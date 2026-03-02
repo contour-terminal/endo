@@ -23,7 +23,7 @@ TEST_CASE("HtmlUtils.urlEncode_unreserved_chars_passthrough", "[agent][tools]")
 
 TEST_CASE("HtmlUtils.urlEncode_empty_string", "[agent][tools]")
 {
-    CHECK(urlEncode("") == "");
+    CHECK(urlEncode("").empty());
 }
 
 TEST_CASE("HtmlUtils.stripHtmlTags_basic", "[agent][tools]")
@@ -43,7 +43,7 @@ TEST_CASE("HtmlUtils.stripHtmlTags_no_tags", "[agent][tools]")
 
 TEST_CASE("HtmlUtils.stripHtmlTags_empty", "[agent][tools]")
 {
-    CHECK(stripHtmlTags("") == "");
+    CHECK(stripHtmlTags("").empty());
 }
 
 TEST_CASE("HtmlUtils.decodeHtmlEntities_common_entities", "[agent][tools]")
@@ -70,5 +70,5 @@ TEST_CASE("HtmlUtils.decodeHtmlEntities_no_entities", "[agent][tools]")
 
 TEST_CASE("HtmlUtils.decodeHtmlEntities_empty", "[agent][tools]")
 {
-    CHECK(decodeHtmlEntities("") == "");
+    CHECK(decodeHtmlEntities("").empty());
 }

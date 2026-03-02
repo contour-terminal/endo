@@ -1715,7 +1715,7 @@ TEST_CASE("Parser.FSharp.match_multiline_followed_by_statement")
 TEST_CASE("Parser.FSharp.match_singleline_still_works")
 {
     // Regression guard: single-line match must still work
-    auto ast = parse("let r = match x with | 1 -> \"one\" | _ -> \"other\"");
+    auto ast = parse(R"(let r = match x with | 1 -> "one" | _ -> "other")");
     REQUIRE(ast != nullptr);
     auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
     REQUIRE(letStmt != nullptr);

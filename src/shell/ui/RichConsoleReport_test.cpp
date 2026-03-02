@@ -35,7 +35,7 @@ TEST_CASE("RichConsoleReport.plain_syntax_error", "[RichConsoleReport]")
     CHECK(result.find("error[syntax]: Unexpected token 'xyz'") != std::string::npos);
     CHECK(result.find("--> stdin:1:5") != std::string::npos);
     CHECK(result.find("ech \"hello world\"") != std::string::npos);
-    CHECK(result.find("~") != std::string::npos);
+    CHECK(result.find('~') != std::string::npos);
 }
 
 TEST_CASE("RichConsoleReport.plain_warning", "[RichConsoleReport]")
@@ -72,7 +72,7 @@ TEST_CASE("RichConsoleReport.plain_no_context", "[RichConsoleReport]")
 
     CHECK(result.find("error[link]: Unresolved symbol 'foo'") != std::string::npos);
     // No gutter lines when no context snippet
-    CHECK(result.find("|") == std::string::npos);
+    CHECK(result.find('|') == std::string::npos);
 }
 
 TEST_CASE("RichConsoleReport.plain_no_filename", "[RichConsoleReport]")

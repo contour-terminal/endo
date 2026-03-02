@@ -117,7 +117,7 @@ class HttpClient
 
   private:
     /// Sets up common curl options shared between execute() and download().
-    void setupRequest(void* curl, HttpRequest const& request, void* headerList) const;
+    static void setupRequest(void* curlHandle, HttpRequest const& request, void* slist);
 
     void* _handle = nullptr; ///< CURL easy handle (void* to avoid leaking curl headers)
 };

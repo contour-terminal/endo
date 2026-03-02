@@ -6,6 +6,8 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
+#include <ranges>
+
 namespace endo
 {
 
@@ -28,10 +30,8 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
     list->tag = 0; // Nil
 
     // Build cons-cell list right-to-left so the result is in original order
-    for (auto it = files.rbegin(); it != files.rend(); ++it)
+    for (const auto& file: std::ranges::reverse_view(files))
     {
-        auto const& file = *it;
-
         // Allocate a FileInfo record
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(file.name)));

@@ -857,7 +857,9 @@ std::optional<HoverInfo> computeHover(std::string const& source, SourcePosition 
     std::vector<TokenInfo> tokens;
     while (lexer.currentToken() != Token::EndOfInput)
     {
-        tokens.emplace_back(TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
+        tokens.emplace_back(TokenInfo { .token = lexer.currentToken(),
+                                        .literal = lexer.currentLiteral(),
+                                        .location = lexer.currentRange() });
         lexer.nextToken();
     }
 

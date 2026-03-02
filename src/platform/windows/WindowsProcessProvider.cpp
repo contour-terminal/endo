@@ -7,7 +7,7 @@
     #include <vector>
 
     #include <windows.h>
-
+    // windows.h must precede psapi.h and tlhelp32.h
     #include <psapi.h>
     #include <tlhelp32.h>
 
@@ -61,8 +61,7 @@ std::vector<ProcessEntry> WindowsProcessProvider::listProcesses() const
                 if (tokenInfoLen > 0)
                 {
                     auto tokenBuf = std::vector<char>(tokenInfoLen);
-                    if (GetTokenInformation(
-                            hToken, TokenUser, tokenBuf.data(), tokenInfoLen, &tokenInfoLen))
+                    if (GetTokenInformation(hToken, TokenUser, tokenBuf.data(), tokenInfoLen, &tokenInfoLen))
                     {
                         auto const* tokenUser = reinterpret_cast<TOKEN_USER const*>(tokenBuf.data());
                         wchar_t userName[256] {};
@@ -71,8 +70,13 @@ std::vector<ProcessEntry> WindowsProcessProvider::listProcesses() const
                         DWORD domainLen = 256;
                         SID_NAME_USE sidType {};
 
-                        if (LookupAccountSidW(
-                                nullptr, tokenUser->User.Sid, userName, &userNameLen, domainName, &domainLen, &sidType))
+                        if (LookupAccountSidW(nullptr,
+                                              tokenUser->User.Sid,
+                                              userName,
+                                              &userNameLen,
+                                              domainName,
+                                              &domainLen,
+                                              &sidType))
                         {
                             std::string narrowUser;
                             for (DWORD i = 0; i < userNameLen; ++i)

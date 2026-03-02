@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <bit>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "FileTypeStyle.hpp"
@@ -311,7 +312,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             auto cell = fieldValueToString(slotVal, fields[col], runner);
             if (config.showDirectorySlash && col == 0 && isDir)
                 cell += '/';
-            if (static_cast<int>(col) != config.autoGrowColumn)
+            if (std::cmp_not_equal(col, config.autoGrowColumn))
                 cell = truncate(cell, config.maxColumnWidth);
             auto cellDisplayWidth = displayWidth(cell);
             if (decorateFiles && config.showIcons && col == 0)
@@ -324,7 +325,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
 
     // Cap column widths at maxColumnWidth (auto-grow column is exempt)
     for (size_t col = 0; col < colWidths.size(); ++col)
-        if (static_cast<int>(col) != config.autoGrowColumn)
+        if (std::cmp_not_equal(col, config.autoGrowColumn))
             colWidths[col] = std::min(colWidths[col], config.maxColumnWidth);
 
     // Terminal-width-aware shrinking
@@ -333,9 +334,9 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         // Compute total table width including overhead
         int overhead = 0;
         if (config.style == TableStyle::Bordered)
-            overhead = static_cast<int>(numCols + 1) + 2 * static_cast<int>(numCols); // borders + padding
+            overhead = static_cast<int>(numCols + 1) + (2 * static_cast<int>(numCols)); // borders + padding
         else if (config.style == TableStyle::Compact)
-            overhead = 1 + 2 * static_cast<int>(numCols - 1); // leading space + gaps
+            overhead = 1 + (2 * static_cast<int>(numCols - 1)); // leading space + gaps
         else
             overhead = 2 * static_cast<int>(numCols - 1); // gaps only
 
@@ -357,7 +358,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     }
 
     // After terminal-width shrinking, truncate auto-grow column cells to fit the final width
-    if (config.autoGrowColumn >= 0 && config.autoGrowColumn < static_cast<int>(numCols))
+    if (config.autoGrowColumn >= 0 && std::cmp_less(config.autoGrowColumn, numCols))
     {
         auto const col = static_cast<size_t>(config.autoGrowColumn);
         auto const iconOffset = (decorateFiles && config.showIcons && col == 0) ? IconDisplayWidth : 0;

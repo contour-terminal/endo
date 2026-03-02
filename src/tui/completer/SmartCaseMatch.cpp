@@ -9,7 +9,7 @@ namespace tui
 
 bool SmartCaseMatch::hasUppercase(std::string_view s) noexcept
 {
-    return std::any_of(s.begin(), s.end(), [](unsigned char c) { return std::isupper(c) != 0; });
+    return std::ranges::any_of(s, [](unsigned char c) { return std::isupper(c) != 0; });
 }
 
 bool SmartCaseMatch::matchesPrefixCaseInsensitive(std::string_view text, std::string_view pattern) noexcept

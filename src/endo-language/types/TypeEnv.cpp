@@ -80,7 +80,7 @@ void TypeEnv::collectFreeVars(TypePtr const& type, std::vector<TypeVarId>& vars)
     if (auto* tv = type->asTypeVar())
     {
         // Add if not already present
-        if (std::find(vars.begin(), vars.end(), tv->id) == vars.end())
+        if (std::ranges::find(vars, tv->id) == vars.end())
             vars.push_back(tv->id);
     }
     else if (auto* fn = type->asFunction())
@@ -133,7 +133,7 @@ void TypeEnv::collectFreeVars(TypeScheme const& scheme, std::vector<TypeVarId>& 
     {
         if (quantified.find(id) == quantified.end())
         {
-            if (std::find(vars.begin(), vars.end(), id) == vars.end())
+            if (std::ranges::find(vars, id) == vars.end())
                 vars.push_back(id);
         }
     }
@@ -151,7 +151,7 @@ std::vector<TypeVarId> TypeEnv::freeTypeVars() const
         auto parentVars = _parent->freeTypeVars();
         for (auto id: parentVars)
         {
-            if (std::find(result.begin(), result.end(), id) == result.end())
+            if (std::ranges::find(result, id) == result.end())
                 result.push_back(id);
         }
     }
@@ -241,8 +241,10 @@ bool TypeRegistry::isRegistered(std::string const& name) const
 void TypeRegistry::registerBuiltins()
 {
     // Register the built-in Error type
-    registerRecord("Error",
-                   RecordType { "Error", { { "code", types::intType() }, { "message", types::strType() } } });
+    registerRecord(
+        "Error",
+        RecordType { .name = "Error",
+                     .fields = { { "code", types::intType() }, { "message", types::strType() } } });
 }
 
 // Standard environment creation

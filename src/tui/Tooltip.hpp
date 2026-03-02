@@ -98,7 +98,7 @@ class Tooltip: public Component
     std::string _rawContent;
     TooltipContentType _contentType = TooltipContentType::PlainText;
     StyledText _styledContent;
-    Size _maxSize = { 60, 15 };
+    Size _maxSize = { .width = 60, .height = 15 };
     int _scrollOffset = 0;
 
     // Border and padding
@@ -112,7 +112,7 @@ class Tooltip: public Component
     [[nodiscard]] Size contentAreaSize() const;
 
     /// @brief Renders scroll indicators if needed.
-    void renderScrollIndicators(Canvas& canvas);
+    void renderScrollIndicators(Canvas& canvas) const;
 };
 
 } // namespace tui

@@ -135,7 +135,7 @@ auto makeInitializedClient(std::vector<nlohmann::json> tools) -> ClientAndTransp
     if (!initResult.has_value())
         throw std::runtime_error("Failed to initialize mock client");
 
-    return { std::move(client), tp };
+    return { .client = std::move(client), .transport = tp };
 }
 
 } // namespace

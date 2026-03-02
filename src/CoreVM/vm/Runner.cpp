@@ -163,14 +163,13 @@ void Runner::Stack::rotate(size_t fp, size_t n)
 }
 
 // }}}
-static CoreString* t = nullptr;
 
 Runner::Runner(const Function* function,
                void* userdata,
                Globals* globals,
                RuntimeConfig config,
                TraceLogger traceLogger):
-    Runner { function, userdata, globals, NoQuota, std::move(config), std::move(traceLogger) }
+    Runner { function, userdata, globals, NoQuota, config, std::move(traceLogger) }
 {
 }
 
@@ -181,20 +180,18 @@ Runner::Runner(const Function* function,
                RuntimeConfig config,
                TraceLogger traceLogger):
     _quota { quota },
-    _config { std::move(config) },
+    _config { config },
     _function(function),
     _traceLogger { traceLogger ? std::move(traceLogger) : [](Instruction, size_t, size_t) {} },
     _program(function->program()),
     _userdata(userdata),
     _regexpContext(),
-    _state(Inactive),
-    _ip(0),
     _stack(_function->stackSize()),
-    _globals { *globals },
-    _stringGarbage()
+    _globals { *globals }
+
 {
     // initialize emptyString()
-    t = newString("");
+    newString("");
 }
 
 void Runner::consume(Opcode opcode)
@@ -203,7 +200,7 @@ void Runner::consume(Opcode opcode)
         return;
 
     unsigned price = getPrice(opcode);
-    if (price >= _quota)
+    if (std::cmp_greater_equal(price, _quota))
     {
         _quota = 0;
         throw QuotaExceeded {};
@@ -408,7 +405,7 @@ void Runner::freeObject(TypedObject* obj)
 
 bool Runner::run()
 {
-    assert(_state == Inactive);
+    assert(_state == State::Inactive);
     auto result = runWithResult();
     if (!result)
     {
@@ -421,24 +418,24 @@ bool Runner::run()
 
 Runner::RunResult Runner::runWithResult()
 {
-    assert(_state == Inactive);
+    assert(_state == State::Inactive);
     return loopWithResult();
 }
 
 RuntimeError Runner::makeError(std::string message) const
 {
-    return RuntimeError { std::move(message), _function->locationOf(_ip) };
+    return RuntimeError { .message = std::move(message), .location = _function->locationOf(_ip) };
 }
 
 void Runner::suspend()
 {
-    assert(_state == Running);
-    _state = Suspended;
+    assert(_state == State::Running);
+    _state = State::Suspended;
 }
 
 bool Runner::resume()
 {
-    assert(_state == Suspended);
+    assert(_state == State::Suspended);
     auto result = loopWithResult();
     if (!result)
     {
@@ -632,11 +629,11 @@ Runner::RunResult Runner::loopWithResult()
     }
     auto codeBase = code.data();
 #else
-    auto codeBase = _function->code().data();
+    const auto* codeBase = _function->code().data();
 #endif
     // }}}
 
-    _state = Running;
+    _state = State::Running;
     decltype(codeBase) pc {};
     set_pc(_ip);
 
@@ -688,16 +685,16 @@ Runner::RunResult Runner::loopWithResult()
     // {{{ control
     instr(EXIT)
     {
-        _state = Inactive;
+        _state = State::Inactive;
         _ip = get_pc();
         return A != 0;
     }
 
     instr(EXITPOP)
     {
-        _state = Inactive;
+        _state = State::Inactive;
         _ip = get_pc();
-        CoreNumber exitCode = static_cast<CoreNumber>(pop());
+        auto exitCode = static_cast<CoreNumber>(pop());
         return exitCode != 0;
     }
 
@@ -1084,7 +1081,7 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(PCMPEQ)
     {
-        SP(-2) = getIPAddress(-2) == getIPAddress(-2);
+        SP(-2) = getIPAddress(-2) == getIPAddress(-1);
         pop();
         next;
     }
@@ -1199,7 +1196,7 @@ Runner::RunResult Runner::loopWithResult()
             if (signature.returnType() != LiteralType::Void)
                 push(args[0]);
 
-            if (_state == Suspended)
+            if (_state == State::Suspended)
             {
                 COREVM_DEBUG("CoreVM: vm suspended in function. returning (false)");
                 return false;
@@ -1544,6 +1541,7 @@ Runner::RunResult Runner::loopWithResult()
         }
         catch (...)
         {
+            // Intentionally empty: invalid string-to-float conversions default to 0.0
         }
         SP(-1) = std::bit_cast<uint64_t>(f);
         next;

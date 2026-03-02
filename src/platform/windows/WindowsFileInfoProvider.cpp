@@ -52,7 +52,8 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
         if (!ec)
         {
             auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lastWrite);
-            fileEntry.mtime = std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
+            fileEntry.mtime =
+                std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
         }
 
         result.push_back(std::move(fileEntry));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/PlatformError.hpp>
-
 #include <catch2/catch_test_macros.hpp>
+
+#include <platform/PlatformError.hpp>
 
 using namespace endo::platform;
 

@@ -22,16 +22,16 @@ TEST_CASE("Point.default_construction")
 
 TEST_CASE("Point.construction")
 {
-    Point p { 5, 10 };
+    Point p { .x = 5, .y = 10 };
     CHECK(p.x == 5);
     CHECK(p.y == 10);
 }
 
 TEST_CASE("Point.equality")
 {
-    Point p1 { 3, 4 };
-    Point p2 { 3, 4 };
-    Point p3 { 3, 5 };
+    Point p1 { .x = 3, .y = 4 };
+    Point p2 { .x = 3, .y = 4 };
+    Point p3 { .x = 3, .y = 5 };
 
     CHECK(p1 == p2);
     CHECK(p1 != p3);
@@ -39,7 +39,7 @@ TEST_CASE("Point.equality")
 
 TEST_CASE("Point.offset")
 {
-    Point p { 5, 10 };
+    Point p { .x = 5, .y = 10 };
     Point result = p.offset(2, -3);
     CHECK(result.x == 7);
     CHECK(result.y == 7);
@@ -58,7 +58,7 @@ TEST_CASE("Size.default_construction")
 
 TEST_CASE("Size.construction")
 {
-    Size s { 80, 24 };
+    Size s { .width = 80, .height = 24 };
     CHECK(s.width == 80);
     CHECK(s.height == 24);
 }
@@ -94,7 +94,7 @@ TEST_CASE("Rect.default_construction")
 
 TEST_CASE("Rect.construction")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
     CHECK(r.x == 5);
     CHECK(r.y == 10);
     CHECK(r.width == 20);
@@ -112,7 +112,7 @@ TEST_CASE("Rect.factory_fromXYWH")
 
 TEST_CASE("Rect.factory_fromCorners")
 {
-    auto r = Rect::fromCorners({ 5, 10 }, { 15, 20 });
+    auto r = Rect::fromCorners({ .x = 5, .y = 10 }, { .x = 15, .y = 20 });
     CHECK(r.x == 5);
     CHECK(r.y == 10);
     CHECK(r.width == 10);
@@ -121,7 +121,7 @@ TEST_CASE("Rect.factory_fromCorners")
 
 TEST_CASE("Rect.factory_fromPositionSize")
 {
-    auto r = Rect::fromPositionSize({ 3, 4 }, { 10, 20 });
+    auto r = Rect::fromPositionSize({ .x = 3, .y = 4 }, { .width = 10, .height = 20 });
     CHECK(r.x == 3);
     CHECK(r.y == 4);
     CHECK(r.width == 10);
@@ -130,7 +130,7 @@ TEST_CASE("Rect.factory_fromPositionSize")
 
 TEST_CASE("Rect.accessors")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
 
     CHECK(r.left() == 5);
     CHECK(r.top() == 10);
@@ -164,7 +164,7 @@ TEST_CASE("Rect.area")
 
 TEST_CASE("Rect.contains_point_coordinates")
 {
-    Rect r { 5, 10, 20, 15 }; // x=5..24 (inclusive), y=10..24 (inclusive)
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 }; // x=5..24 (inclusive), y=10..24 (inclusive)
 
     // Inside
     CHECK(r.contains(5, 10));  // top-left corner
@@ -180,17 +180,17 @@ TEST_CASE("Rect.contains_point_coordinates")
 
 TEST_CASE("Rect.contains_point")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
     CHECK(r.contains(Point { 15, 17 }));
     CHECK_FALSE(r.contains(Point { 0, 0 }));
 }
 
 TEST_CASE("Rect.contains_rect")
 {
-    Rect outer { 0, 0, 100, 100 };
-    Rect inner { 10, 10, 20, 20 };
-    Rect overlapping { 90, 90, 20, 20 };
-    Rect disjoint { 200, 200, 10, 10 };
+    Rect outer { .x = 0, .y = 0, .width = 100, .height = 100 };
+    Rect inner { .x = 10, .y = 10, .width = 20, .height = 20 };
+    Rect overlapping { .x = 90, .y = 90, .width = 20, .height = 20 };
+    Rect disjoint { .x = 200, .y = 200, .width = 10, .height = 10 };
 
     CHECK(outer.contains(inner));
     CHECK_FALSE(outer.contains(overlapping));
@@ -200,10 +200,10 @@ TEST_CASE("Rect.contains_rect")
 
 TEST_CASE("Rect.intersects")
 {
-    Rect r1 { 0, 0, 10, 10 };
-    Rect r2 { 5, 5, 10, 10 };   // overlaps
-    Rect r3 { 10, 10, 10, 10 }; // touches corner (no intersection)
-    Rect r4 { 20, 20, 10, 10 }; // disjoint
+    Rect r1 { .x = 0, .y = 0, .width = 10, .height = 10 };
+    Rect r2 { .x = 5, .y = 5, .width = 10, .height = 10 };   // overlaps
+    Rect r3 { .x = 10, .y = 10, .width = 10, .height = 10 }; // touches corner (no intersection)
+    Rect r4 { .x = 20, .y = 20, .width = 10, .height = 10 }; // disjoint
 
     CHECK(r1.intersects(r2));
     CHECK(r2.intersects(r1));
@@ -213,7 +213,7 @@ TEST_CASE("Rect.intersects")
 
 TEST_CASE("Rect.offset")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
     auto result = r.offset(3, -2);
 
     CHECK(result.x == 8);
@@ -224,8 +224,8 @@ TEST_CASE("Rect.offset")
 
 TEST_CASE("Rect.offset_point")
 {
-    Rect r { 5, 10, 20, 15 };
-    auto result = r.offset(Point { 3, -2 });
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
+    auto result = r.offset(Point { .x = 3, .y = -2 });
 
     CHECK(result.x == 8);
     CHECK(result.y == 8);
@@ -233,7 +233,7 @@ TEST_CASE("Rect.offset_point")
 
 TEST_CASE("Rect.withPosition")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
     auto result = r.withPosition(100, 200);
 
     CHECK(result.x == 100);
@@ -244,7 +244,7 @@ TEST_CASE("Rect.withPosition")
 
 TEST_CASE("Rect.withSize")
 {
-    Rect r { 5, 10, 20, 15 };
+    Rect r { .x = 5, .y = 10, .width = 20, .height = 15 };
     auto result = r.withSize(50, 60);
 
     CHECK(result.x == 5);
@@ -255,7 +255,7 @@ TEST_CASE("Rect.withSize")
 
 TEST_CASE("Rect.inset")
 {
-    Rect r { 10, 10, 30, 20 };
+    Rect r { .x = 10, .y = 10, .width = 30, .height = 20 };
 
     // Uniform inset
     auto r1 = r.inset(5);
@@ -281,7 +281,7 @@ TEST_CASE("Rect.inset")
 
 TEST_CASE("Rect.expand")
 {
-    Rect r { 10, 10, 20, 20 };
+    Rect r { .x = 10, .y = 10, .width = 20, .height = 20 };
     auto result = r.expand(5);
 
     CHECK(result.x == 5);
@@ -292,8 +292,8 @@ TEST_CASE("Rect.expand")
 
 TEST_CASE("Rect.intersect")
 {
-    Rect r1 { 0, 0, 10, 10 };
-    Rect r2 { 5, 5, 10, 10 };
+    Rect r1 { .x = 0, .y = 0, .width = 10, .height = 10 };
+    Rect r2 { .x = 5, .y = 5, .width = 10, .height = 10 };
 
     auto result = r1.intersect(r2);
     CHECK(result.x == 5);
@@ -304,8 +304,8 @@ TEST_CASE("Rect.intersect")
 
 TEST_CASE("Rect.intersect_no_overlap")
 {
-    Rect r1 { 0, 0, 10, 10 };
-    Rect r2 { 20, 20, 10, 10 };
+    Rect r1 { .x = 0, .y = 0, .width = 10, .height = 10 };
+    Rect r2 { .x = 20, .y = 20, .width = 10, .height = 10 };
 
     auto result = r1.intersect(r2);
     CHECK(result.empty());
@@ -313,8 +313,8 @@ TEST_CASE("Rect.intersect_no_overlap")
 
 TEST_CASE("Rect.unite")
 {
-    Rect r1 { 0, 0, 10, 10 };
-    Rect r2 { 5, 5, 10, 10 };
+    Rect r1 { .x = 0, .y = 0, .width = 10, .height = 10 };
+    Rect r2 { .x = 5, .y = 5, .width = 10, .height = 10 };
 
     auto result = r1.unite(r2);
     CHECK(result.x == 0);
@@ -325,7 +325,7 @@ TEST_CASE("Rect.unite")
 
 TEST_CASE("Rect.unite_empty")
 {
-    Rect r1 { 5, 5, 10, 10 };
+    Rect r1 { .x = 5, .y = 5, .width = 10, .height = 10 };
     Rect r2; // empty
 
     auto result = r1.unite(r2);
@@ -519,7 +519,7 @@ TEST_CASE("Buffer.clearRect")
             buf.at(r, c).grapheme = "X";
 
     // Clear a region
-    buf.clearRect(Rect { 5, 2, 10, 3 });
+    buf.clearRect(Rect { .x = 5, .y = 2, .width = 10, .height = 3 });
 
     // Check cleared region
     CHECK(buf.at(2, 5).grapheme == " ");
@@ -575,7 +575,7 @@ TEST_CASE("Buffer.fill")
     Style style;
     style.bold = true;
 
-    buf.fill(Rect { 2, 3, 5, 4 }, '*', style);
+    buf.fill(Rect { .x = 2, .y = 3, .width = 5, .height = 4 }, '*', style);
 
     // Check filled region
     CHECK(buf.at(3, 2).grapheme == "*");
@@ -615,7 +615,7 @@ TEST_CASE("Canvas.dimensions")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     CHECK(canvas.width() == 30);
     CHECK(canvas.height() == 10);
@@ -627,7 +627,7 @@ TEST_CASE("Canvas.put")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
     Style style;
     style.bold = true;
 
@@ -642,7 +642,7 @@ TEST_CASE("Canvas.put_clipping")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     // Put outside canvas bounds - should be ignored
     canvas.put(-1, 0, "X", Style {});
@@ -668,7 +668,7 @@ TEST_CASE("Canvas.putString")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     int consumed = canvas.putString(2, 3, "hello", Style {});
     CHECK(consumed == 5);
@@ -682,7 +682,8 @@ TEST_CASE("Canvas.putString_clipping")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 10, 5 }, theme); // Small canvas: 10 cols, 5 rows
+    Canvas canvas(
+        buf, Rect { .x = 10, .y = 5, .width = 10, .height = 5 }, theme); // Small canvas: 10 cols, 5 rows
 
     // Write string starting at column 7, which should clip at column 10
     int consumed = canvas.putString(0, 7, "hello", Style {});
@@ -693,11 +694,11 @@ TEST_CASE("Canvas.fill")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
     Style style;
     style.bold = true;
 
-    canvas.fill(Rect { 2, 1, 5, 3 }, '#', style);
+    canvas.fill(Rect { .x = 2, .y = 1, .width = 5, .height = 3 }, '#', style);
 
     // Canvas (1, 2) = Buffer (6, 12)
     CHECK(buf.at(6, 12).grapheme == "#");
@@ -711,7 +712,7 @@ TEST_CASE("Canvas.clear")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     // Put some content first
     canvas.putString(0, 0, "hello", Style {});
@@ -729,7 +730,7 @@ TEST_CASE("Canvas.setCursor")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     canvas.setCursor(3, 7);
 
@@ -741,7 +742,7 @@ TEST_CASE("Canvas.hideCursor")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     canvas.hideCursor();
     CHECK(buf.cursorVisible() == false);
@@ -751,10 +752,10 @@ TEST_CASE("Canvas.subcanvas")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     // Create subcanvas within the canvas
-    Canvas sub = canvas.subcanvas(Rect { 5, 2, 10, 4 });
+    Canvas sub = canvas.subcanvas(Rect { .x = 5, .y = 2, .width = 10, .height = 4 });
 
     CHECK(sub.width() == 10);
     CHECK(sub.height() == 4);
@@ -770,10 +771,11 @@ TEST_CASE("Canvas.subcanvas_clipping")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 10, 5, 30, 10 }, theme);
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 30, .height = 10 }, theme);
 
     // Create subcanvas that extends beyond parent canvas
-    Canvas sub = canvas.subcanvas(Rect { 25, 0, 20, 5 }); // Would extend to col 45, but parent ends at 30
+    Canvas sub = canvas.subcanvas(
+        Rect { .x = 25, .y = 0, .width = 20, .height = 5 }); // Would extend to col 45, but parent ends at 30
 
     // Subcanvas should be clipped to parent bounds
     CHECK(sub.width() == 5); // 30 - 25 = 5
@@ -784,9 +786,9 @@ TEST_CASE("Canvas.drawBox")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 0, 0, 80, 24 }, theme);
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 80, .height = 24 }, theme);
 
-    canvas.drawBox(Rect { 5, 2, 10, 4 }, BorderStyle::Single, Style {});
+    canvas.drawBox(Rect { .x = 5, .y = 2, .width = 10, .height = 4 }, BorderStyle::Single, Style {});
 
     // Check corners (using Unicode box characters)
     // Top-left at (2, 5)
@@ -800,7 +802,7 @@ TEST_CASE("Canvas.drawHLine")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 0, 0, 80, 24 }, theme);
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 80, .height = 24 }, theme);
 
     canvas.drawHLine(5, 10, 15, "-", Style {});
 
@@ -812,7 +814,7 @@ TEST_CASE("Canvas.drawVLine")
 {
     Buffer buf(24, 80);
     auto theme = darkTheme();
-    Canvas canvas(buf, Rect { 0, 0, 80, 24 }, theme);
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 80, .height = 24 }, theme);
 
     canvas.drawVLine(10, 5, 8, "|", Style {});
 

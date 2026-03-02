@@ -49,11 +49,8 @@ inline constexpr std::array CopilotModels = {
 
 /// All known provider names in display order.
 inline constexpr std::array KnownProviders = {
-    std::string_view { "claude" },
-    std::string_view { "openai" },
-    std::string_view { "gemini" },
-    std::string_view { "copilot" },
-    std::string_view { "local" },
+    std::string_view { "claude" },  std::string_view { "openai" }, std::string_view { "gemini" },
+    std::string_view { "copilot" }, std::string_view { "local" },
 };
 
 /// Result of a model name lookup across all known providers.

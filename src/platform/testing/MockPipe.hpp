@@ -33,6 +33,7 @@ class MockPipe final: public Pipe
     }
 
     [[nodiscard]] NativeHandle reader() const noexcept override { return _reader; }
+
     [[nodiscard]] NativeHandle writer() const noexcept override { return _writer; }
 
     [[nodiscard]] NativeHandle releaseReader() noexcept override
@@ -50,6 +51,7 @@ class MockPipe final: public Pipe
     }
 
     void closeReader() noexcept override { _reader = InvalidHandle; }
+
     void closeWriter() noexcept override { _writer = InvalidHandle; }
 
     [[nodiscard]] bool good() const noexcept override

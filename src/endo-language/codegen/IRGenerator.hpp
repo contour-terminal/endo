@@ -80,7 +80,7 @@ struct FSharpPersistentState
     /// Output definition record type metadata (type name -> fields + ID).
     struct OutputDefRecordType
     {
-        uint16_t typeId;
+        uint16_t typeId = 0;
         std::vector<CoreVM::FieldInfo> fields;
     };
 
@@ -90,7 +90,7 @@ struct FSharpPersistentState
     struct StructuredCommandInfo
     {
         std::string builtinCallbackName; ///< e.g., "structured_docker_ps"
-        uint16_t recordTypeId;           ///< List element type ID
+        uint16_t recordTypeId = 0;       ///< List element type ID
         std::string recordTypeName;      ///< For _recordTypes lookup
     };
 
@@ -266,7 +266,7 @@ class IRGenerator final: public ast::Visitor
     CoreVM::Value* toBool(CoreVM::Value* value);
 
     /// Checks if any expression in the list contains a runtime-evaluated expression.
-    [[nodiscard]] bool containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const;
+    [[nodiscard]] static bool containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions);
 
     std::vector<CoreVM::Constant*> createConstantArray(
         std::vector<std::unique_ptr<ast::Expr>> const& expressions);
@@ -336,8 +336,8 @@ class IRGenerator final: public ast::Visitor
     // Loop context management for break/continue
     struct LoopContext
     {
-        CoreVM::BasicBlock* continueTarget;
-        CoreVM::BasicBlock* breakTarget;
+        CoreVM::BasicBlock* continueTarget = nullptr;
+        CoreVM::BasicBlock* breakTarget = nullptr;
     };
 
     void pushLoopContext(CoreVM::BasicBlock* continueTarget, CoreVM::BasicBlock* breakTarget);
@@ -350,7 +350,7 @@ class IRGenerator final: public ast::Visitor
     [[nodiscard]] bool inFunction() const;
 
     // Helper for dynamic type comparison
-    [[nodiscard]] bool needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const;
+    [[nodiscard]] static bool needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs);
 
     // F# variable scope management (delegated to ScopeManager)
     void pushFSharpScope();
@@ -464,28 +464,28 @@ class IRGenerator final: public ast::Visitor
                           std::optional<CoreVM::LiteralType> expectedReturnType = std::nullopt);
 
     /// Generates IR for `map f xs` — applies f to each element, returns new list.
-    void generateMapIR(std::string const& funcName, CoreVM::Value* listValue);
+    void generateMapIR(std::string const& funcParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `filter pred xs` — keeps elements where pred returns true.
-    void generateFilterIR(std::string const& predName, CoreVM::Value* listValue);
+    void generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `fold init f xs` — left fold over list with initial accumulator.
-    void generateFoldIR(CoreVM::Value* initValue, std::string const& funcName, CoreVM::Value* listValue);
+    void generateFoldIR(CoreVM::Value* initValue, std::string const& funcParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `reduce f xs` — fold without initial value, returns Option.
-    void generateReduceIR(std::string const& funcName, CoreVM::Value* listValue);
+    void generateReduceIR(std::string const& funcParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `reverse xs` — reverses a list.
     void generateReverseIR(CoreVM::Value* listValue);
 
     /// Generates IR for `find pred xs` — returns first element matching predicate as Option.
-    void generateFindIR(std::string const& predName, CoreVM::Value* listValue);
+    void generateFindIR(std::string const& predParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `exists pred xs` — returns true if any element matches predicate.
-    void generateExistsIR(std::string const& predName, CoreVM::Value* listValue);
+    void generateExistsIR(std::string const& predParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `forall pred xs` — returns true if all elements match predicate.
-    void generateForallIR(std::string const& predName, CoreVM::Value* listValue);
+    void generateForallIR(std::string const& predParamName, CoreVM::Value* listValue);
 
     /// Generates IR for `each f xs` — applies function to each element for side effects, returns unit.
     void generateEachIR(std::string const& funcParamName, CoreVM::Value* listValue);
@@ -530,7 +530,7 @@ class IRGenerator final: public ast::Visitor
     /// Resolves a function argument expression (identifier or lambda) to a function reference.
     struct ResolvedFunction
     {
-        FSharpFunction const* func;
+        FSharpFunction const* func = nullptr;
         std::string name;
     };
 
@@ -615,9 +615,9 @@ class IRGenerator final: public ast::Visitor
     // Tracks return block and storage for early returns from try expressions
     struct FSharpFunctionContext
     {
-        CoreVM::BasicBlock* returnBlock;    ///< Block to jump to on error propagation
-        CoreVM::AllocaInstr* returnStorage; ///< Storage for the return value
-        ReturnKind returnKind;              ///< Whether function returns Result/Option
+        CoreVM::BasicBlock* returnBlock = nullptr;    ///< Block to jump to on error propagation
+        CoreVM::AllocaInstr* returnStorage = nullptr; ///< Storage for the return value
+        ReturnKind returnKind = ReturnKind::Plain;    ///< Whether function returns Result/Option
     };
 
     void pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
@@ -740,10 +740,10 @@ class IRGenerator final: public ast::Visitor
     struct RecursiveCallContext
     {
         std::string functionName;                       ///< Name of the recursive function
-        CoreVM::BasicBlock* entryBlock;                 ///< Loop entry block to jump back to
+        CoreVM::BasicBlock* entryBlock = nullptr;       ///< Loop entry block to jump back to
         std::vector<CoreVM::AllocaInstr*> paramAllocas; ///< Parameter storage for updating on recursion
-        CoreVM::AllocaInstr* resultStorage;             ///< Storage for the final result
-        CoreVM::BasicBlock* exitBlock;                  ///< Block to continue after recursion completes
+        CoreVM::AllocaInstr* resultStorage = nullptr;   ///< Storage for the final result
+        CoreVM::BasicBlock* exitBlock = nullptr;        ///< Block to continue after recursion completes
     };
 
     /// Tracks active mutual recursion compilation with dispatch-loop optimization.
@@ -755,15 +755,15 @@ class IRGenerator final: public ast::Visitor
         struct FunctionSlot
         {
             std::string name;                               ///< Function name
-            int dispatchIndex;                              ///< Dispatch tag value for this function
+            int dispatchIndex = 0;                          ///< Dispatch tag value for this function
             std::vector<CoreVM::AllocaInstr*> paramAllocas; ///< Parameter storage
         };
 
-        std::vector<FunctionSlot> functions; ///< All functions in the mutual group
-        CoreVM::AllocaInstr* dispatchTag;    ///< Dispatch tag storage (selects which body to run)
-        CoreVM::BasicBlock* dispatchBlock;   ///< Dispatch loop entry block
-        CoreVM::AllocaInstr* resultStorage;  ///< Shared result storage
-        CoreVM::BasicBlock* exitBlock;       ///< Exit block after recursion completes
+        std::vector<FunctionSlot> functions;          ///< All functions in the mutual group
+        CoreVM::AllocaInstr* dispatchTag = nullptr;   ///< Dispatch tag storage (selects which body to run)
+        CoreVM::BasicBlock* dispatchBlock = nullptr;  ///< Dispatch loop entry block
+        CoreVM::AllocaInstr* resultStorage = nullptr; ///< Shared result storage
+        CoreVM::BasicBlock* exitBlock = nullptr;      ///< Exit block after recursion completes
 
         /// Finds a function slot by name, or nullptr if not found.
         [[nodiscard]] FunctionSlot const* findFunction(std::string const& name) const

@@ -3,17 +3,17 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
 
-    #include <agent/providers/local/ChatTemplate.hpp>
-    #include <agent/providers/local/ToolCallParser.hpp>
-
-    #include <llama.h>
-
     #include <algorithm>
     #include <cstring>
     #include <format>
     #include <string>
     #include <utility>
     #include <vector>
+
+    #include <llama.h>
+
+    #include <agent/providers/local/ChatTemplate.hpp>
+    #include <agent/providers/local/ToolCallParser.hpp>
 
 namespace endo::agent
 {
@@ -84,7 +84,7 @@ namespace
 } // namespace
 
 LlamaCppProvider::LlamaCppProvider(local::ModelManager& modelManager, LlamaCppProviderConfig config):
-    _modelManager(modelManager), _config(std::move(config))
+    _modelManager(modelManager), _config(config)
 {
 }
 
@@ -96,7 +96,7 @@ LlamaCppProvider::~LlamaCppProvider()
 
 LlamaCppProvider::LlamaCppProvider(LlamaCppProvider&& other) noexcept:
     _modelManager(other._modelManager),
-    _config(std::move(other._config)),
+    _config(other._config),
     _ctx(std::exchange(other._ctx, nullptr)),
     _cachedTokens(std::move(other._cachedTokens))
 {
@@ -108,7 +108,7 @@ auto LlamaCppProvider::operator=(LlamaCppProvider&& other) noexcept -> LlamaCppP
     {
         if (_ctx)
             llama_free(_ctx);
-        _config = std::move(other._config);
+        _config = other._config;
         _ctx = std::exchange(other._ctx, nullptr);
         _cachedTokens = std::move(other._cachedTokens);
     }
@@ -148,8 +148,7 @@ auto LlamaCppProvider::effectiveChatTemplate() const -> local::ChatTemplateForma
 
 auto LlamaCppProvider::generate(std::span<ChatMessage const> messages,
                                 std::span<ToolDefinition const> tools,
-                                StreamCallback streamCb)
-    -> std::expected<GenerateResult, ProviderError>
+                                StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
 {
     // Ensure context is ready.
     if (auto error = ensureContext())

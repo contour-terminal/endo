@@ -317,9 +317,9 @@ TypeDescriptor* TypeRegistry::registerProductType(std::string name, std::vector<
     type->slotCount = static_cast<uint16_t>(type->fields.size());
 
     // Assign offsets if not already set
-    for (uint8_t i = 0; i < type->fields.size(); ++i)
+    for (size_t i = 0; i < type->fields.size(); ++i)
     {
-        type->fields[i].offset = i;
+        type->fields[i].offset = static_cast<uint8_t>(i);
     }
 
     return addType(std::move(type));
@@ -329,8 +329,8 @@ TypeDescriptor* TypeRegistry::registerProductType(std::unique_ptr<TypeDescriptor
 {
     // Ensure the type has the correct kind and consistent offsets
     assert(type->kind == TypeKind::Product);
-    for (uint8_t i = 0; i < type->fields.size(); ++i)
-        type->fields[i].offset = i;
+    for (size_t i = 0; i < type->fields.size(); ++i)
+        type->fields[i].offset = static_cast<uint8_t>(i);
     // Preserve slotCount if already set (e.g., named tuples need extra slots for type tags)
     if (type->slotCount == 0)
         type->slotCount = static_cast<uint16_t>(type->fields.size());

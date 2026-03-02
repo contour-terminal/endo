@@ -33,7 +33,7 @@ auto makeTestTools() -> std::vector<ToolDefinition>
 TEST_CASE("agent.local.tool_call_parser.single_xml_tag", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output =
+    const auto* const output =
         R"(<tool_call>{"name": "read_file", "arguments": {"path": "/tmp/test.txt"}}</tool_call>)";
 
     auto const result = parseToolCalls(output, tools);
@@ -48,7 +48,7 @@ TEST_CASE("agent.local.tool_call_parser.single_xml_tag", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.multiple_xml_tags", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output =
+    const auto* const output =
         R"(<tool_call>{"name": "read_file", "arguments": {"path": "/a.txt"}}</tool_call>)"
         R"(<tool_call>{"name": "write_file", "arguments": {"path": "/b.txt", "content": "hello"}}</tool_call>)";
 
@@ -68,7 +68,7 @@ TEST_CASE("agent.local.tool_call_parser.multiple_xml_tags", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.mixed_text_and_xml", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output =
+    const auto* const output =
         "Let me read that file for you.\n"
         R"(<tool_call>{"name": "read_file", "arguments": {"path": "/tmp/test.txt"}}</tool_call>)"
         "\nDone processing.";
@@ -86,10 +86,10 @@ TEST_CASE("agent.local.tool_call_parser.mixed_text_and_xml", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.json_code_block", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output = "Here is the tool call:\n"
-                        "```json\n"
-                        R"({"name": "read_file", "arguments": {"path": "/tmp/data.csv"}})"
-                        "\n```";
+    const auto* const output = "Here is the tool call:\n"
+                               "```json\n"
+                               R"({"name": "read_file", "arguments": {"path": "/tmp/data.csv"}})"
+                               "\n```";
 
     auto const result = parseToolCalls(output, tools);
 
@@ -102,7 +102,8 @@ TEST_CASE("agent.local.tool_call_parser.json_code_block", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.inline_json", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output = R"(I will call {"name": "read_file", "arguments": {"path": "/tmp/file.txt"}} now.)";
+    const auto* const output =
+        R"(I will call {"name": "read_file", "arguments": {"path": "/tmp/file.txt"}} now.)";
 
     auto const result = parseToolCalls(output, tools);
 
@@ -115,7 +116,7 @@ TEST_CASE("agent.local.tool_call_parser.inline_json", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.malformed_json", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output = R"(<tool_call>{not valid json!!!}</tool_call>)";
+    const auto* const output = R"(<tool_call>{not valid json!!!}</tool_call>)";
 
     auto const result = parseToolCalls(output, tools);
 
@@ -126,7 +127,7 @@ TEST_CASE("agent.local.tool_call_parser.malformed_json", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.unknown_tool_name", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output =
+    const auto* const output =
         R"(<tool_call>{"name": "delete_everything", "arguments": {"force": true}}</tool_call>)";
 
     auto const result = parseToolCalls(output, tools);
@@ -141,7 +142,7 @@ TEST_CASE("agent.local.tool_call_parser.unknown_tool_name", "[agent][local]")
 TEST_CASE("agent.local.tool_call_parser.plain_text_no_tool_calls", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output = "This is just a regular response with no tool calls at all.";
+    const auto* const output = "This is just a regular response with no tool calls at all.";
 
     auto const result = parseToolCalls(output, tools);
 
@@ -153,7 +154,7 @@ TEST_CASE("agent.local.tool_call_parser.plain_text_no_tool_calls", "[agent][loca
 TEST_CASE("agent.local.tool_call_parser.nested_json_arguments", "[agent][local]")
 {
     auto const tools = makeTestTools();
-    auto const output =
+    const auto* const output =
         R"(<tool_call>{"name": "write_file", "arguments": {"path": "/config.json", "content": "{\"key\": [1, 2, {\"nested\": true}]}"}}</tool_call>)";
 
     auto const result = parseToolCalls(output, tools);

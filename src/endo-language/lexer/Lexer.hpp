@@ -163,8 +163,8 @@ struct LineColumn
 
 struct SourceLocation
 {
-    int line = 0;          // 0-based index
-    int column = 0;        // 0-based index
+    int line = 0;     // 0-based index
+    int column = 0;   // 0-based index
     std::string name; // e.g. stdin, or a filename
 };
 

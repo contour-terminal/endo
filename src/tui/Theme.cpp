@@ -397,7 +397,7 @@ auto ThemeManager::current() const noexcept -> Theme const&
 
 void ThemeManager::setCurrent(Theme theme)
 {
-    _current = std::move(theme);
+    _current = theme;
 }
 
 void ThemeManager::reset()

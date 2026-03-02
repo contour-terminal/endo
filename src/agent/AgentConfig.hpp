@@ -58,19 +58,19 @@ struct CopilotConfig
 /// Configuration for the local llama.cpp inference provider.
 struct LocalConfig
 {
-    std::string modelPath;                                         ///< Path to GGUF model file.
-    std::string modelDir = "~/.local/share/endo/models/";          ///< Directory for model storage.
-    int32_t gpuLayers = -1;                                        ///< GPU layers to offload (-1 = all, 0 = CPU only).
-    size_t contextSize = 32768;                                    ///< Context window size in tokens.
-    int32_t threads = 0;                                           ///< Number of threads (0 = auto-detect).
-    size_t batchSize = 512;                                        ///< Batch size for prompt evaluation.
-    float temperature = 0.7f;                                      ///< Sampling temperature.
-    float topP = 0.9f;                                             ///< Top-p (nucleus) sampling.
-    int32_t topK = 40;                                             ///< Top-k sampling.
-    float repeatPenalty = 1.1f;                                    ///< Repetition penalty.
-    bool flashAttention = true;                                    ///< Enable flash attention if supported.
-    size_t maxTokens = 4096;                                       ///< Maximum output tokens per request.
-    std::string chatTemplate;                                      ///< Chat template override (empty = auto-detect).
+    std::string modelPath;                                ///< Path to GGUF model file.
+    std::string modelDir = "~/.local/share/endo/models/"; ///< Directory for model storage.
+    int32_t gpuLayers = -1;                               ///< GPU layers to offload (-1 = all, 0 = CPU only).
+    size_t contextSize = 32768;                           ///< Context window size in tokens.
+    int32_t threads = 0;                                  ///< Number of threads (0 = auto-detect).
+    size_t batchSize = 512;                               ///< Batch size for prompt evaluation.
+    float temperature = 0.7f;                             ///< Sampling temperature.
+    float topP = 0.9f;                                    ///< Top-p (nucleus) sampling.
+    int32_t topK = 40;                                    ///< Top-k sampling.
+    float repeatPenalty = 1.1f;                           ///< Repetition penalty.
+    bool flashAttention = true;                           ///< Enable flash attention if supported.
+    size_t maxTokens = 4096;                              ///< Maximum output tokens per request.
+    std::string chatTemplate;                             ///< Chat template override (empty = auto-detect).
 };
 
 /// Configuration for agent plan mode.

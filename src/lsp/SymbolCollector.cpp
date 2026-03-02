@@ -6,7 +6,9 @@
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 
+#include <ranges>
 #include <unordered_map>
+#include <utility>
 
 #include "StubRuntime.hpp"
 
@@ -62,9 +64,9 @@ namespace
         /// Resolves a symbol name to its definition index, searching from innermost scope.
         [[nodiscard]] int resolveSymbol(std::string const& name) const
         {
-            for (auto it = _scopes.rbegin(); it != _scopes.rend(); ++it)
+            for (const auto& _scope: std::ranges::reverse_view(_scopes))
             {
-                if (auto found = it->find(name); found != it->end())
+                if (auto found = _scope.find(name); found != _scope.end())
                     return found->second;
             }
             return -1;
@@ -537,7 +539,7 @@ std::vector<SourceLocationRange> findReferences(std::string const& source,
     auto targetDefIndex = -1;
 
     // Check if cursor is on a definition — match by begin position
-    for (auto i = 0; i < static_cast<int>(table->definitions.size()); ++i)
+    for (auto i = 0; std::cmp_less(i, table->definitions.size()); ++i)
     {
         auto const& def = table->definitions[static_cast<size_t>(i)];
         if (def.name == name && def.location.begin.line == tokenBegin.line

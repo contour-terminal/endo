@@ -42,7 +42,7 @@ TEST_CASE("DiagnosticsCollector.empty_source", "[diagnostics]")
 
 TEST_CASE("DiagnosticsCollector.valid_match_expression", "[diagnostics]")
 {
-    auto diagnostics = collectDiagnostics("let x = match 1 with | 1 -> \"one\" | _ -> \"other\"");
+    auto diagnostics = collectDiagnostics(R"(let x = match 1 with | 1 -> "one" | _ -> "other")");
     CHECK(diagnostics.empty());
 }
 
@@ -200,7 +200,7 @@ TEST_CASE("DiagnosticsCollector.option_in_binary_op_type_error", "[diagnostics][
             found = true;
             CHECK(d.severity == DiagnosticSeverity::Error);
             REQUIRE(!d.suggestions.empty());
-            CHECK(d.suggestions[0].find("?") != std::string::npos);
+            CHECK(d.suggestions[0].find('?') != std::string::npos);
             // Diagnostic must have a non-zero-width source range (not the default (0,0))
             CHECK(d.range.end.character > d.range.start.character);
         }
@@ -304,7 +304,7 @@ TEST_CASE("DiagnosticsCollector.heterogeneous_list_type_error", "[diagnostics][t
             found = true;
             CHECK(d.severity == DiagnosticSeverity::Error);
             REQUIRE(!d.suggestions.empty());
-            CHECK(d.suggestions[0].find("?") != std::string::npos);
+            CHECK(d.suggestions[0].find('?') != std::string::npos);
             CHECK(d.range.start.line == 0);
             CHECK(d.range.end.character > d.range.start.character);
         }

@@ -346,12 +346,12 @@ class Screen
     [[nodiscard]] Component* componentAtRecursive(Component& component, int row, int col) const;
 
     // Event dispatch helpers
-    [[nodiscard]] EventResult bubbleEvent(Component* target, InputEvent const& event);
+    [[nodiscard]] static EventResult bubbleEvent(Component* target, InputEvent const& event);
     [[nodiscard]] EventResult dispatchKeyEvent(InputEvent const& event);
     [[nodiscard]] EventResult dispatchMouseEvent(MouseEvent const& mouse);
 
     // Focus helpers
-    void updateFocus(Component* oldFocus, Component* newFocus);
+    static void updateFocus(Component* oldFocus, Component* newFocus);
     [[nodiscard]] std::vector<Component*> collectFocusableComponents(FocusGroupId const& group) const;
     void collectFocusableRecursive(Component& component,
                                    FocusGroupId const& group,

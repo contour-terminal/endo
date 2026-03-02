@@ -42,12 +42,12 @@ namespace
         using enum TokenCategory;
         switch (category)
         {
-            case Keyword: return { TypeKeyword, 0 };
-            case Number: return { TypeNumber, 0 };
-            case String: return { TypeString, 0 };
-            case Constructor: return { TypeEnumMember, 0 };
-            case Operator: return { TypeOperator, 0 };
-            case Function: return { TypeFunction, 0 };
+            case Keyword: return { .type = TypeKeyword, .modifiers = 0 };
+            case Number: return { .type = TypeNumber, .modifiers = 0 };
+            case String: return { .type = TypeString, .modifiers = 0 };
+            case Constructor: return { .type = TypeEnumMember, .modifiers = 0 };
+            case Operator: return { .type = TypeOperator, .modifiers = 0 };
+            case Function: return { .type = TypeFunction, .modifiers = 0 };
             case Variable: {
                 // Shell variables get the modification modifier
                 using enum Token;
@@ -59,16 +59,16 @@ namespace
                     case DollarDollar:
                     case DollarNot:
                     case DollarNumber:
-                    case DollarBraceParam: return { TypeVariable, ModModification };
-                    default: return { TypeVariable, 0 };
+                    case DollarBraceParam: return { .type = TypeVariable, .modifiers = ModModification };
+                    default: return { .type = TypeVariable, .modifiers = 0 };
                 }
             }
-            case Comment: return { TypeComment, 0 };
-            case Type: return { TypeType, 0 };
+            case Comment: return { .type = TypeComment, .modifiers = 0 };
+            case Type: return { .type = TypeType, .modifiers = 0 };
             case Punctuation:
-            case Default: return { -1, 0 };
+            case Default: return { .type = -1, .modifiers = 0 };
         }
-        return { -1, 0 };
+        return { .type = -1, .modifiers = 0 };
     }
 
 } // namespace

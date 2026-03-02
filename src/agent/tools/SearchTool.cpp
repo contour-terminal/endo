@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <agent/tools/SearchTool.hpp>
@@ -400,7 +401,7 @@ namespace
                     lines.push_back(std::move(line));
 
                 auto matchedLineNumbers = std::vector<int> {};
-                for (auto i = 0; i < static_cast<int>(lines.size()); ++i)
+                for (auto i = 0; std::cmp_less(i, lines.size()); ++i)
                 {
                     if (std::regex_search(lines[i], regex))
                         matchedLineNumbers.push_back(i);
@@ -675,7 +676,7 @@ auto SearchTool::definition() const -> ToolDefinition
                         nlohmann::json {
                             { "type", "string" },
                             { "description",
-                              "File type shorthand (e.g. \"cpp\", \"py\", \"js\", \"rust\", \"ts\")" },
+                              R"(File type shorthand (e.g. "cpp", "py", "js", "rust", "ts"))" },
                         } },
                       { "case_insensitive",
                         nlohmann::json {

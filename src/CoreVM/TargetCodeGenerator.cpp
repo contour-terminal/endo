@@ -11,6 +11,7 @@
 #include <print>
 #include <ranges>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace CoreVM
@@ -29,9 +30,7 @@ std::vector<T> convert(const std::vector<Constant*>& source)
     return target;
 }
 
-TargetCodeGenerator::TargetCodeGenerator(): _functionId(0)
-{
-}
+TargetCodeGenerator::TargetCodeGenerator() = default;
 
 std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
 {
@@ -371,7 +370,7 @@ void TargetCodeGenerator::visit(StoreInstr& storeInstr)
     }
 
     StackPointer di = getStackPointer(storeInstr.variable());
-    COREVM_ASSERT(di != size_t(-1), "BUG: StoreInstr.variable not found on stack");
+    COREVM_ASSERT(std::cmp_not_equal(di, -1), "BUG: StoreInstr.variable not found on stack");
 
     if (storeInstr.source()->uses().size() == 1 && _stack.back() == storeInstr.source())
     {
@@ -396,7 +395,7 @@ void TargetCodeGenerator::visit(LoadInstr& loadInstr)
     }
 
     StackPointer si = getStackPointer(loadInstr.variable());
-    COREVM_ASSERT(si != static_cast<size_t>(-1),
+    COREVM_ASSERT(std::cmp_not_equal(si, -1),
                   "BUG: emitLoad: LoadInstr with variable() not yet on the stack.");
 
     emitInstr(Opcode::LOAD, si);
@@ -550,7 +549,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
         // FIXME this constant initialization should pretty much be done in the entry block
         CoreNumber number = integer->get();
         // Only use ILOAD for non-negative numbers that fit in Operand (uint16_t)
-        if (number >= 0 && static_cast<uint64_t>(number) <= std::numeric_limits<Operand>::max())
+        if (number >= 0 && std::cmp_less_equal(number, std::numeric_limits<Operand>::max()))
         {
             emitInstr(Opcode::ILOAD, static_cast<Operand>(number));
             changeStack(0, value);
@@ -619,7 +618,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
                 emitInstr(Opcode::CTLOAD, _cp.makeCidrArray(convert<util::Cidr, ConstantCidr>(array->get())));
                 changeStack(0, value);
                 break;
-            default: fprintf(stderr, "BUG: Unsupported array type in target code generator."); abort();
+            default: std::print(stderr, "BUG: Unsupported array type in target code generator."); abort();
         }
         return;
     }
@@ -642,7 +641,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
 
     // if value is already on stack, dup to top
     StackPointer si = getStackPointer(value);
-    COREVM_ASSERT(si != static_cast<size_t>(-1),
+    COREVM_ASSERT(std::cmp_not_equal(si, -1),
                   "BUG: emitLoad: value not yet on the stack but referenced as operand.");
 
     // If value is at the top of stack AND only used once, we can use it directly
@@ -666,7 +665,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
     push(value);
 }
 
-void TargetCodeGenerator::dumpCurrentStack()
+void TargetCodeGenerator::dumpCurrentStack() const
 {
     std::print("Dump stack state ({} elements):\n", _stack.size());
 
@@ -678,7 +677,7 @@ void TargetCodeGenerator::dumpCurrentStack()
 
 void TargetCodeGenerator::visit(PhiNode& /*phiInstr*/)
 {
-    fprintf(
+    std::print(
         stderr,
         "Should never reach here, as PHI instruction nodes should have been replaced by target registers.");
     abort();

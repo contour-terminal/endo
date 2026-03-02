@@ -31,7 +31,7 @@ enum class TypeKind : uint8_t
 struct FieldInfo
 {
     std::string name;                       ///< Field name (empty string for tuple positions)
-    uint8_t offset;                         ///< Slot offset within the object's data area
+    uint8_t offset {};                      ///< Slot offset within the object's data area
     LiteralType type = LiteralType::Number; ///< The VM type of this field's value
     std::string nestedTypeName; ///< For Object-typed fields, the nested type name (e.g., "Size", "DateTime")
 };
@@ -47,7 +47,7 @@ struct ModuleFunctionInfo
 struct VariantInfo
 {
     std::string name;              ///< Variant name ("Some", "None", "Ok", "Error", etc.)
-    uint8_t payloadSlots;          ///< Number of Value slots for payload (0 for unit variants)
+    uint8_t payloadSlots {};       ///< Number of Value slots for payload (0 for unit variants)
     std::vector<FieldInfo> fields; ///< Named fields (empty if positional or unit variant)
 };
 
@@ -61,10 +61,10 @@ struct VariantInfo
 /// - Debugging/tracing (type and variant names)
 struct TypeDescriptor
 {
-    TypeKind kind;      ///< What kind of composite type this is
-    uint16_t id;        ///< Unique type ID for fast comparison
-    std::string name;   ///< Human-readable type name ("Option", "Result", etc.)
-    uint16_t slotCount; ///< Total Value slots needed for payload data
+    TypeKind kind {};      ///< What kind of composite type this is
+    uint16_t id {};        ///< Unique type ID for fast comparison
+    std::string name;      ///< Human-readable type name ("Option", "Result", etc.)
+    uint16_t slotCount {}; ///< Total Value slots needed for payload data
 
     /// Variant information (only for Sum types).
     /// Index in this vector is the tag value.
@@ -145,7 +145,7 @@ constexpr uint64_t packTypeTag(LiteralType t0, LiteralType t1, LiteralType t2) n
 /// Unpacks a LiteralType from a packed type tag at the given position (0, 1, or 2).
 constexpr LiteralType unpackTypeTag(uint64_t packed, uint8_t position) noexcept
 {
-    return static_cast<LiteralType>((packed >> (position * 8)) & 0xFF);
+    return static_cast<LiteralType>((packed >> (static_cast<unsigned>(position) * 8)) & 0xFF);
 }
 
 /// Well-known type IDs for built-in types.

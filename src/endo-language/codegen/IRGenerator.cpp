@@ -12,10 +12,13 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <algorithm>
 #include <bit>
 #include <functional>
 #include <map>
+#include <ranges>
 #include <typeinfo>
+#include <utility>
 
 // {{{ trace macros
 // clang-format off
@@ -93,19 +96,19 @@ namespace
             case CoreVM::LiteralType::Object:
                 if (auto info = tryGetObjectInfo(value))
                 {
-                    if (info->typeId == CoreVM::BuiltinTypeId::Option)
+                    if (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::Option))
                     {
                         if (auto it = info->slots.find(0); it != info->slots.end())
                             return std::format("option<{}>", typeName(it->second));
                         return "option"; // None — no inner type known
                     }
-                    if (info->typeId == CoreVM::BuiltinTypeId::Result)
+                    if (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::Result))
                     {
                         if (auto it = info->slots.find(0); it != info->slots.end())
                             return std::format("result<{}>", typeName(it->second));
                         return "result";
                     }
-                    if (info->typeId == CoreVM::BuiltinTypeId::Tuple2)
+                    if (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::Tuple2))
                     {
                         auto it0 = info->slots.find(0);
                         auto it1 = info->slots.find(1);
@@ -113,7 +116,7 @@ namespace
                             return std::format("{} * {}", typeName(it0->second), typeName(it1->second));
                         return "tuple";
                     }
-                    if (info->typeId == CoreVM::BuiltinTypeId::Tuple3)
+                    if (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::Tuple3))
                     {
                         auto it0 = info->slots.find(0);
                         auto it1 = info->slots.find(1);
@@ -125,7 +128,7 @@ namespace
                                                typeName(it2->second));
                         return "tuple";
                     }
-                    if (info->typeId == CoreVM::BuiltinTypeId::List)
+                    if (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::List))
                     {
                         // Cons: slot[0] = head element
                         if (auto it = info->slots.find(0); it != info->slots.end())
@@ -171,9 +174,9 @@ namespace
 
         // For sum types (Option/Result/List): different variant tags → compatible
         // (e.g., Some(42) vs None, Ok(42) vs Error("msg"), Cons vs Nil)
-        auto const isSumType = infoA->typeId == CoreVM::BuiltinTypeId::Option
-                               || infoA->typeId == CoreVM::BuiltinTypeId::Result
-                               || infoA->typeId == CoreVM::BuiltinTypeId::List;
+        auto const isSumType = std::cmp_equal(infoA->typeId, CoreVM::BuiltinTypeId::Option)
+                               || std::cmp_equal(infoA->typeId, CoreVM::BuiltinTypeId::Result)
+                               || std::cmp_equal(infoA->typeId, CoreVM::BuiltinTypeId::List);
         if (isSumType && infoA->tag.has_value() && infoB->tag.has_value() && *infoA->tag != *infoB->tag)
             return true;
 
@@ -243,7 +246,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             func.body = nullptr;
             func.builtinHOF = std::move(hofName);
             func.resultKind = resultKind;
-            generator.registerFSharpFunction(std::move(name), std::move(func));
+            generator.registerFSharpFunction(name, std::move(func));
         };
         registerHOF("map", { "__f", "__xs" }, "map", ResultKind::Value);
         registerHOF("filter", { "__pred", "__xs" }, "filter", ResultKind::Value);
@@ -474,12 +477,12 @@ void IRGenerator::popFSharpScope()
 
     // Emit dispose callbacks for `let use` bindings in LIFO order (before ORELEASE).
     auto const& disposeEntries = _sema.scopes().currentDisposeEntries();
-    for (auto it = disposeEntries.rbegin(); it != disposeEntries.rend(); ++it)
+    for (const auto& disposeEntrie: std::ranges::reverse_view(disposeEntries))
     {
-        auto* callback = findCallback(it->callbackSignature);
+        auto* callback = findCallback(disposeEntrie.callbackSignature);
         if (callback)
         {
-            auto* val = _builder.createLoad(it->storage, "dispose.load");
+            auto* val = _builder.createLoad(disposeEntrie.storage, "dispose.load");
             _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { val }, "dispose.call");
         }
     }
@@ -801,7 +804,7 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
 
     // Try expressions: the ? operator unwraps Result/Option, but the function
     // itself needs to return a Result/Option for the error path. Default to Result.
-    if (auto* tryExpr = dynamic_cast<ast::TryExpr const*>(body))
+    if (const auto* tryExpr = dynamic_cast<ast::TryExpr const*>(body))
     {
         // Check the operand to determine if it's Option or Result
         auto operandKind = determineReturnKind(tryExpr->operand.get());
@@ -811,15 +814,15 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     }
 
     // Try-finally: result type is the body's result type
-    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+    if (const auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
         return determineReturnKind(tryFinally->body.get());
 
     // Check through parentheses
-    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+    if (const auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
         return determineReturnKind(paren->inner.get());
 
     // Let-in expression: check both value and body recursively
-    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+    if (const auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
     {
         auto valueKind = determineReturnKind(letIn->value.get());
         if (valueKind != ReturnKind::Plain)
@@ -828,7 +831,7 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     }
 
     // If expression: check both branches
-    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+    if (const auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
     {
         auto thenKind = determineReturnKind(ifExpr->thenExpr.get());
         if (thenKind != ReturnKind::Plain)
@@ -837,7 +840,7 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     }
 
     // Check match expression arms
-    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    if (const auto* match = dynamic_cast<ast::MatchExpr const*>(body))
     {
         for (auto const& arm: match->arms)
         {
@@ -849,7 +852,7 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     }
 
     // Check pipeline - the result type is the last function's return type
-    if (auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
+    if (const auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
     {
         auto valueKind = determineReturnKind(pipe->value.get());
         if (valueKind != ReturnKind::Plain)
@@ -858,13 +861,13 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     }
 
     // Function application - look up the called function's return kind
-    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+    if (const auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
     {
         // Drill down to find the base identifier
         ast::Expr const* base = app->function.get();
-        while (auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
+        while (const auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
             base = inner->function.get();
-        if (auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
+        if (const auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
         {
             auto const* func = lookupFSharpFunction(ident->name);
             if (func)
@@ -895,17 +898,17 @@ bool IRGenerator::containsTryExpr(ast::Expr const* body) const
     if (dynamic_cast<ast::PlaceholderLambdaExpr const*>(body))
         return false;
 
-    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+    if (const auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
         return containsTryExpr(paren->inner.get());
 
-    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+    if (const auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
         return containsTryExpr(letIn->value.get()) || containsTryExpr(letIn->body.get());
 
-    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+    if (const auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
         return containsTryExpr(ifExpr->thenExpr.get())
                || (ifExpr->elseExpr && containsTryExpr(ifExpr->elseExpr.get()));
 
-    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    if (const auto* match = dynamic_cast<ast::MatchExpr const*>(body))
     {
         if (containsTryExpr(match->scrutinee.get()))
             return true;
@@ -915,28 +918,28 @@ bool IRGenerator::containsTryExpr(ast::Expr const* body) const
         return false;
     }
 
-    if (auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
+    if (const auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
         return containsTryExpr(pipe->value.get()) || containsTryExpr(pipe->function.get());
 
-    if (auto* binary = dynamic_cast<ast::BinaryExpr const*>(body))
+    if (const auto* binary = dynamic_cast<ast::BinaryExpr const*>(body))
         return containsTryExpr(binary->left.get()) || containsTryExpr(binary->right.get());
 
-    if (auto* unary = dynamic_cast<ast::UnaryExpr const*>(body))
+    if (const auto* unary = dynamic_cast<ast::UnaryExpr const*>(body))
         return containsTryExpr(unary->operand.get());
 
-    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+    if (const auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
         return containsTryExpr(app->function.get()) || containsTryExpr(app->argument.get());
 
-    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+    if (const auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
         return containsTryExpr(tryFinally->body.get());
 
-    if (auto* result = dynamic_cast<ast::ResultExpr const*>(body))
+    if (const auto* result = dynamic_cast<ast::ResultExpr const*>(body))
         return containsTryExpr(result->payload.get());
 
-    if (auto* option = dynamic_cast<ast::OptionExpr const*>(body))
+    if (const auto* option = dynamic_cast<ast::OptionExpr const*>(body))
         return option->isSome && containsTryExpr(option->value.get());
 
-    if (auto* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(body))
+    if (const auto* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(body))
         return containsTryExpr(optDefault->option.get()) || containsTryExpr(optDefault->defaultValue.get());
 
     return false;
@@ -958,16 +961,16 @@ bool IRGenerator::needsAutoWrap(ast::Expr const* body) const
         return true;
 
     // Let-in: wrapping depends on the body (the final expression)
-    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+    if (const auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
         return needsAutoWrap(letIn->body.get());
 
     // If expression: needs wrapping if either branch needs it
-    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+    if (const auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
         return needsAutoWrap(ifExpr->thenExpr.get())
                || (ifExpr->elseExpr && needsAutoWrap(ifExpr->elseExpr.get()));
 
     // Match expression: needs wrapping if any arm needs it
-    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    if (const auto* match = dynamic_cast<ast::MatchExpr const*>(body))
     {
         for (auto const& arm: match->arms)
             if (needsAutoWrap(arm.body.get()))
@@ -976,20 +979,20 @@ bool IRGenerator::needsAutoWrap(ast::Expr const* body) const
     }
 
     // Parenthesized expression: check inner
-    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+    if (const auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
         return needsAutoWrap(paren->inner.get());
 
     // Try-finally: check the body
-    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+    if (const auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
         return needsAutoWrap(tryFinally->body.get());
 
     // Application of a known function that returns Result/Option — already wrapped
-    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+    if (const auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
     {
         ast::Expr const* base = app->function.get();
-        while (auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
+        while (const auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
             base = inner->function.get();
-        if (auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
+        if (const auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
         {
             auto const* func = lookupFSharpFunction(ident->name);
             if (func && func->returnKind != ReturnKind::Plain)
@@ -1147,6 +1150,7 @@ CoreVM::Value* IRGenerator::createCallableObject(FSharpFunction const& func, std
     CoreVM::IRProgram::CustomProductType customType;
     customType.name = std::format("Callable_{}", funcName);
     customType.assignedId = callableTypeId;
+    customType.fields.reserve(captureCount + 1);
     customType.fields.push_back({ "funcId", 0, CoreVM::LiteralType::Number });
     for (uint16_t i = 0; i < captureCount; ++i)
         customType.fields.push_back(
@@ -2541,9 +2545,10 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
         typeId = _builder.program()->allocateCustomTypeId();
 
         std::vector<CoreVM::FieldInfo> fields;
+        fields.reserve(node.inlineFields.size());
         std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes;
 
-        for (uint8_t i = 0; i < node.inlineFields.size(); ++i)
+        for (size_t i = 0; i < node.inlineFields.size(); ++i)
         {
             auto const& field = node.inlineFields[i];
             auto vmType = CoreVM::LiteralType::String; // default
@@ -2558,7 +2563,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
                     case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
                 }
             }
-            fields.push_back({ field.name, i, vmType });
+            fields.push_back({ field.name, static_cast<uint8_t>(i), vmType });
             fieldTypes[field.name] = vmType;
 
             // Build schema descriptor
@@ -2908,7 +2913,7 @@ CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
     return _builder.createNCmpEQ(value, _builder.get(CoreVM::CoreNumber(0)));
 }
 
-bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
+bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
 {
     for (auto const& expr: expressions)
     {
@@ -3163,7 +3168,7 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
         }
         else if (auto info = tryGetObjectInfo(value))
         {
-            isList = (info->typeId == CoreVM::BuiltinTypeId::List);
+            isList = (std::cmp_equal(info->typeId, CoreVM::BuiltinTypeId::List));
             if (!isList)
                 isTypedObject = true;
         }
@@ -4246,7 +4251,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 
     if (name == "rand")
     {
-        if (argExprs.size() == 0)
+        if (argExprs.empty())
         {
             // rand — no arguments, returns random positive integer
             auto* callback = findCallback("rand()I");
@@ -4725,7 +4730,7 @@ bool IRGenerator::inFunction() const
     return _functionDepth > 0;
 }
 
-bool IRGenerator::needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const
+bool IRGenerator::needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs)
 {
     // Check if either operand has a dynamic type (from OGETSLOT or similar)
     return lhs->type() == CoreVM::LiteralType::Void || lhs->type() == CoreVM::LiteralType::Object
@@ -5321,8 +5326,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         if (_persistentState)
         {
             _persistentState->properties[node.name] = FSharpPersistentState::PersistedProperty {
-                node.getter.get(),
-                node.setter.get(),
+                .getter = node.getter.get(),
+                .setter = node.setter.get(),
             };
         }
 
@@ -5902,7 +5907,8 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
                 auto tn = typeName(operand);
                 if (tn == "object")
                 {
-                    auto const baseName = *typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
+                    const auto* const baseName =
+                        *typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
                     if (auto const innerType = getInnerType(operand);
                         innerType && *innerType != CoreVM::LiteralType::Void)
                     {
@@ -6460,7 +6466,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             explicitArgExprs.push_back(innerApp->argument.get());
             base = innerApp->function.get();
         }
-        std::reverse(explicitArgExprs.begin(), explicitArgExprs.end());
+        std::ranges::reverse(explicitArgExprs);
 
         // Unwrap parens
         while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(base))
@@ -7074,7 +7080,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     }
 
     // Reverse to get arguments in correct order (first arg first)
-    std::reverse(argExprs.begin(), argExprs.end());
+    std::ranges::reverse(argExprs);
 
     // Unwrap ParenExpr if present
     while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(current))
@@ -7515,7 +7521,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         CoreVM::Value* list = emitNilList(CoreVM::LiteralType::Void, "varargs.nil");
 
         // Build Cons cells in reverse order so first extra arg is at the head
-        for (auto i = static_cast<int>(args.size()) - 1; i >= static_cast<int>(fixedCount); --i)
+        for (auto i = static_cast<int>(args.size()) - 1; std::cmp_greater_equal(i, fixedCount); --i)
         {
             list = emitListCons(args[i], list, args[i]->type(), "varargs.cons");
         }
@@ -8520,7 +8526,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             auto allocaType = scrutinee->type();
             if (auto innerLiteralType = getInnerType(scrutinee))
             {
-                if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+                if (const auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
                 {
                     if (ctorPat->payload.has_value())
                         allocaType = *innerLiteralType;
@@ -8597,7 +8603,9 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         {
             std::unordered_map<std::string, PatternIRGenerator::ConstructorMeta> ctorLookup;
             for (auto const& [ctorName, ctorInfo]: _sema.types().constructors())
-                ctorLookup[ctorName] = { ctorInfo.typeId, ctorInfo.tag, ctorInfo.payloadSlots };
+                ctorLookup[ctorName] = { .typeId = ctorInfo.typeId,
+                                         .tag = ctorInfo.tag,
+                                         .payloadSlots = ctorInfo.payloadSlots };
             patternIRGenerator.setConstructorLookup(std::move(ctorLookup));
         }
 
@@ -8686,7 +8694,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         {
             CoreVM::Value* bindingSource = _builder.createLoad(scrutineeStorage, "scrutinee.reload");
 
-            if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+            if (const auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
             {
                 // Extract payload from slot 0 for constructor patterns
                 if (ctorPat->payload.has_value())
@@ -8832,7 +8840,7 @@ void IRGenerator::visit(ast::ListExpr const& node)
             }
             else
             {
-                suggestions.push_back("Ensure all list elements have the same type");
+                suggestions.emplace_back("Ensure all list elements have the same type");
             }
             reportTypeErrorWithSuggestions(
                 std::move(suggestions),
@@ -8961,9 +8969,9 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
         {
             if (startLit->value.size() == 1 && endLit->value.size() == 1 && !node.step)
             {
-                auto startOrd =
+                auto* startOrd =
                     _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(startLit->value[0])));
-                auto endOrd = _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(endLit->value[0])));
+                auto* endOrd = _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(endLit->value[0])));
                 auto* callback = findCallback("list_char_range(II)I");
                 if (!callback)
                 {
@@ -9198,7 +9206,7 @@ void IRGenerator::emitComprehensionLevel(ast::ListComprehensionExpr const& node,
     auto* elemAlloca = createAllocaInEntryBlock(compElemType, std::format("{}.elem", prefix));
 
     // Determine whether body is a nested comprehension
-    auto* innerComp = dynamic_cast<ast::ListComprehensionExpr const*>(node.body.get());
+    const auto* innerComp = dynamic_cast<ast::ListComprehensionExpr const*>(node.body.get());
 
     // Create blocks AFTER source codegen to ensure correct block ordering
     auto* condBlock = _builder.createBlock(std::format("{}.cond", prefix));
@@ -10041,25 +10049,27 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             // Check if pattern matches
             bool patternAlwaysMatches = false;
 
-            if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
+            if (const auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
             {
                 // Variable pattern always matches
                 patternAlwaysMatches = true;
             }
-            else if (auto* wildPat = dynamic_cast<pattern::WildcardPattern const*>(arm.pattern.get()))
+            else if (const auto* wildPat = dynamic_cast<pattern::WildcardPattern const*>(arm.pattern.get()))
             {
                 // Wildcard always matches
                 patternAlwaysMatches = true;
             }
-            else if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+            else if (const auto* ctorPat =
+                         dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
             {
                 // Constructor pattern - check payload if it's a literal
                 if (ctorPat->payload.has_value())
                 {
-                    if (auto* litPat = dynamic_cast<pattern::LiteralPattern const*>(ctorPat->payload->get()))
+                    if (const auto* litPat =
+                            dynamic_cast<pattern::LiteralPattern const*>(ctorPat->payload->get()))
                     {
                         // Compare error value with literal
-                        if (auto* intVal = std::get_if<int64_t>(&litPat->value))
+                        if (const auto* intVal = std::get_if<int64_t>(&litPat->value))
                         {
                             CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
                             // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
@@ -10090,10 +10100,10 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                     patternAlwaysMatches = true;
                 }
             }
-            else if (auto* litPat = dynamic_cast<pattern::LiteralPattern const*>(arm.pattern.get()))
+            else if (const auto* litPat = dynamic_cast<pattern::LiteralPattern const*>(arm.pattern.get()))
             {
                 // Direct literal pattern - compare error value
-                if (auto* intVal = std::get_if<int64_t>(&litPat->value))
+                if (const auto* intVal = std::get_if<int64_t>(&litPat->value))
                 {
                     CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
                     // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
@@ -10118,15 +10128,16 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             pushFSharpScope();
 
             // Bind pattern variables
-            if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
+            if (const auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
             {
                 bindFSharpVariable(varPat->name, errorStorage);
             }
-            else if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+            else if (const auto* ctorPat =
+                         dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
             {
                 if (ctorPat->payload.has_value())
                 {
-                    if (auto* innerVar =
+                    if (const auto* innerVar =
                             dynamic_cast<pattern::VariablePattern const*>(ctorPat->payload->get()))
                     {
                         bindFSharpVariable(innerVar->name, errorStorage);
@@ -10349,8 +10360,9 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
 
     // Build field info list with type annotations from the AST
     std::vector<CoreVM::FieldInfo> fields;
+    fields.reserve(node.fields.size());
     std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes;
-    for (uint8_t i = 0; i < node.fields.size(); ++i)
+    for (size_t i = 0; i < node.fields.size(); ++i)
     {
         auto vmType = CoreVM::LiteralType::Number; // default for non-primitive or unknown types
         if (auto const* prim = std::get_if<PrimitiveTypeNode>(&node.fields[i].type->node))
@@ -10364,7 +10376,7 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
                 case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
             }
         }
-        fields.push_back({ node.fields[i].name, i, vmType });
+        fields.push_back({ node.fields[i].name, static_cast<uint8_t>(i), vmType });
         fieldTypes[node.fields[i].name] = vmType;
     }
 
@@ -10695,7 +10707,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         {
             for (auto const& [name, recInfo]: _sema.types().records())
             {
-                if (recInfo.typeId == info->typeId)
+                if (std::cmp_equal(recInfo.typeId, info->typeId))
                 {
                     typeInfo = &recInfo;
                     break;
@@ -10726,7 +10738,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             {
                 for (auto const& [name, uInfo]: _sema.types().unions())
                 {
-                    if (uInfo.typeId == info->typeId)
+                    if (std::cmp_equal(uInfo.typeId, info->typeId))
                     {
                         unionInfo = &uInfo;
                         break;
@@ -10916,7 +10928,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
         {
             for (auto const& [name, recInfo]: _sema.types().records())
             {
-                if (recInfo.typeId == info->typeId)
+                if (std::cmp_equal(recInfo.typeId, info->typeId))
                 {
                     typeInfo = &recInfo;
                     break;
@@ -11009,6 +11021,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
 
     // Build variant info list
     std::vector<CoreVM::VariantInfo> variants;
+    variants.reserve(node.variants.size());
     // Maps field name → (variant_tag, slot_offset) for field access
     std::unordered_map<std::string, std::pair<int, uint8_t>> fieldLookup;
 
@@ -11018,6 +11031,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
 
         // Build FieldInfo entries from named fields
         std::vector<CoreVM::FieldInfo> fields;
+        fields.reserve(variant.fieldNames.size());
         for (size_t j = 0; j < variant.fieldNames.size(); ++j)
         {
             if (!variant.fieldNames[j].empty())

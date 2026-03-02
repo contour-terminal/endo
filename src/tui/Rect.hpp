@@ -17,7 +17,10 @@ struct Point
     constexpr auto operator<=>(Point const&) const noexcept = default;
 
     /// Offset this point by the given delta.
-    [[nodiscard]] constexpr Point offset(int dx, int dy) const noexcept { return { x + dx, y + dy }; }
+    [[nodiscard]] constexpr Point offset(int dx, int dy) const noexcept
+    {
+        return { .x = x + dx, .y = y + dy };
+    }
 };
 
 /// A 2D size with width and height.
@@ -51,19 +54,22 @@ struct Rect
     /// Create a rectangle from position and size.
     [[nodiscard]] static constexpr Rect fromXYWH(int x, int y, int w, int h) noexcept
     {
-        return { x, y, w, h };
+        return { .x = x, .y = y, .width = w, .height = h };
     }
 
     /// Create a rectangle from two corner points (inclusive).
     [[nodiscard]] static constexpr Rect fromCorners(Point topLeft, Point bottomRight) noexcept
     {
-        return { topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y };
+        return { .x = topLeft.x,
+                 .y = topLeft.y,
+                 .width = bottomRight.x - topLeft.x,
+                 .height = bottomRight.y - topLeft.y };
     }
 
     /// Create a rectangle from position and size.
     [[nodiscard]] static constexpr Rect fromPositionSize(Point pos, Size size) noexcept
     {
-        return { pos.x, pos.y, size.width, size.height };
+        return { .x = pos.x, .y = pos.y, .width = size.width, .height = size.height };
     }
 
     // --- Accessors ---
@@ -81,22 +87,22 @@ struct Rect
     [[nodiscard]] constexpr int bottom() const noexcept { return y + height; }
 
     /// Top-left corner.
-    [[nodiscard]] constexpr Point topLeft() const noexcept { return { x, y }; }
+    [[nodiscard]] constexpr Point topLeft() const noexcept { return { .x = x, .y = y }; }
 
     /// Top-right corner.
-    [[nodiscard]] constexpr Point topRight() const noexcept { return { right(), y }; }
+    [[nodiscard]] constexpr Point topRight() const noexcept { return { .x = right(), .y = y }; }
 
     /// Bottom-left corner.
-    [[nodiscard]] constexpr Point bottomLeft() const noexcept { return { x, bottom() }; }
+    [[nodiscard]] constexpr Point bottomLeft() const noexcept { return { .x = x, .y = bottom() }; }
 
     /// Bottom-right corner.
-    [[nodiscard]] constexpr Point bottomRight() const noexcept { return { right(), bottom() }; }
+    [[nodiscard]] constexpr Point bottomRight() const noexcept { return { .x = right(), .y = bottom() }; }
 
     /// Size of the rectangle.
-    [[nodiscard]] constexpr Size size() const noexcept { return { width, height }; }
+    [[nodiscard]] constexpr Size size() const noexcept { return { .width = width, .height = height }; }
 
     /// Position (top-left corner).
-    [[nodiscard]] constexpr Point position() const noexcept { return { x, y }; }
+    [[nodiscard]] constexpr Point position() const noexcept { return { .x = x, .y = y }; }
 
     // --- Queries ---
 
@@ -132,7 +138,7 @@ struct Rect
     /// Returns a new rectangle offset by (dx, dy).
     [[nodiscard]] constexpr Rect offset(int dx, int dy) const noexcept
     {
-        return { x + dx, y + dy, width, height };
+        return { .x = x + dx, .y = y + dy, .width = width, .height = height };
     }
 
     /// Returns a new rectangle offset by the given point.
@@ -141,43 +147,50 @@ struct Rect
     /// Returns a new rectangle with position set to (newX, newY).
     [[nodiscard]] constexpr Rect withPosition(int newX, int newY) const noexcept
     {
-        return { newX, newY, width, height };
+        return { .x = newX, .y = newY, .width = width, .height = height };
     }
 
     /// Returns a new rectangle with position set to the given point.
     [[nodiscard]] constexpr Rect withPosition(Point pos) const noexcept
     {
-        return { pos.x, pos.y, width, height };
+        return { .x = pos.x, .y = pos.y, .width = width, .height = height };
     }
 
     /// Returns a new rectangle with size set to (newWidth, newHeight).
     [[nodiscard]] constexpr Rect withSize(int newWidth, int newHeight) const noexcept
     {
-        return { x, y, newWidth, newHeight };
+        return { .x = x, .y = y, .width = newWidth, .height = newHeight };
     }
 
     /// Returns a new rectangle with size set to the given size.
     [[nodiscard]] constexpr Rect withSize(Size newSize) const noexcept
     {
-        return { x, y, newSize.width, newSize.height };
+        return { .x = x, .y = y, .width = newSize.width, .height = newSize.height };
     }
 
     /// Returns a new rectangle shrunk by `amount` on all sides.
     [[nodiscard]] constexpr Rect inset(int amount) const noexcept
     {
-        return { x + amount, y + amount, width - 2 * amount, height - 2 * amount };
+        return {
+            .x = x + amount, .y = y + amount, .width = width - (2 * amount), .height = height - (2 * amount)
+        };
     }
 
     /// Returns a new rectangle shrunk by different amounts horizontally and vertically.
     [[nodiscard]] constexpr Rect inset(int horizontal, int vertical) const noexcept
     {
-        return { x + horizontal, y + vertical, width - 2 * horizontal, height - 2 * vertical };
+        return { .x = x + horizontal,
+                 .y = y + vertical,
+                 .width = width - (2 * horizontal),
+                 .height = height - (2 * vertical) };
     }
 
     /// Returns a new rectangle shrunk by different amounts on each side.
     [[nodiscard]] constexpr Rect inset(int left, int top, int right, int bottom) const noexcept
     {
-        return { x + left, y + top, width - left - right, height - top - bottom };
+        return {
+            .x = x + left, .y = y + top, .width = width - left - right, .height = height - top - bottom
+        };
     }
 
     /// Returns a new rectangle expanded by `amount` on all sides.
@@ -195,7 +208,7 @@ struct Rect
         if (newRight <= newX || newBottom <= newY)
             return {}; // No intersection
 
-        return { newX, newY, newRight - newX, newBottom - newY };
+        return { .x = newX, .y = newY, .width = newRight - newX, .height = newBottom - newY };
     }
 
     /// Returns the smallest rectangle that contains both this and the other rectangle.
@@ -211,7 +224,7 @@ struct Rect
         int newRight = std::max(right(), other.right());
         int newBottom = std::max(bottom(), other.bottom());
 
-        return { newX, newY, newRight - newX, newBottom - newY };
+        return { .x = newX, .y = newY, .width = newRight - newX, .height = newBottom - newY };
     }
 
     // --- Comparison ---

@@ -625,8 +625,8 @@ TEST_CASE("TypeRegistry.register_and_lookup")
 {
     TypeRegistry registry;
 
-    registry.registerRecord("Point",
-                            { "Point", { { "x", types::floatType() }, { "y", types::floatType() } } });
+    registry.registerRecord(
+        "Point", { .name = "Point", .fields = { { "x", types::floatType() }, { "y", types::floatType() } } });
 
     auto result = registry.lookupRecord("Point");
     REQUIRE(result.has_value());

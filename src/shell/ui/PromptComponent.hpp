@@ -382,11 +382,11 @@ class PromptComponent: public tui::Component
     [[nodiscard]] std::optional<std::chrono::steady_clock::time_point> computeModuleRefreshDeadline() const;
 
     // Double-Tab detection
-    std::chrono::steady_clock::time_point _lastTabTime {};
+    std::chrono::steady_clock::time_point _lastTabTime;
     static constexpr auto DoubleTabThreshold = std::chrono::milliseconds(400);
 
     // Ctrl+D exit confirmation state
-    std::chrono::steady_clock::time_point _lastCtrlDTime {};
+    std::chrono::steady_clock::time_point _lastCtrlDTime;
     bool _exitHintVisible = false;
 
     // Inline history cycling (fish-style prefix search)

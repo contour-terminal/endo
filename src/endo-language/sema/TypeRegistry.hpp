@@ -13,7 +13,7 @@ namespace endo
 /// Metadata for a registered record (product) type definition.
 struct RecordTypeInfo
 {
-    uint16_t typeId;                                                 ///< Assigned type ID
+    uint16_t typeId = 0;                                             ///< Assigned type ID
     std::string name;                                                ///< Type name
     std::vector<CoreVM::FieldInfo> fields;                           ///< Field definitions (name + offset)
     std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes; ///< Field name -> VM literal type
@@ -24,7 +24,7 @@ struct RecordTypeInfo
 /// Metadata for a registered discriminated union (sum) type definition.
 struct UnionTypeInfo
 {
-    uint16_t typeId;                           ///< Assigned type ID
+    uint16_t typeId = 0;                       ///< Assigned type ID
     std::string name;                          ///< Type name (e.g., "Shape")
     std::vector<CoreVM::VariantInfo> variants; ///< Variant definitions
 
@@ -36,9 +36,9 @@ struct UnionTypeInfo
 struct ConstructorInfo
 {
     std::string typeName;                ///< Parent union type name
-    uint16_t typeId;                     ///< Assigned type ID of the parent union
-    int tag;                             ///< Tag value for this constructor variant
-    uint8_t payloadSlots;                ///< Number of payload slots (0 for unit constructors)
+    uint16_t typeId = 0;                 ///< Assigned type ID of the parent union
+    int tag = 0;                         ///< Tag value for this constructor variant
+    uint8_t payloadSlots = 0;            ///< Number of payload slots (0 for unit constructors)
     std::vector<std::string> fieldNames; ///< Named fields (parallel to payload slots, empty if unnamed)
 };
 

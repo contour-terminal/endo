@@ -43,15 +43,16 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
         if (funcName == "flatpak_complete")
         {
             if (args.empty())
-                return { { "run", "install", "uninstall", "update", "list", "info", "search" }, {} };
+                return { .completions = { "run", "install", "uninstall", "update", "list", "info", "search" },
+                         .errors = {} };
             if (args.size() == 1 && args[0] == "run")
-                return { { "com.visualstudio.code",
-                           "org.mozilla.firefox",
-                           "org.gnome.Calculator",
-                           "io.github.sxyazi.yazi" },
-                         {} };
+                return { .completions = { "com.visualstudio.code",
+                                          "org.mozilla.firefox",
+                                          "org.gnome.Calculator",
+                                          "io.github.sxyazi.yazi" },
+                         .errors = {} };
             if (args.size() == 1 && args[0] == "--")
-                return { { "--user", "--system", "--verbose", "-v" }, {} };
+                return { .completions = { "--user", "--system", "--verbose", "-v" }, .errors = {} };
         }
         return {};
     };
@@ -178,7 +179,7 @@ TEST_CASE("ScriptedCompleter.cache_reuse")
                                          std::vector<std::string> const& /*args*/,
                                          std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
-        return { { "run", "install", "update" }, {} };
+        return { .completions = { "run", "install", "update" }, .errors = {} };
     };
 
     endo::CompleterFunctionRegistry registry;
@@ -211,7 +212,7 @@ TEST_CASE("ScriptedCompleter.args_extraction")
                                std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
         capturedArgs = args;
-        return { { "result" }, {} };
+        return { .completions = { "result" }, .errors = {} };
     };
 
     endo::CompleterFunctionRegistry registry;

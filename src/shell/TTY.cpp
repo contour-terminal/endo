@@ -116,7 +116,7 @@ void RealTTY::setEchoEnabled(bool enabled)
     if (!_hasTTY)
         return;
 
-    termios tio;
+    auto tio = termios {};
     if (tcgetattr(STDIN_FILENO, &tio) == -1)
         return;
 
@@ -138,7 +138,7 @@ std::optional<char> RealTTY::readCharWithTimeout(std::chrono::milliseconds timeo
             return std::nullopt; // timeout or error
     }
 
-    char ch;
+    auto ch = char {};
     ssize_t const n = ::read(STDIN_FILENO, &ch, 1);
     if (n <= 0)
         return std::nullopt; // EOF or error
@@ -163,7 +163,7 @@ void RealTTY::writeToStdin(std::string_view str) const
 
 TestPTY::TestPTY(): _windowSize { .ws_row = 25, .ws_col = 80, .ws_xpixel = 0, .ws_ypixel = 0 }
 {
-    char name[256];
+    char name[256] {};
     if (openpty(&_ptyMaster, &_ptySlave, name, &_baseTermios, &_windowSize) == -1)
         throw std::runtime_error("openpty: " + std::string(strerror(errno)));
 
@@ -216,7 +216,7 @@ void TestPTY::restoreMode()
 
 void TestPTY::setEchoEnabled(bool enabled)
 {
-    termios tio;
+    auto tio = termios {};
     if (tcgetattr(_ptySlave, &tio) == -1)
         return;
 
@@ -238,7 +238,7 @@ std::optional<char> TestPTY::readCharWithTimeout(std::chrono::milliseconds timeo
             return std::nullopt; // timeout or error
     }
 
-    char ch;
+    auto ch = char {};
     ssize_t const n = ::read(_ptySlave, &ch, 1);
     if (n <= 0)
         return std::nullopt; // EOF or error
@@ -278,7 +278,7 @@ void TestPTY::outputUpdateLoop()
 {
     while (!_closed)
     {
-        char buffer[1024];
+        char buffer[1024] {};
         ssize_t const writeResult = read(_ptyMaster, buffer, sizeof(buffer));
         if (writeResult == 0)
             break;

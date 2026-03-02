@@ -298,7 +298,7 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     }
 
     // Sort: directories first, then by score (descending), then alphabetically
-    std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {
+    std::ranges::sort(results, [](auto const& a, auto const& b) {
         bool aIsDir = !a.displayText.empty() && a.displayText.back() == '/';
         bool bIsDir = !b.displayText.empty() && b.displayText.back() == '/';
 

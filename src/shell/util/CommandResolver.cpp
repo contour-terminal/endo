@@ -19,12 +19,12 @@ CommandResolver::CommandResolver(EnvironmentProvider const& env): _env(env)
 CommandInfo CommandResolver::resolve(std::string_view command) const
 {
     if (command.empty())
-        return { CommandType::NotFound, "command not found" };
+        return { .type = CommandType::NotFound, .tooltip = "command not found" };
 
     // Check for builtins first
     auto const& builtins = builtinNames();
     if (builtins.count(std::string(command)))
-        return { CommandType::Builtin, "shell builtin" };
+        return { .type = CommandType::Builtin, .tooltip = "shell builtin" };
 
     // TODO: Check for aliases when implemented
     // For now, aliases are a placeholder
@@ -37,8 +37,8 @@ CommandInfo CommandResolver::resolve(std::string_view command) const
     if (it != _pathCache.end())
     {
         if (it->second.empty())
-            return { CommandType::NotFound, "command not found" };
-        return { CommandType::External, it->second };
+            return { .type = CommandType::NotFound, .tooltip = "command not found" };
+        return { .type = CommandType::External, .tooltip = it->second };
     }
 
     // Not in cache, search PATH
@@ -46,8 +46,8 @@ CommandInfo CommandResolver::resolve(std::string_view command) const
     _pathCache[cmdStr] = path;
 
     if (path.empty())
-        return { CommandType::NotFound, "command not found" };
-    return { CommandType::External, path };
+        return { .type = CommandType::NotFound, .tooltip = "command not found" };
+    return { .type = CommandType::External, .tooltip = path };
 }
 
 void CommandResolver::invalidateCache()

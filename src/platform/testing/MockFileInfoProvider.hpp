@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/FileInfoProvider.hpp>
-
 #include <map>
 #include <string>
 #include <utility>
+
+#include <platform/FileInfoProvider.hpp>
 
 namespace endo::platform::testing
 {

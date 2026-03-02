@@ -53,24 +53,22 @@ bool Message::operator==(const Message& other) const noexcept
 
 // }}}
 // {{{ ConsoleReport
-ConsoleReport::ConsoleReport(): _errorCount { 0 }
-{
-}
+ConsoleReport::ConsoleReport() = default;
 
 bool ConsoleReport::containsFailures() const noexcept
 {
     return _errorCount != 0;
 }
 
-void ConsoleReport::push_back(Message message)
+void ConsoleReport::push_back(Message msg)
 {
-    if (message.type != Type::Warning)
+    if (msg.type != Type::Warning)
         _errorCount++;
 
     // Format: filename:line:column: type: message
-    auto const& loc = message.sourceLocation;
+    auto const& loc = msg.sourceLocation;
     std::string_view typeStr;
-    switch (message.type)
+    switch (msg.type)
     {
         case Type::TokenError: typeStr = "token error"; break;
         case Type::SyntaxError: typeStr = "syntax error"; break;
@@ -83,17 +81,17 @@ void ConsoleReport::push_back(Message message)
     if (!loc.filename.empty())
     {
         std::cerr << std::format(
-            "{}:{}:{}: {}: {}\n", loc.filename, loc.begin.line, loc.begin.column, typeStr, message.text);
+            "{}:{}:{}: {}: {}\n", loc.filename, loc.begin.line, loc.begin.column, typeStr, msg.text);
     }
     else
     {
-        std::cerr << std::format("{}: {}\n", typeStr, message.text);
+        std::cerr << std::format("{}: {}\n", typeStr, msg.text);
     }
 
     // Print context snippet with caret if available
-    if (message.contextSnippet.has_value())
+    if (msg.contextSnippet.has_value())
     {
-        std::cerr << std::format("  | {}\n", message.contextSnippet.value());
+        std::cerr << std::format("  | {}\n", msg.contextSnippet.value());
 
         // Create caret line pointing to the error column
         if (loc.begin.column > 0)
@@ -109,7 +107,7 @@ void ConsoleReport::push_back(Message message)
     }
 
     // Print suggestions as hints
-    for (auto const& suggestion: message.suggestions)
+    for (auto const& suggestion: msg.suggestions)
     {
         std::cerr << std::format("  hint: {}\n", suggestion);
     }

@@ -9,6 +9,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace tui
 {
@@ -74,11 +75,9 @@ namespace
     auto detectHeadingLevel(std::string_view line) -> int
     {
         auto level = 0;
-        while (level < static_cast<int>(line.size()) && level < 6
-               && line[static_cast<std::size_t>(level)] == '#')
+        while (std::cmp_less(level, line.size()) && level < 6 && line[static_cast<std::size_t>(level)] == '#')
             ++level;
-        if (level > 0 && level < static_cast<int>(line.size())
-            && line[static_cast<std::size_t>(level)] == ' ')
+        if (level > 0 && std::cmp_less(level, line.size()) && line[static_cast<std::size_t>(level)] == ' ')
             return level;
         return 0;
     }

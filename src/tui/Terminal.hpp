@@ -134,8 +134,8 @@ class Terminal
     bool _mockMode = false; ///< True when using a mock output (skip input/signal init).
     ColorScheme _colorScheme = ColorScheme::Unknown;
     std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
-    bool _focused = true;          ///< Whether the terminal window has focus (assume focused on startup).
-    bool _hudSupported = false;    ///< Whether terminal supports HUD overlay (DEC mode 2035).
+    bool _focused = true;       ///< Whether the terminal window has focus (assume focused on startup).
+    bool _hudSupported = false; ///< Whether terminal supports HUD overlay (DEC mode 2035).
     std::vector<std::function<void(bool)>> _focusCallbacks;
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
     int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).

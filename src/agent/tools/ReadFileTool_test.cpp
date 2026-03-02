@@ -67,9 +67,9 @@ TEST_CASE("ReadFileTool.with_offset_and_limit", "[agent][tools]")
     auto const result = tool.execute(args);
 
     REQUIRE(result.has_value());
-    CHECK(result->content.find("b") != std::string::npos);
-    CHECK(result->content.find("c") != std::string::npos);
-    CHECK(result->content.find("d") == std::string::npos); // Not included due to limit
+    CHECK(result->content.find('b') != std::string::npos);
+    CHECK(result->content.find('c') != std::string::npos);
+    CHECK(result->content.find('d') == std::string::npos); // Not included due to limit
 }
 
 TEST_CASE("ReadFileTool.file_not_found", "[agent][tools]")

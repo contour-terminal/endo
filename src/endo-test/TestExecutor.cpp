@@ -327,7 +327,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage = std::format(
-                        "Env var \"{}\" mismatch: expected \"{}\", got \"{}\"", key, value, it->second);
+                        R"(Env var "{}" mismatch: expected "{}", got "{}")", key, value, it->second);
                     return result;
                 }
             }

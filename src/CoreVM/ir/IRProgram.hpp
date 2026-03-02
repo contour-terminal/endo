@@ -21,6 +21,7 @@
 namespace CoreVM
 {
 
+class IRProgram;
 class NativeCallback;
 
 // =============================================================================
@@ -41,12 +42,12 @@ class PassManager
     void run(IRFunction* function);
 
     template <typename... Args>
-    void logDebug(std::format_string<Args...> msg, Args... args)
+    static void logDebug(std::format_string<Args...> msg, Args... args)
     {
         logDebug(std::vformat(msg.get(), std::make_format_args(args...)));
     }
 
-    void logDebug(const std::string& msg);
+    static void logDebug(const std::string& msg);
 
   private:
     std::list<std::pair<std::string, FunctionPass>> _functionPasses;
@@ -237,8 +238,8 @@ class IRBuilder
 {
   private:
     std::unique_ptr<IRProgram> _program;
-    IRFunction* _function;
-    BasicBlock* _insertPoint;
+    IRFunction* _function = nullptr;
+    BasicBlock* _insertPoint = nullptr;
     std::unordered_map<std::string, unsigned long> _nameStore;
     SourceLocation _currentLocation;
 

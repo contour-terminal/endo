@@ -227,22 +227,22 @@ TEST_CASE("FileReferenceExpander.stripExpansions.no_file_blocks", "[agent][conte
 
 TEST_CASE("FileReferenceExpander.stripExpansions.single_file_block", "[agent][context]")
 {
-    auto const input = "explain @hello.txt\n\n<file path=\"hello.txt\">\n     1\tline 1\n</file>";
+    const auto* const input = "explain @hello.txt\n\n<file path=\"hello.txt\">\n     1\tline 1\n</file>";
     auto const result = FileReferenceExpander::stripExpansions(input);
     CHECK(result == "explain @hello.txt");
 }
 
 TEST_CASE("FileReferenceExpander.stripExpansions.multiple_file_blocks", "[agent][context]")
 {
-    auto const input = "compare @a.txt and @b.txt\n\n<file path=\"a.txt\">\ncontent a\n</file>"
-                       "\n\n<file path=\"b.txt\">\ncontent b\n</file>";
+    const auto* const input = "compare @a.txt and @b.txt\n\n<file path=\"a.txt\">\ncontent a\n</file>"
+                              "\n\n<file path=\"b.txt\">\ncontent b\n</file>";
     auto const result = FileReferenceExpander::stripExpansions(input);
     CHECK(result == "compare @a.txt and @b.txt");
 }
 
 TEST_CASE("FileReferenceExpander.stripExpansions.error_file_block", "[agent][context]")
 {
-    auto const input = "read @missing.txt\n\n<file path=\"missing.txt\" error=\"File not found\"/>";
+    const auto* const input = "read @missing.txt\n\n<file path=\"missing.txt\" error=\"File not found\"/>";
     auto const result = FileReferenceExpander::stripExpansions(input);
     CHECK(result == "read @missing.txt");
 }
@@ -256,7 +256,7 @@ TEST_CASE("FileReferenceExpander.stripExpansions.empty_string", "[agent][context
 TEST_CASE("FileReferenceExpander.stripExpansions.roundtrip_with_expand", "[agent][context]")
 {
     auto const dir = TempTestDir {};
-    auto const original = "explain @hello.txt";
+    const auto* const original = "explain @hello.txt";
     auto const expanded = FileReferenceExpander::expand(original, dir.root);
     auto const stripped = FileReferenceExpander::stripExpansions(expanded.expandedMessage);
     CHECK(stripped == original);

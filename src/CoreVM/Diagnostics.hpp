@@ -3,6 +3,7 @@
 
 #include <CoreVM/SourceLocation.hpp>
 
+#include <cstdint>
 #include <format>
 #include <optional>
 #include <stdexcept>
@@ -12,7 +13,7 @@
 namespace CoreVM::diagnostics
 {
 
-enum class Type
+enum class Type : uint8_t
 {
     TokenError,
     SyntaxError,
@@ -189,7 +190,7 @@ class ConsoleReport: public Report
     [[nodiscard]] bool containsFailures() const noexcept override;
 
   private:
-    size_t _errorCount;
+    size_t _errorCount = 0;
 };
 
 std::ostream& operator<<(std::ostream& os, const Report& report);

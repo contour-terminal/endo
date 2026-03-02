@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <format>
+#include <ranges>
 #include <sstream>
 #include <unordered_map>
 
@@ -237,7 +238,8 @@ namespace types
 
     TypePtr function(TypePtr param, TypePtr ret)
     {
-        return std::make_shared<Type>(Type { FunctionType { std::move(param), std::move(ret) } });
+        return std::make_shared<Type>(
+            Type { FunctionType { .paramType = std::move(param), .returnType = std::move(ret) } });
     }
 
     TypePtr function(std::vector<TypePtr> const& params, TypePtr ret)
@@ -247,9 +249,9 @@ namespace types
 
         // Build curried function type right-to-left: a -> b -> c -> ret
         TypePtr result = ret;
-        for (auto it = params.rbegin(); it != params.rend(); ++it)
+        for (const auto& param: std::ranges::reverse_view(params))
         {
-            result = function(*it, result);
+            result = function(param, result);
         }
         return result;
     }
@@ -271,12 +273,14 @@ namespace types
 
     TypePtr result(TypePtr ok, TypePtr error)
     {
-        return std::make_shared<Type>(Type { ResultType { std::move(ok), std::move(error) } });
+        return std::make_shared<Type>(
+            Type { ResultType { .okType = std::move(ok), .errorType = std::move(error) } });
     }
 
     TypePtr record(std::string name, std::vector<RecordField> fields)
     {
-        return std::make_shared<Type>(Type { RecordType { std::move(name), std::move(fields) } });
+        return std::make_shared<Type>(
+            Type { RecordType { .name = std::move(name), .fields = std::move(fields) } });
     }
 
     TypePtr anonymousRecord(std::vector<RecordField> fields)
@@ -286,17 +290,18 @@ namespace types
 
     TypePtr unionType(std::string name, std::vector<UnionCase> cases)
     {
-        return std::make_shared<Type>(Type { UnionType { std::move(name), std::move(cases) } });
+        return std::make_shared<Type>(
+            Type { UnionType { .name = std::move(name), .cases = std::move(cases) } });
     }
 
     TypeScheme scheme(std::vector<TypeVarId> quantified, TypePtr type)
     {
-        return TypeScheme { std::move(quantified), std::move(type) };
+        return TypeScheme { .quantifiedVars = std::move(quantified), .type = std::move(type) };
     }
 
     TypeScheme monomorphic(TypePtr type)
     {
-        return TypeScheme { {}, std::move(type) };
+        return TypeScheme { .quantifiedVars = {}, .type = std::move(type) };
     }
 
 } // namespace types
@@ -318,7 +323,7 @@ std::string toString(PrimitiveType prim)
 
 std::string toString(Type const& type)
 {
-    if (auto* tv = type.asTypeVar())
+    if (const auto* tv = type.asTypeVar())
     {
         // Use lowercase letters for type variables: a, b, c, ...
         // For ids >= 26, use a1, b1, etc.
@@ -329,11 +334,11 @@ std::string toString(Type const& type)
         else
             return std::format("{}{}", letter, suffix);
     }
-    else if (auto* prim = type.asPrimitive())
+    else if (const auto* prim = type.asPrimitive())
     {
         return toString(prim->kind);
     }
-    else if (auto* fn = type.asFunction())
+    else if (const auto* fn = type.asFunction())
     {
         std::string paramStr = toString(*fn->paramType);
         // Add parentheses around function parameter types for clarity
@@ -341,12 +346,12 @@ std::string toString(Type const& type)
             paramStr = "(" + paramStr + ")";
         return paramStr + " -> " + toString(*fn->returnType);
     }
-    else if (auto* lst = type.asList())
+    else if (const auto* lst = type.asList())
     {
         auto inner = toString(*lst->elementType);
         return "list<" + inner + (inner.back() == '>' ? " >" : ">");
     }
-    else if (auto* tup = type.asTuple())
+    else if (const auto* tup = type.asTuple())
     {
         std::ostringstream oss;
         oss << "(";
@@ -359,17 +364,17 @@ std::string toString(Type const& type)
         oss << ")";
         return oss.str();
     }
-    else if (auto* opt = type.asOption())
+    else if (const auto* opt = type.asOption())
     {
         auto inner = toString(*opt->innerType);
         return "option<" + inner + (inner.back() == '>' ? " >" : ">");
     }
-    else if (auto* res = type.asResult())
+    else if (const auto* res = type.asResult())
     {
         auto errStr = toString(*res->errorType);
         return "result<" + toString(*res->okType) + ", " + errStr + (errStr.back() == '>' ? " >" : ">");
     }
-    else if (auto* rec = type.asRecord())
+    else if (const auto* rec = type.asRecord())
     {
         std::ostringstream oss;
         if (!rec->name.empty())
@@ -384,7 +389,7 @@ std::string toString(Type const& type)
         oss << " }";
         return oss.str();
     }
-    else if (auto* un = type.asUnion())
+    else if (const auto* un = type.asUnion())
     {
         std::ostringstream oss;
         oss << un->name;
@@ -421,7 +426,7 @@ std::string toString(TypeScheme const& scheme)
     oss << "forall";
     for (auto varId: scheme.quantifiedVars)
     {
-        char letter = 'a' + static_cast<char>(varId % 26);
+        auto const letter = static_cast<char>('a' + (varId % 26));
         uint32_t suffix = varId / 26;
         oss << " ";
         if (suffix == 0)

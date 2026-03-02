@@ -141,7 +141,7 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
                     argsStr = argsStr.substr(0, 77) + "...";
             }
 
-            auto const status = isError ? "ERROR" : "OK";
+            const auto* const status = isError ? "ERROR" : "OK";
             std::println(
                 "  [{:3}] {} ({}) -> {} ({}ms)", toolCallCount, toolName, argsStr, status, durationMs);
         }

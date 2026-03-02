@@ -1113,7 +1113,7 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     {
         // Directly call print/println builtin
         auto* strVal = convertToString(elemLoad, "each.elem");
-        auto const sig = funcName == "println" ? "println(S)V" : "print(S)V";
+        const auto* const sig = funcName == "println" ? "println(S)V" : "print(S)V";
         auto* callback = findCallback(sig);
         if (callback)
             _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { strVal }, funcName);

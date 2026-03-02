@@ -70,7 +70,8 @@ Screen::Screen(Terminal& terminal, ScreenConfig config):
         int const relY = hover.y - 1 - bounds.y;
         if (auto result = target->onHover(relX, relY))
         {
-            auto const absPos = Point { bounds.x + result->position.x, bounds.y + result->position.y };
+            auto const absPos =
+                Point { .x = bounds.x + result->position.x, .y = bounds.y + result->position.y };
             showTooltip(result->text, absPos, result->contentType);
         }
     });
@@ -177,7 +178,7 @@ void Screen::clearAndRelease()
 
 void Screen::setTheme(Theme theme)
 {
-    _theme = std::move(theme);
+    _theme = theme;
     invalidate();
 }
 
@@ -206,7 +207,7 @@ int Screen::cols() const noexcept
 
 Size Screen::size() const noexcept
 {
-    return { cols(), rows() };
+    return { .width = cols(), .height = rows() };
 }
 
 void Screen::setViewport(Viewport viewport)
@@ -226,17 +227,18 @@ Rect Screen::viewportArea() const noexcept
 {
     switch (_config.viewport)
     {
-        case Viewport::Fullscreen: return { 0, 0, _terminal.columns(), _terminal.rows() };
+        case Viewport::Fullscreen:
+            return { .x = 0, .y = 0, .width = _terminal.columns(), .height = _terminal.rows() };
         case Viewport::Inline: {
             // For inline mode, the viewport area is the maximum area available for rendering.
             // We use inlineMaxHeight if set, otherwise the full terminal height.
             // The actual content height (_previousContentHeight) is only used for flush positioning.
             int maxHeight = _config.inlineMaxHeight > 0 ? _config.inlineMaxHeight : _terminal.rows();
-            return { 0, 0, _terminal.columns(), maxHeight };
+            return { .x = 0, .y = 0, .width = _terminal.columns(), .height = maxHeight };
         }
         case Viewport::Fixed: return _config.fixedArea;
     }
-    return { 0, 0, _terminal.columns(), _terminal.rows() };
+    return { .x = 0, .y = 0, .width = _terminal.columns(), .height = _terminal.rows() };
 }
 
 EventResult Screen::dispatchEvent(InputEvent const& event)
@@ -309,7 +311,7 @@ void Screen::focusNext()
         return;
     }
 
-    auto it = std::find(focusable.begin(), focusable.end(), current);
+    auto it = std::ranges::find(focusable, current);
     if (it == focusable.end() || ++it == focusable.end())
         setFocus(focusable.front()); // Wrap around
     else
@@ -329,7 +331,7 @@ void Screen::focusPrev()
         return;
     }
 
-    auto it = std::find(focusable.begin(), focusable.end(), current);
+    auto it = std::ranges::find(focusable, current);
     if (it == focusable.end() || it == focusable.begin())
         setFocus(focusable.back()); // Wrap around
     else
@@ -365,9 +367,7 @@ void Screen::renderTree()
 
     // Render root's children sorted by z-index
     std::vector<Component*> sortedChildren(_root->children().begin(), _root->children().end());
-    std::sort(sortedChildren.begin(), sortedChildren.end(), [](Component* a, Component* b) {
-        return a->zIndex() < b->zIndex();
-    });
+    std::ranges::sort(sortedChildren, [](Component* a, Component* b) { return a->zIndex() < b->zIndex(); });
 
     for (Component* child: sortedChildren)
     {
@@ -397,9 +397,7 @@ void Screen::renderComponent(Component& component, Rect parentBounds)
 
     // Render children sorted by z-index
     std::vector<Component*> sortedChildren(component.children().begin(), component.children().end());
-    std::sort(sortedChildren.begin(), sortedChildren.end(), [](Component* a, Component* b) {
-        return a->zIndex() < b->zIndex();
-    });
+    std::ranges::sort(sortedChildren, [](Component* a, Component* b) { return a->zIndex() < b->zIndex(); });
 
     for (Component* child: sortedChildren)
     {
@@ -418,7 +416,10 @@ void Screen::renderOverlays()
 
         // Calculate overlay bounds at absolute position
         Size overlaySize = entry.component->preferredSize();
-        Rect overlayBounds { entry.position.x, entry.position.y, overlaySize.width, overlaySize.height };
+        Rect overlayBounds { .x = entry.position.x,
+                             .y = entry.position.y,
+                             .width = overlaySize.width,
+                             .height = overlaySize.height };
 
         // Clip only to screen bounds, not to any parent
         Rect screenBounds = viewportArea();
@@ -444,8 +445,7 @@ void Screen::renderOverlays()
 void Screen::showOverlay(Component& overlay, Point position)
 {
     // Check if already visible
-    auto it = std::find_if(
-        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+    auto it = std::ranges::find_if(_overlays, [&](auto const& e) { return e.component == &overlay; });
 
     if (it != _overlays.end())
     {
@@ -463,8 +463,7 @@ void Screen::showOverlay(Component& overlay, Point position)
 
 void Screen::hideOverlay(Component& overlay)
 {
-    auto it = std::find_if(
-        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+    auto it = std::ranges::find_if(_overlays, [&](auto const& e) { return e.component == &overlay; });
 
     if (it != _overlays.end())
     {
@@ -476,8 +475,7 @@ void Screen::hideOverlay(Component& overlay)
 
 void Screen::positionOverlay(Component& overlay, Point position)
 {
-    auto it = std::find_if(
-        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+    auto it = std::ranges::find_if(_overlays, [&](auto const& e) { return e.component == &overlay; });
 
     if (it != _overlays.end())
     {
@@ -488,8 +486,7 @@ void Screen::positionOverlay(Component& overlay, Point position)
 
 bool Screen::isOverlayVisible(Component const& overlay) const noexcept
 {
-    return std::find_if(
-               _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; })
+    return std::ranges::find_if(_overlays, [&](auto const& e) { return e.component == &overlay; })
            != _overlays.end();
 }
 
@@ -921,9 +918,7 @@ Component* Screen::componentAtRecursive(Component& component, int row, int col) 
 {
     // Check children in reverse z-order (highest z-index first)
     std::vector<Component*> sortedChildren(component.children().begin(), component.children().end());
-    std::sort(sortedChildren.begin(), sortedChildren.end(), [](Component* a, Component* b) {
-        return a->zIndex() > b->zIndex();
-    });
+    std::ranges::sort(sortedChildren, [](Component* a, Component* b) { return a->zIndex() > b->zIndex(); });
 
     for (Component* child: sortedChildren)
     {
@@ -1058,11 +1053,10 @@ void Screen::showTooltip(std::string_view text, Point position, TooltipContentTy
     {
         // Try above
         y = position.y - tooltipSize.height;
-        if (y < 0)
-            y = 0; // Clamp to top
+        y = std::max(y, 0); // Clamp to top
     }
 
-    showOverlay(_tooltip, Point { x, y });
+    showOverlay(_tooltip, Point { .x = x, .y = y });
     _tooltipVisible = true;
 }
 

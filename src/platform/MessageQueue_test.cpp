@@ -137,7 +137,7 @@ TEST_CASE("MessageQueue.size_and_empty", "[platform][messagequeue]")
 {
     auto queue = MessageQueue<int> {};
     CHECK(queue.empty());
-    CHECK(queue.size() == 0);
+    CHECK(queue.empty());
 
     queue.push(1);
     queue.push(2);

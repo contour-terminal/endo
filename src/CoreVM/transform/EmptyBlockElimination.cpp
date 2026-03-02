@@ -15,7 +15,7 @@ bool emptyBlockElimination(IRFunction* function)
         if (bb->size() != 1)
             continue;
 
-        if (BrInstr* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
+        if (auto* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
         {
             BasicBlock* newSuccessor = br->targetBlock();
             eliminated.push_back(bb);
@@ -39,7 +39,7 @@ bool emptyBlockElimination(IRFunction* function)
         bb->getFunction()->erase(bb);
     }
 
-    return eliminated.size() > 0;
+    return !eliminated.empty();
 }
 
 } // namespace CoreVM::transform

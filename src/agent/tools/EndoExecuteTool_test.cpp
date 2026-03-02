@@ -32,7 +32,7 @@ TEST_CASE("EndoExecuteTool.normal_execution", "[agent][tools]")
     REQUIRE(result.has_value());
     CHECK_FALSE(result->isError);
     CHECK(result->content.find("Exit code: 0") != std::string::npos);
-    CHECK(result->content.find("3") != std::string::npos);
+    CHECK(result->content.find('3') != std::string::npos);
 }
 
 TEST_CASE("EndoExecuteTool.error_exit_code", "[agent][tools]")

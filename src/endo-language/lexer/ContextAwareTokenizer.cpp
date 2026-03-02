@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/lexer/ContextAwareTokenizer.hpp>
 
+#include <ranges>
+
 namespace endo
 {
 
@@ -117,11 +119,11 @@ std::vector<ClassifiedToken> tokenizeWithContext(std::string_view source)
         {
             // Check if the previous meaningful token was a statement boundary (or this is the first token).
             auto isFirstOnLine = true;
-            for (auto it = result.rbegin(); it != result.rend(); ++it)
+            for (auto& it: std::ranges::reverse_view(result))
             {
-                if (it->token == Token::LineFeed || it->token == Token::Semicolon)
+                if (it.token == Token::LineFeed || it.token == Token::Semicolon)
                     break;
-                if (it->category != TokenCategory::Default)
+                if (it.category != TokenCategory::Default)
                 {
                     isFirstOnLine = false;
                     break;

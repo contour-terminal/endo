@@ -226,7 +226,7 @@ BuiltinCallDescriptor const* BuiltinDescriptorRegistry::lookupCall(std::string_v
 }
 
 BuiltinPropertyDescriptor const* BuiltinDescriptorRegistry::lookupProperty(uint16_t typeId,
-                                                                            std::string_view field) const
+                                                                           std::string_view field) const
 {
     auto key = std::format("{}:{}", typeId, field);
     if (auto it = _properties.find(key); it != _properties.end())

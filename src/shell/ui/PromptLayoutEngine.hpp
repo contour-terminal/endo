@@ -43,26 +43,26 @@ class PromptLayoutEngine
     [[nodiscard]] static int preferredHeight(PromptConfig const& config);
 
   private:
-    int renderSingleLine(tui::Canvas& canvas,
-                         PromptConfig const& config,
-                         std::vector<PromptSegments> const& infoModules,
-                         tui::Theme const& theme) const;
+    static int renderSingleLine(tui::Canvas& canvas,
+                                PromptConfig const& config,
+                                std::vector<PromptSegments> const& infoModules,
+                                tui::Theme const& theme);
 
-    int renderTwoLine(tui::Canvas& canvas,
-                      PromptConfig const& config,
-                      std::vector<PromptSegments> const& infoModules,
-                      std::vector<PromptSegments> const& rightModules,
-                      tui::Theme const& theme) const;
+    static int renderTwoLine(tui::Canvas& canvas,
+                             PromptConfig const& config,
+                             std::vector<PromptSegments> const& infoModules,
+                             std::vector<PromptSegments> const& rightModules,
+                             tui::Theme const& theme);
 
-    int renderBoxed(tui::Canvas& canvas,
-                    PromptConfig const& config,
-                    std::vector<PromptSegments> const& infoModules,
-                    tui::Theme const& theme) const;
+    static int renderBoxed(tui::Canvas& canvas,
+                           PromptConfig const& config,
+                           std::vector<PromptSegments> const& infoModules,
+                           tui::Theme const& theme);
 
-    int renderPowerline(tui::Canvas& canvas,
-                        PromptConfig const& config,
-                        std::vector<PromptSegments> const& infoModules,
-                        tui::Theme const& theme) const;
+    static int renderPowerline(tui::Canvas& canvas,
+                               PromptConfig const& config,
+                               std::vector<PromptSegments> const& infoModules,
+                               tui::Theme const& theme);
 
     /// @brief Renders segments onto a canvas at the given position.
     /// @return The number of columns consumed.

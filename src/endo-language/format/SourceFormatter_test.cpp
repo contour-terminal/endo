@@ -113,7 +113,7 @@ TEST_CASE("SourceFormatter.let_binding_compound_rhs_breaks_after_eq", "[format]"
 
 TEST_CASE("SourceFormatter.let_binding_compound_rhs_idempotency", "[format]")
 {
-    auto const source = "let r = if true then 42 else 0";
+    const auto* const source = "let r = if true then 42 else 0";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -129,7 +129,7 @@ TEST_CASE("SourceFormatter.let_function", "[format]")
 
 TEST_CASE("SourceFormatter.match_expression", "[format]")
 {
-    auto const result = SourceFormatter::format("let f x = match x with | 0 -> \"zero\" | _ -> \"other\"");
+    auto const result = SourceFormatter::format(R"(let f x = match x with | 0 -> "zero" | _ -> "other")");
     // Match arms should be on separate lines
     CHECK(result.find("| 0 ->") != std::string::npos);
     CHECK(result.find("| _ ->") != std::string::npos);
@@ -170,7 +170,7 @@ TEST_CASE("SourceFormatter.trailing_newline_disabled", "[format]")
 
 TEST_CASE("SourceFormatter.parse_failure_returns_original", "[format]")
 {
-    auto const source = "let let let ???";
+    const auto* const source = "let let let ???";
     auto const result = SourceFormatter::format(source);
     CHECK(result == source);
 }
@@ -181,7 +181,7 @@ TEST_CASE("SourceFormatter.parse_failure_returns_original", "[format]")
 
 TEST_CASE("SourceFormatter.idempotency_simple", "[format]")
 {
-    auto const source = "let x = 42";
+    const auto* const source = "let x = 42";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     CHECK(first == second);
@@ -189,7 +189,7 @@ TEST_CASE("SourceFormatter.idempotency_simple", "[format]")
 
 TEST_CASE("SourceFormatter.idempotency_match", "[format]")
 {
-    auto const source = "let f x = match x with | 0 -> \"zero\" | _ -> \"other\"";
+    const auto* const source = R"(let f x = match x with | 0 -> "zero" | _ -> "other")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     CHECK(first == second);
@@ -197,7 +197,7 @@ TEST_CASE("SourceFormatter.idempotency_match", "[format]")
 
 TEST_CASE("SourceFormatter.idempotency_if_expr", "[format]")
 {
-    auto const source = "let f x = if x == 0 then \"zero\" else \"nonzero\"";
+    const auto* const source = R"(let f x = if x == 0 then "zero" else "nonzero")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     CHECK(first == second);
@@ -231,7 +231,7 @@ TEST_CASE("SourceFormatter.if_else_never_all_on_one_line", "[format]")
 
 TEST_CASE("SourceFormatter.if_else_compact_two_line", "[format]")
 {
-    auto const result = SourceFormatter::format("let f x = if x > 0 then \"pos\" else \"neg\"");
+    auto const result = SourceFormatter::format(R"(let f x = if x > 0 then "pos" else "neg")");
     INFO("Result: [" << result << "]");
     // Compact two-line: `if cond then thenBody\n    else elseBody`
     CHECK(result.find("then \"pos\"") != std::string::npos);
@@ -242,7 +242,7 @@ TEST_CASE("SourceFormatter.if_else_compound_then_multiline", "[format]")
 {
     // Compound then branch forces multi-line
     auto const result = SourceFormatter::format(
-        "let f x = if x > 0 then (match x with | 1 -> \"one\" | _ -> \"other\") else \"neg\"");
+        R"(let f x = if x > 0 then (match x with | 1 -> "one" | _ -> "other") else "neg")");
     INFO("Result: [" << result << "]");
     // Should use multi-line format with indented branches
     CHECK(result.find("then\n") != std::string::npos);
@@ -253,7 +253,7 @@ TEST_CASE("SourceFormatter.if_else_compound_else_multiline", "[format]")
 {
     // Compound else branch forces multi-line (symmetry)
     auto const result = SourceFormatter::format(
-        "let f x = if x > 0 then \"pos\" else (match x with | 0 -> \"zero\" | _ -> \"neg\")");
+        R"(let f x = if x > 0 then "pos" else (match x with | 0 -> "zero" | _ -> "neg"))");
     INFO("Result: [" << result << "]");
     CHECK(result.find("then\n") != std::string::npos);
     CHECK(result.find("else\n") != std::string::npos);
@@ -262,7 +262,7 @@ TEST_CASE("SourceFormatter.if_else_compound_else_multiline", "[format]")
 TEST_CASE("SourceFormatter.if_elif_chain", "[format]")
 {
     auto const result =
-        SourceFormatter::format("let f x = if x > 0 then \"pos\" elif x == 0 then \"zero\" else \"neg\"");
+        SourceFormatter::format(R"(let f x = if x > 0 then "pos" elif x == 0 then "zero" else "neg")");
     INFO("Result: [" << result << "]");
     // elif should appear aligned with if
     CHECK(result.find("elif") != std::string::npos);
@@ -273,7 +273,7 @@ TEST_CASE("SourceFormatter.if_else_if_reformats_to_elif", "[format]")
 {
     // `else if` input should be reformatted to `elif` in output
     auto const result =
-        SourceFormatter::format("let f x = if x > 0 then \"pos\" else if x == 0 then \"zero\" else \"neg\"");
+        SourceFormatter::format(R"(let f x = if x > 0 then "pos" else if x == 0 then "zero" else "neg")");
     INFO("Result: [" << result << "]");
     CHECK(result.find("elif") != std::string::npos);
     CHECK(result.find("else if") == std::string::npos);
@@ -281,7 +281,7 @@ TEST_CASE("SourceFormatter.if_else_if_reformats_to_elif", "[format]")
 
 TEST_CASE("SourceFormatter.elif_chain_idempotency", "[format]")
 {
-    auto const source = "let f x = if x > 0 then \"pos\" elif x == 0 then \"zero\" else \"neg\"";
+    const auto* const source = R"(let f x = if x > 0 then "pos" elif x == 0 then "zero" else "neg")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -291,7 +291,7 @@ TEST_CASE("SourceFormatter.elif_chain_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.if_else_idempotency", "[format]")
 {
-    auto const source = "let f x = if x == 0 then \"zero\" else \"nonzero\"";
+    const auto* const source = R"(let f x = if x == 0 then "zero" else "nonzero")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -301,7 +301,8 @@ TEST_CASE("SourceFormatter.if_else_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.if_else_compound_idempotency", "[format]")
 {
-    auto const source = "let f x = if x > 0 then (match x with | 1 -> \"one\" | _ -> \"other\") else \"neg\"";
+    const auto* const source =
+        R"(let f x = if x > 0 then (match x with | 1 -> "one" | _ -> "other") else "neg")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -314,7 +315,7 @@ TEST_CASE("SourceFormatter.if_else_compound_idempotency", "[format]")
 TEST_CASE("SourceFormatter.match_simple_arm_inline", "[format]")
 {
     // Simple body stays inline
-    auto const result = SourceFormatter::format("let f x = match x with | 0 -> \"zero\" | _ -> \"other\"");
+    auto const result = SourceFormatter::format(R"(let f x = match x with | 0 -> "zero" | _ -> "other")");
     INFO("Result: [" << result << "]");
     CHECK(result.find("| 0 -> \"zero\"") != std::string::npos);
     CHECK(result.find("| _ -> \"other\"") != std::string::npos);
@@ -333,7 +334,7 @@ TEST_CASE("SourceFormatter.match_compound_arm_body_multiline", "[format]")
 
 TEST_CASE("SourceFormatter.match_compound_idempotency", "[format]")
 {
-    auto const source = "let f x = match x with | 0 -> (if true then 1 else 2) | _ -> 3";
+    const auto* const source = "let f x = match x with | 0 -> (if true then 1 else 2) | _ -> 3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -351,7 +352,7 @@ TEST_CASE("SourceFormatter.match_pipeline_arm_multiline", "[format]")
 
 TEST_CASE("SourceFormatter.match_pipeline_arm_idempotency", "[format]")
 {
-    auto const source =
+    const auto* const source =
         "let f x = match x with | xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
@@ -406,7 +407,7 @@ TEST_CASE("SourceFormatter.try_with_compound_handler_multiline", "[format]")
 
 TEST_CASE("SourceFormatter.try_with_idempotency", "[format]")
 {
-    auto const source = "let f x = try (match x with | Some v -> v | None -> 0) with | Error e -> 0";
+    const auto* const source = "let f x = try (match x with | Some v -> v | None -> 0) with | Error e -> 0";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -444,7 +445,7 @@ TEST_CASE("SourceFormatter.try_finally_compound_multiline", "[format]")
 
 TEST_CASE("SourceFormatter.try_finally_idempotency", "[format]")
 {
-    auto const source = "let f x = try x finally 0";
+    const auto* const source = "let f x = try x finally 0";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -464,14 +465,14 @@ TEST_CASE("SourceFormatter.lambda_simple_inline", "[format]")
 TEST_CASE("SourceFormatter.lambda_compound_body_multiline", "[format]")
 {
     auto const result =
-        SourceFormatter::format("let f = fun x -> (match x with | 0 -> \"zero\" | _ -> \"other\")");
+        SourceFormatter::format(R"(let f = fun x -> (match x with | 0 -> "zero" | _ -> "other"))");
     INFO("Result: [" << result << "]");
     CHECK(result.find("fun x ->\n") != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.lambda_idempotency", "[format]")
 {
-    auto const source = "let f = fun x -> (match x with | 0 -> \"zero\" | _ -> \"other\")";
+    const auto* const source = R"(let f = fun x -> (match x with | 0 -> "zero" | _ -> "other"))";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -491,7 +492,7 @@ TEST_CASE("SourceFormatter.let_in_simple_inline", "[format]")
 TEST_CASE("SourceFormatter.let_in_compound_body_multiline", "[format]")
 {
     auto const result =
-        SourceFormatter::format("let f x = let y = 5 in (match y with | 0 -> \"zero\" | _ -> \"other\")");
+        SourceFormatter::format(R"(let f x = let y = 5 in (match y with | 0 -> "zero" | _ -> "other"))");
     INFO("Result: [" << result << "]");
     // `in` stays on same line as value, body indented on next line
     CHECK(result.find("= 5 in") != std::string::npos);
@@ -500,7 +501,7 @@ TEST_CASE("SourceFormatter.let_in_compound_body_multiline", "[format]")
 
 TEST_CASE("SourceFormatter.let_in_idempotency", "[format]")
 {
-    auto const source = "let f x = let y = 5 in (match y with | 0 -> \"zero\" | _ -> \"other\")";
+    const auto* const source = R"(let f x = let y = 5 in (match y with | 0 -> "zero" | _ -> "other"))";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -512,7 +513,7 @@ TEST_CASE("SourceFormatter.let_in_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_preserves_leading_comments", "[format]")
 {
-    auto const source = "# header comment\n\nfor x in [1; 2] do\n    print x";
+    const auto* const source = "# header comment\n\nfor x in [1; 2] do\n    print x";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     // Comment must appear before the for loop, not inside
@@ -525,7 +526,7 @@ TEST_CASE("SourceFormatter.for_in_preserves_leading_comments", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_leading_comments_idempotency", "[format]")
 {
-    auto const source = "# header\n\nfor x in [1; 2] do\n    print x";
+    const auto* const source = "# header\n\nfor x in [1; 2] do\n    print x";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -535,7 +536,7 @@ TEST_CASE("SourceFormatter.for_in_leading_comments_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.while_preserves_leading_comments", "[format]")
 {
-    auto const source = "# header comment\n\nwhile true do\n    print 1";
+    const auto* const source = "# header comment\n\nwhile true do\n    print 1";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     auto const commentPos = result.find("# header comment");
@@ -547,7 +548,7 @@ TEST_CASE("SourceFormatter.while_preserves_leading_comments", "[format]")
 
 TEST_CASE("SourceFormatter.while_leading_comments_idempotency", "[format]")
 {
-    auto const source = "# header\n\nwhile true do\n    print 1";
+    const auto* const source = "# header\n\nwhile true do\n    print 1";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -559,7 +560,7 @@ TEST_CASE("SourceFormatter.while_leading_comments_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_preserves_body_trailing_comment", "[format]")
 {
-    auto const source = "for x in [1; 2] do\n    print x\n    # end of body";
+    const auto* const source = "for x in [1; 2] do\n    print x\n    # end of body";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     // Comment must appear inside the loop body (indented under do)
@@ -572,7 +573,7 @@ TEST_CASE("SourceFormatter.for_in_preserves_body_trailing_comment", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_body_trailing_comment_idempotency", "[format]")
 {
-    auto const source = "for x in [1; 2] do\n    print x\n    # end of body";
+    const auto* const source = "for x in [1; 2] do\n    print x\n    # end of body";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -582,7 +583,7 @@ TEST_CASE("SourceFormatter.for_in_body_trailing_comment_idempotency", "[format]"
 
 TEST_CASE("SourceFormatter.while_preserves_body_trailing_comment", "[format]")
 {
-    auto const source = "while true do\n    print 1\n    # end of body";
+    const auto* const source = "while true do\n    print 1\n    # end of body";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     auto const commentPos = result.find("# end of body");
@@ -594,7 +595,7 @@ TEST_CASE("SourceFormatter.while_preserves_body_trailing_comment", "[format]")
 
 TEST_CASE("SourceFormatter.while_body_trailing_comment_idempotency", "[format]")
 {
-    auto const source = "while true do\n    print 1\n    # end of body";
+    const auto* const source = "while true do\n    print 1\n    # end of body";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -606,7 +607,7 @@ TEST_CASE("SourceFormatter.while_body_trailing_comment_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.let_binding_preserves_leading_comments", "[format]")
 {
-    auto const source = "# header comment\n\nlet xs = 1..5";
+    const auto* const source = "# header comment\n\nlet xs = 1..5";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     // Comment must appear before the let binding, not after
@@ -619,7 +620,7 @@ TEST_CASE("SourceFormatter.let_binding_preserves_leading_comments", "[format]")
 
 TEST_CASE("SourceFormatter.let_binding_leading_comments_idempotency", "[format]")
 {
-    auto const source = "# header comment\n\nlet xs = 1..5";
+    const auto* const source = "# header comment\n\nlet xs = 1..5";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -673,7 +674,7 @@ TEST_CASE("SourceFormatter.blank_line_between_consecutive_lets", "[format]")
 
 TEST_CASE("SourceFormatter.consecutive_expressions_idempotency", "[format]")
 {
-    auto const source = "print 1\nprint 2\nprint 3";
+    const auto* const source = "print 1\nprint 2\nprint 3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -683,7 +684,7 @@ TEST_CASE("SourceFormatter.consecutive_expressions_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.mixed_expressions_and_lets_idempotency", "[format]")
 {
-    auto const source = "let x = 1\nprint x\nprint x\nlet y = 2";
+    const auto* const source = "let x = 1\nprint x\nprint x\nlet y = 2";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -725,7 +726,7 @@ TEST_CASE("SourceFormatter.comment_between_expressions", "[format]")
 
 TEST_CASE("SourceFormatter.comment_between_expressions_idempotency", "[format]")
 {
-    auto const source = "print 1\n# between\nprint 2";
+    const auto* const source = "print 1\n# between\nprint 2";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -838,7 +839,7 @@ TEST_CASE("SourceFormatter.user_blank_line_combined_with_heuristic", "[format]")
 
 TEST_CASE("SourceFormatter.blank_line_preservation_idempotency", "[format]")
 {
-    auto const source = "print 1\n\nprint 2\nprint 3";
+    const auto* const source = "print 1\n\nprint 2\nprint 3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -848,7 +849,7 @@ TEST_CASE("SourceFormatter.blank_line_preservation_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.multiple_blank_lines_normalization_idempotency", "[format]")
 {
-    auto const source = "print 1\n\n\n\nprint 2";
+    const auto* const source = "print 1\n\n\n\nprint 2";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -858,7 +859,7 @@ TEST_CASE("SourceFormatter.multiple_blank_lines_normalization_idempotency", "[fo
 
 TEST_CASE("SourceFormatter.nested_blank_line_idempotency", "[format]")
 {
-    auto const source = "while true do\n    print 1\n\n    print 2";
+    const auto* const source = "while true do\n    print 1\n\n    print 2";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -889,7 +890,7 @@ TEST_CASE("SourceFormatter.mixed_blank_and_no_blank_groups", "[format]")
 
 TEST_CASE("SourceFormatter.mixed_blank_groups_idempotency", "[format]")
 {
-    auto const source = "print 1\nprint 2\n\nprint 3\nprint 4";
+    const auto* const source = "print 1\nprint 2\n\nprint 3\nprint 4";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -917,7 +918,7 @@ TEST_CASE("SourceFormatter.string_escape_backslash", "[format]")
 
 TEST_CASE("SourceFormatter.string_escape_idempotency", "[format]")
 {
-    auto const source = R"(let s = "line1\nline2\ttab")";
+    const auto* const source = R"(let s = "line1\nline2\ttab")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -970,7 +971,7 @@ TEST_CASE("SourceFormatter.list_wrapping_idempotency", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 40;
-    auto const source = "let data = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12]";
+    const auto* const source = "let data = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12]";
     auto const first = SourceFormatter::format(source, config);
     auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
@@ -982,8 +983,8 @@ TEST_CASE("SourceFormatter.list_long_wraps_bracket_on_eq_line", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 40;
-    auto const result = SourceFormatter::format(
-        "let opts = [\"aa\"; \"bb\"; \"cc\"; \"dd\"; \"ee\"; \"ff\"; \"gg\"]", config);
+    auto const result =
+        SourceFormatter::format(R"(let opts = ["aa"; "bb"; "cc"; "dd"; "ee"; "ff"; "gg"])", config);
     INFO("Result: [" << result << "]");
     // Opening bracket on same line as =, closing bracket aligned with let
     CHECK(result.starts_with("let opts = [\n"));
@@ -1007,19 +1008,18 @@ TEST_CASE("SourceFormatter.tuple_long_wraps", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 30;
-    auto const result =
-        SourceFormatter::format("let t = (\"hello\", \"world\", \"testing\", \"wrap\")", config);
+    auto const result = SourceFormatter::format(R"(let t = ("hello", "world", "testing", "wrap"))", config);
     INFO("Result: [" << result << "]");
     CHECK(result.find("(\n") != std::string::npos);
     // Closing paren on its own line (possibly indented from let binding context)
-    CHECK(result.find(")") != std::string::npos);
+    CHECK(result.find(')') != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.tuple_wrapping_idempotency", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 30;
-    auto const source = "let t = (\"hello\", \"world\", \"testing\", \"wrap\")";
+    const auto* const source = R"(let t = ("hello", "world", "testing", "wrap"))";
     auto const first = SourceFormatter::format(source, config);
     auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
@@ -1051,7 +1051,7 @@ TEST_CASE("SourceFormatter.pipeline_chain_wraps", "[format]")
 
 TEST_CASE("SourceFormatter.pipeline_chain_wrapping_idempotency", "[format]")
 {
-    auto const source = "let x = data |> List.filter (fun x -> x > 5) |> List.sum";
+    const auto* const source = "let x = data |> List.filter (fun x -> x > 5) |> List.sum";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -1074,7 +1074,7 @@ TEST_CASE("SourceFormatter.pipeline_single_long_wrapping_idempotency", "[format]
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 30;
-    auto const source = "let x = some_very_long_variable_name |> some_very_long_function_name";
+    const auto* const source = "let x = some_very_long_variable_name |> some_very_long_function_name";
     auto const first = SourceFormatter::format(source, config);
     auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
@@ -1094,7 +1094,7 @@ TEST_CASE("SourceFormatter.pipeline_short_source_keeps_first_inline", "[format]"
 
 TEST_CASE("SourceFormatter.pipeline_short_source_keeps_first_inline_idempotency", "[format]")
 {
-    auto const source = "let f raw = raw |> split x |> filter g |> sum";
+    const auto* const source = "let f raw = raw |> split x |> filter g |> sum";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -1112,7 +1112,7 @@ TEST_CASE("SourceFormatter.pipeline_long_source_wraps_normally", "[format]")
 
 TEST_CASE("SourceFormatter.pipeline_long_source_wraps_normally_idempotency", "[format]")
 {
-    auto const source = "let f items = items |> split x |> filter g |> sum";
+    const auto* const source = "let f items = items |> split x |> filter g |> sum";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -1142,7 +1142,7 @@ TEST_CASE("SourceFormatter.concat_chain_wraps", "[format]")
 
 TEST_CASE("SourceFormatter.concat_chain_wrapping_idempotency", "[format]")
 {
-    auto const source = "let x = list1 @ list2 @ list3";
+    const auto* const source = "let x = list1 @ list2 @ list3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -1161,7 +1161,7 @@ TEST_CASE("SourceFormatter.concat_short_source_keeps_first_inline", "[format]")
 
 TEST_CASE("SourceFormatter.concat_short_source_keeps_first_inline_idempotency", "[format]")
 {
-    auto const source = "let f xs = xs @ list2 @ list3";
+    const auto* const source = "let f xs = xs @ list2 @ list3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -1188,7 +1188,7 @@ TEST_CASE("SourceFormatter.list_complex_elements_idempotency", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 60;
-    auto const source = "let fns = [fun x -> x + 1; fun x -> x * 2; fun x -> x - 3]";
+    const auto* const source = "let fns = [fun x -> x + 1; fun x -> x * 2; fun x -> x - 3]";
     auto const first = SourceFormatter::format(source, config);
     auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
@@ -1215,7 +1215,7 @@ TEST_CASE("SourceFormatter.pipeline_of_long_list_idempotency", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 50;
-    auto const source = "let x = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] |> List.sum";
+    const auto* const source = "let x = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] |> List.sum";
     auto const first = SourceFormatter::format(source, config);
     auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
@@ -1229,14 +1229,14 @@ TEST_CASE("SourceFormatter.pipeline_of_long_list_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.multiline_function_body", "[format]")
 {
-    auto const source = R"(let f x y =
+    const auto* const source = R"(let f x y =
     let z = x + y
     let w = z * 2
     if w > 10 then w - 10
     else z + w)";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
-    auto const expected = R"(let f x y =
+    const auto* const expected = R"(let f x y =
     let z = x + y
     let w = z * 2
     if w > 10 then w - 10
@@ -1247,7 +1247,7 @@ TEST_CASE("SourceFormatter.multiline_function_body", "[format]")
 
 TEST_CASE("SourceFormatter.multiline_function_body_compound_result", "[format]")
 {
-    auto const source = R"(let f x y =
+    const auto* const source = R"(let f x y =
     let z = x + y
     let w = z * 2
     match w with
@@ -1266,7 +1266,7 @@ TEST_CASE("SourceFormatter.multiline_function_body_compound_result", "[format]")
 
 TEST_CASE("SourceFormatter.multiline_function_body_idempotency", "[format]")
 {
-    auto const source = R"(let f x y =
+    const auto* const source = R"(let f x y =
     let z = x + y
     let w = z * 2
     if w > 10 then w - 10

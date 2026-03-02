@@ -66,7 +66,7 @@ std::unique_ptr<Instr> BasicBlock::remove(Instr* instr)
         }
     }
 
-    auto i = std::find_if(_code.begin(), _code.end(), [&](const auto& obj) { return obj.get() == instr; });
+    auto i = std::ranges::find_if(_code, [&](const auto& obj) { return obj.get() == instr; });
     assert(i != _code.end());
 
     std::unique_ptr<Instr> removedInstr = std::move(*i);
@@ -93,8 +93,7 @@ std::unique_ptr<Instr> BasicBlock::replace(Instr* oldInstr, std::unique_ptr<Inst
         assert(dynamic_cast<TerminateInstr*>(newInstr.get()) == nullptr
                && "Most not be a terminator instruction.");
 
-        auto i =
-            std::find_if(_code.begin(), _code.end(), [&](const auto& obj) { return obj.get() == oldInstr; });
+        auto i = std::ranges::find_if(_code, [&](const auto& obj) { return obj.get() == oldInstr; });
 
         assert(i != _code.end());
 
@@ -277,11 +276,11 @@ void BasicBlock::unlinkSuccessor(BasicBlock* successor)
 {
     assert(successor != nullptr);
 
-    auto p = std::find(successor->_predecessors.begin(), successor->_predecessors.end(), this);
+    auto p = std::ranges::find(successor->_predecessors, this);
     assert(p != successor->_predecessors.end());
     successor->_predecessors.erase(p);
 
-    auto s = std::find(_successors.begin(), _successors.end(), successor);
+    auto s = std::ranges::find(_successors, successor);
     assert(s != _successors.end());
     _successors.erase(s);
 }

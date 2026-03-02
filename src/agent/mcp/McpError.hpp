@@ -39,7 +39,7 @@ using McpVoidResult = std::expected<void, McpError>;
 /// @return An unexpected McpError.
 [[nodiscard]] inline auto makeMcpError(McpErrorCode code, std::string message) -> std::unexpected<McpError>
 {
-    return std::unexpected<McpError>(McpError { code, std::move(message) });
+    return std::unexpected<McpError>(McpError { .code = code, .message = std::move(message) });
 }
 
 } // namespace endo::agent::mcp

@@ -562,7 +562,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 continue;
         }
 
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     // -b overrides -n
@@ -752,7 +752,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     bool success = true;
 
     if (files.empty())
-        files.push_back("-");
+        files.emplace_back("-");
 
     for (auto const& file: files)
     {

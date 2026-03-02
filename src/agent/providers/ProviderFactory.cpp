@@ -12,8 +12,8 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
     #include <agent/providers/local/ChatTemplate.hpp>
-    #include <agent/providers/local/ModelManager.hpp>
     #include <agent/providers/local/LlamaCppProvider.hpp>
+    #include <agent/providers/local/ModelManager.hpp>
 #endif
 
 namespace endo::agent
@@ -298,8 +298,7 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
                     local::chatTemplateFromString(config.local.chatTemplate);
                 providerConfig.useChatTemplateOverride = true;
             }
-            _providers.emplace(
-                "local", std::make_unique<LlamaCppProvider>(*_modelManager, std::move(providerConfig)));
+            _providers.emplace("local", std::make_unique<LlamaCppProvider>(*_modelManager, providerConfig));
         }
     }
 #endif
@@ -461,8 +460,7 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 providerConfig.useChatTemplateOverride = true;
             }
             // Local provider does not need an HttpClient — set it to nullptr.
-            auto provider =
-                std::make_unique<LlamaCppProvider>(*_modelManager, std::move(providerConfig));
+            auto provider = std::make_unique<LlamaCppProvider>(*_modelManager, providerConfig);
             return OwnedProvider { .httpClient = nullptr, .provider = std::move(provider) };
         }
     }

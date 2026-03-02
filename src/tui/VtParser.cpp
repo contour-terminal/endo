@@ -52,17 +52,15 @@ namespace
     auto parseKeyField(std::string_view field) -> KeyFieldInfo
     {
         auto info = KeyFieldInfo {};
-        auto it = field.begin();
-        auto const end = field.end();
+        auto const* it = field.data();
+        auto const* const end = field.data() + field.size();
 
         auto parseNext = [&](int& target) {
             if (it == end)
                 return;
-            auto const start = &*it;
-            auto const fieldEnd = start + std::distance(it, end);
-            auto const [ptr, ec] = std::from_chars(start, fieldEnd, target);
+            auto const [ptr, ec] = std::from_chars(it, end, target);
             if (ec == std::errc {})
-                it = field.begin() + std::distance(field.data(), ptr);
+                it = ptr;
             // Skip the colon separator if present
             if (it != end && *it == ':')
                 ++it;
@@ -494,7 +492,7 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         // Parse the key field's colon-separated subparameters (key:shifted_key:base_layout_key)
         auto const firstSemicolon = _paramBuf.find(';');
         auto const keyFieldStr = (firstSemicolon != std::string_view::npos)
-                                     ? std::string_view(_paramBuf.data(), firstSemicolon)
+                                     ? std::string_view(_paramBuf).substr(0, firstSemicolon)
                                      : std::string_view(_paramBuf);
         auto const keyInfo = parseKeyField(keyFieldStr);
         auto const keycode = keyInfo.key;

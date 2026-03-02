@@ -149,7 +149,7 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(std::string
     }
 
     // Sort by score descending
-    std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) { return a.score > b.score; });
+    std::ranges::sort(results, [](auto const& a, auto const& b) { return a.score > b.score; });
 
     // Trim to maxResults
     if (results.size() > maxResults)

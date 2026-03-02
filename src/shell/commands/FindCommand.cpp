@@ -7,6 +7,7 @@
 #include <CoreVM/types/TypeDescriptor.hpp>
 
 #include <filesystem>
+#include <ranges>
 
 namespace endo
 {
@@ -131,13 +132,11 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
     auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
     list->tag = 0; // Nil
 
-    for (auto it = matches.rbegin(); it != matches.rend(); ++it)
+    for (auto& match: std::ranges::reverse_view(matches))
     {
-        auto const& match = *it;
-
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(match.path)));
-        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, match.size);
+        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, static_cast<int64_t>(match.size));
         record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
         auto* modeObj = endo::builtins::makeFileModeFromBits(&runner, static_cast<int64_t>(match.mode));
         record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));

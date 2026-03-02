@@ -12,7 +12,8 @@
 namespace endo::platform
 {
 
-bool WindowsEnvironmentProvider::CaseInsensitiveLess::operator()(std::string const& a, std::string const& b) const
+bool WindowsEnvironmentProvider::CaseInsensitiveLess::operator()(std::string const& a,
+                                                                 std::string const& b) const
 {
     return std::lexicographical_compare(
         a.begin(), a.end(), b.begin(), b.end(), [](unsigned char ac, unsigned char bc) {
@@ -40,7 +41,8 @@ std::optional<std::string_view> WindowsEnvironmentProvider::get(std::string_view
     buffer.resize(32767);
 
     auto const nameStr = std::string(name);
-    auto const len = GetEnvironmentVariableA(nameStr.c_str(), buffer.data(), static_cast<DWORD>(buffer.size()));
+    auto const len =
+        GetEnvironmentVariableA(nameStr.c_str(), buffer.data(), static_cast<DWORD>(buffer.size()));
     if (len == 0)
         return std::nullopt;
 
@@ -91,7 +93,8 @@ std::vector<std::string> WindowsEnvironmentProvider::keys() const
     {
         auto const found = std::find_if(result.begin(), result.end(), [&](std::string const& existing) {
             return std::equal(existing.begin(), existing.end(), key.begin(), key.end(), [](char a, char b) {
-                return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+                return std::tolower(static_cast<unsigned char>(a))
+                       == std::tolower(static_cast<unsigned char>(b));
             });
         });
         if (found == result.end())
@@ -101,7 +104,8 @@ std::vector<std::string> WindowsEnvironmentProvider::keys() const
     return result;
 }
 
-std::expected<void, PlatformError> WindowsEnvironmentProvider::changeDirectory(std::filesystem::path const& path)
+std::expected<void, PlatformError> WindowsEnvironmentProvider::changeDirectory(
+    std::filesystem::path const& path)
 {
     std::error_code ec;
     std::filesystem::current_path(path, ec);

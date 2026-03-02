@@ -22,9 +22,8 @@ IRProgram::~IRProgram()
     // in order to not cause confusion upon resource release
     {
         std::unique_ptr<IRFunction> global;
-        auto gh = std::find_if(_functions.begin(), _functions.end(), [](auto& function) {
-            return function->name() == GLOBAL_SCOPE_INIT_NAME;
-        });
+        auto gh = std::ranges::find_if(
+            _functions, [](auto& function) { return function->name() == GLOBAL_SCOPE_INIT_NAME; });
         if (gh != _functions.end())
         {
             global = std::move(*gh);

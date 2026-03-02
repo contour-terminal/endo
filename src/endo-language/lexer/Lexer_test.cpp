@@ -514,7 +514,7 @@ TEST_CASE("Lexer.dquote_positional_param")
 TEST_CASE("Lexer.dquote_escaped_dollar")
 {
     // Escaped dollar sign should be literal
-    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("\"Price: \\$100\""));
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>(R"("Price: \$100")"));
     CHECK(lexer.currentToken() == endo::Token::DblQuoteStart);
 
     lexer.nextToken();
@@ -528,7 +528,7 @@ TEST_CASE("Lexer.dquote_escaped_dollar")
 TEST_CASE("Lexer.dquote_escaped_quote")
 {
     // Escaped double quote inside string
-    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("\"He said \\\"hi\\\"\""));
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>(R"("He said \"hi\"")"));
     CHECK(lexer.currentToken() == endo::Token::DblQuoteStart);
 
     lexer.nextToken();
@@ -542,7 +542,7 @@ TEST_CASE("Lexer.dquote_escaped_quote")
 TEST_CASE("Lexer.dquote_escaped_backslash")
 {
     // Escaped backslash
-    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("\"path\\\\name\""));
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>(R"("path\\name")"));
     CHECK(lexer.currentToken() == endo::Token::DblQuoteStart);
 
     lexer.nextToken();
@@ -556,7 +556,7 @@ TEST_CASE("Lexer.dquote_escaped_backslash")
 TEST_CASE("Lexer.dquote_escape_sequences")
 {
     // Common escape sequences: \n, \t, \r
-    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("\"line1\\nline2\\ttab\""));
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>(R"("line1\nline2\ttab")"));
     CHECK(lexer.currentToken() == endo::Token::DblQuoteStart);
 
     lexer.nextToken();
@@ -947,7 +947,7 @@ TEST_CASE("Lexer.fsharp_range_lexer_behavior")
 
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::DotDot);
-    CHECK(lexer.currentLiteral() == "");
+    CHECK(lexer.currentLiteral().empty());
 
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::Number);

@@ -40,9 +40,9 @@ namespace
         };
 
         constexpr MockProc procs[] = {
-            { 1, 0, "root", 0.1, 1024, "/sbin/init" },
-            { 42, 1, "alice", 15.5, 4096, "firefox" },
-            { 100, 1, "bob", 2.3, 2048, "vim" },
+            { .pid = 1, .ppid = 0, .user = "root", .cpu = 0.1, .mem = 1024, .command = "/sbin/init" },
+            { .pid = 42, .ppid = 1, .user = "alice", .cpu = 15.5, .mem = 4096, .command = "firefox" },
+            { .pid = 100, .ppid = 1, .user = "bob", .cpu = 2.3, .mem = 2048, .command = "vim" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -76,9 +76,9 @@ namespace
         };
 
         constexpr MockFile files[] = {
-            { "docs", 4096, 0755, 1700000000, true },
-            { "hello.txt", 42, 0644, 1700001000, false },
-            { "script.sh", 256, 0755, 1700002000, false },
+            { .name = "docs", .size = 4096, .mode = 0755, .mtime = 1700000000, .isDir = true },
+            { .name = "hello.txt", .size = 42, .mode = 0644, .mtime = 1700001000, .isDir = false },
+            { .name = "script.sh", .size = 256, .mode = 0755, .mtime = 1700002000, .isDir = false },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -112,9 +112,9 @@ namespace
         };
 
         constexpr MockJob jobs[] = {
-            { 1, "Running", "sleep 100", 1234 },
-            { 2, "Stopped", "vim", 5678 },
-            { 3, "Done", "make build", 9012 },
+            { .id = 1, .state = "Running", .command = "sleep 100", .pid = 1234 },
+            { .id = 2, .state = "Stopped", .command = "vim", .pid = 5678 },
+            { .id = 3, .state = "Done", .command = "make build", .pid = 9012 },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -147,27 +147,27 @@ namespace
         };
 
         constexpr MockContainer containers[] = {
-            { "abc123def",
-              "nginx:latest",
-              "/docker-entrypoint…",
-              "2024-01-15 10:00:00",
-              "Up 3 hours",
-              "80/tcp",
-              "web-server" },
-            { "def456ghi",
-              "postgres:16",
-              "docker-entrypoint.s…",
-              "2024-01-14 08:00:00",
-              "Up 2 days",
-              "5432/tcp",
-              "db-main" },
-            { "ghi789jkl",
-              "redis:7",
-              "docker-entrypoint.s…",
-              "2024-01-13 12:00:00",
-              "Exited (0) 1 hour ago",
-              "",
-              "cache" },
+            { .id = "abc123def",
+              .image = "nginx:latest",
+              .command = "/docker-entrypoint…",
+              .created = "2024-01-15 10:00:00",
+              .status = "Up 3 hours",
+              .ports = "80/tcp",
+              .names = "web-server" },
+            { .id = "def456ghi",
+              .image = "postgres:16",
+              .command = "docker-entrypoint.s…",
+              .created = "2024-01-14 08:00:00",
+              .status = "Up 2 days",
+              .ports = "5432/tcp",
+              .names = "db-main" },
+            { .id = "ghi789jkl",
+              .image = "redis:7",
+              .command = "docker-entrypoint.s…",
+              .created = "2024-01-13 12:00:00",
+              .status = "Exited (0) 1 hour ago",
+              .ports = "",
+              .names = "cache" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -201,9 +201,21 @@ namespace
         };
 
         constexpr MockImage images[] = {
-            { "sha256:abc", "nginx", "latest", "2024-01-10", "187MB" },
-            { "sha256:def", "postgres", "16", "2024-01-08", "412MB" },
-            { "sha256:ghi", "redis", "7", "2024-01-05", "130MB" },
+            { .id = "sha256:abc",
+              .repository = "nginx",
+              .tag = "latest",
+              .created = "2024-01-10",
+              .size = "187MB" },
+            { .id = "sha256:def",
+              .repository = "postgres",
+              .tag = "16",
+              .created = "2024-01-08",
+              .size = "412MB" },
+            { .id = "sha256:ghi",
+              .repository = "redis",
+              .tag = "7",
+              .created = "2024-01-05",
+              .size = "130MB" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -236,9 +248,21 @@ namespace
         };
 
         constexpr MockCommit commits[] = {
-            { "abc123", "Alice", "alice@example.com", "2024-01-15", "feat: add login" },
-            { "def456", "Bob", "bob@example.com", "2024-01-14", "fix: null check" },
-            { "ghi789", "Alice", "alice@example.com", "2024-01-13", "docs: update README" },
+            { .sha = "abc123",
+              .author = "Alice",
+              .email = "alice@example.com",
+              .date = "2024-01-15",
+              .message = "feat: add login" },
+            { .sha = "def456",
+              .author = "Bob",
+              .email = "bob@example.com",
+              .date = "2024-01-14",
+              .message = "fix: null check" },
+            { .sha = "ghi789",
+              .author = "Alice",
+              .email = "alice@example.com",
+              .date = "2024-01-13",
+              .message = "docs: update README" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -268,9 +292,9 @@ namespace
         };
 
         constexpr MockStatusEntry entries[] = {
-            { "M", "src/main.cpp" },
-            { "??", "README.md" },
-            { "A", ".gitignore" },
+            { .status = "M", .path = "src/main.cpp" },
+            { .status = "??", .path = "README.md" },
+            { .status = "A", .path = ".gitignore" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)

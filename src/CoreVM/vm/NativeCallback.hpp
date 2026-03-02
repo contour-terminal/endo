@@ -9,6 +9,7 @@
 #include <cassert>
 #include <functional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -122,7 +123,7 @@ class Params
 
         iterator& operator++()
         {
-            if (_current != static_cast<decltype(_current)>(_params->_argc))
+            if (std::cmp_not_equal(_current, _params->_argc))
             {
                 ++_current;
             }
@@ -148,11 +149,11 @@ class Params
 // Attribute
 // =============================================================================
 
-enum class Attribute : unsigned
+enum class Attribute : uint8_t
 {
-    Experimental = 0x0001,
-    NoReturn = 0x0002,
-    SideEffectFree = 0x0004,
+    Experimental = 0x01,
+    NoReturn = 0x02,
+    SideEffectFree = 0x04,
 };
 
 // =============================================================================
@@ -163,7 +164,7 @@ class Signature
 {
   private:
     std::string _name;
-    LiteralType _returnType;
+    LiteralType _returnType = LiteralType::Void;
     std::vector<LiteralType> _args;
 
   public:
@@ -224,7 +225,7 @@ class NativeCallback
     Functor _function;
     Signature _signature;
 
-    unsigned _attributes;
+    unsigned _attributes = 0;
 
     std::vector<std::string> _names;
     std::vector<DefaultValue> _defaults;
@@ -276,7 +277,10 @@ class NativeCallback
     NativeCallback& setReadOnly() noexcept;
     NativeCallback& setExperimental() noexcept;
 
-    [[nodiscard]] bool getAttribute(Attribute t) const noexcept { return _attributes & unsigned(t); }
+    [[nodiscard]] bool getAttribute(Attribute t) const noexcept
+    {
+        return (_attributes & static_cast<unsigned>(t)) != 0;
+    }
 
     [[nodiscard]] bool isNeverReturning() const noexcept { return getAttribute(Attribute::NoReturn); }
 

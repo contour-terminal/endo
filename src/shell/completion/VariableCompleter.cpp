@@ -94,7 +94,7 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
     }
 
     // Sort by score (descending), then alphabetically
-    std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {
+    std::ranges::sort(results, [](auto const& a, auto const& b) {
         if (a.score != b.score)
             return a.score > b.score;
         return a.text < b.text;

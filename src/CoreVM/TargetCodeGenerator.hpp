@@ -33,7 +33,7 @@ class TargetCodeGenerator: public InstructionVisitor
   protected:
     void generate(IRFunction* function);
 
-    void dumpCurrentStack();
+    void dumpCurrentStack() const;
 
     void emitLoad(Value* value);
 
@@ -202,7 +202,7 @@ class TargetCodeGenerator: public InstructionVisitor
     std::unordered_map<BasicBlock*, std::list<UnconditionalJump>> _unconditionalJumps;
     std::list<std::pair<MatchInstr*, size_t>> _matchHints;
 
-    size_t _functionId;
+    size_t _functionId = 0;
     std::vector<Instruction> _code;
 
     ConstantPool::LocationTable _locationTable;

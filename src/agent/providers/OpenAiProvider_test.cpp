@@ -128,7 +128,7 @@ TEST_CASE("agent.openai.parse_done_sentinel")
 
 TEST_CASE("agent.openai.parse_text_delta")
 {
-    auto const data = R"({"choices":[{"delta":{"content":"Hello"},"index":0}]})";
+    const auto* const data = R"({"choices":[{"delta":{"content":"Hello"},"index":0}]})";
     auto result = OpenAiProvider::parseSseData(data);
     REQUIRE(result.has_value());
     CHECK(result->contains("choices"));
@@ -137,7 +137,7 @@ TEST_CASE("agent.openai.parse_text_delta")
 
 TEST_CASE("agent.openai.parse_tool_call_delta")
 {
-    auto const data = R"({
+    const auto* const data = R"({
         "choices": [{
             "delta": {
                 "tool_calls": [{
@@ -174,7 +174,7 @@ TEST_CASE("agent.openai.parse_malformed_json")
 TEST_CASE("agent.openai.parse_usage_in_final_chunk")
 {
     // Simulate the final chunk from OpenAI that contains usage data.
-    auto data = R"({
+    const auto* data = R"({
         "id": "chatcmpl-abc",
         "choices": [],
         "usage": {
@@ -198,7 +198,7 @@ TEST_CASE("agent.openai.parse_usage_in_final_chunk")
 
 TEST_CASE("agent.openai.parse_usage_without_cache_details")
 {
-    auto data = R"({
+    const auto* data = R"({
         "choices": [],
         "usage": {
             "prompt_tokens": 800,

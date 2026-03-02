@@ -86,10 +86,10 @@ class Component
 
     /// Returns the preferred size for this component.
     /// Used by layout algorithms.
-    [[nodiscard]] virtual Size preferredSize() const { return { 0, 1 }; }
+    [[nodiscard]] virtual Size preferredSize() const { return { .width = 0, .height = 1 }; }
 
     /// Returns the minimum size this component can shrink to.
-    [[nodiscard]] virtual Size minSize() const { return { 0, 0 }; }
+    [[nodiscard]] virtual Size minSize() const { return { .width = 0, .height = 0 }; }
 
     // --- Event Handling ---
 

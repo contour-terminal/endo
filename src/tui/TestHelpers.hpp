@@ -27,7 +27,7 @@ namespace tui::test
 inline std::string canvasToString(Buffer const& buffer, Rect area = {})
 {
     if (area.empty())
-        area = Rect { 0, 0, buffer.cols(), buffer.rows() };
+        area = Rect { .x = 0, .y = 0, .width = buffer.cols(), .height = buffer.rows() };
 
     std::string result;
     for (int row = area.y; row < area.bottom(); ++row)
@@ -66,7 +66,7 @@ inline std::string renderPopup(CompletionPopup& popup, int width, int height)
     buffer.clear();
 
     Theme theme;
-    Canvas canvas(buffer, Rect { 0, 0, width, height }, theme);
+    Canvas canvas(buffer, Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
     popup.render(canvas);
 
     return canvasToString(buffer);

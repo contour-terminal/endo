@@ -341,8 +341,7 @@ SubcommandDef const* CommandSpecCompleter::resolveSubcommand(CommandSpec const& 
 
     for (auto const& name: chain)
     {
-        auto it = std::find_if(
-            subs->begin(), subs->end(), [&](SubcommandDef const& sub) { return sub.name == name; });
+        auto it = std::ranges::find_if(*subs, [&](SubcommandDef const& sub) { return sub.name == name; });
         if (it == subs->end())
             return nullptr;
         current = &*it;

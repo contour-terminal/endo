@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <format>
+#include <ranges>
 
 namespace endo::agent
 {
@@ -24,11 +25,11 @@ void ToolStatusComponent::toolStarted(ToolCall const& call)
 void ToolStatusComponent::toolCompleted(ToolResultMessage const& result)
 {
     // Find the most recent entry with matching name that hasn't completed yet.
-    for (auto it = _entries.rbegin(); it != _entries.rend(); ++it)
+    for (auto& _entrie: std::ranges::reverse_view(_entries))
     {
-        if (it->name == result.name && !it->completion.has_value())
+        if (_entrie.name == result.name && !_entrie.completion.has_value())
         {
-            it->completion = ToolCompletionInfo {
+            _entrie.completion = ToolCompletionInfo {
                 .isError = result.isError,
                 .outputSize = result.content.size(),
                 .duration = result.duration,

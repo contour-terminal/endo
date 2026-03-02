@@ -22,12 +22,12 @@ enum class CommandContext : std::uint8_t
 /// @brief A single command entry in the command palette.
 struct CommandEntry
 {
-    std::string id;          ///< Unique identifier, e.g. "shell.go_to_directory".
-    std::string label;       ///< Display label, e.g. "Go to Directory".
-    std::string description; ///< Short description shown next to label.
-    std::string category;    ///< Category grouping, e.g. "Navigation", "Session".
-    std::string keybinding;  ///< Display hint for keybinding, e.g. "Ctrl+T".
-    CommandContext context;   ///< Which mode(s) this command is available in.
+    std::string id;               ///< Unique identifier, e.g. "shell.go_to_directory".
+    std::string label;            ///< Display label, e.g. "Go to Directory".
+    std::string description;      ///< Short description shown next to label.
+    std::string category;         ///< Category grouping, e.g. "Navigation", "Session".
+    std::string keybinding;       ///< Display hint for keybinding, e.g. "Ctrl+T".
+    CommandContext context;       ///< Which mode(s) this command is available in.
     std::function<void()> action; ///< Callback invoked when the command is executed.
 };
 

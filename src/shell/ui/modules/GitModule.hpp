@@ -30,6 +30,7 @@ class GitModule final: public PromptModule
 
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
+
     void invalidateCache() override { _cachePopulated = false; }
 
     /// @brief Returns the cached git info from the most recent query.

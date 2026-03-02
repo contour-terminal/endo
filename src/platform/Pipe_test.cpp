@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <catch2/catch_test_macros.hpp>
+
 #include <platform/Pipe.hpp>
 #include <platform/testing/MockPipe.hpp>
-
-#include <catch2/catch_test_macros.hpp>
 
 using namespace endo::platform;
 

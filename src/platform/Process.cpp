@@ -2,6 +2,7 @@
 #include "Process.hpp"
 
 #if !defined(_WIN32)
+    #include <algorithm>
     #include <cerrno>
     #include <csignal>
 
@@ -197,8 +198,8 @@ std::expected<void, PlatformError> PosixProcessManager::setForegroundPgrp(Native
 }
 
 std::expected<NativeHandle, PlatformError> PosixProcessManager::openFile(std::filesystem::path const& path,
-                                                                          int flags,
-                                                                          int mode)
+                                                                         int flags,
+                                                                         int mode)
 {
     NativeHandle const fd = open(path.c_str(), flags, mode);
     if (fd == InvalidHandle)
@@ -251,7 +252,7 @@ void PosixProcessManager::closeExtraHandlesExcept(std::vector<NativeHandle> cons
     int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
     for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
     {
-        bool const shouldKeep = std::find(keepOpen.begin(), keepOpen.end(), fd) != keepOpen.end();
+        bool const shouldKeep = std::ranges::find(keepOpen, fd) != keepOpen.end();
         if (!shouldKeep)
             ::close(fd);
     }

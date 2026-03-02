@@ -2,6 +2,7 @@
 #include <endo-language/types/TypeInferencer.hpp>
 
 #include <format>
+#include <ranges>
 
 namespace endo
 {
@@ -73,22 +74,22 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
 {
     // --- Literals ---
     if (dynamic_cast<ast::IntLiteralExpr const*>(&expr))
-        return std::pair { types::intType(), subst };
+        return std::pair { types::intType(), std::move(subst) };
 
     if (dynamic_cast<ast::FloatLiteralExpr const*>(&expr))
-        return std::pair { types::floatType(), subst };
+        return std::pair { types::floatType(), std::move(subst) };
 
     if (dynamic_cast<ast::BoolLiteralExpr const*>(&expr))
-        return std::pair { types::boolType(), subst };
+        return std::pair { types::boolType(), std::move(subst) };
 
     if (dynamic_cast<ast::LiteralExpr const*>(&expr))
-        return std::pair { types::strType(), subst };
+        return std::pair { types::strType(), std::move(subst) };
 
     if (dynamic_cast<ast::FStringExpr const*>(&expr))
-        return std::pair { types::strType(), subst };
+        return std::pair { types::strType(), std::move(subst) };
 
     if (dynamic_cast<ast::UnitExpr const*>(&expr))
-        return std::pair { types::unitType(), subst };
+        return std::pair { types::unitType(), std::move(subst) };
 
     // --- Identifier ---
     if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(&expr))
@@ -97,21 +98,21 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         if (!scheme)
             return std::unexpected(std::format("Unbound variable: {}", ident->name));
         auto instantiated = env->instantiate(*scheme);
-        return std::pair { instantiated, subst };
+        return std::pair { instantiated, std::move(subst) };
     }
 
     // --- Parenthesized expression ---
     if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(&expr))
-        return inferExpr(*paren->inner, env, subst);
+        return inferExpr(*paren->inner, env, std::move(subst));
 
     // --- Binary expression ---
     if (auto const* bin = dynamic_cast<ast::BinaryExpr const*>(&expr))
-        return inferBinaryOp(bin->op, *bin->left, *bin->right, env, subst);
+        return inferBinaryOp(bin->op, *bin->left, *bin->right, env, std::move(subst));
 
     // --- Unary expression ---
     if (auto const* unary = dynamic_cast<ast::UnaryExpr const*>(&expr))
     {
-        auto operandResult = inferExpr(*unary->operand, env, subst);
+        auto operandResult = inferExpr(*unary->operand, env, std::move(subst));
         if (!operandResult)
             return operandResult;
         auto [operandType, s1] = *operandResult;
@@ -145,7 +146,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- If-then-else ---
     if (auto const* ifExpr = dynamic_cast<ast::IfExpr const*>(&expr))
     {
-        auto condResult = inferExpr(*ifExpr->condition, env, subst);
+        auto condResult = inferExpr(*ifExpr->condition, env, std::move(subst));
         if (!condResult)
             return condResult;
         auto [condType, s1] = *condResult;
@@ -193,15 +194,15 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             bodyEnv->bindMono(param.name, paramType);
         }
 
-        auto bodyResult = inferExpr(*lambda->body, bodyEnv, subst);
+        auto bodyResult = inferExpr(*lambda->body, bodyEnv, std::move(subst));
         if (!bodyResult)
             return bodyResult;
         auto [bodyType, s1] = *bodyResult;
 
         // Build curried function type: p1 -> p2 -> ... -> bodyType
         auto resultType = s1.apply(bodyType);
-        for (auto it = paramTypes.rbegin(); it != paramTypes.rend(); ++it)
-            resultType = types::function(s1.apply(*it), resultType);
+        for (auto& paramType: std::ranges::reverse_view(paramTypes))
+            resultType = types::function(s1.apply(paramType), resultType);
 
         return std::pair { resultType, s1 };
     }
@@ -209,7 +210,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Function application ---
     if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(&expr))
     {
-        auto funcResult = inferExpr(*app->function, env, subst);
+        auto funcResult = inferExpr(*app->function, env, std::move(subst));
         if (!funcResult)
             return funcResult;
         auto [funcType, s1] = *funcResult;
@@ -231,7 +232,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Pipeline expression: value |> func  ≡  func value ---
     if (auto const* pipe = dynamic_cast<ast::PipelineExpr const*>(&expr))
     {
-        auto valResult = inferExpr(*pipe->value, env, subst);
+        auto valResult = inferExpr(*pipe->value, env, std::move(subst));
         if (!valResult)
             return valResult;
         auto [valType, s1] = *valResult;
@@ -270,8 +271,8 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
                 }
                 auto freshRet = innerEnv->freshTypeVarType();
                 auto funcType = freshRet;
-                for (auto it = freshParams.rbegin(); it != freshParams.rend(); ++it)
-                    funcType = types::function(*it, funcType);
+                for (auto& freshParam: std::ranges::reverse_view(freshParams))
+                    funcType = types::function(freshParam, funcType);
                 innerEnv->bindMono(letIn->name, funcType);
                 paramTypes = freshParams;
             }
@@ -289,7 +290,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             for (size_t i = 0; i < letIn->parameters.size(); ++i)
                 bodyEnv->bindMono(letIn->parameters[i].name, paramTypes[i]);
 
-            auto valResult = inferExpr(*letIn->value, bodyEnv, subst);
+            auto valResult = inferExpr(*letIn->value, bodyEnv, std::move(subst));
             if (!valResult)
                 return valResult;
             auto [valType, s1] = *valResult;
@@ -297,8 +298,8 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             // Build function type
             auto retType = s1.apply(valType);
             auto funcType = retType;
-            for (auto it = paramTypes.rbegin(); it != paramTypes.rend(); ++it)
-                funcType = types::function(s1.apply(*it), funcType);
+            for (auto& paramType: std::ranges::reverse_view(paramTypes))
+                funcType = types::function(s1.apply(paramType), funcType);
 
             if (letIn->isRecursive)
             {
@@ -336,7 +337,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         else if (letIn->isDestructuring())
         {
             // Destructuring let-in: let (x, y) = expr in body
-            auto valResult = inferExpr(*letIn->value, env, subst);
+            auto valResult = inferExpr(*letIn->value, env, std::move(subst));
             if (!valResult)
                 return valResult;
             auto [valType, s1] = *valResult;
@@ -358,7 +359,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         else
         {
             // Simple value binding
-            auto valResult = inferExpr(*letIn->value, env, subst);
+            auto valResult = inferExpr(*letIn->value, env, std::move(subst));
             if (!valResult)
                 return valResult;
             auto [valType, s1] = *valResult;
@@ -374,7 +375,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Match expression ---
     if (auto const* matchExpr = dynamic_cast<ast::MatchExpr const*>(&expr))
     {
-        auto scrutResult = inferExpr(*matchExpr->scrutinee, env, subst);
+        auto scrutResult = inferExpr(*matchExpr->scrutinee, env, std::move(subst));
         if (!scrutResult)
             return scrutResult;
         auto [scrutType, s1] = *scrutResult;
@@ -427,7 +428,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     if (auto const* block = dynamic_cast<ast::BlockExpr const*>(&expr))
     {
         auto blockEnv = env->childScope();
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
 
         for (auto const& stmt: block->statements)
         {
@@ -446,10 +447,10 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         if (listExpr->elements.empty())
         {
             auto elemVar = env->freshTypeVarType();
-            return std::pair { types::list(elemVar), subst };
+            return std::pair { types::list(elemVar), std::move(subst) };
         }
 
-        auto firstResult = inferExpr(*listExpr->elements[0], env, subst);
+        auto firstResult = inferExpr(*listExpr->elements[0], env, std::move(subst));
         if (!firstResult)
             return firstResult;
         auto [elemType, currentSubst] = *firstResult;
@@ -473,7 +474,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Cons expression ---
     if (auto const* consExpr = dynamic_cast<ast::ConsExpr const*>(&expr))
     {
-        auto headResult = inferExpr(*consExpr->head, env, subst);
+        auto headResult = inferExpr(*consExpr->head, env, std::move(subst));
         if (!headResult)
             return headResult;
         auto [headType, s1] = *headResult;
@@ -493,7 +494,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- List concatenation ---
     if (auto const* concat = dynamic_cast<ast::ConcatListExpr const*>(&expr))
     {
-        auto leftResult = inferExpr(*concat->left, env, subst);
+        auto leftResult = inferExpr(*concat->left, env, std::move(subst));
         if (!leftResult)
             return leftResult;
         auto [leftType, s1] = *leftResult;
@@ -511,13 +512,13 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
 
     // --- List range ---
     if (dynamic_cast<ast::ListRangeExpr const*>(&expr))
-        return std::pair { types::list(types::intType()), subst };
+        return std::pair { types::list(types::intType()), std::move(subst) };
 
     // --- Tuple expression ---
     if (auto const* tupleExpr = dynamic_cast<ast::TupleExpr const*>(&expr))
     {
         std::vector<TypePtr> elemTypes;
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
 
         for (auto const& elem: tupleExpr->elements)
         {
@@ -537,7 +538,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     {
         if (optExpr->isSome)
         {
-            auto valResult = inferExpr(*optExpr->value, env, subst);
+            auto valResult = inferExpr(*optExpr->value, env, std::move(subst));
             if (!valResult)
                 return valResult;
             auto [valType, s1] = *valResult;
@@ -546,14 +547,14 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         else
         {
             auto innerVar = env->freshTypeVarType();
-            return std::pair { types::option(innerVar), subst };
+            return std::pair { types::option(innerVar), std::move(subst) };
         }
     }
 
     // --- Result expression ---
     if (auto const* resExpr = dynamic_cast<ast::ResultExpr const*>(&expr))
     {
-        auto payloadResult = inferExpr(*resExpr->payload, env, subst);
+        auto payloadResult = inferExpr(*resExpr->payload, env, std::move(subst));
         if (!payloadResult)
             return payloadResult;
         auto [payloadType, s1] = *payloadResult;
@@ -573,7 +574,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Option default expression (?|) ---
     if (auto const* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
     {
-        auto optResult = inferExpr(*optDefault->option, env, subst);
+        auto optResult = inferExpr(*optDefault->option, env, std::move(subst));
         if (!optResult)
             return optResult;
         auto [optType, s1] = *optResult;
@@ -600,7 +601,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Optional chaining expression (?.) ---
     if (auto const* optChain = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
     {
-        auto objResult = inferExpr(*optChain->object, env, subst);
+        auto objResult = inferExpr(*optChain->object, env, std::move(subst));
         if (!objResult)
             return objResult;
         auto [objType, s1] = *objResult;
@@ -620,7 +621,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Try expression (?) ---
     if (auto const* tryExpr = dynamic_cast<ast::TryExpr const*>(&expr))
     {
-        auto operandResult = inferExpr(*tryExpr->operand, env, subst);
+        auto operandResult = inferExpr(*tryExpr->operand, env, std::move(subst));
         if (!operandResult)
             return operandResult;
         auto [operandType, s1] = *operandResult;
@@ -651,7 +652,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Try-with expression ---
     if (auto const* tryWith = dynamic_cast<ast::TryWithExpr const*>(&expr))
     {
-        auto bodyResult = inferExpr(*tryWith->body, env, subst);
+        auto bodyResult = inferExpr(*tryWith->body, env, std::move(subst));
         if (!bodyResult)
             return bodyResult;
         auto [bodyType, s1] = *bodyResult;
@@ -689,7 +690,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- Try-finally expression ---
     if (auto const* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(&expr))
     {
-        auto bodyResult = inferExpr(*tryFinally->body, env, subst);
+        auto bodyResult = inferExpr(*tryFinally->body, env, std::move(subst));
         if (!bodyResult)
             return bodyResult;
         auto [bodyType, s1] = *bodyResult;
@@ -706,7 +707,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // --- List comprehension ---
     if (auto const* comp = dynamic_cast<ast::ListComprehensionExpr const*>(&expr))
     {
-        auto srcResult = inferExpr(*comp->source, env, subst);
+        auto srcResult = inferExpr(*comp->source, env, std::move(subst));
         if (!srcResult)
             return srcResult;
         auto [srcType, s1] = *srcResult;
@@ -773,7 +774,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     // Mutable assignment expression: `name <- value` returns unit
     if (auto const* mutExpr = dynamic_cast<ast::MutAssignExpr const*>(&expr))
     {
-        auto valResult = inferExpr(*mutExpr->value, env, subst);
+        auto valResult = inferExpr(*mutExpr->value, env, std::move(subst));
         if (!valResult)
             return valResult;
         auto [valType, s1] = *valResult;
@@ -792,7 +793,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
     }
 
     // Unknown expression type — use fresh type variable to avoid blocking inference
-    return std::pair { env->freshTypeVarType(), subst };
+    return std::pair { env->freshTypeVarType(), std::move(subst) };
 }
 
 // ============================================================================
@@ -805,7 +806,7 @@ TypeInferencer::InferResult TypeInferencer::inferBinaryOp(ast::BinaryOp op,
                                                           TypeEnvPtr const& env,
                                                           Substitution subst)
 {
-    auto leftResult = inferExpr(left, env, subst);
+    auto leftResult = inferExpr(left, env, std::move(subst));
     if (!leftResult)
         return leftResult;
     auto [leftType, s1] = *leftResult;
@@ -915,21 +916,23 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                     type = types::strType();
             },
             lit->value);
-        return PatternResult { type, {}, subst };
+        return PatternResult { .type = type, .bindings = {}, .subst = std::move(subst) };
     }
 
     // --- Variable pattern ---
     if (auto const* var = dynamic_cast<pattern::VariablePattern const*>(&pat))
     {
         auto freshType = env->freshTypeVarType();
-        return PatternResult { freshType, { { var->name, freshType } }, subst };
+        return PatternResult { .type = freshType,
+                               .bindings = { { var->name, freshType } },
+                               .subst = std::move(subst) };
     }
 
     // --- Wildcard pattern ---
     if (dynamic_cast<pattern::WildcardPattern const*>(&pat))
     {
         auto freshType = env->freshTypeVarType();
-        return PatternResult { freshType, {}, subst };
+        return PatternResult { .type = freshType, .bindings = {}, .subst = std::move(subst) };
     }
 
     // --- Tuple pattern ---
@@ -937,7 +940,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
     {
         std::vector<TypePtr> elemTypes;
         std::vector<std::pair<std::string, TypePtr>> allBindings;
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
 
         for (auto const& elem: tuplePat->elements)
         {
@@ -950,7 +953,9 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
             currentSubst = elemResult->subst;
         }
 
-        return PatternResult { types::tuple(elemTypes), std::move(allBindings), currentSubst };
+        return PatternResult { .type = types::tuple(elemTypes),
+                               .bindings = std::move(allBindings),
+                               .subst = currentSubst };
     }
 
     // --- List pattern ---
@@ -958,7 +963,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
     {
         auto elemVar = env->freshTypeVarType();
         std::vector<std::pair<std::string, TypePtr>> allBindings;
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
 
         for (auto const& elem: listPat->elements)
         {
@@ -979,13 +984,15 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
         if (listPat->restBinding)
             allBindings.emplace_back(*listPat->restBinding, types::list(elemVar));
 
-        return PatternResult { types::list(elemVar), std::move(allBindings), currentSubst };
+        return PatternResult { .type = types::list(elemVar),
+                               .bindings = std::move(allBindings),
+                               .subst = currentSubst };
     }
 
     // --- Cons pattern ---
     if (auto const* consPat = dynamic_cast<pattern::ConsPattern const*>(&pat))
     {
-        auto headResult = inferPattern(*consPat->head, env, subst);
+        auto headResult = inferPattern(*consPat->head, env, std::move(subst));
         if (!headResult)
             return headResult;
 
@@ -1002,7 +1009,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
         for (auto& b: tailResult->bindings)
             allBindings.push_back(std::move(b));
 
-        return PatternResult { s->apply(listType), std::move(allBindings), *s };
+        return PatternResult { .type = s->apply(listType), .bindings = std::move(allBindings), .subst = *s };
     }
 
     // --- Constructor pattern (Some, None, Ok, Error) ---
@@ -1015,17 +1022,17 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                 auto payloadResult = inferPattern(**ctorPat->payload, env, subst);
                 if (!payloadResult)
                     return payloadResult;
-                return PatternResult { types::option(payloadResult->type),
-                                       std::move(payloadResult->bindings),
-                                       payloadResult->subst };
+                return PatternResult { .type = types::option(payloadResult->type),
+                                       .bindings = std::move(payloadResult->bindings),
+                                       .subst = payloadResult->subst };
             }
             auto innerVar = env->freshTypeVarType();
-            return PatternResult { types::option(innerVar), {}, subst };
+            return PatternResult { .type = types::option(innerVar), .bindings = {}, .subst = subst };
         }
         else if (ctorPat->name == "None")
         {
             auto innerVar = env->freshTypeVarType();
-            return PatternResult { types::option(innerVar), {}, subst };
+            return PatternResult { .type = types::option(innerVar), .bindings = {}, .subst = subst };
         }
         else if (ctorPat->name == "Ok")
         {
@@ -1035,12 +1042,12 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                 auto payloadResult = inferPattern(**ctorPat->payload, env, subst);
                 if (!payloadResult)
                     return payloadResult;
-                return PatternResult { types::result(payloadResult->type, errVar),
-                                       std::move(payloadResult->bindings),
-                                       payloadResult->subst };
+                return PatternResult { .type = types::result(payloadResult->type, errVar),
+                                       .bindings = std::move(payloadResult->bindings),
+                                       .subst = payloadResult->subst };
             }
             auto okVar = env->freshTypeVarType();
-            return PatternResult { types::result(okVar, errVar), {}, subst };
+            return PatternResult { .type = types::result(okVar, errVar), .bindings = {}, .subst = subst };
         }
         else if (ctorPat->name == "Error")
         {
@@ -1050,12 +1057,12 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                 auto payloadResult = inferPattern(**ctorPat->payload, env, subst);
                 if (!payloadResult)
                     return payloadResult;
-                return PatternResult { types::result(okVar, payloadResult->type),
-                                       std::move(payloadResult->bindings),
-                                       payloadResult->subst };
+                return PatternResult { .type = types::result(okVar, payloadResult->type),
+                                       .bindings = std::move(payloadResult->bindings),
+                                       .subst = payloadResult->subst };
             }
             auto errVar = env->freshTypeVarType();
-            return PatternResult { types::result(okVar, errVar), {}, subst };
+            return PatternResult { .type = types::result(okVar, errVar), .bindings = {}, .subst = subst };
         }
 
         // Unknown constructor — use fresh type
@@ -1063,33 +1070,39 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
         std::vector<std::pair<std::string, TypePtr>> bindings;
         if (ctorPat->payload)
         {
-            auto payloadResult = inferPattern(**ctorPat->payload, env, subst);
+            auto payloadResult = inferPattern(**ctorPat->payload, env, std::move(subst));
             if (!payloadResult)
                 return payloadResult;
             bindings = std::move(payloadResult->bindings);
             subst = payloadResult->subst;
         }
-        return PatternResult { freshType, std::move(bindings), subst };
+        return PatternResult { .type = freshType,
+                               .bindings = std::move(bindings),
+                               .subst = std::move(subst) };
     }
 
     // --- As pattern ---
     if (auto const* asPat = dynamic_cast<pattern::AsPattern const*>(&pat))
     {
-        auto innerResult = inferPattern(*asPat->inner, env, subst);
+        auto innerResult = inferPattern(*asPat->inner, env, std::move(subst));
         if (!innerResult)
             return innerResult;
         auto bindings = innerResult->bindings;
         bindings.emplace_back(asPat->name, innerResult->type);
-        return PatternResult { innerResult->type, std::move(bindings), innerResult->subst };
+        return PatternResult { .type = innerResult->type,
+                               .bindings = std::move(bindings),
+                               .subst = innerResult->subst };
     }
 
     // --- Or pattern ---
     if (auto const* orPat = dynamic_cast<pattern::OrPattern const*>(&pat))
     {
         if (orPat->alternatives.empty())
-            return PatternResult { env->freshTypeVarType(), {}, subst };
+            return PatternResult { .type = env->freshTypeVarType(),
+                                   .bindings = {},
+                                   .subst = std::move(subst) };
 
-        auto firstResult = inferPattern(*orPat->alternatives[0], env, subst);
+        auto firstResult = inferPattern(*orPat->alternatives[0], env, std::move(subst));
         if (!firstResult)
             return firstResult;
 
@@ -1108,13 +1121,15 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
             currentType = currentSubst.apply(currentType);
         }
 
-        return PatternResult { currentType, firstResult->bindings, currentSubst };
+        return PatternResult { .type = currentType,
+                               .bindings = firstResult->bindings,
+                               .subst = currentSubst };
     }
 
     // --- Guarded pattern ---
     if (auto const* guardPat = dynamic_cast<pattern::GuardedPattern const*>(&pat))
     {
-        auto innerResult = inferPattern(*guardPat->pattern, env, subst);
+        auto innerResult = inferPattern(*guardPat->pattern, env, std::move(subst));
         if (!innerResult)
             return innerResult;
         // Guard is checked at arm level in match inference, skip here
@@ -1125,7 +1140,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
     if (auto const* recPat = dynamic_cast<pattern::RecordPattern const*>(&pat))
     {
         std::vector<std::pair<std::string, TypePtr>> allBindings;
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
 
         for (auto const& field: recPat->fields)
         {
@@ -1147,11 +1162,13 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
         }
 
         // Use a fresh type variable for the record — we don't have enough info to construct the record type
-        return PatternResult { env->freshTypeVarType(), std::move(allBindings), currentSubst };
+        return PatternResult { .type = env->freshTypeVarType(),
+                               .bindings = std::move(allBindings),
+                               .subst = currentSubst };
     }
 
     // Unknown pattern type
-    return PatternResult { env->freshTypeVarType(), {}, subst };
+    return PatternResult { .type = env->freshTypeVarType(), .bindings = {}, .subst = std::move(subst) };
 }
 
 // ============================================================================
@@ -1165,7 +1182,7 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
     // --- Compound statement ---
     if (auto const* compound = dynamic_cast<ast::CompoundStmt const*>(&stmt))
     {
-        auto currentSubst = subst;
+        auto currentSubst = std::move(subst);
         for (auto const& child: compound->statements)
         {
             // CompoundStmt children are Node*, could be Statement or Expr
@@ -1225,8 +1242,8 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 // Pre-bind with fresh function type for recursive reference
                 auto freshRet = funcEnv->freshTypeVarType();
                 auto funcType = freshRet;
-                for (auto it = paramTypes.rbegin(); it != paramTypes.rend(); ++it)
-                    funcType = types::function(*it, funcType);
+                for (auto& paramType: std::ranges::reverse_view(paramTypes))
+                    funcType = types::function(paramType, funcType);
                 funcEnv->bindMono(letStmt->name, funcType);
             }
 
@@ -1246,8 +1263,8 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             // Build curried function type
             auto resolvedRet = s1.apply(retType);
             auto funcType = resolvedRet;
-            for (auto it = paramTypes.rbegin(); it != paramTypes.rend(); ++it)
-                funcType = types::function(s1.apply(*it), funcType);
+            for (auto& paramType: std::ranges::reverse_view(paramTypes))
+                funcType = types::function(s1.apply(paramType), funcType);
 
             if (letStmt->isRecursive)
             {
@@ -1294,8 +1311,8 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 // Pre-bind for recursive reference
                 auto freshRet = andFuncEnv->freshTypeVarType();
                 auto andFuncType = freshRet;
-                for (auto it = andParamTypes.rbegin(); it != andParamTypes.rend(); ++it)
-                    andFuncType = types::function(*it, andFuncType);
+                for (auto& andParamType: std::ranges::reverse_view(andParamTypes))
+                    andFuncType = types::function(andParamType, andFuncType);
                 andFuncEnv->bindMono(andBind.name, andFuncType);
 
                 // Also bind the primary function and any previous `and` bindings
@@ -1316,8 +1333,8 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
 
                 auto resolvedAndRet = s2.apply(andRetType);
                 auto resolvedAndFunc = resolvedAndRet;
-                for (auto it = andParamTypes.rbegin(); it != andParamTypes.rend(); ++it)
-                    resolvedAndFunc = types::function(s2.apply(*it), resolvedAndFunc);
+                for (auto& andParamType: std::ranges::reverse_view(andParamTypes))
+                    resolvedAndFunc = types::function(s2.apply(andParamType), resolvedAndFunc);
 
                 // Record inferred type
                 InferredFunctionType andInferred;

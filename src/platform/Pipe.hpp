@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/PlatformError.hpp>
-#include <platform/Types.hpp>
-
 #include <expected>
 #include <memory>
+
+#include <platform/PlatformError.hpp>
+#include <platform/Types.hpp>
 
 namespace endo::platform
 {

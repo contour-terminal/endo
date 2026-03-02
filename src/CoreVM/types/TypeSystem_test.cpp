@@ -79,7 +79,7 @@ TEST_CASE("TypeRegistry.builtins")
     TypeRegistry registry;
 
     // Option type should be registered
-    auto* optionType = registry.get(BuiltinTypeId::Option);
+    const auto* optionType = registry.get(BuiltinTypeId::Option);
     REQUIRE(optionType != nullptr);
     CHECK(optionType->name == "Option");
     CHECK(optionType->kind == TypeKind::Sum);
@@ -88,7 +88,7 @@ TEST_CASE("TypeRegistry.builtins")
     CHECK(optionType->getVariantTag("Some") == 1);
 
     // Result type should be registered
-    auto* resultType = registry.get(BuiltinTypeId::Result);
+    const auto* resultType = registry.get(BuiltinTypeId::Result);
     REQUIRE(resultType != nullptr);
     CHECK(resultType->name == "Result");
     CHECK(resultType->kind == TypeKind::Sum);

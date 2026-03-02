@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/testing/MockProcessManager.hpp>
-#include <platform/testing/MockProcessProvider.hpp>
-#include <platform/testing/MockFileInfoProvider.hpp>
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <csignal>
+
+#include <platform/testing/MockFileInfoProvider.hpp>
+#include <platform/testing/MockProcessManager.hpp>
+#include <platform/testing/MockProcessProvider.hpp>
 
 using namespace endo::platform;
 
@@ -60,7 +60,8 @@ TEST_CASE("MockProcessManager.sendSignal", "[platform][mock]")
 TEST_CASE("MockProcessProvider.basic", "[platform][mock]")
 {
     testing::MockProcessProvider pp;
-    pp.setProcesses({ { .pid = 1, .ppid = 0, .user = "root", .cpuPercent = 0.0, .memKb = 1024, .command = "init" } });
+    pp.setProcesses(
+        { { .pid = 1, .ppid = 0, .user = "root", .cpuPercent = 0.0, .memKb = 1024, .command = "init" } });
 
     auto const procs = pp.listProcesses();
     REQUIRE(procs.size() == 1);

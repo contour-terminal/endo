@@ -39,7 +39,7 @@ null ::= "null"
             {
                 if (!alternatives.empty())
                     alternatives += " | ";
-                alternatives += std::format("\"\\\"{}\\\"\"", value.get<std::string>());
+                alternatives += std::format(R"("\"{}\"")", value.get<std::string>());
             }
             rules.emplace_back(std::format("{} ::= {}", ruleName, alternatives));
             return;
@@ -76,13 +76,13 @@ null ::= "null"
                 rules.emplace_back(std::format("{} ::= string", itemsRuleName));
 
             rules.emplace_back(std::format(
-                "{} ::= \"[\" ws ({} (\",\" ws {})*)? \"]\"", ruleName, itemsRuleName, itemsRuleName));
+                R"({} ::= "[" ws ({} ("," ws {})*)? "]")", ruleName, itemsRuleName, itemsRuleName));
         }
         else if (typeStr == "object")
         {
             if (!schema.contains("properties") || schema["properties"].empty())
             {
-                rules.emplace_back(std::format("{} ::= \"{{\" ws \"}}\"", ruleName));
+                rules.emplace_back(std::format(R"({} ::= "{{" ws "}}")", ruleName));
                 return;
             }
 
@@ -93,7 +93,7 @@ null ::= "null"
             {
                 auto const propRuleName = ruleName + "-" + propName;
                 emitRules(propSchema, propRuleName, rules);
-                propertyParts.emplace_back(std::format("\"\\\"{}\\\":\" ws {}", propName, propRuleName));
+                propertyParts.emplace_back(std::format(R"("\"{}\":" ws {})", propName, propRuleName));
             }
 
             auto body = std::string {};
@@ -104,7 +104,7 @@ null ::= "null"
                 body += part;
             }
 
-            rules.emplace_back(std::format("{} ::= \"{{\" ws {} ws \"}}\"", ruleName, body));
+            rules.emplace_back(std::format(R"({} ::= "{{" ws {} ws "}}")", ruleName, body));
         }
         else
         {
@@ -142,11 +142,10 @@ auto generateToolCallGrammar(std::span<ToolDefinition const> tools) -> std::stri
         emitRules(tool.inputSchema, argsRuleName, rules);
 
         // Emit the tool-specific JSON rule: {"name": "toolName", "arguments": <args>}
-        rules.emplace_back(
-            std::format("{} ::= \"{{\\\"name\\\": \\\"{}\\\"\" \", \\\"arguments\\\": \" {} \"}}\"",
-                        toolRuleName,
-                        tool.name,
-                        argsRuleName));
+        rules.emplace_back(std::format(R"({} ::= "{{\"name\": \"{}\"" ", \"arguments\": " {} "}}")",
+                                       toolRuleName,
+                                       tool.name,
+                                       argsRuleName));
 
         toolJsonAlternatives.emplace_back(toolRuleName);
     }

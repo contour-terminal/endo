@@ -3,6 +3,8 @@
 #include <tui/QuestionComponent.hpp>
 #include <tui/Theme.hpp>
 
+#include <utility>
+
 namespace tui
 {
 
@@ -262,7 +264,7 @@ auto QuestionComponent::processInput(InputEvent const& event) -> QuestionAction
             case ListAction::Toggled: {
                 auto const idx = _list.selectedIndex();
                 auto const otherIdx = otherItemIndex();
-                if (otherIdx >= 0 && idx == static_cast<std::size_t>(otherIdx))
+                if (otherIdx >= 0 && std::cmp_equal(idx, otherIdx))
                 {
                     _otherActive = _list.isChecked(idx);
                     if (_otherActive)
@@ -317,7 +319,7 @@ auto QuestionComponent::processInput(InputEvent const& event) -> QuestionAction
         case ListAction::Selected: {
             auto const idx = _list.selectedIndex();
             auto const otherIdx = otherItemIndex();
-            if (otherIdx >= 0 && idx == static_cast<std::size_t>(otherIdx))
+            if (otherIdx >= 0 && std::cmp_equal(idx, otherIdx))
             {
                 // Transition to "Other..." InputField
                 _otherActive = true;
@@ -344,7 +346,7 @@ auto QuestionComponent::answer() const -> std::string
         auto const otherIdx = otherItemIndex();
         for (auto idx: checked)
         {
-            if (otherIdx >= 0 && idx == static_cast<std::size_t>(otherIdx))
+            if (otherIdx >= 0 && std::cmp_equal(idx, otherIdx))
             {
                 // Use the InputField text for "Other..."
                 if (!result.empty())

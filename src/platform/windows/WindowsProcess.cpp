@@ -2,10 +2,9 @@
 #include <platform/Process.hpp>
 
 #if defined(_WIN32)
-    #include <windows.h>
-
     #include <fcntl.h>
     #include <tlhelp32.h>
+    #include <windows.h>
 
 namespace endo::platform
 {
@@ -144,7 +143,9 @@ std::expected<WaitResult, PlatformError> WindowsProcessManager::wait(ProcessId p
     CloseHandle(handle);
     _processHandles.erase(it);
 
-    return WaitResult { .exitCode = static_cast<int>(exitCode), .signaled = false, .stopped = false, .signal = 0 };
+    return WaitResult {
+        .exitCode = static_cast<int>(exitCode), .signaled = false, .stopped = false, .signal = 0
+    };
 }
 
 std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> WindowsProcessManager::waitPgid(
@@ -231,14 +232,15 @@ std::expected<ProcessId, PlatformError> WindowsProcessManager::getForegroundPgrp
     return static_cast<ProcessId>(GetCurrentProcessId());
 }
 
-std::expected<void, PlatformError> WindowsProcessManager::setForegroundPgrp(NativeHandle /*fd*/, ProcessId /*pgid*/)
+std::expected<void, PlatformError> WindowsProcessManager::setForegroundPgrp(NativeHandle /*fd*/,
+                                                                            ProcessId /*pgid*/)
 {
     return {};
 }
 
 std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::filesystem::path const& path,
-                                                                            int flags,
-                                                                            int /*mode*/)
+                                                                           int flags,
+                                                                           int /*mode*/)
 {
     DWORD access = 0;
     DWORD creation = OPEN_EXISTING;
@@ -265,9 +267,13 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto const handle = CreateFileW(
-        path.wstring().c_str(), access, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, creation, FILE_ATTRIBUTE_NORMAL,
-        nullptr);
+    auto const handle = CreateFileW(path.wstring().c_str(),
+                                    access,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                    &sa,
+                                    creation,
+                                    FILE_ATTRIBUTE_NORMAL,
+                                    nullptr);
 
     if (handle == INVALID_HANDLE_VALUE)
         return std::unexpected(PlatformError::IoError);

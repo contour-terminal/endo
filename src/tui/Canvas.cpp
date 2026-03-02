@@ -149,7 +149,7 @@ void Canvas::drawImage(int row, int col, int columnSpan, int lineSpan, std::stri
 {
     auto const bufRow = toBufferRow(row);
     auto const bufCol = toBufferCol(col);
-    auto const cellArea = Rect { bufCol, bufRow, columnSpan, lineSpan };
+    auto const cellArea = Rect { .x = bufCol, .y = bufRow, .width = columnSpan, .height = lineSpan };
     _buffer.addImage(cellArea, std::string(encodedSixel));
 }
 
@@ -181,7 +181,7 @@ Canvas Canvas::subcanvas(Rect area) const
 Rect Canvas::clipToLocal(Rect localArea) const noexcept
 {
     // Intersect with our local bounds (0,0 to width,height)
-    return localArea.intersect(Rect { 0, 0, _area.width, _area.height });
+    return localArea.intersect(Rect { .x = 0, .y = 0, .width = _area.width, .height = _area.height });
 }
 
 Rect Canvas::toBufferRect(Rect localArea) const noexcept

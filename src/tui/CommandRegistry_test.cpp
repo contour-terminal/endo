@@ -14,7 +14,7 @@ TEST_CASE("CommandRegistry.initial_state")
     CommandRegistry reg;
 
     CHECK(reg.empty());
-    CHECK(reg.size() == 0);
+    CHECK(reg.empty());
     CHECK(reg.commands().empty());
 }
 
@@ -146,12 +146,27 @@ TEST_CASE("CommandRegistry.commandsForContext_shell")
 {
     CommandRegistry reg;
 
-    reg.add({ .id = "shell_only", .label = "S", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Shell, .action = [] {} });
-    reg.add({ .id = "agent_only", .label = "A", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Agent, .action = [] {} });
-    reg.add({ .id = "both", .label = "B", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Both, .action = [] {} });
+    reg.add({ .id = "shell_only",
+              .label = "S",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Shell,
+              .action = [] {} });
+    reg.add({ .id = "agent_only",
+              .label = "A",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Agent,
+              .action = [] {} });
+    reg.add({ .id = "both",
+              .label = "B",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Both,
+              .action = [] {} });
 
     auto const shellCmds = reg.commandsForContext(CommandContext::Shell);
     CHECK(shellCmds.size() == 2); // shell_only + both
@@ -173,12 +188,27 @@ TEST_CASE("CommandRegistry.commandsForContext_agent")
 {
     CommandRegistry reg;
 
-    reg.add({ .id = "shell_only", .label = "S", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Shell, .action = [] {} });
-    reg.add({ .id = "agent_only", .label = "A", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Agent, .action = [] {} });
-    reg.add({ .id = "both", .label = "B", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Both, .action = [] {} });
+    reg.add({ .id = "shell_only",
+              .label = "S",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Shell,
+              .action = [] {} });
+    reg.add({ .id = "agent_only",
+              .label = "A",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Agent,
+              .action = [] {} });
+    reg.add({ .id = "both",
+              .label = "B",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Both,
+              .action = [] {} });
 
     auto const agentCmds = reg.commandsForContext(CommandContext::Agent);
     CHECK(agentCmds.size() == 2); // agent_only + both
@@ -199,12 +229,27 @@ TEST_CASE("CommandRegistry.commands_returns_all")
 {
     CommandRegistry reg;
 
-    reg.add({ .id = "a", .label = "A", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Shell, .action = [] {} });
-    reg.add({ .id = "b", .label = "B", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Agent, .action = [] {} });
-    reg.add({ .id = "c", .label = "C", .description = "", .category = "", .keybinding = "",
-              .context = CommandContext::Both, .action = [] {} });
+    reg.add({ .id = "a",
+              .label = "A",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Shell,
+              .action = [] {} });
+    reg.add({ .id = "b",
+              .label = "B",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Agent,
+              .action = [] {} });
+    reg.add({ .id = "c",
+              .label = "C",
+              .description = "",
+              .category = "",
+              .keybinding = "",
+              .context = CommandContext::Both,
+              .action = [] {} });
 
     CHECK(reg.commands().size() == 3);
 }

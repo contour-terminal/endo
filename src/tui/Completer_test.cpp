@@ -93,8 +93,8 @@ TEST_CASE("CompletionItem.suffix")
 
     CHECK(ci.suffix(0) == "hello");
     CHECK(ci.suffix(2) == "llo");
-    CHECK(ci.suffix(5) == "");
-    CHECK(ci.suffix(10) == ""); // Beyond text length
+    CHECK(ci.suffix(5).empty());
+    CHECK(ci.suffix(10).empty()); // Beyond text length
 }
 
 TEST_CASE("CompletionItem.comparison")
@@ -229,7 +229,7 @@ TEST_CASE("Completer.suggest_no_match")
 TEST_CASE("Completer.findCommonPrefix_empty")
 {
     auto prefix = Completer::findCommonPrefix({});
-    CHECK(prefix == "");
+    CHECK(prefix.empty());
 }
 
 TEST_CASE("Completer.findCommonPrefix_single")
@@ -247,7 +247,7 @@ TEST_CASE("Completer.findCommonPrefix_common")
 TEST_CASE("Completer.findCommonPrefix_no_common")
 {
     auto prefix = Completer::findCommonPrefix({ item("apple"), item("banana") });
-    CHECK(prefix == "");
+    CHECK(prefix.empty());
 }
 
 TEST_CASE("Completer.config_persistence")

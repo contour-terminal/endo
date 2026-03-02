@@ -159,7 +159,7 @@ TEST_CASE("HoverProvider.empty_source", "[hover]")
 
 TEST_CASE("HoverProvider.binding_record_variable_shows_type", "[hover]")
 {
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    const auto* source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
     // Hover on "alice" (line 1, character 4)
     auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
     REQUIRE(result.has_value());
@@ -169,7 +169,7 @@ TEST_CASE("HoverProvider.binding_record_variable_shows_type", "[hover]")
 
 TEST_CASE("HoverProvider.binding_record_variable_shows_fields", "[hover]")
 {
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    const auto* source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
     auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
     REQUIRE(result.has_value());
     // Should show the type definition with field names and types
@@ -180,7 +180,7 @@ TEST_CASE("HoverProvider.binding_record_variable_shows_fields", "[hover]")
 TEST_CASE("HoverProvider.binding_record_type_in_code_block", "[hover]")
 {
     // The type detection works via RecordExpr typeName resolved by the parser
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    const auto* source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
     auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
     REQUIRE(result.has_value());
     // Should show the type in the code block as well
@@ -190,7 +190,7 @@ TEST_CASE("HoverProvider.binding_record_type_in_code_block", "[hover]")
 
 TEST_CASE("HoverProvider.binding_record_literal_preview", "[hover]")
 {
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    const auto* source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
     auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
     REQUIRE(result.has_value());
     // Should show the record literal value preview
@@ -200,7 +200,7 @@ TEST_CASE("HoverProvider.binding_record_literal_preview", "[hover]")
 
 TEST_CASE("HoverProvider.binding_anonymous_record", "[hover]")
 {
-    auto source = "let r = { x = 1 }";
+    const auto* source = "let r = { x = 1 }";
     auto result = computeHover(source, SourcePosition { .line = 0, .character = 4 });
     REQUIRE(result.has_value());
     CHECK(result->markdownText.find("`r`") != std::string::npos);

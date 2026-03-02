@@ -66,7 +66,8 @@ std::vector<std::string> PosixEnvironmentProvider::keys() const
     return result;
 }
 
-std::expected<void, PlatformError> PosixEnvironmentProvider::changeDirectory(std::filesystem::path const& path)
+std::expected<void, PlatformError> PosixEnvironmentProvider::changeDirectory(
+    std::filesystem::path const& path)
 {
     if (chdir(path.c_str()) != 0)
         return std::unexpected(PlatformError::FileNotFound);

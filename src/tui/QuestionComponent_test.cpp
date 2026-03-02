@@ -30,9 +30,9 @@ auto renderRow(QuestionComponent& comp, int row, int width = 60, int height = 15
 {
     auto const& theme = currentTheme();
     auto buffer = Buffer(height, width);
-    auto canvas = Canvas(buffer, Rect { 0, 0, width, height }, theme);
-    comp.setArea(Rect { 0, 0, width, height });
-    comp.setScreenBounds(Rect { 0, 0, width, height });
+    auto canvas = Canvas(buffer, Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+    comp.setArea(Rect { .x = 0, .y = 0, .width = width, .height = height });
+    comp.setScreenBounds(Rect { .x = 0, .y = 0, .width = width, .height = height });
     comp.render(canvas);
 
     auto result = std::string {};
@@ -298,8 +298,8 @@ TEST_CASE("QuestionComponent.multiline_question_text", "[tui][question]")
     // Render and verify both lines appear on separate rows.
     auto const size = comp.preferredSize();
     auto buffer = Buffer(size.height, 80);
-    auto canvas = Canvas(buffer, Rect { 0, 0, 80, size.height }, currentTheme());
-    comp.setArea(Rect { 0, 0, 80, size.height });
+    auto canvas = Canvas(buffer, Rect { .x = 0, .y = 0, .width = 80, .height = size.height }, currentTheme());
+    comp.setArea(Rect { .x = 0, .y = 0, .width = 80, .height = size.height });
     comp.render(canvas);
 
     // Row 0: header (╭─ question ─...)
@@ -373,8 +373,8 @@ TEST_CASE("List.multi_select_render_checked_single_item", "[tui][list]")
 
     auto const& theme = currentTheme();
     auto buffer = Buffer(1, 40);
-    auto canvas = Canvas(buffer, Rect { 0, 0, 40, 1 }, theme);
-    list.setArea(Rect { 0, 0, 40, 1 });
+    auto canvas = Canvas(buffer, Rect { .x = 0, .y = 0, .width = 40, .height = 1 }, theme);
+    list.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 1 });
     list.render(canvas);
 
     // Single row should contain checked prefix "[x]" followed by item label

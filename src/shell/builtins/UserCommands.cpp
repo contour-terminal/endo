@@ -27,8 +27,8 @@ void Shell::builtinBind(CoreVM::Params& context)
     if (context.count() >= 1)
     {
         auto const& argArray = context.getStringArray(1);
-        for (size_t i = 0; i < argArray.size(); ++i)
-            args.push_back(argArray[i]);
+        for (const auto& i: argArray)
+            args.push_back(i);
     }
 
     // No arguments: list all bindings
@@ -97,60 +97,61 @@ void Shell::builtinBind(CoreVM::Params& context)
     {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        (void) renderMarkdownHelp(outputFd,
-                           "# bind\n"
-                           "\n"
-                           "Manage key bindings for the line editor.\n"
-                           "\n"
-                           "## Usage\n"
-                           "\n"
-                           "`bind [OPTIONS] [KEY ACTION]`\n"
-                           "\n"
-                           "## Options\n"
-                           "\n"
-                           "| Option | Description |\n"
-                           "|--------|-------------|\n"
-                           "| `-l`, `--list` | List all keybindings |\n"
-                           "| `-r`, `--remove` | Remove a keybinding: `bind -r ctrl+y` |\n"
-                           "| `--reset` | Reset all keybindings to defaults |\n"
-                           "| `-h`, `--help` | Show this help message |\n"
-                           "\n"
-                           "## Examples\n"
-                           "\n"
-                           "```\n"
-                           "bind                     # List all bindings\n"
-                           "bind ctrl+y redo         # Bind Ctrl+Y to redo\n"
-                           "bind ctrl+y yank         # Bind Ctrl+Y to yank (Emacs-style)\n"
-                           "bind -r ctrl+y           # Remove Ctrl+Y binding\n"
-                           "bind --reset             # Reset to defaults\n"
-                           "```\n"
-                           "\n"
-                           "## Key Format\n"
-                           "\n"
-                           "`[modifier+]...key`\n"
-                           "\n"
-                           "**Modifiers:** `ctrl`, `alt`, `shift`, `super`\n"
-                           "\n"
-                           "**Keys:** `a`-`z`, `enter`, `backspace`, `delete`, `tab`, `escape`,\n"
-                           "`up`, `down`, `left`, `right`, `home`, `end`, `f1`-`f12`\n"
-                           "\n"
-                           "## Actions\n"
-                           "\n"
-                           "| Category | Actions |\n"
-                           "|----------|----------|\n"
-                           "| Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, "
-                           "`move-backward-word`, `move-to-line-start`, `move-to-line-end`, "
-                           "`move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, "
-                           "`smart-move-to-line-start`, `smart-move-to-line-end` |\n"
-                           "| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, "
-                           "`delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |\n"
-                           "| Undo | `undo`, `redo` |\n"
-                           "| Kill Ring | `yank`, `yank-pop` |\n"
-                           "| Selection | `select-all` |\n"
-                           "| Clipboard | `cut`, `copy`, `paste` |\n"
-                           "| Control | `submit`, `abort`, `insert-newline`, `agent-mode`, "
-                           "`cycle-agent-mode`, `cycle-thinking-mode`, `cycle-model` |\n"
-                           "| History | `history-prev`, `history-next` |\n");
+        (void) renderMarkdownHelp(
+            outputFd,
+            "# bind\n"
+            "\n"
+            "Manage key bindings for the line editor.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`bind [OPTIONS] [KEY ACTION]`\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|--------|-------------|\n"
+            "| `-l`, `--list` | List all keybindings |\n"
+            "| `-r`, `--remove` | Remove a keybinding: `bind -r ctrl+y` |\n"
+            "| `--reset` | Reset all keybindings to defaults |\n"
+            "| `-h`, `--help` | Show this help message |\n"
+            "\n"
+            "## Examples\n"
+            "\n"
+            "```\n"
+            "bind                     # List all bindings\n"
+            "bind ctrl+y redo         # Bind Ctrl+Y to redo\n"
+            "bind ctrl+y yank         # Bind Ctrl+Y to yank (Emacs-style)\n"
+            "bind -r ctrl+y           # Remove Ctrl+Y binding\n"
+            "bind --reset             # Reset to defaults\n"
+            "```\n"
+            "\n"
+            "## Key Format\n"
+            "\n"
+            "`[modifier+]...key`\n"
+            "\n"
+            "**Modifiers:** `ctrl`, `alt`, `shift`, `super`\n"
+            "\n"
+            "**Keys:** `a`-`z`, `enter`, `backspace`, `delete`, `tab`, `escape`,\n"
+            "`up`, `down`, `left`, `right`, `home`, `end`, `f1`-`f12`\n"
+            "\n"
+            "## Actions\n"
+            "\n"
+            "| Category | Actions |\n"
+            "|----------|----------|\n"
+            "| Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, "
+            "`move-backward-word`, `move-to-line-start`, `move-to-line-end`, "
+            "`move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, "
+            "`smart-move-to-line-start`, `smart-move-to-line-end` |\n"
+            "| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, "
+            "`delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |\n"
+            "| Undo | `undo`, `redo` |\n"
+            "| Kill Ring | `yank`, `yank-pop` |\n"
+            "| Selection | `select-all` |\n"
+            "| Clipboard | `cut`, `copy`, `paste` |\n"
+            "| Control | `submit`, `abort`, `insert-newline`, `agent-mode`, "
+            "`cycle-agent-mode`, `cycle-thinking-mode`, `cycle-model` |\n"
+            "| History | `history-prev`, `history-next` |\n");
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;
@@ -198,8 +199,8 @@ void Shell::builtinWhich(CoreVM::Params& context)
     if (context.count() >= 1)
     {
         auto const& argArray = context.getStringArray(1);
-        for (size_t i = 0; i < argArray.size(); ++i)
-            args.push_back(argArray[i]);
+        for (const auto& i: argArray)
+            args.push_back(i);
     }
 
     // Parse flags
@@ -239,29 +240,30 @@ void Shell::builtinWhich(CoreVM::Params& context)
     {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        (void) renderMarkdownHelp(outputFd,
-                           "# which\n"
-                           "\n"
-                           "Locate executables in the PATH.\n"
-                           "\n"
-                           "## Usage\n"
-                           "\n"
-                           "`which [OPTIONS] PROGRAM...`\n"
-                           "\n"
-                           "## Options\n"
-                           "\n"
-                           "| Option | Description |\n"
-                           "|--------|-------------|\n"
-                           "| `-a`, `--all` | Print all matching executables in PATH, not just the first |\n"
-                           "| `-h`, `--help` | Show this help message |\n"
-                           "| `-i`, `--read-alias` | Also show aliases (not yet implemented) |\n"
-                           "\n"
-                           "## Exit Status\n"
-                           "\n"
-                           "| Code | Meaning |\n"
-                           "|------|----------|\n"
-                           "| `0` | All programs were found |\n"
-                           "| `1` | One or more programs were not found |\n");
+        (void) renderMarkdownHelp(
+            outputFd,
+            "# which\n"
+            "\n"
+            "Locate executables in the PATH.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`which [OPTIONS] PROGRAM...`\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|--------|-------------|\n"
+            "| `-a`, `--all` | Print all matching executables in PATH, not just the first |\n"
+            "| `-h`, `--help` | Show this help message |\n"
+            "| `-i`, `--read-alias` | Also show aliases (not yet implemented) |\n"
+            "\n"
+            "## Exit Status\n"
+            "\n"
+            "| Code | Meaning |\n"
+            "|------|----------|\n"
+            "| `0` | All programs were found |\n"
+            "| `1` | One or more programs were not found |\n");
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;

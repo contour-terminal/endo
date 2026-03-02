@@ -53,8 +53,11 @@ void ScopeManager::bindVariable(std::string const& name,
                                 std::optional<SourceLocationRange> location)
 {
     if (_currentScope)
-        _currentScope->bindings[name] =
-            BindingInfo { value, isMutable, isExported, /*isUsed=*/false, std::move(location) };
+        _currentScope->bindings[name] = BindingInfo { .value = value,
+                                                      .isMutable = isMutable,
+                                                      .isExported = isExported,
+                                                      /*isUsed=*/.isUsed = false,
+                                                      .bindingLocation = std::move(location) };
 }
 
 void ScopeManager::bindObjectVariable(std::string const& name,
@@ -65,8 +68,11 @@ void ScopeManager::bindObjectVariable(std::string const& name,
     if (_currentScope)
     {
         _currentScope->objectVariables.push_back(storage);
-        _currentScope->bindings[name] =
-            BindingInfo { storage, isMutable, /*isExported=*/false, /*isUsed=*/false, std::move(location) };
+        _currentScope->bindings[name] = BindingInfo { .value = storage,
+                                                      .isMutable = isMutable,
+                                                      /*isExported=*/.isExported = false,
+                                                      /*isUsed=*/.isUsed = false,
+                                                      .bindingLocation = std::move(location) };
     }
 }
 
