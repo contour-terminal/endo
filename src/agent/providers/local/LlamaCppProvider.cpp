@@ -179,7 +179,7 @@ auto LlamaCppProvider::generate(std::span<ChatMessage const> messages,
 
     // Remove divergent suffix from KV cache.
     if (commonPrefix < _cachedTokens.size())
-        llama_kv_self_seq_rm(_ctx, 0, static_cast<int32_t>(commonPrefix), -1);
+        llama_memory_seq_rm(llama_get_memory(_ctx), 0, static_cast<int32_t>(commonPrefix), -1);
 
     // Decode only the new tokens (after the common prefix).
     auto const newTokensStart = commonPrefix;
