@@ -728,6 +728,77 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
+            else if (_runtime.findProperty(_lexer.currentLiteral()) != nullptr)
+            {
+                // Bare builtin property → evaluate as F# expression
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Check for mutable assignment: property <- value
+                if (_lexer.currentToken() == Token::LeftArrow)
+                {
+                    if (auto* identExpr = dynamic_cast<ast::IdentifierExpr*>(expr.get()))
+                    {
+                        auto name = identExpr->name;
+                        auto const nameRange = identExpr->location;
+                        _lexer.nextToken(); // consume '<-'
+                        _lexer.enterFSharpExpr();
+                        auto value = parseFSharpExpr();
+                        _lexer.leaveFSharpExpr();
+                        if (!value)
+                            return nullptr;
+                        auto stmt = std::make_unique<ast::MutAssignStmt>(std::move(name), std::move(value));
+                        stmt->location = nameRange && stmt->value->location
+                                             ? SourceLocationRange { .begin = nameRange->begin,
+                                                                     .end = stmt->value->location->end }
+                                             : nameRange;
+                        return stmt;
+                    }
+                }
+                // Check for trailing |> pipeline (allow newlines before |>)
+                {
+                    auto const skippedNL = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe && skippedNL)
+                        _lexer.pushBackToken(Token::LineFeed, "\n");
+                }
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    std::unique_ptr<ast::Expr> pipeline =
+                        std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (true)
+                    {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
+                        _lexer.nextToken();
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                           /*displayResult=*/_autoDisplay);
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
+            }
             else
             {
                 // Check for F# mutable assignment: identifier <- expr
