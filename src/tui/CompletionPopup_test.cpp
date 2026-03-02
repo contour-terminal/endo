@@ -338,7 +338,7 @@ TEST_CASE("CompletionPopup.renderedHeight_and_renderedWidth")
     Buffer buffer(10, 30);
     buffer.clear();
     Theme theme;
-    Canvas canvas(buffer, Rect { 0, 0, 30, 10 }, theme);
+    Canvas canvas(buffer, Rect { .x = 0, .y = 0, .width = 30, .height = 10 }, theme);
     popup.render(canvas);
 
     CHECK(popup.renderedHeight() > 0);

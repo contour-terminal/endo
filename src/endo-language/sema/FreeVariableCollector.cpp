@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <endo-language/sema/FreeVariableCollector.hpp>
-
 #include <endo-language/ast/Pattern.hpp>
+#include <endo-language/sema/FreeVariableCollector.hpp>
 
 #include <algorithm>
 #include <functional>

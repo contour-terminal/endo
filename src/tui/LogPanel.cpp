@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <format>
 #include <string>
+#include <utility>
 
 namespace tui
 {
@@ -137,7 +138,7 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
             auto const prefixLen = static_cast<int>(levelTag.size()) + 3; // " [Tag] "
             auto const maxMsgLen = std::max(0, cols - prefixLen);
             auto const& msg = entry.message;
-            if (static_cast<int>(msg.size()) > maxMsgLen)
+            if (std::cmp_greater(msg.size(), maxMsgLen))
                 output.writeRaw(msg.substr(0, static_cast<std::size_t>(maxMsgLen)));
             else
                 output.writeRaw(msg);

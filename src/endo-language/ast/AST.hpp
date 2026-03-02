@@ -35,7 +35,7 @@ struct Node
     void setSpanFromChildren(Node const& left, Node const& right)
     {
         if (left.location && right.location)
-            location = SourceLocationRange { left.location->begin, right.location->end };
+            location = SourceLocationRange { .begin = left.location->begin, .end = right.location->end };
         else if (left.location)
             location = left.location;
         else if (right.location)
@@ -935,7 +935,7 @@ struct LetBindingStmt final: public Statement
         isExported(false),
         isMutable(mut),
         isRecursive(false),
-        parameters(),
+
         returnType(std::nullopt),
         value(std::move(val)),
         destructurePattern(std::move(pat))
@@ -1006,7 +1006,7 @@ struct LetInExpr final: public Expr
     /// Constructor for destructuring let-in: `let (x, y) = expr in body`
     LetInExpr(std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val, std::unique_ptr<Expr> b):
         isRecursive(false),
-        parameters(),
+
         returnType(std::nullopt),
         value(std::move(val)),
         body(std::move(b)),

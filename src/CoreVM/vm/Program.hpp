@@ -59,8 +59,8 @@ struct RuntimeError
 
 struct MatchCaseDef
 {
-    uint64_t label;
-    uint64_t pc;
+    uint64_t label {};
+    uint64_t pc {};
 
     MatchCaseDef() = default;
 
@@ -72,9 +72,9 @@ struct MatchCaseDef
 class MatchDef
 {
   public:
-    size_t functionId;
-    MatchClass op;
-    uint64_t elsePC;
+    size_t functionId {};
+    MatchClass op {};
+    uint64_t elsePC {};
     std::vector<MatchCaseDef> cases;
 };
 
@@ -291,7 +291,7 @@ class Program
   private:
     ConstantPool _cp;
 
-    Runtime* _runtime;
+    Runtime* _runtime = nullptr;
     mutable std::vector<std::unique_ptr<Function>> _functions;
     std::vector<std::unique_ptr<Match>> _matches;
     std::vector<NativeCallback*> _nativeFunctions;

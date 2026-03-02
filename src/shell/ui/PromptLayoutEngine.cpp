@@ -53,7 +53,7 @@ int PromptLayoutEngine::preferredHeight(PromptConfig const& config)
 int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
                                          PromptConfig const& config,
                                          std::vector<PromptSegments> const& infoModules,
-                                         tui::Theme const& theme) const
+                                         tui::Theme const& theme)
 {
     auto col = 0;
 
@@ -91,18 +91,20 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
                                       PromptConfig const& config,
                                       std::vector<PromptSegments> const& infoModules,
                                       std::vector<PromptSegments> const& rightModules,
-                                      tui::Theme const& theme) const
+                                      tui::Theme const& theme)
 {
     constexpr auto HorizontalMargin = 1;
     auto const canvasWidth = canvas.width();
-    auto const contentWidth = canvasWidth - 2 * HorizontalMargin;
+    auto const contentWidth = canvasWidth - (2 * HorizontalMargin);
 
     // Background fill for both lines
     auto bgStyle = tui::Style {};
     bgStyle.bg = theme.promptColors.background;
 
-    canvas.fill(tui::Rect { HorizontalMargin, 0, contentWidth, 1 }, ' ', bgStyle);
-    canvas.fill(tui::Rect { HorizontalMargin, 1, contentWidth, 1 }, ' ', bgStyle);
+    canvas.fill(
+        tui::Rect { .x = HorizontalMargin, .y = 0, .width = contentWidth, .height = 1 }, ' ', bgStyle);
+    canvas.fill(
+        tui::Rect { .x = HorizontalMargin, .y = 1, .width = contentWidth, .height = 1 }, ' ', bgStyle);
 
     // Line 1: separator + modules
     auto col = HorizontalMargin;
@@ -129,7 +131,6 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     }
 
     // Info modules with space separation (or │ for Rounded)
-    auto const infoStartCol = col;
     for (std::size_t i = 0; i < infoModules.size(); ++i)
     {
         if (i > 0)
@@ -220,7 +221,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
 int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
                                     PromptConfig const& config,
                                     std::vector<PromptSegments> const& infoModules,
-                                    tui::Theme const& theme) const
+                                    tui::Theme const& theme)
 {
     auto const canvasWidth = canvas.width();
     auto sepStyle = tui::Style {};
@@ -269,7 +270,7 @@ int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
 int PromptLayoutEngine::renderPowerline(tui::Canvas& canvas,
                                         PromptConfig const& config,
                                         std::vector<PromptSegments> const& infoModules,
-                                        tui::Theme const& theme) const
+                                        tui::Theme const& theme)
 {
     auto col = 0;
 

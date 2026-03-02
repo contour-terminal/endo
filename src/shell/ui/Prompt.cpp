@@ -101,7 +101,7 @@ void Prompt::initialize()
 
     // Add PromptComponent to the screen's root
     // Set initial area to full width, 1 row (will grow as needed)
-    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), 1 });
+    _promptComponent->setArea(tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = 1 });
     _screen->root().addChild(*_promptComponent);
 
     // Set initial focus
@@ -122,7 +122,8 @@ std::string Prompt::read()
     _promptComponent->setMultiline(_multilineEnabled);
     // Update component area based on content
     auto prefSize = _promptComponent->preferredSize();
-    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), prefSize.height });
+    _promptComponent->setArea(
+        tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
 
     // Render initial state (skip if display() already drew current state)
     if (!_displayDrewCurrentState)
@@ -168,7 +169,8 @@ std::string Prompt::read()
                 // Focus just changed — redraw to show/hide dim effect
                 _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _promptComponent->setArea(
+                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
                 _screen->draw();
             }
             else if (nowFocused)
@@ -176,7 +178,8 @@ std::string Prompt::read()
                 _screen->tickHover();
                 _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _promptComponent->setArea(
+                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
                 _screen->draw();
             }
             continue;
@@ -297,7 +300,8 @@ std::string Prompt::read()
             // Re-render prompt below the errors
             _promptComponent->flushDeferredUpdates();
             auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _promptComponent->setArea(
+                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
             _screen->draw();
             continue; // skip the normal needsRedraw path
         }
@@ -306,7 +310,8 @@ std::string Prompt::read()
         {
             _promptComponent->flushDeferredUpdates();
             auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _promptComponent->setArea(
+                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
             _screen->draw();
         }
     }
@@ -346,7 +351,8 @@ std::optional<std::string> Prompt::processInput()
         {
             onResize();
             auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _promptComponent->setArea(
+                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
             _screen->draw();
             continue;
         }
@@ -361,7 +367,8 @@ std::optional<std::string> Prompt::processInput()
         {
             _promptComponent->flushDeferredUpdates();
             auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _promptComponent->setArea(
+                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
             _screen->draw();
             continue;
         }
@@ -411,7 +418,8 @@ std::optional<std::string> Prompt::processInput()
             case PromptComponent::Action::Changed: {
                 _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _promptComponent->setArea(
+                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
                 _screen->draw();
                 break;
             }
@@ -425,7 +433,8 @@ std::optional<std::string> Prompt::processInput()
                 // Update component area and redraw
                 _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _promptComponent->setArea(
+                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
                 _screen->draw();
                 break;
             }
@@ -440,7 +449,8 @@ std::optional<std::string> Prompt::processInput()
                 _promptComponent->flushDeferredUpdates();
                 {
                     auto pSize = _promptComponent->preferredSize();
-                    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                    _promptComponent->setArea(
+                        tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
                 }
                 _screen->draw();
                 break;
@@ -471,7 +481,8 @@ void Prompt::display()
 
     // Update component area
     auto prefSize = _promptComponent->preferredSize();
-    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), prefSize.height });
+    _promptComponent->setArea(
+        tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
 
     // Render
     _screen->draw();

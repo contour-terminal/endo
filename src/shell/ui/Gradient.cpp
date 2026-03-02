@@ -18,7 +18,7 @@ namespace endo
 tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) noexcept
 {
     if (stops.empty())
-        return { 0, 0, 0 };
+        return { .r = 0, .g = 0, .b = 0 };
 
     if (stops.size() == 1)
         return stops[0];

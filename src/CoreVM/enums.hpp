@@ -163,7 +163,7 @@ enum Opcode : uint16_t
     LFORCE, // LFORCE                  ; force lazy value at top of stack
 };
 
-enum class MatchClass
+enum class MatchClass : uint8_t
 {
     Same,
     Head,
@@ -173,7 +173,7 @@ enum class MatchClass
 
 std::string tos(MatchClass c);
 
-enum class UnaryOperator
+enum class UnaryOperator : uint8_t
 {
     // numerical
     INeg,
@@ -187,7 +187,7 @@ enum class UnaryOperator
     SIsEmpty,
 };
 
-enum class BinaryOperator
+enum class BinaryOperator : uint8_t
 {
     // numerical
     IAdd,
@@ -246,7 +246,7 @@ enum class BinaryOperator
 const char* cstr(BinaryOperator op);
 const char* cstr(UnaryOperator op);
 
-enum class LiteralType
+enum class LiteralType : uint8_t
 {
     Void = 0,
     Boolean = 1,      // bool (int64)
@@ -337,7 +337,7 @@ using FCmpGEInstr = BinaryInstr<BinaryOperator::FCmpGE, LiteralType::Boolean>;
 using FCmpLTInstr = BinaryInstr<BinaryOperator::FCmpLT, LiteralType::Boolean>;
 using FCmpGTInstr = BinaryInstr<BinaryOperator::FCmpGT, LiteralType::Boolean>;
 
-enum class OperandSig
+enum class OperandSig : uint8_t
 {
     V,   // no operands
     I,   // imm16
@@ -384,19 +384,21 @@ constexpr Instruction makeInstruction(Opcode opc)
 /** Creates an instruction with one operand. */
 constexpr Instruction makeInstruction(Opcode opc, Operand op1)
 {
-    return (opc | (op1 << 16));
+    return static_cast<Instruction>(opc) | (static_cast<Instruction>(op1) << 16);
 }
 
 /** Creates an instruction with two operands. */
 constexpr Instruction makeInstruction(Opcode opc, Operand op1, Operand op2)
 {
-    return (opc | (op1 << 16) | (Instruction(op2) << 32));
+    return static_cast<Instruction>(opc) | (static_cast<Instruction>(op1) << 16)
+           | (static_cast<Instruction>(op2) << 32);
 }
 
 /** Creates an instruction with three operands. */
 constexpr Instruction makeInstruction(Opcode opc, Operand op1, Operand op2, Operand op3)
 {
-    return (opc | (op1 << 16) | (Instruction(op2) << 32) | (Instruction(op3) << 48));
+    return static_cast<Instruction>(opc) | (static_cast<Instruction>(op1) << 16)
+           | (static_cast<Instruction>(op2) << 32) | (static_cast<Instruction>(op3) << 48);
 }
 
 // --------------------------------------------------------------------------

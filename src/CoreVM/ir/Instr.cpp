@@ -48,7 +48,7 @@ Instr::~Instr()
             // if operand is a BasicBlock, unlink it as successor
             if (BasicBlock* parent = getBasicBlock(); parent != nullptr)
             {
-                if (BasicBlock* oldBB = dynamic_cast<BasicBlock*>(op))
+                if (auto* oldBB = dynamic_cast<BasicBlock*>(op))
                 {
                     parent->unlinkSuccessor(oldBB);
                 }
@@ -63,7 +63,7 @@ void Instr::addOperand(Value* value)
 
     value->addUse(this);
 
-    if (BasicBlock* newBB = dynamic_cast<BasicBlock*>(value))
+    if (auto* newBB = dynamic_cast<BasicBlock*>(value))
     {
         getBasicBlock()->linkSuccessor(newBB);
     }
@@ -79,7 +79,7 @@ Value* Instr::setOperand(size_t i, Value* value)
     {
         old->removeUse(this);
 
-        if (BasicBlock* oldBB = dynamic_cast<BasicBlock*>(old))
+        if (auto* oldBB = dynamic_cast<BasicBlock*>(old))
         {
             getBasicBlock()->unlinkSuccessor(oldBB);
         }
@@ -89,7 +89,7 @@ Value* Instr::setOperand(size_t i, Value* value)
     {
         value->addUse(this);
 
-        if (BasicBlock* newBB = dynamic_cast<BasicBlock*>(value))
+        if (auto* newBB = dynamic_cast<BasicBlock*>(value))
         {
             getBasicBlock()->linkSuccessor(newBB);
         }

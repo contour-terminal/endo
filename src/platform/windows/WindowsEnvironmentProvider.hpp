@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/EnvironmentProvider.hpp>
-
 #include <map>
 #include <string>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo::platform
 {
@@ -26,7 +26,8 @@ class WindowsEnvironmentProvider final: public EnvironmentProvider
     void exportVariable(std::string_view name) override;
     [[nodiscard]] std::vector<std::string> keys() const override;
 
-    [[nodiscard]] std::expected<void, PlatformError> changeDirectory(std::filesystem::path const& path) override;
+    [[nodiscard]] std::expected<void, PlatformError> changeDirectory(
+        std::filesystem::path const& path) override;
     [[nodiscard]] std::string currentDirectory() const override;
 
   private:
@@ -35,6 +36,7 @@ class WindowsEnvironmentProvider final: public EnvironmentProvider
     {
         bool operator()(std::string const& a, std::string const& b) const;
     };
+
     std::map<std::string, std::string, CaseInsensitiveLess> _values;
 };
 

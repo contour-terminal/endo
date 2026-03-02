@@ -140,7 +140,10 @@ class Canvas
     [[nodiscard]] Size size() const noexcept { return _area.size(); }
 
     /// Returns the canvas area (always starts at 0,0 in local coordinates).
-    [[nodiscard]] Rect area() const noexcept { return Rect { 0, 0, _area.width, _area.height }; }
+    [[nodiscard]] Rect area() const noexcept
+    {
+        return Rect { .x = 0, .y = 0, .width = _area.width, .height = _area.height };
+    }
 
     /// Returns the theme.
     [[nodiscard]] Theme const& theme() const noexcept { return _theme; }

@@ -84,7 +84,7 @@ void CommandPalettePopup::render(Canvas& canvas)
 
     auto const& theme = canvas.theme();
 
-    auto const visibleCount = std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
+    auto const visibleCount = std::min(static_cast<size_t>(maxVisibleItems), _filteredItems.size());
     auto const paletteWidth = calculateWidth(canvas.width());
     // Height: 2 (borders) + 1 (filter) + 1 (separator) + visible items
     auto const paletteHeight = static_cast<int>(visibleCount) + 4;
@@ -95,13 +95,13 @@ void CommandPalettePopup::render(Canvas& canvas)
     auto const innerWidth = paletteWidth - 2;
 
     // Draw border
-    auto const borderRect = Rect { 0, 0, paletteWidth, paletteHeight };
+    auto const borderRect = Rect { .x = 0, .y = 0, .width = paletteWidth, .height = paletteHeight };
     canvas.drawBox(borderRect, BorderStyle::Rounded, theme.dialogBorder);
 
     // Row 1: Filter input field
     auto const filterRow = 1;
     auto const filterBg = theme.completionItem;
-    canvas.fill(Rect { 1, filterRow, innerWidth, 1 }, ' ', filterBg);
+    canvas.fill(Rect { .x = 1, .y = filterRow, .width = innerWidth, .height = 1 }, ' ', filterBg);
 
     // Render prompt indicator
     auto const promptText = _title.empty() ? std::string_view("> ") : std::string_view(_title);
@@ -137,7 +137,7 @@ void CommandPalettePopup::render(Canvas& canvas)
         auto const& matchStyle = theme.completionMatch;
 
         // Fill row background
-        canvas.fill(Rect { 1, row, innerWidth, 1 }, ' ', itemStyle);
+        canvas.fill(Rect { .x = 1, .y = row, .width = innerWidth, .height = 1 }, ' ', itemStyle);
 
         auto col = 1;
 
@@ -200,11 +200,11 @@ EventResult CommandPalettePopup::onEvent(InputEvent const& event)
 Size CommandPalettePopup::preferredSize() const
 {
     if (!visible())
-        return { 0, 0 };
+        return { .width = 0, .height = 0 };
 
-    auto const visibleCount = std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
+    auto const visibleCount = std::min(static_cast<size_t>(maxVisibleItems), _filteredItems.size());
     auto const height = static_cast<int>(visibleCount) + 4; // borders + filter + separator
-    return { MaxWidth, height };
+    return { .width = maxPaletteWidth, .height = height };
 }
 
 // ============================================================================
@@ -421,13 +421,13 @@ void CommandPalettePopup::ensureSelectedVisible()
 {
     if (_selected < _scrollOffset)
         _scrollOffset = _selected;
-    else if (_selected >= _scrollOffset + MaxVisibleItems)
-        _scrollOffset = _selected - MaxVisibleItems + 1;
+    else if (_selected >= _scrollOffset + maxVisibleItems)
+        _scrollOffset = _selected - maxVisibleItems + 1;
 }
 
 int CommandPalettePopup::calculateWidth(int maxWidth) const
 {
-    auto width = MinWidth;
+    auto width = minPaletteWidth;
 
     for (auto const& item: _filteredItems)
     {
@@ -444,7 +444,7 @@ int CommandPalettePopup::calculateWidth(int maxWidth) const
         width = std::max(width, itemWidth);
     }
 
-    return std::min(std::min(width, MaxWidth), maxWidth);
+    return std::min({ width, maxPaletteWidth, maxWidth });
 }
 
 void CommandPalettePopup::executeSelected()
@@ -479,7 +479,7 @@ void CommandPalettePopup::pageDown()
 {
     if (_filteredItems.empty())
         return;
-    _selected = std::min(_selected + MaxVisibleItems, _filteredItems.size() - 1);
+    _selected = std::min(_selected + maxVisibleItems, _filteredItems.size() - 1);
     ensureSelectedVisible();
 }
 
@@ -487,7 +487,7 @@ void CommandPalettePopup::pageUp()
 {
     if (_filteredItems.empty())
         return;
-    _selected = (_selected >= static_cast<size_t>(MaxVisibleItems)) ? _selected - MaxVisibleItems : 0;
+    _selected = (_selected >= static_cast<size_t>(maxVisibleItems)) ? _selected - maxVisibleItems : 0;
     ensureSelectedVisible();
 }
 

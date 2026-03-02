@@ -78,7 +78,7 @@ void Component::addChild(Component& child, LayoutParams params)
 
 void Component::removeChild(Component& child)
 {
-    auto it = std::find(_children.begin(), _children.end(), &child);
+    auto it = std::ranges::find(_children, &child);
     if (it != _children.end())
     {
         _children.erase(it);
@@ -157,7 +157,7 @@ void RootComponent::render([[maybe_unused]] Canvas& canvas)
 Size RootComponent::preferredSize() const
 {
     // Root takes full screen, so preferred size is not meaningful.
-    return { 0, 0 };
+    return { .width = 0, .height = 0 };
 }
 
 } // namespace tui

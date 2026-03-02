@@ -51,7 +51,7 @@ class Buffer
     [[nodiscard]] int cols() const noexcept { return _cols; }
 
     /// Returns the size as a Size struct.
-    [[nodiscard]] Size size() const noexcept { return { _cols, _rows }; }
+    [[nodiscard]] Size size() const noexcept { return { .width = _cols, .height = _rows }; }
 
     /// Returns true if the buffer has no cells.
     [[nodiscard]] bool empty() const noexcept { return _cells.empty(); }
@@ -150,7 +150,7 @@ class Buffer
     std::vector<Cell> _cells;
     int _rows = 0;
     int _cols = 0;
-    Point _cursor { 0, 0 };
+    Point _cursor { .x = 0, .y = 0 };
     bool _cursorVisible = true;
     std::vector<ImageRegion> _images;
 

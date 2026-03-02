@@ -21,7 +21,7 @@ void HoverState::onMouseMove(int x, int y, Component* target)
         }
 
         // Reset hover state
-        _hover = HoverInfo { x, y, target };
+        _hover = HoverInfo { .x = x, .y = y, .target = target };
         _hoverStart = std::chrono::steady_clock::now();
         _confirmed = false;
     }

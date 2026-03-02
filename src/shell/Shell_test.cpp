@@ -322,8 +322,8 @@ TEST_CASE("shell.builtin.read.more_vars_than_words")
     shell("read A B C D");
     CHECK(shell.env.get("A").value_or("NONE") == "one");
     CHECK(shell.env.get("B").value_or("NONE") == "two");
-    CHECK(shell.env.get("C").value_or("NONE") == "");
-    CHECK(shell.env.get("D").value_or("NONE") == "");
+    CHECK(shell.env.get("C").value_or("NONE").empty());
+    CHECK(shell.env.get("D").value_or("NONE").empty());
 }
 
 // Note: Pipeline support for read (e.g., "echo hello | read VAR") requires
@@ -349,8 +349,8 @@ TEST_CASE("shell.builtin.read.empty_ifs_no_split")
     shell("read A B C");
     // With empty IFS, no splitting occurs - first var gets everything
     CHECK(shell.env.get("A").value_or("NONE") == "one two three");
-    CHECK(shell.env.get("B").value_or("NONE") == "");
-    CHECK(shell.env.get("C").value_or("NONE") == "");
+    CHECK(shell.env.get("B").value_or("NONE").empty());
+    CHECK(shell.env.get("C").value_or("NONE").empty());
 }
 
 TEST_CASE("shell.builtin.read.timeout_success")
@@ -520,7 +520,7 @@ TEST_CASE("shell.builtin.cat_n_flag")
 {
     // Test line numbering with echo piped to cat
     TestShell shell;
-    auto output = shell("echo -e \"line1\\nline2\\nline3\" | cat -n").output();
+    auto output = shell(R"(echo -e "line1\nline2\nline3" | cat -n)").output();
     CHECK(output.find("1\t") != std::string::npos);
     CHECK(output.find("2\t") != std::string::npos);
     CHECK(output.find("3\t") != std::string::npos);
@@ -530,7 +530,7 @@ TEST_CASE("shell.builtin.cat_b_flag")
 {
     // Test -b only numbers non-blank lines
     TestShell shell;
-    auto output = shell("echo -e \"line1\\n\\nline2\" | cat -b").output();
+    auto output = shell(R"(echo -e "line1\n\nline2" | cat -b)").output();
     // First line should be numbered
     CHECK(output.find("1\t") != std::string::npos);
     // Second line is blank, should NOT be numbered
@@ -542,7 +542,7 @@ TEST_CASE("shell.builtin.cat_E_flag")
 {
     // Test -E shows $ at end of lines
     TestShell shell;
-    auto output = shell("echo -e \"hello\\nworld\" | cat -E").output();
+    auto output = shell(R"(echo -e "hello\nworld" | cat -E)").output();
     CHECK(output.find("hello$") != std::string::npos);
     CHECK(output.find("world$") != std::string::npos);
 }
@@ -551,7 +551,7 @@ TEST_CASE("shell.builtin.cat_T_flag")
 {
     // Test -T shows tabs as ^I
     TestShell shell;
-    auto output = shell("echo -e \"a\\tb\" | cat -T").output();
+    auto output = shell(R"(echo -e "a\tb" | cat -T)").output();
     CHECK(output.find("^I") != std::string::npos);
 }
 
@@ -559,7 +559,7 @@ TEST_CASE("shell.builtin.cat_s_flag")
 {
     // Test -s squeezes multiple blank lines
     TestShell shell;
-    auto output = shell("echo -e \"a\\n\\n\\n\\nb\" | cat -s").output();
+    auto output = shell(R"(echo -e "a\n\n\n\nb" | cat -s)").output();
     // Should squeeze the multiple blank lines into one
     // Count the number of lines
     size_t newlineCount = 0;
@@ -574,16 +574,16 @@ TEST_CASE("shell.builtin.cat_A_flag")
 {
     // Test -A is equivalent to -ET
     TestShell shell;
-    auto output = shell("echo -e \"a\\tb\" | cat -A").output();
+    auto output = shell(R"(echo -e "a\tb" | cat -A)").output();
     CHECK(output.find("^I") != std::string::npos); // Shows tabs
-    CHECK(output.find("$") != std::string::npos);  // Shows line ends
+    CHECK(output.find('$') != std::string::npos);  // Shows line ends
 }
 
 TEST_CASE("shell.builtin.cat_combined_flags")
 {
     // Test combining multiple flags
     TestShell shell;
-    auto output = shell("echo -e \"a\\tb\\ncd\" | cat -nT").output();
+    auto output = shell(R"(echo -e "a\tb\ncd" | cat -nT)").output();
     CHECK(output.find("1\t") != std::string::npos); // Line numbers
     CHECK(output.find("^I") != std::string::npos);  // Tabs shown
 }
@@ -608,61 +608,61 @@ TEST_CASE("shell.builtin.cat_nonexistent_file")
 TEST_CASE("shell.builtin.cat_range_basic")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat --range 2..4").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat --range 2..4)").output();
     CHECK(output == "b\nc\nd\n");
 }
 
 TEST_CASE("shell.builtin.cat_range_short")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r 2..3").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat -r 2..3)").output();
     CHECK(output == "b\nc\n");
 }
 
 TEST_CASE("shell.builtin.cat_range_open_end")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r 3..").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat -r 3..)").output();
     CHECK(output == "c\nd\ne\n");
 }
 
 TEST_CASE("shell.builtin.cat_range_open_start")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r ..2").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat -r ..2)").output();
     CHECK(output == "a\nb\n");
 }
 
 TEST_CASE("shell.builtin.cat_range_with_line_numbers")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -nr 3..4").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat -nr 3..4)").output();
     CHECK(output.find("3\t") != std::string::npos);
     CHECK(output.find("4\t") != std::string::npos);
     CHECK(output.find("1\t") == std::string::npos);
-    CHECK(output.find("c") != std::string::npos);
-    CHECK(output.find("d") != std::string::npos);
+    CHECK(output.find('c') != std::string::npos);
+    CHECK(output.find('d') != std::string::npos);
 }
 
 TEST_CASE("shell.builtin.cat_range_combined_flags")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -nr 2..2").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd\ne" | cat -nr 2..2)").output();
     CHECK(output.find("2\t") != std::string::npos);
-    CHECK(output.find("b") != std::string::npos);
+    CHECK(output.find('b') != std::string::npos);
 }
 
 TEST_CASE("shell.builtin.cat_range_single_line")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\" | cat --range 2..2").output();
+    auto output = shell(R"(echo -e "a\nb\nc" | cat --range 2..2)").output();
     CHECK(output == "b\n");
 }
 
 TEST_CASE("shell.builtin.cat_range_with_squeeze")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\n\\n\\n\\nb\\nc\" | cat -sr 1..6").output();
+    auto output = shell(R"(echo -e "a\n\n\n\nb\nc" | cat -sr 1..6)").output();
     CHECK(output == "a\n\nb\nc\n");
 }
 
@@ -697,7 +697,7 @@ TEST_CASE("shell.builtin.cat_range_error_missing_arg")
 TEST_CASE("shell.builtin.cat_range_equals_syntax")
 {
     TestShell shell;
-    auto output = shell("echo -e \"a\\nb\\nc\\nd\" | cat --range=2..3").output();
+    auto output = shell(R"(echo -e "a\nb\nc\nd" | cat --range=2..3)").output();
     CHECK(output == "b\nc\n");
 }
 
@@ -722,7 +722,7 @@ TEST_CASE("shell.builtin.cat_raw_flag")
     // Write a PPM image and cat it with --raw — should get raw bytes
     TestShell shell;
     // Create a minimal PPM file
-    shell("echo -e 'P6\\n1 1\\n255\\n' > /tmp/endo_test_cat_raw.ppm");
+    shell(R"(echo -e 'P6\n1 1\n255\n' > /tmp/endo_test_cat_raw.ppm)");
     auto output = shell("cat --raw /tmp/endo_test_cat_raw.ppm").output();
     CHECK(output.find("P6") != std::string::npos);
     std::filesystem::remove("/tmp/endo_test_cat_raw.ppm");
@@ -2026,7 +2026,8 @@ TEST_CASE("shell.redirect.output_append")
     shell("echo line2 >> /tmp/endo_test_append.txt");
     // Verify both lines present
     std::ifstream file("/tmp/endo_test_append.txt");
-    std::string line1, line2;
+    auto line1 = std::string {};
+    auto line2 = std::string {};
     std::getline(file, line1);
     std::getline(file, line2);
     CHECK(line1 == "line1");
@@ -2129,14 +2130,14 @@ TEST_CASE("shell.logical.and_failure")
 {
     // false && echo hello - should NOT execute echo because false fails
     TestShell shell;
-    CHECK(shell("false && echo hello").output() == "");
+    CHECK(shell("false && echo hello").output().empty());
 }
 
 TEST_CASE("shell.logical.or_success")
 {
     // true || echo hello - should NOT execute echo because true succeeds
     TestShell shell;
-    CHECK(shell("true || echo hello").output() == "");
+    CHECK(shell("true || echo hello").output().empty());
 }
 
 TEST_CASE("shell.logical.or_failure")
@@ -2469,7 +2470,7 @@ TEST_CASE("shell.expand.param_alternate_unset")
     // Note: empty string expansion becomes a space-separated argument
     // so we check that the alternate is not used
     shell("set RESULT ${UNSET:+alt}");
-    CHECK(shell.env.get("RESULT").value_or("FAIL") == "");
+    CHECK(shell.env.get("RESULT").value_or("FAIL").empty());
 }
 
 TEST_CASE("shell.expand.param_alternate_set")
@@ -3740,7 +3741,7 @@ TEST_CASE("shell.env.endo_shlvl_defaults_to_zero")
     TestShell shell;
     shell("echo $ENDO_SHLVL");
     CHECK(shell.exitCode == 0);
-    CHECK(std::string(shell.output()).find("0") != std::string::npos);
+    CHECK(std::string(shell.output()).find('0') != std::string::npos);
 }
 
 TEST_CASE("shell.env.endo_shlvl_increments_when_preset")

@@ -13,7 +13,7 @@ namespace CoreVM
 {
 
 IRFunction::IRFunction(const std::string& name, IRProgram* program):
-    Constant(LiteralType::Function, name), _program(program), _blocks()
+    Constant(LiteralType::Function, name), _program(program)
 {
 }
 
@@ -59,7 +59,7 @@ void IRFunction::setEntryBlock(BasicBlock* bb)
 {
     COREVM_ASSERT(bb->getFunction(), "BasicBlock must belong to this function.");
 
-    auto i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == bb; });
+    auto i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == bb; });
     COREVM_ASSERT(i != _blocks.end(), "BasicBlock must belong to this function.");
     std::unique_ptr<BasicBlock> t = std::move(*i);
     _blocks.erase(i);
@@ -92,7 +92,7 @@ bool IRFunction::isAfter(const BasicBlock* bb, const BasicBlock* afterThat) cons
     assert(bb->getFunction() == this);
     assert(afterThat->getFunction() == this);
 
-    auto i = std::find_if(_blocks.cbegin(), _blocks.cend(), [&](const auto& obj) { return obj.get() == bb; });
+    auto i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == bb; });
 
     if (i == _blocks.cend())
         return false;
@@ -109,12 +109,11 @@ void IRFunction::moveAfter(const BasicBlock* moveable, const BasicBlock* after)
 {
     assert(moveable->getFunction() == this && after->getFunction() == this);
 
-    auto i =
-        std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == moveable; });
+    auto i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == moveable; });
     std::unique_ptr<BasicBlock> m = std::move(*i);
     _blocks.erase(i);
 
-    i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == after; });
+    i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == after; });
     ++i;
     _blocks.insert(i, std::move(m));
 }
@@ -123,19 +122,18 @@ void IRFunction::moveBefore(const BasicBlock* moveable, const BasicBlock* before
 {
     assert(moveable->getFunction() == this && before->getFunction() == this);
 
-    auto i =
-        std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == moveable; });
+    auto i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == moveable; });
     std::unique_ptr<BasicBlock> m = std::move(*i);
     _blocks.erase(i);
 
-    i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == before; });
+    i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == before; });
     ++i;
     _blocks.insert(i, std::move(m));
 }
 
 void IRFunction::erase(BasicBlock* bb)
 {
-    auto i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == bb; });
+    auto i = std::ranges::find_if(_blocks, [&](const auto& obj) { return obj.get() == bb; });
     COREVM_ASSERT(i != _blocks.end(), "Given basic block must be a member of this function to be removed.");
 
     for (Instr* instr: bb->instructions())

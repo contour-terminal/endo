@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <utility>
 
 namespace tui
 {
@@ -60,7 +61,7 @@ void List::render(Canvas& canvas)
     auto const visibleCount =
         std::min(static_cast<std::size_t>(maxRows), _visibleIndices.size() - _scrollOffset);
 
-    for (auto i = std::size_t { 0 }; i < static_cast<std::size_t>(maxRows); ++i)
+    for (auto i = std::size_t { 0 }; std::cmp_less(i, maxRows); ++i)
     {
         auto const row = static_cast<int>(i);
 
@@ -108,7 +109,7 @@ void List::render(Canvas& canvas)
         // Item label
         auto const labelMaxWidth = width - col;
         auto displayLabel = item.label;
-        if (static_cast<int>(displayLabel.size()) > labelMaxWidth)
+        if (std::cmp_greater(displayLabel.size(), labelMaxWidth))
             displayLabel = displayLabel.substr(0, static_cast<std::size_t>(labelMaxWidth - 1)) + "\u2026";
 
         canvas.putString(row, col, displayLabel, itemStyle);
@@ -150,7 +151,7 @@ EventResult List::onEvent(InputEvent const& event)
 Size List::preferredSize() const
 {
     if (_items.empty())
-        return { 20, 1 };
+        return { .width = 20, .height = 1 };
 
     // Calculate max width from items
     int maxWidth = 0;
@@ -163,7 +164,7 @@ Size List::preferredSize() const
     // Height is the number of visible items (capped at a reasonable default)
     auto const height = std::min(static_cast<int>(_visibleIndices.size()), 20);
 
-    return { maxWidth + 2, height }; // +2 for scroll indicator space
+    return { .width = maxWidth + 2, .height = height }; // +2 for scroll indicator space
 }
 
 void List::setItems(std::vector<ListItem> items)
@@ -304,7 +305,7 @@ auto List::handleKey(KeyEvent const& key) -> ListAction
 
 void List::setStyle(ListStyle style)
 {
-    _style = std::move(style);
+    _style = style;
 }
 
 auto List::style() const noexcept -> ListStyle const&

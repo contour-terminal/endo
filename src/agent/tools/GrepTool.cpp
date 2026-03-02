@@ -6,6 +6,7 @@
 #include <regex>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <agent/tools/GrepTool.hpp>
@@ -108,8 +109,7 @@ auto GrepTool::definition() const -> ToolDefinition
                         { "description", "Directory to search in (default: current working directory)" } } },
                     { "glob",
                       { { "type", "string" },
-                        { "description",
-                          "Glob pattern to filter files (e.g. \"*.cpp\", \"*.{ts,tsx}\")" } } },
+                        { "description", R"(Glob pattern to filter files (e.g. "*.cpp", "*.{ts,tsx}"))" } } },
                     { "context",
                       { { "type", "integer" },
                         { "description",
@@ -193,7 +193,7 @@ auto GrepTool::execute(nlohmann::json const& arguments) -> std::expected<ToolRes
 
         auto matchedLineNumbers = std::set<int> {};
 
-        for (auto i = 0; i < static_cast<int>(lines.size()); ++i)
+        for (auto i = 0; std::cmp_less(i, lines.size()); ++i)
         {
             if (std::regex_search(lines[i], regex))
                 matchedLineNumbers.insert(i);

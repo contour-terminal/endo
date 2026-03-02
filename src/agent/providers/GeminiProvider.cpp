@@ -6,6 +6,7 @@
 #include <crispy/base64.h>
 
 #include <format>
+#include <ranges>
 
 namespace endo::agent
 {
@@ -116,9 +117,9 @@ auto GeminiProvider::findToolName(std::span<ChatMessage const> messages, std::st
     -> std::string
 {
     // Walk backwards through messages to find a ToolUseBlock with matching id.
-    for (auto it = messages.rbegin(); it != messages.rend(); ++it)
+    for (const auto& message: std::ranges::reverse_view(messages))
     {
-        for (auto const& block: it->content)
+        for (auto const& block: message.content)
         {
             if (auto const* toolUse = std::get_if<ToolUseBlock>(&block))
             {
@@ -154,7 +155,7 @@ auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
         }
 
         // Determine Gemini role: "user" or "model".
-        auto const geminiRole = (msg.role == Role::Assistant) ? "model" : "user";
+        const auto* const geminiRole = (msg.role == Role::Assistant) ? "model" : "user";
 
         // Check if this message contains ToolResultBlocks — they need special handling.
         auto hasToolResults = false;

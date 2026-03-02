@@ -141,7 +141,7 @@ void InputField::render(Canvas& canvas)
 
     // Fill background if custom background style is set
     if (_styles.background.has_value())
-        canvas.fill(Rect { 0, 0, width, height }, ' ', *_styles.background);
+        canvas.fill(Rect { .x = 0, .y = 0, .width = width, .height = height }, ' ', *_styles.background);
 
     // ====================================================================
     // Single-line mode (or single-line content)
@@ -478,7 +478,7 @@ Size InputField::preferredSize() const
 
     // Width: prompt + some reasonable text width
     int promptWidth = static_cast<int>(_prompt.size());
-    return { promptWidth + 40, std::max(1, lines) };
+    return { .width = promptWidth + 40, .height = std::max(1, lines) };
 }
 
 auto InputField::text() const noexcept -> std::string_view
@@ -503,7 +503,7 @@ auto InputField::prompt() const noexcept -> std::string_view
 
 void InputField::setStyles(InputFieldStyles styles)
 {
-    _styles = std::move(styles);
+    _styles = styles;
 }
 
 void InputField::clear()
@@ -1628,8 +1628,7 @@ void InputField::setCursorFromClick(int line, int column, bool extendSelection)
 {
     // Clamp line to valid range
     auto const totalLines = lineCount();
-    if (line < 0)
-        line = 0;
+    line = std::max(line, 0);
     if (line >= totalLines)
         line = totalLines - 1;
 
@@ -1644,8 +1643,7 @@ void InputField::setCursorFromClick(int line, int column, bool extendSelection)
     }
 
     // Clamp column to valid range within the line
-    if (column < 0)
-        column = 0;
+    column = std::max(column, 0);
 
     // Move to the target grapheme position within the line
     auto newCursor = moveToGraphemeInLine(lineStart, column);
@@ -1922,8 +1920,7 @@ auto InputField::findWordStart(std::size_t pos) const -> std::size_t
 
     // Move to start of current character
     std::size_t current = pos;
-    if (current > _buffer.size())
-        current = _buffer.size();
+    current = std::min(current, _buffer.size());
     if (current > 0)
         current = prevGraphemeCluster(current);
 
@@ -1972,7 +1969,7 @@ void InputField::selectWord(std::size_t position)
 
     // Clamp position to buffer bounds
     if (position >= _buffer.size())
-        position = _buffer.size() > 0 ? _buffer.size() - 1 : 0;
+        position = !_buffer.empty() ? _buffer.size() - 1 : 0;
 
     // If on a non-word character, don't select anything meaningful
     if (!isWordChar(_buffer[position]))
@@ -1993,8 +1990,7 @@ void InputField::selectWord(std::size_t position)
 void InputField::selectLine(int lineIndex)
 {
     auto const totalLines = lineCount();
-    if (lineIndex < 0)
-        lineIndex = 0;
+    lineIndex = std::max(lineIndex, 0);
     if (lineIndex >= totalLines)
         lineIndex = totalLines - 1;
 

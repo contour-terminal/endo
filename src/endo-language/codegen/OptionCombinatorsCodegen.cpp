@@ -26,14 +26,14 @@ std::optional<IRGenerator::ResolvedFunction> IRGenerator::resolveFunctionArgumen
         // Named function
         auto funcName = ident->name;
         if (auto const* func = lookupFSharpFunction(funcName))
-            return ResolvedFunction { func, funcName };
+            return ResolvedFunction { .func = func, .name = funcName };
 
         // Fallback: check function reference
         if (auto ref = lookupFSharpFunctionRef(funcName))
         {
             funcName = *ref;
             if (auto const* func = lookupFSharpFunction(funcName))
-                return ResolvedFunction { func, funcName };
+                return ResolvedFunction { .func = func, .name = funcName };
         }
         return std::nullopt;
     }
@@ -47,7 +47,7 @@ std::optional<IRGenerator::ResolvedFunction> IRGenerator::resolveFunctionArgumen
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
-        return ResolvedFunction { lookupFSharpFunction(funcName), funcName };
+        return ResolvedFunction { .func = lookupFSharpFunction(funcName), .name = funcName };
     }
 
     return std::nullopt;

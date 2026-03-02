@@ -87,7 +87,7 @@ std::vector<json> runSession(std::vector<json> const& messages)
 
 TEST_CASE("JsonRpc.readMessage parses Content-Length header and JSON body", "[lsp][jsonrpc]")
 {
-    auto const body = R"({"jsonrpc":"2.0","id":1,"method":"test"})";
+    const auto* const body = R"({"jsonrpc":"2.0","id":1,"method":"test"})";
     std::istringstream input(std::format("Content-Length: {}\r\n\r\n{}", std::strlen(body), body));
 
     auto result = readMessage(input);
@@ -227,7 +227,7 @@ TEST_CASE("LSP.request before initialize returns ServerNotInitialized error", "[
         sendNotification("exit", json::object()),
     });
 
-    REQUIRE(responses.size() >= 1);
+    REQUIRE(!responses.empty());
     CHECK(responses[0].contains("error"));
     CHECK(responses[0]["error"]["code"] == static_cast<int>(ErrorCode::ServerNotInitialized));
 }
@@ -574,7 +574,7 @@ TEST_CASE("SemanticTokens.fsharp_slash_as_operator", "[lsp][semantic]")
 
 TEST_CASE("Hover.let keyword returns binding description", "[lsp][hover]")
 {
-    auto hover = computeHover("let x = 42", Position { 0, 0 });
+    auto hover = computeHover("let x = 42", Position { .line = 0, .character = 0 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("let") != std::string::npos);
     CHECK(hover->contents.value.find("binding") != std::string::npos);
@@ -582,7 +582,7 @@ TEST_CASE("Hover.let keyword returns binding description", "[lsp][hover]")
 
 TEST_CASE("Hover.fun keyword returns lambda description", "[lsp][hover]")
 {
-    auto hover = computeHover("fun x -> x", Position { 0, 0 });
+    auto hover = computeHover("fun x -> x", Position { .line = 0, .character = 0 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("fun") != std::string::npos);
     CHECK(hover->contents.value.find("ambda") != std::string::npos); // "Lambda" or "lambda"
@@ -590,14 +590,14 @@ TEST_CASE("Hover.fun keyword returns lambda description", "[lsp][hover]")
 
 TEST_CASE("Hover.match keyword returns description", "[lsp][hover]")
 {
-    auto hover = computeHover("match x with\n| 0 -> 1", Position { 0, 0 });
+    auto hover = computeHover("match x with\n| 0 -> 1", Position { .line = 0, .character = 0 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("match") != std::string::npos);
 }
 
 TEST_CASE("Hover.Some constructor returns type signature", "[lsp][hover]")
 {
-    auto hover = computeHover("Some 5", Position { 0, 0 });
+    auto hover = computeHover("Some 5", Position { .line = 0, .character = 0 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("Some") != std::string::npos);
     CHECK(hover->contents.value.find("option") != std::string::npos);
@@ -605,7 +605,7 @@ TEST_CASE("Hover.Some constructor returns type signature", "[lsp][hover]")
 
 TEST_CASE("Hover.Ok constructor returns type signature", "[lsp][hover]")
 {
-    auto hover = computeHover("Ok 5", Position { 0, 0 });
+    auto hover = computeHover("Ok 5", Position { .line = 0, .character = 0 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("Ok") != std::string::npos);
     CHECK(hover->contents.value.find("result") != std::string::npos);
@@ -613,7 +613,7 @@ TEST_CASE("Hover.Ok constructor returns type signature", "[lsp][hover]")
 
 TEST_CASE("Hover.|> operator returns pipe description", "[lsp][hover]")
 {
-    auto hover = computeHover("x |> f", Position { 0, 2 });
+    auto hover = computeHover("x |> f", Position { .line = 0, .character = 2 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("|>") != std::string::npos);
     CHECK(hover->contents.value.find("pipe") != std::string::npos);
@@ -622,20 +622,20 @@ TEST_CASE("Hover.|> operator returns pipe description", "[lsp][hover]")
 TEST_CASE("Hover.whitespace returns nullopt", "[lsp][hover]")
 {
     // Position 3 is on whitespace between "let" and "x"
-    auto hover = computeHover("let x = 42", Position { 0, 3 });
+    auto hover = computeHover("let x = 42", Position { .line = 0, .character = 3 });
     CHECK_FALSE(hover.has_value());
 }
 
 TEST_CASE("Hover.position past end returns nullopt", "[lsp][hover]")
 {
-    auto hover = computeHover("let x = 42", Position { 5, 0 });
+    auto hover = computeHover("let x = 42", Position { .line = 5, .character = 0 });
     CHECK_FALSE(hover.has_value());
 }
 
 TEST_CASE("Hover.variable binding at definition shows value", "[lsp][hover]")
 {
     // Position 4 is on "variable" in "let variable = 42"
-    auto hover = computeHover("let variable = 42", Position { 0, 4 });
+    auto hover = computeHover("let variable = 42", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("variable") != std::string::npos);
     CHECK(hover->contents.value.find("binding") != std::string::npos);
@@ -645,7 +645,7 @@ TEST_CASE("Hover.variable binding at definition shows value", "[lsp][hover]")
 TEST_CASE("Hover.variable binding at usage shows value", "[lsp][hover]")
 {
     // Position 0,8 is on "variable" in the second line
-    auto hover = computeHover("let variable = 42\nprintln variable", Position { 1, 8 });
+    auto hover = computeHover("let variable = 42\nprintln variable", Position { .line = 1, .character = 8 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("variable") != std::string::npos);
     CHECK(hover->contents.value.find("binding") != std::string::npos);
@@ -654,7 +654,8 @@ TEST_CASE("Hover.variable binding at usage shows value", "[lsp][hover]")
 
 TEST_CASE("Hover.string binding shows value preview", "[lsp][hover]")
 {
-    auto hover = computeHover("let greeting = \"hello world\"\nprintln greeting", Position { 1, 8 });
+    auto hover = computeHover("let greeting = \"hello world\"\nprintln greeting",
+                              Position { .line = 1, .character = 8 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("greeting") != std::string::npos);
     CHECK(hover->contents.value.find("hello world") != std::string::npos);
@@ -662,7 +663,7 @@ TEST_CASE("Hover.string binding shows value preview", "[lsp][hover]")
 
 TEST_CASE("Hover.boolean binding shows value preview", "[lsp][hover]")
 {
-    auto hover = computeHover("let flag = true", Position { 0, 4 });
+    auto hover = computeHover("let flag = true", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("flag") != std::string::npos);
     CHECK(hover->contents.value.find("= true") != std::string::npos);
@@ -670,7 +671,7 @@ TEST_CASE("Hover.boolean binding shows value preview", "[lsp][hover]")
 
 TEST_CASE("Hover.expression binding shows value preview", "[lsp][hover]")
 {
-    auto hover = computeHover("let result = Some 42", Position { 0, 4 });
+    auto hover = computeHover("let result = Some 42", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("result") != std::string::npos);
     CHECK(hover->contents.value.find("= Some 42") != std::string::npos);
@@ -678,7 +679,7 @@ TEST_CASE("Hover.expression binding shows value preview", "[lsp][hover]")
 
 TEST_CASE("Hover.function binding does not show body as value", "[lsp][hover]")
 {
-    auto hover = computeHover("let double x = x * 2", Position { 0, 4 });
+    auto hover = computeHover("let double x = x * 2", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("function") != std::string::npos);
     // Functions show signature, not body - should not contain "= x * 2"
@@ -688,18 +689,19 @@ TEST_CASE("Hover.function binding does not show body as value", "[lsp][hover]")
 TEST_CASE("Hover.function definition shows function info with parameters", "[lsp][hover]")
 {
     // Position 4 is on "add" in "let add x y = x + y"
-    auto hover = computeHover("let add x y = x + y", Position { 0, 4 });
+    auto hover = computeHover("let add x y = x + y", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("add") != std::string::npos);
     CHECK(hover->contents.value.find("function") != std::string::npos);
-    CHECK(hover->contents.value.find("x") != std::string::npos);
-    CHECK(hover->contents.value.find("y") != std::string::npos);
+    CHECK(hover->contents.value.find('x') != std::string::npos);
+    CHECK(hover->contents.value.find('y') != std::string::npos);
 }
 
 TEST_CASE("Hover.function reference shows function info", "[lsp][hover]")
 {
     // Hover on "add" in the usage "println (add 3 4)"
-    auto hover = computeHover("let add x y = x + y\nprintln (add 3 4)", Position { 1, 9 });
+    auto hover =
+        computeHover("let add x y = x + y\nprintln (add 3 4)", Position { .line = 1, .character = 9 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("add") != std::string::npos);
     CHECK(hover->contents.value.find("function") != std::string::npos);
@@ -708,16 +710,17 @@ TEST_CASE("Hover.function reference shows function info", "[lsp][hover]")
 TEST_CASE("Hover.function parameter shows parameter info", "[lsp][hover]")
 {
     // Position 8 is on "x" parameter in "let add x y = x + y"
-    auto hover = computeHover("let add x y = x + y", Position { 0, 8 });
+    auto hover = computeHover("let add x y = x + y", Position { .line = 0, .character = 8 });
     REQUIRE(hover.has_value());
-    CHECK(hover->contents.value.find("x") != std::string::npos);
+    CHECK(hover->contents.value.find('x') != std::string::npos);
     CHECK(hover->contents.value.find("parameter") != std::string::npos);
     CHECK(hover->contents.value.find("add") != std::string::npos);
 }
 
 TEST_CASE("Hover.typed function shows type annotations", "[lsp][hover]")
 {
-    auto hover = computeHover("let add (x: int) (y: int): int = x + y", Position { 0, 4 });
+    auto hover =
+        computeHover("let add (x: int) (y: int): int = x + y", Position { .line = 0, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("add") != std::string::npos);
     CHECK(hover->contents.value.find("int") != std::string::npos);
@@ -726,7 +729,7 @@ TEST_CASE("Hover.typed function shows type annotations", "[lsp][hover]")
 TEST_CASE("Hover.recursive function shows rec qualifier", "[lsp][hover]")
 {
     auto hover = computeHover("let rec fact n = if n <= 1 then 1 else n * fact (n - 1)\nprintln (fact 5)",
-                              Position { 0, 8 });
+                              Position { .line = 0, .character = 8 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("fact") != std::string::npos);
     CHECK(hover->contents.value.find("rec") != std::string::npos);
@@ -734,7 +737,7 @@ TEST_CASE("Hover.recursive function shows rec qualifier", "[lsp][hover]")
 
 TEST_CASE("Hover.mutable binding shows mut qualifier", "[lsp][hover]")
 {
-    auto hover = computeHover("let mut counter = 0", Position { 0, 8 });
+    auto hover = computeHover("let mut counter = 0", Position { .line = 0, .character = 8 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("counter") != std::string::npos);
     CHECK(hover->contents.value.find("mutable") != std::string::npos);
@@ -743,7 +746,7 @@ TEST_CASE("Hover.mutable binding shows mut qualifier", "[lsp][hover]")
 
 TEST_CASE("Hover.exported binding shows export qualifier", "[lsp][hover]")
 {
-    auto hover = computeHover("let export PATH = \"/usr/bin\"", Position { 0, 11 });
+    auto hover = computeHover("let export PATH = \"/usr/bin\"", Position { .line = 0, .character = 11 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("PATH") != std::string::npos);
     CHECK(hover->contents.value.find("exported") != std::string::npos);
@@ -920,7 +923,7 @@ TEST_CASE("SymbolCollector.collectSymbols returns definitions and references", "
 {
     auto table = collectSymbols("let x = 42\nprintln x");
     REQUIRE(table.has_value());
-    CHECK(table->definitions.size() >= 1);
+    CHECK(!table->definitions.empty());
     // "x" should be defined once
     bool foundXDef = false;
     for (auto const& def: table->definitions)
@@ -1031,7 +1034,8 @@ TEST_CASE("Definition.top-level binding usage jumps to definition", "[lsp][defin
 {
     // "let x = 42\nprintln x"
     //  cursor on "x" at line 1, col 8
-    auto loc = computeDefinition("let x = 42\nprintln x", "file:///test.endo", Position { 1, 8 });
+    auto loc = computeDefinition(
+        "let x = 42\nprintln x", "file:///test.endo", Position { .line = 1, .character = 8 });
     REQUIRE(loc.has_value());
     CHECK(loc->uri == "file:///test.endo");
     // Definition should be at line 0 (let x)
@@ -1040,7 +1044,8 @@ TEST_CASE("Definition.top-level binding usage jumps to definition", "[lsp][defin
 
 TEST_CASE("Definition.function reference jumps to definition", "[lsp][definition]")
 {
-    auto loc = computeDefinition("let f x = x + 1\nprintln (f 3)", "file:///test.endo", Position { 1, 9 });
+    auto loc = computeDefinition(
+        "let f x = x + 1\nprintln (f 3)", "file:///test.endo", Position { .line = 1, .character = 9 });
     REQUIRE(loc.has_value());
     CHECK(loc->range.start.line == 0);
 }
@@ -1049,7 +1054,8 @@ TEST_CASE("Definition.function parameter in body jumps to param", "[lsp][definit
 {
     // "let f x = x + 1"
     //  the second "x" (in body, col 10) should resolve to param "x" (col 6)
-    auto loc = computeDefinition("let f x = x + 1", "file:///test.endo", Position { 0, 10 });
+    auto loc =
+        computeDefinition("let f x = x + 1", "file:///test.endo", Position { .line = 0, .character = 10 });
     REQUIRE(loc.has_value());
     // Parameter "x" is at column 6
     CHECK(loc->range.start.character == 6);
@@ -1057,9 +1063,9 @@ TEST_CASE("Definition.function parameter in body jumps to param", "[lsp][definit
 
 TEST_CASE("Definition.let-in scoped binding", "[lsp][definition]")
 {
-    auto source = "let result = let y = 10 in y + 1";
+    const auto* source = "let result = let y = 10 in y + 1";
     // cursor on "y" in "y + 1" (col 27)
-    auto loc = computeDefinition(source, "file:///test.endo", Position { 0, 27 });
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 0, .character = 27 });
     REQUIRE(loc.has_value());
     // "y" definition is at col 17
     CHECK(loc->range.start.line == 0);
@@ -1067,9 +1073,9 @@ TEST_CASE("Definition.let-in scoped binding", "[lsp][definition]")
 
 TEST_CASE("Definition.lambda parameter", "[lsp][definition]")
 {
-    auto source = "let f = fun x -> x + 1";
+    const auto* source = "let f = fun x -> x + 1";
     // cursor on "x" in body (col 17)
-    auto loc = computeDefinition(source, "file:///test.endo", Position { 0, 17 });
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 0, .character = 17 });
     REQUIRE(loc.has_value());
     // "x" parameter is at col 12
     CHECK(loc->range.start.character == 12);
@@ -1077,23 +1083,23 @@ TEST_CASE("Definition.lambda parameter", "[lsp][definition]")
 
 TEST_CASE("Definition.cursor not on identifier returns nullopt", "[lsp][definition]")
 {
-    auto loc = computeDefinition("let x = 42", "file:///test.endo", Position { 0, 0 });
+    auto loc = computeDefinition("let x = 42", "file:///test.endo", Position { .line = 0, .character = 0 });
     CHECK_FALSE(loc.has_value()); // cursor on "let" keyword
 }
 
 TEST_CASE("Definition.unknown identifier returns nullopt", "[lsp][definition]")
 {
     // "println" is a builtin, not a user-defined symbol
-    auto loc = computeDefinition("println 42", "file:///test.endo", Position { 0, 0 });
+    auto loc = computeDefinition("println 42", "file:///test.endo", Position { .line = 0, .character = 0 });
     // It may return itself or nullopt depending on whether the builtin is in scope
     // Just verify no crash
 }
 
 TEST_CASE("Definition.shadowed variable resolves to inner scope", "[lsp][definition]")
 {
-    auto source = "let x = 1\nlet result = let x = 2 in x";
+    const auto* source = "let x = 1\nlet result = let x = 2 in x";
     // cursor on "x" after "in" (0-based col 26)
-    auto loc = computeDefinition(source, "file:///test.endo", Position { 1, 26 });
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 26 });
     REQUIRE(loc.has_value());
     // Inner "x" is on line 1
     CHECK(loc->range.start.line == 1);
@@ -1105,46 +1111,50 @@ TEST_CASE("Definition.shadowed variable resolves to inner scope", "[lsp][definit
 
 TEST_CASE("References.all uses of variable with declaration", "[lsp][references]")
 {
-    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, true);
+    auto locs = computeReferences(
+        "let x = 42\nprintln x", "file:///test.endo", Position { .line = 0, .character = 4 }, true);
     // Should find at least 2: definition + usage
     CHECK(locs.size() >= 2);
 }
 
 TEST_CASE("References.all uses without declaration", "[lsp][references]")
 {
-    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, false);
+    auto locs = computeReferences(
+        "let x = 42\nprintln x", "file:///test.endo", Position { .line = 0, .character = 4 }, false);
     // Should find 1 usage (not the declaration)
-    CHECK(locs.size() >= 1);
+    CHECK(!locs.empty());
     // All should be references, not the definition position
 }
 
 TEST_CASE("References.function references across call sites", "[lsp][references]")
 {
-    auto source = "let f x = x + 1\nprintln (f 3)\nprintln (f 5)";
-    auto locs = computeReferences(source, "file:///test.endo", Position { 0, 4 }, true);
+    const auto* source = "let f x = x + 1\nprintln (f 3)\nprintln (f 5)";
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 4 }, true);
     // f appears 3 times: definition + 2 calls
     CHECK(locs.size() >= 3);
 }
 
 TEST_CASE("References.scoped variable does not leak", "[lsp][references]")
 {
-    auto source = "let a = let x = 1 in x\nlet b = let x = 2 in x";
+    const auto* source = "let a = let x = 1 in x\nlet b = let x = 2 in x";
     // cursor on first "x" definition (line 0, col 12)
-    auto locs = computeReferences(source, "file:///test.endo", Position { 0, 12 }, true);
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 12 }, true);
     // Should find only 2: first "x" def + first "x" ref
     CHECK(locs.size() == 2);
 }
 
 TEST_CASE("References.no matches returns empty", "[lsp][references]")
 {
-    auto locs = computeReferences("let x = 42", "file:///test.endo", Position { 0, 0 }, true);
+    auto locs =
+        computeReferences("let x = 42", "file:///test.endo", Position { .line = 0, .character = 0 }, true);
     // cursor on "let" keyword, not an identifier
     CHECK(locs.empty());
 }
 
 TEST_CASE("References.cursor on usage finds all references", "[lsp][references]")
 {
-    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 1, 8 }, true);
+    auto locs = computeReferences(
+        "let x = 42\nprintln x", "file:///test.endo", Position { .line = 1, .character = 8 }, true);
     CHECK(locs.size() >= 2);
 }
 
@@ -1154,39 +1164,39 @@ TEST_CASE("References.cursor on usage finds all references", "[lsp][references]"
 
 TEST_CASE("SignatureHelp.single parameter function", "[lsp][signaturehelp]")
 {
-    auto source = "let f x = x + 1\nf 3";
+    const auto* source = "let f x = x + 1\nf 3";
     // cursor on "3" (line 1, col 2)
-    auto sig = computeSignatureHelp(source, Position { 1, 2 });
+    auto sig = computeSignatureHelp(source, Position { .line = 1, .character = 2 });
     REQUIRE(sig.has_value());
-    REQUIRE(sig->signatures.size() >= 1);
-    CHECK(sig->signatures[0].label.find("f") != std::string::npos);
+    REQUIRE(!sig->signatures.empty());
+    CHECK(sig->signatures[0].label.find('f') != std::string::npos);
     CHECK(sig->signatures[0].parameters.size() == 1);
     CHECK(sig->activeParameter == 0);
 }
 
 TEST_CASE("SignatureHelp.multi-parameter function", "[lsp][signaturehelp]")
 {
-    auto source = "let add x y = x + y\nadd 1 2";
+    const auto* source = "let add x y = x + y\nadd 1 2";
     // cursor on "2" (line 1, col 6) — second argument
-    auto sig = computeSignatureHelp(source, Position { 1, 6 });
+    auto sig = computeSignatureHelp(source, Position { .line = 1, .character = 6 });
     REQUIRE(sig.has_value());
-    REQUIRE(sig->signatures.size() >= 1);
+    REQUIRE(!sig->signatures.empty());
     CHECK(sig->signatures[0].parameters.size() == 2);
     CHECK(sig->activeParameter == 1);
 }
 
 TEST_CASE("SignatureHelp.typed parameters show types", "[lsp][signaturehelp]")
 {
-    auto source = "let add (x: int) (y: int): int = x + y\nadd 1 2";
-    auto sig = computeSignatureHelp(source, Position { 1, 4 });
+    const auto* source = "let add (x: int) (y: int): int = x + y\nadd 1 2";
+    auto sig = computeSignatureHelp(source, Position { .line = 1, .character = 4 });
     REQUIRE(sig.has_value());
-    REQUIRE(sig->signatures.size() >= 1);
+    REQUIRE(!sig->signatures.empty());
     CHECK(sig->signatures[0].label.find("int") != std::string::npos);
 }
 
 TEST_CASE("SignatureHelp.not in function call returns nullopt", "[lsp][signaturehelp]")
 {
-    auto sig = computeSignatureHelp("let x = 42", Position { 0, 8 });
+    auto sig = computeSignatureHelp("let x = 42", Position { .line = 0, .character = 8 });
     CHECK_FALSE(sig.has_value());
 }
 
@@ -1203,7 +1213,7 @@ TEST_CASE("E2E.initialize advertises new capabilities", "[lsp][e2e]")
         sendNotification("exit", json::object()),
     });
 
-    REQUIRE(responses.size() >= 1);
+    REQUIRE(!responses.empty());
     auto const& caps = responses[0]["result"]["capabilities"];
     CHECK(caps["definitionProvider"] == true);
     CHECK(caps["referencesProvider"] == true);
@@ -1392,7 +1402,8 @@ TEST_CASE("DocumentSymbol.parse_failure_returns_empty", "[lsp][documentsymbol]")
 
 TEST_CASE("Rename.variable_all_references", "[lsp][rename]")
 {
-    auto edit = computeRename("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, "y");
+    auto edit = computeRename(
+        "let x = 42\nprintln x", "file:///test.endo", Position { .line = 0, .character = 4 }, "y");
     REQUIRE(edit.has_value());
     auto const& changes = edit->changes;
     REQUIRE(changes.count("file:///test.endo") == 1);
@@ -1405,8 +1416,10 @@ TEST_CASE("Rename.variable_all_references", "[lsp][rename]")
 
 TEST_CASE("Rename.function_all_references", "[lsp][rename]")
 {
-    auto edit = computeRename(
-        "let f x = x + 1\nprintln (f 3)\nprintln (f 5)", "file:///test.endo", Position { 0, 4 }, "g");
+    auto edit = computeRename("let f x = x + 1\nprintln (f 3)\nprintln (f 5)",
+                              "file:///test.endo",
+                              Position { .line = 0, .character = 4 },
+                              "g");
     REQUIRE(edit.has_value());
     auto const& edits = edit->changes.at("file:///test.endo");
     // f appears 3 times: definition + 2 calls
@@ -1415,7 +1428,8 @@ TEST_CASE("Rename.function_all_references", "[lsp][rename]")
 
 TEST_CASE("Rename.parameter_renames_in_scope", "[lsp][rename]")
 {
-    auto edit = computeRename("let add x y = x + y", "file:///test.endo", Position { 0, 8 }, "a");
+    auto edit = computeRename(
+        "let add x y = x + y", "file:///test.endo", Position { .line = 0, .character = 8 }, "a");
     REQUIRE(edit.has_value());
     auto const& edits = edit->changes.at("file:///test.endo");
     // "x" param definition + "x" usage in body = 2 edits
@@ -1427,13 +1441,13 @@ TEST_CASE("Rename.parameter_renames_in_scope", "[lsp][rename]")
 TEST_CASE("Rename.cursor_not_on_identifier", "[lsp][rename]")
 {
     // Cursor on "let" keyword
-    auto edit = computeRename("let x = 42", "file:///test.endo", Position { 0, 0 }, "y");
+    auto edit = computeRename("let x = 42", "file:///test.endo", Position { .line = 0, .character = 0 }, "y");
     CHECK_FALSE(edit.has_value());
 }
 
 TEST_CASE("PrepareRename.valid_position", "[lsp][rename]")
 {
-    auto range = prepareRename("let x = 42\nprintln x", Position { 0, 4 });
+    auto range = prepareRename("let x = 42\nprintln x", Position { .line = 0, .character = 4 });
     REQUIRE(range.has_value());
     CHECK(range->start.line == 0);
     CHECK(range->start.character == 4); // "x" starts at column 4
@@ -1442,7 +1456,7 @@ TEST_CASE("PrepareRename.valid_position", "[lsp][rename]")
 TEST_CASE("PrepareRename.invalid_position", "[lsp][rename]")
 {
     // Cursor on "let" keyword
-    auto range = prepareRename("let x = 42", Position { 0, 0 });
+    auto range = prepareRename("let x = 42", Position { .line = 0, .character = 0 });
     CHECK_FALSE(range.has_value());
 }
 
@@ -1614,7 +1628,7 @@ TEST_CASE("E2E.initialize_advertises_documentSymbol_and_rename", "[lsp][e2e]")
         sendNotification("exit", json::object()),
     });
 
-    REQUIRE(responses.size() >= 1);
+    REQUIRE(!responses.empty());
     auto const& caps = responses[0]["result"]["capabilities"];
     CHECK(caps["documentSymbolProvider"] == true);
     CHECK(caps.contains("renameProvider"));
@@ -1634,7 +1648,7 @@ TEST_CASE("Completion.initialize_advertises_completion", "[lsp][completion]")
         sendNotification("exit", json::object()),
     });
 
-    REQUIRE(responses.size() >= 1);
+    REQUIRE(!responses.empty());
     auto const& caps = responses[0]["result"]["capabilities"];
     CHECK(caps.contains("completionProvider"));
     auto const& triggers = caps["completionProvider"]["triggerCharacters"];
@@ -1795,8 +1809,8 @@ TEST_CASE("Completion.dot_access_returns_option_methods", "[lsp][completion]")
 
 TEST_CASE("Hover.record_variable_shows_type_name", "[lsp][hover]")
 {
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
-    auto hover = computeHover(source, Position { 1, 4 });
+    const auto* source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    auto hover = computeHover(source, Position { .line = 1, .character = 4 });
     REQUIRE(hover.has_value());
     CHECK(hover->contents.value.find("Person") != std::string::npos);
     CHECK(hover->contents.value.find("alice") != std::string::npos);
@@ -1804,7 +1818,8 @@ TEST_CASE("Hover.record_variable_shows_type_name", "[lsp][hover]")
 
 TEST_CASE("Completion.record_field_dot_access", "[lsp][completion]")
 {
-    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }\nalice.";
+    const auto* source =
+        "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }\nalice.";
     auto responses = runSession({
         sendRequest("initialize", json::object()),
         sendNotification("initialized", json::object()),
@@ -1854,7 +1869,7 @@ TEST_CASE("Completion.record_field_dot_access", "[lsp][completion]")
 
 TEST_CASE("Completion.record_variable_specific_fields", "[lsp][completion]")
 {
-    auto source =
+    const auto* source =
         "type Person = { name: str; age: int }\ntype ProcessInfo = { pid: int; cpu: float }\nlet alice = { "
         "name = \"Alice\"; age = 30 }\nalice.";
     auto responses = runSession({
@@ -1920,7 +1935,7 @@ TEST_CASE("Completion.record_variable_specific_fields", "[lsp][completion]")
 TEST_CASE("Completion.left_arrow_model_candidates", "[lsp][completion][left-arrow]")
 {
     // "agent_claude_model <- " = 22 chars
-    auto result = computeCompletion("agent_claude_model <- ", Position { 0, 22 });
+    auto result = computeCompletion("agent_claude_model <- ", Position { .line = 0, .character = 22 });
     CHECK(result.is_array());
     bool hasOpus = false;
     bool hasSonnet = false;
@@ -1939,7 +1954,7 @@ TEST_CASE("Completion.left_arrow_model_candidates", "[lsp][completion][left-arro
 TEST_CASE("Completion.left_arrow_preset_prefix_filter", "[lsp][completion][left-arrow]")
 {
     // "shell_prompt_preset <- pow" = 26 chars — should filter to powerline
-    auto result = computeCompletion("shell_prompt_preset <- pow", Position { 0, 26 });
+    auto result = computeCompletion("shell_prompt_preset <- pow", Position { .line = 0, .character = 26 });
     CHECK(result.is_array());
     bool hasPowerline = false;
     bool hasMinimalArrow = false;
@@ -1958,7 +1973,7 @@ TEST_CASE("Completion.left_arrow_preset_prefix_filter", "[lsp][completion][left-
 TEST_CASE("Completion.left_arrow_boolean_candidates", "[lsp][completion][left-arrow]")
 {
     // "agent_trace_enabled <- " = 23 chars
-    auto result = computeCompletion("agent_trace_enabled <- ", Position { 0, 23 });
+    auto result = computeCompletion("agent_trace_enabled <- ", Position { .line = 0, .character = 23 });
     CHECK(result.is_array());
     bool hasTrue = false;
     bool hasFalse = false;
@@ -1977,7 +1992,7 @@ TEST_CASE("Completion.left_arrow_boolean_candidates", "[lsp][completion][left-ar
 TEST_CASE("Completion.left_arrow_auth_type_candidates", "[lsp][completion][left-arrow]")
 {
     // "agent_claude_auth_type <- " = 26 chars
-    auto result = computeCompletion("agent_claude_auth_type <- ", Position { 0, 26 });
+    auto result = computeCompletion("agent_claude_auth_type <- ", Position { .line = 0, .character = 26 });
     CHECK(result.is_array());
     bool hasAuto = false;
     bool hasOauth = false;

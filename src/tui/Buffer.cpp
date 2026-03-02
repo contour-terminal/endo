@@ -3,6 +3,7 @@
 
 #include <tui/TerminalOutput.hpp>
 
+#include <algorithm>
 #include <ranges>
 #include <stdexcept>
 
@@ -39,7 +40,7 @@ void Buffer::resize(int rows, int cols)
         _cells.clear();
         _rows = 0;
         _cols = 0;
-        _cursor = { 0, 0 };
+        _cursor = { .x = 0, .y = 0 };
         return;
     }
 
@@ -71,10 +72,8 @@ void Buffer::resize(int rows, int cols)
     // Clamp cursor to new bounds
     _cursor.x = std::min(_cursor.x, _cols - 1);
     _cursor.y = std::min(_cursor.y, _rows - 1);
-    if (_cursor.x < 0)
-        _cursor.x = 0;
-    if (_cursor.y < 0)
-        _cursor.y = 0;
+    _cursor.x = std::max(_cursor.x, 0);
+    _cursor.y = std::max(_cursor.y, 0);
 }
 
 Cell& Buffer::at(int row, int col)

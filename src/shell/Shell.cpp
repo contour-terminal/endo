@@ -435,9 +435,9 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
                 for (size_t i = 0; i < variant.schema.size(); ++i)
                 {
                     defType.fields.push_back(CoreVM::FieldInfo {
-                        variant.schema[i].name,
-                        static_cast<uint8_t>(i),
-                        variant.schema[i].type,
+                        .name = variant.schema[i].name,
+                        .offset = static_cast<uint8_t>(i),
+                        .type = variant.schema[i].type,
                     });
                 }
                 _fsharpState.outputDefinitionTypes[variant.recordTypeName] = std::move(defType);
@@ -659,7 +659,7 @@ void Shell::loadCompleters()
             if (entry.is_regular_file() && entry.path().extension() == ".endo")
                 files.push_back(entry.path());
         }
-        std::sort(files.begin(), files.end());
+        std::ranges::sort(files);
 
         for (auto const& path: files)
         {
@@ -1647,7 +1647,7 @@ namespace
             return {};
 
         auto truncated = arguments;
-        for (auto& [key, value]: truncated.items())
+        for (const auto& [key, value]: truncated.items())
         {
             if (value.is_string())
             {
@@ -2231,9 +2231,10 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
         auto renderQuestion = [&] {
             out.restoreCursor();
             auto buffer = tui::Buffer(height, width);
-            auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
-            question.setArea(tui::Rect { 0, 0, width, height });
-            question.setScreenBounds(tui::Rect { 0, 0, width, height });
+            auto canvas =
+                tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+            question.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+            question.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
             question.render(canvas);
             buffer.writeTo(out);
             out.showCursor();
@@ -2405,16 +2406,15 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
         if (!agentConfig.activeProvider.empty())
         {
-            out.writeText(
-                std::format("Provider '{}' is not available.\n", agentConfig.activeProvider), errorStyle);
+            out.writeText(std::format("Provider '{}' is not available.\n", agentConfig.activeProvider),
+                          errorStyle);
             out.writeText("Check your configuration or run `endo agent status` for details.\n", mutedStyle);
         }
         else
         {
             out.writeText("No AI provider configured or authenticated.\n", errorStyle);
-            out.writeText(
-                "Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n",
-                mutedStyle);
+            out.writeText("Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n",
+                          mutedStyle);
         }
         out.flush();
         return;
@@ -2511,7 +2511,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 .updatedAt = now,
                 .provider = _agentProviderFactory->activeProviderName(),
                 .model = provider->modelInfo().modelName,
-                .turnCount = static_cast<int>(_agentSession->turnCount()),
+                .turnCount = _agentSession->turnCount(),
                 .tokenUsage = _agentSession->sessionUsage(),
             };
             (void) sessionManager.saveSession(
@@ -2875,7 +2875,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     .updatedAt = now,
                     .provider = _agentProviderFactory->activeProviderName(),
                     .model = provider->modelInfo().modelName,
-                    .turnCount = static_cast<int>(_agentSession->turnCount()),
+                    .turnCount = _agentSession->turnCount(),
                     .tokenUsage = _agentSession->sessionUsage(),
                 };
                 (void) sessionManager.saveSession(savedName, _agentSession->history().messages(), metadata);
@@ -2933,7 +2933,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 .updatedAt = now,
                 .provider = _agentProviderFactory->activeProviderName(),
                 .model = provider->modelInfo().modelName,
-                .turnCount = static_cast<int>(_agentSession->turnCount()),
+                .turnCount = _agentSession->turnCount(),
                 .tokenUsage = _agentSession->sessionUsage(),
             };
 
@@ -3096,7 +3096,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             for (auto const& meta: *sessionsResult)
             {
                 auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
-                auto const active = (meta.name == _activeSessionName) ? "\xe2\x97\x8f" : "";
+                const auto* const active = (meta.name == _activeSessionName) ? "\xe2\x97\x8f" : "";
                 auto const tt = std::chrono::system_clock::to_time_t(meta.updatedAt);
                 auto tm = std::tm {};
 #if defined(_WIN32)
@@ -3382,7 +3382,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         inputComponent.inputField().addHistory(entry);
 
     auto const prefSize = inputComponent.preferredSize();
-    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), prefSize.height });
+    inputComponent.setArea(
+        tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = prefSize.height });
     screen.root().addChild(inputComponent);
     screen.setFocus(&inputComponent);
     screen.invalidate();
@@ -3450,9 +3451,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             output.linefeed();
 
             auto buffer = tui::Buffer(height, width);
-            auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
-            component->setArea(tui::Rect { 0, 0, width, height });
-            component->setScreenBounds(tui::Rect { 0, 0, width, height });
+            auto canvas =
+                tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+            component->setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+            component->setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
             component->render(canvas);
             buffer.writeTo(output);
 
@@ -3506,9 +3508,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         auto const height = prefSize.height;
 
         auto buffer = tui::Buffer(height, width);
-        auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
-        inputComponent.setArea(tui::Rect { 0, 0, width, height });
-        inputComponent.setScreenBounds(tui::Rect { 0, 0, width, height });
+        auto canvas =
+            tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+        inputComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+        inputComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
         inputComponent.render(canvas);
         buffer.writeTo(out);
     };
@@ -3775,8 +3778,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                             // Re-render input component for next query.
                             screen.releaseCursor();
                             auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(
-                                tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                             screen.draw();
                         }
                     }
@@ -3878,7 +3881,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
                         screen.releaseCursor();
                         auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        inputComponent.setArea(tui::Rect {
+                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                         screen.draw();
                     }
                     else if constexpr (std::is_same_v<T, agent::AgentShutdownComplete>)
@@ -3943,7 +3947,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 _cachedProjectContextCwd = cwd;
                 systemPromptReady = true;
                 auto const newPrefSize = inputComponent.preferredSize();
-                inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                inputComponent.setArea(
+                    tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                 screen.draw();
             }
 
@@ -3984,7 +3989,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     else if (!anyPromptActive())
                     {
                         auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        inputComponent.setArea(tui::Rect {
+                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                         screen.draw();
                     }
                 }
@@ -4011,7 +4017,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     || inputComponent.ghostTextTimeoutMs() >= 0 || inputComponent.escapeHintTimeoutMs() >= 0)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                    inputComponent.setArea(tui::Rect {
+                        .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                     screen.draw();
                 }
             }
@@ -4321,8 +4328,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                             out.flush();
                             screen.releaseCursor();
                             auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(
-                                tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                             screen.draw();
                         }
                         else // "Revise"
@@ -4331,8 +4338,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                             // Stay in plan mode for revision.
                             screen.releaseCursor();
                             auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(
-                                tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                             screen.draw();
                         }
                         break;
@@ -4344,8 +4351,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         {
                             screen.releaseCursor();
                             auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(
-                                tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                             screen.draw();
                         }
                         break;
@@ -4555,7 +4562,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     if (!sentToWorker)
                     {
                         auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        inputComponent.setArea(tui::Rect {
+                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                         screen.draw();
                     }
                     break;
@@ -4633,7 +4641,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         {
             inputComponent.flushDeferredUpdates();
             auto const newPrefSize = inputComponent.preferredSize();
-            inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+            inputComponent.setArea(
+                tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
             screen.draw();
         }
 

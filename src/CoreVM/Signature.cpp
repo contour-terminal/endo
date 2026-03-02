@@ -2,17 +2,16 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <cstdlib>
+#include <print>
 #include <string>
 #include <vector>
 
 namespace CoreVM
 {
 
-Signature::Signature(): _name(), _returnType(LiteralType::Void), _args()
-{
-}
+Signature::Signature() = default;
 
-Signature::Signature(const std::string& signature): _name(), _returnType(LiteralType::Void), _args()
+Signature::Signature(const std::string& signature)
 {
     // signature  ::= NAME [ '(' args ')' returnType
     // args       ::= type*
@@ -67,7 +66,7 @@ Signature::Signature(const std::string& signature): _name(), _returnType(Literal
                 ++i;
                 break;
             case State::END:
-                fprintf(stderr, "Garbage at end of signature string. %s\n", i);
+                std::println(stderr, "Garbage at end of signature string. {}", i);
                 i = e;
                 break;
         }
@@ -75,7 +74,7 @@ Signature::Signature(const std::string& signature): _name(), _returnType(Literal
 
     if (state != State::END)
     {
-        fprintf(stderr, "Premature end of signature string. %s\n", signature.c_str());
+        std::println(stderr, "Premature end of signature string. {}", signature);
     }
 }
 

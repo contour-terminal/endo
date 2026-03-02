@@ -247,7 +247,7 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 {
     try
     {
-        std::filesystem::create_directories(path.parent_path());
+        (void) std::filesystem::create_directories(path.parent_path());
 
         auto emitter = YAML::Emitter {};
         emitter << YAML::BeginMap;

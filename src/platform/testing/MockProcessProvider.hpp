@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/ProcessProvider.hpp>
-
 #include <utility>
+
+#include <platform/ProcessProvider.hpp>
 
 namespace endo::platform::testing
 {

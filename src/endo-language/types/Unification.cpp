@@ -109,8 +109,7 @@ TypeScheme Substitution::apply(TypeScheme const& scheme) const
     Substitution filtered;
     for (auto const& [varId, type]: _mappings)
     {
-        if (std::find(scheme.quantifiedVars.begin(), scheme.quantifiedVars.end(), varId)
-            == scheme.quantifiedVars.end())
+        if (std::ranges::find(scheme.quantifiedVars, varId) == scheme.quantifiedVars.end())
         {
             filtered.add(varId, type);
         }
@@ -153,7 +152,7 @@ std::string Substitution::toString() const
         if (!first)
             oss << ", ";
         first = false;
-        char letter = 'a' + static_cast<char>(varId % 26);
+        auto const letter = static_cast<char>('a' + (varId % 26));
         oss << letter << " -> " << endo::toString(type);
     }
     oss << "}";
@@ -164,52 +163,54 @@ std::string Substitution::toString() const
 
 TypeError TypeError::mismatch(TypePtr expected, TypePtr actual)
 {
-    return TypeError { Kind::Mismatch,
-                       std::format(
+    return TypeError { .kind = Kind::Mismatch,
+                       .message = std::format(
                            "Type mismatch: expected {}, got {}", toString(expected), toString(actual)),
-                       expected,
-                       actual };
+                       .expected = expected,
+                       .actual = actual };
 }
 
 TypeError TypeError::occursCheck(TypeVarId varId, TypePtr type)
 {
-    char letter = 'a' + static_cast<char>(varId % 26);
-    return TypeError { Kind::OccursCheck,
-                       std::format("Infinite type: {} occurs in {}", letter, toString(type)),
-                       types::typeVar(varId),
-                       type };
+    auto const letter = static_cast<char>('a' + (varId % 26));
+    return TypeError { .kind = Kind::OccursCheck,
+                       .message = std::format("Infinite type: {} occurs in {}", letter, toString(type)),
+                       .expected = types::typeVar(varId),
+                       .actual = type };
 }
 
 TypeError TypeError::arityMismatch(size_t expected, size_t actual)
 {
-    return TypeError { Kind::ArityMismatch,
-                       std::format("Arity mismatch: expected {} elements, got {}", expected, actual),
-                       nullptr,
-                       nullptr };
+    return TypeError { .kind = Kind::ArityMismatch,
+                       .message =
+                           std::format("Arity mismatch: expected {} elements, got {}", expected, actual),
+                       .expected = nullptr,
+                       .actual = nullptr };
 }
 
 TypeError TypeError::fieldMismatch(std::string const& expected, std::string const& actual)
 {
-    return TypeError { Kind::FieldMismatch,
-                       std::format("Field mismatch: expected '{}', got '{}'", expected, actual),
-                       nullptr,
-                       nullptr };
+    return TypeError { .kind = Kind::FieldMismatch,
+                       .message = std::format("Field mismatch: expected '{}', got '{}'", expected, actual),
+                       .expected = nullptr,
+                       .actual = nullptr };
 }
 
 TypeError TypeError::caseMismatch(std::string const& expected, std::string const& actual)
 {
-    return TypeError { Kind::CaseMismatch,
-                       std::format("Case mismatch: expected '{}', got '{}'", expected, actual),
-                       nullptr,
-                       nullptr };
+    return TypeError { .kind = Kind::CaseMismatch,
+                       .message = std::format("Case mismatch: expected '{}', got '{}'", expected, actual),
+                       .expected = nullptr,
+                       .actual = nullptr };
 }
 
 TypeError TypeError::unboundTypeVar(TypeVarId varId)
 {
-    char letter = 'a' + static_cast<char>(varId % 26);
-    return TypeError {
-        Kind::UnboundTypeVar, std::format("Unbound type variable: {}", letter), types::typeVar(varId), nullptr
-    };
+    auto const letter = static_cast<char>('a' + (varId % 26));
+    return TypeError { .kind = Kind::UnboundTypeVar,
+                       .message = std::format("Unbound type variable: {}", letter),
+                       .expected = types::typeVar(varId),
+                       .actual = nullptr };
 }
 
 // Unification implementation
@@ -268,7 +269,7 @@ std::vector<TypeVarId> collectTypeVars(TypePtr const& type)
     std::function<void(TypePtr const&)> collect = [&](TypePtr const& t) {
         if (auto* tv = t->asTypeVar())
         {
-            if (std::find(result.begin(), result.end(), tv->id) == result.end())
+            if (std::ranges::find(result, tv->id) == result.end())
                 result.push_back(tv->id);
         }
         else if (auto* fn = t->asFunction())
@@ -342,9 +343,9 @@ UnifyResult unify(TypePtr const& t1, TypePtr const& t2)
     }
 
     // Both are primitives
-    if (auto* p1 = t1->asPrimitive())
+    if (const auto* p1 = t1->asPrimitive())
     {
-        if (auto* p2 = t2->asPrimitive())
+        if (const auto* p2 = t2->asPrimitive())
         {
             if (p1->kind == p2->kind)
                 return Substitution {};

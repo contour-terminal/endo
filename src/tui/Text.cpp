@@ -65,7 +65,7 @@ void Text::setText(std::string_view content, Style const& style)
 
     // Ensure at least one empty line
     if (_lines.empty())
-        _lines.push_back(TextLine {});
+        _lines.emplace_back();
 }
 
 void Text::setLines(std::vector<TextLine> lines)

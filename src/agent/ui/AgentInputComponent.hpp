@@ -219,11 +219,11 @@ class AgentInputComponent: public tui::Component
 
   private:
     tui::InputField _inputField;
-    tui::CompletionPopup _completionPopup;     ///< Popup widget for slash command completion.
-    tui::CommandPalettePopup _commandPalette;  ///< Command palette popup.
+    tui::CompletionPopup _completionPopup;            ///< Popup widget for slash command completion.
+    tui::CommandPalettePopup _commandPalette;         ///< Command palette popup.
     tui::CommandRegistry* _commandRegistry = nullptr; ///< External command registry.
-    tui::Completer _completer;                 ///< Orchestrates completion providers.
-    bool _completionPopupDirty = false;    ///< Completion popup needs re-filtering.
+    tui::Completer _completer;                        ///< Orchestrates completion providers.
+    bool _completionPopupDirty = false;               ///< Completion popup needs re-filtering.
 
     std::string _providerName;                      ///< Active provider name for header display.
     std::string _modelName;                         ///< Active model name for header display.

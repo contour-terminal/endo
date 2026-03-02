@@ -253,7 +253,7 @@ TEST_CASE("agent.claude.parse_text_block_lifecycle")
         auto result = ClaudeProvider::parseSseEvent(event, accumulators);
         REQUIRE(result.has_value());
         REQUIRE(result->completedBlocks.size() == 1);
-        auto const* text = std::get_if<TextBlock>(&result->completedBlocks[0]);
+        auto const* text = std::get_if<TextBlock>(result->completedBlocks.data());
         REQUIRE(text != nullptr);
         CHECK(text->text == "Hello world!");
     }

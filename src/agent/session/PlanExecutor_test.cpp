@@ -15,7 +15,9 @@ class MockProvider final: public LlmProvider
   public:
     std::string responseText = "Step executed.";
     bool shouldFail = false;
-    ProviderError failError { ProviderErrorCode::NetworkError, "step failed", 500 };
+    ProviderError failError { .code = ProviderErrorCode::NetworkError,
+                              .message = "step failed",
+                              .httpStatus = 500 };
     int generateCallCount = 0;
 
     [[nodiscard]] auto generate(std::span<ChatMessage const>,

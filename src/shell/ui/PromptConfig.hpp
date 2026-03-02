@@ -55,8 +55,8 @@ struct PromptConfig
     bool useGradientPath = false;       ///< Enable gradient coloring for path module.
     tui::RgbColor gradientStart {};     ///< Gradient start color.
     tui::RgbColor gradientEnd {};       ///< Gradient end color.
-    std::vector<tui::RgbColor> auroraBackground {}; ///< Multi-stop background gradient (empty = flat bg).
-    bool enableSixelFade = false;                   ///< Enable sixel aurora fade above prompt.
+    std::vector<tui::RgbColor> auroraBackground; ///< Multi-stop background gradient (empty = flat bg).
+    bool enableSixelFade = false;                ///< Enable sixel aurora fade above prompt.
     int64_t exitConfirmTimeoutMs =
         1000; ///< Timeout (ms) for double Ctrl+D exit confirmation (0 = immediate exit).
 };

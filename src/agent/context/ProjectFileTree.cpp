@@ -165,7 +165,7 @@ auto ProjectFileTree::buildTreeFromPaths(std::vector<std::string> const& paths) 
         if (totalEntries >= _config.maxEntries)
             break;
 
-        auto current = &root;
+        auto* current = &root;
         auto const p = std::filesystem::path(filePath);
         auto parts = std::vector<std::string> {};
 

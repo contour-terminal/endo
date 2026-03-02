@@ -126,8 +126,8 @@ TEST_CASE("multiStopGradient.clamps_out_of_range", "[gradient]")
 
 TEST_CASE("lerpColor.basic", "[gradient]")
 {
-    auto const black = tui::RgbColor { 0, 0, 0 };
-    auto const white = tui::RgbColor { 255, 255, 255 };
+    auto const black = tui::RgbColor { .r = 0, .g = 0, .b = 0 };
+    auto const white = tui::RgbColor { .r = 255, .g = 255, .b = 255 };
 
     auto const mid = tui::lerpColor(black, white, 0.5f);
     // 127 or 128 depending on rounding — allow both

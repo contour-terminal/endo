@@ -113,7 +113,7 @@ auto OAuthCallbackServer::start() -> std::expected<uint16_t, std::string>
         return std::unexpected(std::string("WSAStartup failed"));
 #endif
 
-    _listenFd = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
+    _listenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_listenFd < 0)
         return std::unexpected(std::string("Failed to create socket: ") + strerror(errno));
 
@@ -188,7 +188,7 @@ auto OAuthCallbackServer::waitForCallback(std::chrono::seconds timeout)
 #endif
 
     // Accept the connection.
-    auto const clientFd = static_cast<int>(accept(_listenFd, nullptr, nullptr));
+    auto const clientFd = accept(_listenFd, nullptr, nullptr);
     if (clientFd < 0)
         return std::unexpected(std::string("Failed to accept connection: ") + strerror(errno));
 

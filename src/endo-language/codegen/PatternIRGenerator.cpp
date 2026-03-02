@@ -719,8 +719,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
             else
             {
                 // Reload scrutinee from storage since we're in a new basic block.
-                CoreVM::Value* scrutineeReloaded =
-                    _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+                CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
 
                 // Extract payload from slot 0 using OGETSLOT
                 CoreVM::Value* payloadValue = _builder.createObjGetSlot(

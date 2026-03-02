@@ -59,10 +59,8 @@ std::string extractSourceLine(std::string_view source, int line)
 
 std::string createCaretLine(int column, int length)
 {
-    if (column < 0)
-        column = 0;
-    if (length < 1)
-        length = 1;
+    column = std::max(column, 0);
+    length = std::max(length, 1);
 
     std::string result(static_cast<size_t>(column), ' ');
     result += '^';

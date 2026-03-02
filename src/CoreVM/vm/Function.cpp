@@ -3,6 +3,7 @@
 #include <CoreVM/sysconfig.h>
 
 #include <algorithm>
+#include <print>
 #include <string>
 #include <vector>
 
@@ -10,14 +11,7 @@ namespace CoreVM
 {
 
 Function::Function(Program* program, std::string name, std::vector<Instruction> code):
-    _program(program),
-    _name(std::move(name)),
-    _stackSize(),
-    _code()
-#if defined(COREVM_DIRECT_THREADED_VM)
-    ,
-    _directThreadedCode()
-#endif
+    _program(program), _name(std::move(name))
 {
     setCode(std::move(code));
 }
@@ -38,11 +32,8 @@ void Function::setCode(std::vector<Instruction> code)
 
 void Function::disassemble() const noexcept
 {
-    printf("\n.function %-27s ; (%zu stack size, %zu instructions)\n",
-           name().c_str(),
-           stackSize(),
-           code().size());
-    printf("%s", CoreVM::disassemble(_code.data(), _code.size(), "  ", &_program->constants()).c_str());
+    std::println("\n.function {:27} ; ({} stack size, {} instructions)", name(), stackSize(), code().size());
+    std::print("{}", CoreVM::disassemble(_code.data(), _code.size(), "  ", &_program->constants()));
 }
 
 void Function::setLocationTable(std::vector<std::pair<size_t, SourceLocation>> table)

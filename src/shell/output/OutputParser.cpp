@@ -5,6 +5,7 @@
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <algorithm>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -214,8 +215,8 @@ CoreVM::TypedObject* OutputParser::parseJson(CoreVM::Runner& runner,
 
     // Build cons-cell list right-to-left
     auto* list = createNilList(runner);
-    for (auto it = records.rbegin(); it != records.rend(); ++it)
-        list = createCons(runner, *it, list);
+    for (auto& record: std::ranges::reverse_view(records))
+        list = createCons(runner, record, list);
 
     return list;
 }
@@ -245,8 +246,8 @@ CoreVM::TypedObject* OutputParser::parseFields(CoreVM::Runner& runner,
 
     // Build cons-cell list right-to-left
     auto* list = createNilList(runner);
-    for (auto it = records.rbegin(); it != records.rend(); ++it)
-        list = createCons(runner, *it, list);
+    for (auto& record: std::ranges::reverse_view(records))
+        list = createCons(runner, record, list);
 
     return list;
 }
@@ -312,8 +313,8 @@ bool OutputParser::detectCsvHeader(std::string_view firstLine,
         auto fieldLower = fields[i];
         auto schemaLower = schema[i].name;
         // Simple case-insensitive compare
-        std::transform(fieldLower.begin(), fieldLower.end(), fieldLower.begin(), ::tolower);
-        std::transform(schemaLower.begin(), schemaLower.end(), schemaLower.begin(), ::tolower);
+        std::ranges::transform(fieldLower, fieldLower.begin(), ::tolower);
+        std::ranges::transform(schemaLower, schemaLower.begin(), ::tolower);
         // Trim whitespace from field
         while (!fieldLower.empty() && fieldLower.front() == ' ')
             fieldLower.erase(fieldLower.begin());

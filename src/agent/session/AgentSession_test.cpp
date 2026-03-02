@@ -21,7 +21,9 @@ class MockProvider final: public LlmProvider
   public:
     std::string responseText = "Mock response";
     bool shouldFail = false;
-    ProviderError failError { ProviderErrorCode::NetworkError, "connection failed", 500 };
+    ProviderError failError { .code = ProviderErrorCode::NetworkError,
+                              .message = "connection failed",
+                              .httpStatus = 500 };
 
     /// When set, the first call to generate() returns these tool calls.
     /// Subsequent calls return responseText as normal.
@@ -274,7 +276,7 @@ TEST_CASE("AgentSession.tool_loop_single_round_trip", "[agent]")
     // Verify the tool result message is in history
     auto const& toolResultMsg = session.history().messages()[2];
     CHECK(toolResultMsg.role == Role::User);
-    auto const* toolResult = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    auto const* toolResult = std::get_if<ToolResultBlock>(toolResultMsg.content.data());
     REQUIRE(toolResult != nullptr);
     CHECK(toolResult->toolUseId == "call-1");
     CHECK(toolResult->content == "file contents here");
@@ -334,7 +336,7 @@ TEST_CASE("AgentSession.tool_loop_max_iterations", "[agent]")
 
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == AgentErrorCode::ToolLoopExceeded);
-    CHECK(result.error().message.find("3") != std::string::npos);
+    CHECK(result.error().message.find('3') != std::string::npos);
 }
 
 TEST_CASE("AgentSession.no_registry_no_tools", "[agent]")
@@ -394,7 +396,7 @@ TEST_CASE("AgentSession.tool_result_under_limit_unchanged", "[agent]")
 
     // The tool result in history should be unchanged
     auto const& toolResultMsg = session.history().messages()[2];
-    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    auto const* result = std::get_if<ToolResultBlock>(toolResultMsg.content.data());
     REQUIRE(result != nullptr);
     CHECK(result->content == "short result");
 }
@@ -417,7 +419,7 @@ TEST_CASE("AgentSession.tool_result_over_limit_truncated", "[agent]")
 
     // The tool result in history should be truncated
     auto const& toolResultMsg = session.history().messages()[2];
-    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    auto const* result = std::get_if<ToolResultBlock>(toolResultMsg.content.data());
     REQUIRE(result != nullptr);
     CHECK(result->content.size() < 50000);
     CHECK(result->content.find("[truncated") != std::string::npos);
@@ -441,7 +443,7 @@ TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
     (void) session.processMessage("Test", nullptr);
 
     auto const& toolResultMsg = session.history().messages()[2];
-    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    auto const* result = std::get_if<ToolResultBlock>(toolResultMsg.content.data());
     REQUIRE(result != nullptr);
     CHECK(result->content.size() == 1000);
     CHECK(result->content.find("[truncated") == std::string::npos);
@@ -759,7 +761,7 @@ TEST_CASE("AgentSession.plan_mode_exceeded_iterations", "[agent]")
 
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == AgentErrorCode::ToolLoopExceeded);
-    CHECK(result.error().message.find("3") != std::string::npos);
+    CHECK(result.error().message.find('3') != std::string::npos);
 }
 
 // =============================================================================

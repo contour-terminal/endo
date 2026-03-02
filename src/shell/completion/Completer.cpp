@@ -32,9 +32,7 @@ Completer::Completer(EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<HistoryCompleter>(history));
 
     // Sort by priority (highest first)
-    std::sort(_providers.begin(), _providers.end(), [](auto const& a, auto const& b) {
-        return a->priority() > b->priority();
-    });
+    std::ranges::sort(_providers, [](auto const& a, auto const& b) { return a->priority() > b->priority(); });
 }
 
 void Completer::addProvider(std::unique_ptr<CompletionProvider> provider)
@@ -42,9 +40,7 @@ void Completer::addProvider(std::unique_ptr<CompletionProvider> provider)
     _providers.push_back(std::move(provider));
 
     // Re-sort by priority
-    std::sort(_providers.begin(), _providers.end(), [](auto const& a, auto const& b) {
-        return a->priority() > b->priority();
-    });
+    std::ranges::sort(_providers, [](auto const& a, auto const& b) { return a->priority() > b->priority(); });
 }
 
 std::vector<CompletionItem> Completer::complete(std::string_view input, size_t cursorPosition) const
@@ -145,7 +141,7 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
     }
 
     // Sort by score (descending), then alphabetically
-    std::sort(allResults.begin(), allResults.end(), [](auto const& a, auto const& b) {
+    std::ranges::sort(allResults, [](auto const& a, auto const& b) {
         if (a.score != b.score)
             return a.score > b.score;
         return a.text < b.text;

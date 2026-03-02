@@ -333,8 +333,8 @@ auto generatePkce() -> PkceParams
 
 auto buildAuthorizeUrl(OAuthMode mode, PkceParams const& pkce, std::string_view redirectUri) -> std::string
 {
-    auto const baseUrl = (mode == OAuthMode::ClaudeAi) ? ClaudeAiAuthorizeUrl : ConsoleAuthorizeUrl;
-    auto const scopes = (mode == OAuthMode::ClaudeAi) ? ClaudeAiScopes : ConsoleScopes;
+    const auto* const baseUrl = (mode == OAuthMode::ClaudeAi) ? ClaudeAiAuthorizeUrl : ConsoleAuthorizeUrl;
+    const auto* const scopes = (mode == OAuthMode::ClaudeAi) ? ClaudeAiScopes : ConsoleScopes;
 
     return std::string(baseUrl) + "?code=true&client_id=" + OAuthClientId + "&response_type=code"
            + "&code_challenge=" + pkce.challenge + "&code_challenge_method=S256" + "&redirect_uri="

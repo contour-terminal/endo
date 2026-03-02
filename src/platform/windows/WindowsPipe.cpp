@@ -2,9 +2,9 @@
 #include <platform/Pipe.hpp>
 
 #if defined(_WIN32)
-    #include <windows.h>
+    #include <stdexcept>
 
-#include <stdexcept>
+    #include <windows.h>
 
 namespace endo::platform
 {

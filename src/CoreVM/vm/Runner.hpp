@@ -28,7 +28,7 @@ class TypeRegistry;
 class Runner
 {
   public:
-    enum State
+    enum class State : uint8_t
     {
         Inactive,
         Running,
@@ -208,14 +208,14 @@ class Runner
     const Function* _function;
     TraceLogger _traceLogger;
 
-    const Program* _program;
+    const Program* _program = nullptr;
 
-    void* _userdata;
+    void* _userdata = nullptr;
 
     util::RegExpContext _regexpContext;
 
-    State _state;
-    size_t _ip;
+    State _state = State::Inactive;
+    size_t _ip = 0;
 
     Stack _stack;
 
@@ -230,10 +230,10 @@ class Runner
 
     struct CallFrame
     {
-        size_t ip;
-        const Function* function;
-        size_t fp;
-        size_t argsBase;
+        size_t ip = 0;
+        const Function* function = nullptr;
+        size_t fp = 0;
+        size_t argsBase = 0;
         TypedObject* lazyObj = nullptr;
     };
 

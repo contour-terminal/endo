@@ -72,7 +72,7 @@ auto PromptComponent::PromptTextDecorator::underline(tui::TextPosition pos) cons
 auto PromptComponent::PromptTextDecorator::background(int displayCol) const -> std::optional<tui::RgbColor>
 {
     auto const idx = displayCol + bgOffset;
-    if (bgColors && !bgColors->empty() && idx >= 0 && idx < static_cast<int>(bgColors->size()))
+    if (bgColors && !bgColors->empty() && idx >= 0 && std::cmp_less(idx, bgColors->size()))
         return (*bgColors)[static_cast<std::size_t>(idx)];
     return flatBg;
 }
@@ -191,7 +191,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     auto const totalPromptWidth = HorizontalMargin + leftBarWidth() + PaddingAfterBar + promptTextWidth;
 
     // Effective content width (excluding margins)
-    auto const contentWidth = canvasWidth - 2 * HorizontalMargin;
+    auto const contentWidth = canvasWidth - (2 * HorizontalMargin);
 
     // Use theme-based colors
     auto const& pc = theme.promptColors;
@@ -212,7 +212,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     /// or falls back to the flat theme background.
     auto const bgAt = [&](int col) -> tui::RgbColor {
         auto const idx = col - HorizontalMargin;
-        if (!bgColors.empty() && idx >= 0 && idx < static_cast<int>(bgColors.size()))
+        if (!bgColors.empty() && idx >= 0 && std::cmp_less(idx, bgColors.size()))
             return bgColors[static_cast<std::size_t>(idx)];
         return pc.background;
     };
@@ -300,7 +300,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         else
         {
-            canvas.fill(tui::Rect { HorizontalMargin, infoLineRow, contentWidth, 1 }, ' ', bgStyle);
+            canvas.fill(
+                tui::Rect { .x = HorizontalMargin, .y = infoLineRow, .width = contentWidth, .height = 1 },
+                ' ',
+                bgStyle);
         }
 
         auto col = HorizontalMargin;
@@ -459,7 +462,9 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         else
         {
-            canvas.fill(tui::Rect { HorizontalMargin, row, contentWidth, 1 }, ' ', bgStyle);
+            canvas.fill(tui::Rect { .x = HorizontalMargin, .y = row, .width = contentWidth, .height = 1 },
+                        ' ',
+                        bgStyle);
         }
 
         // Draw separator on input lines
@@ -529,10 +534,10 @@ void PromptComponent::render(tui::Canvas& canvas)
 
     // Render InputField into a subcanvas that starts after the left chrome
     auto const fieldArea = tui::Rect {
-        fieldOriginCol,
-        inputStartRow,
-        canvasWidth - fieldOriginCol - HorizontalMargin,
-        std::min(totalLines, canvas.height() - inputStartRow),
+        .x = fieldOriginCol,
+        .y = inputStartRow,
+        .width = canvasWidth - fieldOriginCol - HorizontalMargin,
+        .height = std::min(totalLines, canvas.height() - inputStartRow),
     };
     auto fieldCanvas = canvas.subcanvas(fieldArea);
     _inputField.render(fieldCanvas);
@@ -567,11 +572,11 @@ void PromptComponent::render(tui::Canvas& canvas)
 
         if (popupHeight >= 3) // Minimum: border (2) + 1 item
         {
-            auto popupRect =
-                tui::Rect { totalPromptWidth, // x (column) - where prompt ends
-                            popupRow,         // y (row) - below or above cursor
-                            std::min(popupSize.width, canvasWidth - totalPromptWidth - HorizontalMargin),
-                            popupHeight };
+            auto popupRect = tui::Rect { .x = totalPromptWidth, // x (column) - where prompt ends
+                                         .y = popupRow,         // y (row) - below or above cursor
+                                         .width = std::min(popupSize.width,
+                                                           canvasWidth - totalPromptWidth - HorizontalMargin),
+                                         .height = popupHeight };
 
             _completionPopup.setArea(popupRect);
             auto popupCanvas = canvas.subcanvas(popupRect);
@@ -589,7 +594,8 @@ void PromptComponent::render(tui::Canvas& canvas)
         if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
         {
             auto const paletteX = std::max(0, (canvasWidth - paletteWidth) / 2);
-            auto const paletteRect = tui::Rect { paletteX, paletteRow, paletteWidth, paletteHeight };
+            auto const paletteRect =
+                tui::Rect { .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight };
             _commandPalette.setArea(paletteRect);
             auto paletteCanvas = canvas.subcanvas(paletteRect);
             _commandPalette.render(paletteCanvas);
@@ -633,7 +639,7 @@ tui::Size PromptComponent::preferredSize() const
         maxWidth = std::max(maxWidth, paletteSize.width);
     }
 
-    return { maxWidth, totalHeight };
+    return { .width = maxWidth, .height = totalHeight };
 }
 
 void PromptComponent::setPrompt(std::string_view prompt)
@@ -824,7 +830,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                             auto matches = _history->search(inputText, 50);
                             for (auto const& entry: matches)
                                 if (entry != inputText)
-                                    _historyCandidates.push_back(std::string(entry));
+                                    _historyCandidates.emplace_back(entry);
                         }
                         if (!_historyCandidates.empty())
                             _historyCycleIndex = 0;
@@ -1061,7 +1067,9 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
     }
 
     // Prefix matches have empty matchPositions; fuzzy matches have non-empty matchPositions.
-    auto const isPrefixMatch = [](auto const& item) { return item.matchPositions.empty(); };
+    auto const isPrefixMatch = [](auto const& item) {
+        return item.matchPositions.empty();
+    };
 
     if (!forceShowPopup)
     {
@@ -1287,7 +1295,7 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
                 tooltipText += "\nhint: " + hint;
             return tui::HoverResult {
                 .text = std::move(tooltipText),
-                .position = { x, y },
+                .position = { .x = x, .y = y },
                 .contentType = tui::TooltipContentType::PlainText,
             };
         }
@@ -1301,7 +1309,7 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
         {
             return tui::HoverResult {
                 .text = hover->markdownText,
-                .position = { x, y },
+                .position = { .x = x, .y = y },
                 .contentType = tui::TooltipContentType::Markdown,
             };
         }
@@ -1316,7 +1324,7 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
             auto const [cmdStart, _] = getCommandBounds();
             return tui::HoverResult {
                 .text = info.tooltip,
-                .position = { cmdStart, y },
+                .position = { .x = cmdStart, .y = y },
                 .contentType = tui::TooltipContentType::PlainText,
             };
         }
@@ -1353,16 +1361,16 @@ std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
 
         for (int x = 0; x < imgWidth; ++x)
         {
-            auto const idx = (static_cast<std::size_t>(y) * imgWidth + x) * 4;
+            auto const idx = ((static_cast<std::size_t>(y) * imgWidth) + x) * 4;
 
             // Horizontal gradient position
             auto const t = (imgWidth > 1) ? static_cast<float>(x) / static_cast<float>(imgWidth - 1) : 0.0f;
             auto const color = multiStopGradient(_config.auroraBackground, t);
 
             // Pre-multiply alpha: blend aurora color with terminal background
-            pixels[idx + 0] = static_cast<std::uint8_t>((color.r * a + bgColor.r * (255 - a)) / 255);
-            pixels[idx + 1] = static_cast<std::uint8_t>((color.g * a + bgColor.g * (255 - a)) / 255);
-            pixels[idx + 2] = static_cast<std::uint8_t>((color.b * a + bgColor.b * (255 - a)) / 255);
+            pixels[idx + 0] = static_cast<std::uint8_t>(((color.r * a) + (bgColor.r * (255 - a))) / 255);
+            pixels[idx + 1] = static_cast<std::uint8_t>(((color.g * a) + (bgColor.g * (255 - a))) / 255);
+            pixels[idx + 2] = static_cast<std::uint8_t>(((color.b * a) + (bgColor.b * (255 - a))) / 255);
             pixels[idx + 3] = 255; // Fully opaque — fade is baked into RGB
         }
     }

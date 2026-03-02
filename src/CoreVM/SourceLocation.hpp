@@ -54,9 +54,9 @@ struct FilePos
 inline size_t operator-(const FilePos& a, const FilePos& b)
 {
     if (b.offset > a.offset)
-        return 1 + b.offset - a.offset;
+        return 1 + (b.offset - a.offset);
     else
-        return 1 + a.offset - b.offset;
+        return 1 + (a.offset - b.offset);
 }
 
 /// Converts a FilePos to string (e.g. "1:5").

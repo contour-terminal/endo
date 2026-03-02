@@ -60,7 +60,7 @@ void StatusBar::render(Canvas& canvas)
 
 Size StatusBar::preferredSize() const
 {
-    return { 80, 1 }; // Full width (will be adjusted), 1 row
+    return { .width = 80, .height = 1 }; // Full width (will be adjusted), 1 row
 }
 
 void StatusBar::setHints(std::vector<KeyHint> hints)
@@ -95,7 +95,7 @@ void StatusBar::setRightText(std::string text)
 
 void StatusBar::setStyle(StatusBarStyle style)
 {
-    _style = std::move(style);
+    _style = style;
 }
 
 auto StatusBar::style() const noexcept -> StatusBarStyle const&

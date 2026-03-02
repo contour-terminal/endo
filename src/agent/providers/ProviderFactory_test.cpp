@@ -30,7 +30,7 @@ TEST_CASE("agent.factory.no_keys_no_providers")
     config.openai.apiKeyEnv = "ENDO_TEST_OPENAI_KEY";
     config.gemini.apiKeyEnv = "ENDO_TEST_GEMINI_KEY";
     config.gemini.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
-    config.openaiCompat.baseUrl = ""; // no compat provider
+    config.openaiCompat.baseUrl = "";         // no compat provider
 
     endo::http::HttpClient httpClient;
     auto factory = ProviderFactory(httpClient, config);

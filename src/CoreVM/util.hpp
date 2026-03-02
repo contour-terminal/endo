@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <print>
 #include <regex>
 #include <string>
 #include <unordered_map>
@@ -450,7 +451,7 @@ inline bool IPAddress::assign(const std::string& text, Family family)
         if (rv < 0)
             perror("inet_pton");
         else
-            fprintf(stderr, "IP address Not in presentation format: %s\n", text.c_str());
+            std::println(stderr, "IP address Not in presentation format: {}", text);
 
         _cstr[0] = 0;
         return false;
@@ -527,7 +528,7 @@ class Cidr
      *
      * e.g. 0.0.0.0/0
      */
-    Cidr(): _ipaddr(), _prefix(0) {}
+    Cidr(): _prefix(0) {}
 
     /**
      * @brief Initializes this CIDR notation with given IP address and prefix.

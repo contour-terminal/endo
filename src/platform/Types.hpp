@@ -5,16 +5,16 @@
 /// @brief Platform-agnostic type definitions for cross-platform compatibility.
 
 #if defined(_WIN32)
-    #include <windows.h>
-    #include <io.h>
     #include <fcntl.h>
+    #include <io.h>
+    #include <windows.h>
     #ifndef STDIN_FILENO
-        #define STDIN_FILENO 0
+        #define STDIN_FILENO  0
         #define STDOUT_FILENO 1
         #define STDERR_FILENO 2
     #endif
     #ifndef SIGINT
-        #define SIGINT 2
+        #define SIGINT  2
         #define SIGTERM 15
         #define SIGKILL 9
         #define SIGTSTP 20
@@ -23,6 +23,7 @@
     #endif
 #else
     #include <sys/types.h>
+
     #include <unistd.h>
 #endif
 
@@ -47,11 +48,22 @@ inline NativeHandle const InvalidHandle = INVALID_HANDLE_VALUE;
 constexpr ProcessId InvalidProcessId = 0;
 
 /// @brief Returns the standard input handle for the current platform.
-inline auto standardInput() -> NativeHandle { return GetStdHandle(STD_INPUT_HANDLE); }
+inline auto standardInput() -> NativeHandle
+{
+    return GetStdHandle(STD_INPUT_HANDLE);
+}
+
 /// @brief Returns the standard output handle for the current platform.
-inline auto standardOutput() -> NativeHandle { return GetStdHandle(STD_OUTPUT_HANDLE); }
+inline auto standardOutput() -> NativeHandle
+{
+    return GetStdHandle(STD_OUTPUT_HANDLE);
+}
+
 /// @brief Returns the standard error handle for the current platform.
-inline auto standardError() -> NativeHandle { return GetStdHandle(STD_ERROR_HANDLE); }
+inline auto standardError() -> NativeHandle
+{
+    return GetStdHandle(STD_ERROR_HANDLE);
+}
 #else
 /// Native file/pipe handle type for the current platform.
 using NativeHandle = int;
@@ -66,11 +78,22 @@ constexpr NativeHandle InvalidHandle = -1;
 constexpr ProcessId InvalidProcessId = -1;
 
 /// @brief Returns the standard input handle for the current platform.
-constexpr auto standardInput() -> NativeHandle { return STDIN_FILENO; }
+constexpr auto standardInput() -> NativeHandle
+{
+    return STDIN_FILENO;
+}
+
 /// @brief Returns the standard output handle for the current platform.
-constexpr auto standardOutput() -> NativeHandle { return STDOUT_FILENO; }
+constexpr auto standardOutput() -> NativeHandle
+{
+    return STDOUT_FILENO;
+}
+
 /// @brief Returns the standard error handle for the current platform.
-constexpr auto standardError() -> NativeHandle { return STDERR_FILENO; }
+constexpr auto standardError() -> NativeHandle
+{
+    return STDERR_FILENO;
+}
 #endif
 
 #ifdef _WIN32

@@ -4,6 +4,7 @@
 #include <tui/Theme.hpp>
 
 #include <algorithm>
+#include <utility>
 
 namespace tui
 {
@@ -42,11 +43,12 @@ void SelectDialog::render(Canvas& canvas)
     auto const startCol = (termCols - dialogWidth) / 2;
 
     // Draw box
-    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    auto boxRect = Rect { .x = startRow, .y = startCol, .width = dialogWidth, .height = dialogHeight };
     canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
 
     // Render list inside box (inner area)
-    auto listRect = Rect { startRow + 1, startCol + 2, dialogWidth - 4, contentHeight };
+    auto listRect =
+        Rect { .x = startRow + 1, .y = startCol + 2, .width = dialogWidth - 4, .height = contentHeight };
     auto listCanvas = canvas.subcanvas(listRect);
     _list.render(listCanvas);
 
@@ -80,7 +82,7 @@ Size SelectDialog::preferredSize() const
     auto const itemCount = static_cast<int>(_list.visibleItems().size());
     auto const contentHeight = std::min(itemCount, _config.maxHeight - 2);
     auto const dialogHeight = contentHeight + 3; // +2 for borders, +1 for hint
-    return { _config.width, dialogHeight };
+    return { .width = _config.width, .height = dialogHeight };
 }
 
 auto SelectDialog::processEvent(InputEvent const& event) -> DialogResult
@@ -156,11 +158,12 @@ void ConfirmDialog::render(Canvas& canvas)
     }
 
     // Draw box with title
-    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    auto boxRect = Rect { .x = startRow, .y = startCol, .width = dialogWidth, .height = dialogHeight };
     canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
 
     // Fill box interior
-    auto innerRect = Rect { startRow + 1, startCol + 1, dialogWidth - 2, dialogHeight - 2 };
+    auto innerRect =
+        Rect { .x = startRow + 1, .y = startCol + 1, .width = dialogWidth - 2, .height = dialogHeight - 2 };
     canvas.fill(innerRect, ' ', Style {});
 
     // Message (with padding)
@@ -218,7 +221,7 @@ EventResult ConfirmDialog::onEvent(InputEvent const& event)
 
 Size ConfirmDialog::preferredSize() const
 {
-    return { _config.width, 6 };
+    return { .width = _config.width, .height = 6 };
 }
 
 auto ConfirmDialog::processEvent(InputEvent const& event) -> DialogResult
@@ -288,11 +291,12 @@ void InputDialog::render(Canvas& canvas)
     }
 
     // Draw box with title
-    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    auto boxRect = Rect { .x = startRow, .y = startCol, .width = dialogWidth, .height = dialogHeight };
     canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
 
     // Fill box interior
-    auto innerRect = Rect { startRow + 1, startCol + 1, dialogWidth - 2, dialogHeight - 2 };
+    auto innerRect =
+        Rect { .x = startRow + 1, .y = startCol + 1, .width = dialogWidth - 2, .height = dialogHeight - 2 };
     canvas.fill(innerRect, ' ', Style {});
 
     // Inner content area
@@ -315,7 +319,7 @@ void InputDialog::render(Canvas& canvas)
     else
     {
         auto displayValue = _value;
-        if (static_cast<int>(displayValue.size()) > inputWidth)
+        if (std::cmp_greater(displayValue.size(), inputWidth))
             displayValue = displayValue.substr(displayValue.size() - static_cast<std::size_t>(inputWidth));
 
         canvas.putString(inputRow, contentCol, displayValue, _config.inputStyle);
@@ -323,8 +327,7 @@ void InputDialog::render(Canvas& canvas)
 
     // Position cursor
     auto cursorCol = contentCol + static_cast<int>(_cursor);
-    if (cursorCol > contentCol + inputWidth - 1)
-        cursorCol = contentCol + inputWidth - 1;
+    cursorCol = std::min(cursorCol, contentCol + inputWidth - 1);
 
     canvas.setCursor(inputRow, cursorCol);
 }
@@ -345,7 +348,7 @@ EventResult InputDialog::onEvent(InputEvent const& event)
 
 Size InputDialog::preferredSize() const
 {
-    return { _config.width, 5 };
+    return { .width = _config.width, .height = 5 };
 }
 
 auto InputDialog::processEvent(InputEvent const& event) -> DialogResult

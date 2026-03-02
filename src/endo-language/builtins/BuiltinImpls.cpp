@@ -15,6 +15,7 @@
 #include <fstream>
 #include <locale>
 #include <random>
+#include <ranges>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -118,8 +119,8 @@ void listConcat(CoreVM::Params& args)
     // Propagate element type from source list's type tag slot
     auto elemType = static_cast<CoreVM::LiteralType>(left->getSlot(2));
     CoreVM::TypedObject* acc = right;
-    for (auto it = elements.rbegin(); it != elements.rend(); ++it)
-        acc = args.caller()->makeConsCell(*it, acc, elemType);
+    for (unsigned long& element: std::ranges::reverse_view(elements))
+        acc = args.caller()->makeConsCell(element, acc, elemType);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
 
@@ -182,8 +183,8 @@ void listSort(CoreVM::Params& args)
     }
     std::ranges::sort(elements);
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (auto it = elements.rbegin(); it != elements.rend(); ++it)
-        acc = args.caller()->makeConsCell(static_cast<uint64_t>(*it), acc, CoreVM::LiteralType::Number);
+    for (long& element: std::ranges::reverse_view(elements))
+        acc = args.caller()->makeConsCell(static_cast<uint64_t>(element), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
 
@@ -200,8 +201,8 @@ void listDistinct(CoreVM::Params& args)
         cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
     }
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (auto it = elements.rbegin(); it != elements.rend(); ++it)
-        acc = args.caller()->makeConsCell(static_cast<uint64_t>(*it), acc, CoreVM::LiteralType::Number);
+    for (long& element: std::ranges::reverse_view(elements))
+        acc = args.caller()->makeConsCell(static_cast<uint64_t>(element), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
 
@@ -222,8 +223,8 @@ void listSortPairs(CoreVM::Params& args)
     std::ranges::stable_sort(pairs, {}, &std::pair<int64_t, uint64_t>::first);
     // Rebuild list of elements only, right-to-left
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Void);
-    for (auto it = pairs.rbegin(); it != pairs.rend(); ++it)
-        acc = args.caller()->makeConsCell(it->second, acc, CoreVM::LiteralType::Void);
+    for (auto& pair: std::ranges::reverse_view(pairs))
+        acc = args.caller()->makeConsCell(pair.second, acc, CoreVM::LiteralType::Void);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
 
@@ -252,14 +253,13 @@ void listGroupPairs(CoreVM::Params& args)
     }
     // Build outer list right-to-left: List<Tuple2<key, List<elem>>>
     auto* outerAcc = args.caller()->makeNilList(CoreVM::LiteralType::Object);
-    for (auto it = groupOrder.rbegin(); it != groupOrder.rend(); ++it)
+    for (long key: std::ranges::reverse_view(groupOrder))
     {
-        auto key = *it;
         auto const& elems = groups[key];
         // Build inner list right-to-left
         auto* innerAcc = args.caller()->makeNilList(CoreVM::LiteralType::Void);
-        for (auto eit = elems.rbegin(); eit != elems.rend(); ++eit)
-            innerAcc = args.caller()->makeConsCell(*eit, innerAcc, CoreVM::LiteralType::Void);
+        for (unsigned long elem: std::ranges::reverse_view(elems))
+            innerAcc = args.caller()->makeConsCell(elem, innerAcc, CoreVM::LiteralType::Void);
         // Build Tuple2(key, innerList)
         auto* tuple = args.caller()->allocObject(CoreVM::BuiltinTypeId::Tuple2);
         tuple->setSlot(0, static_cast<uint64_t>(key));
@@ -365,8 +365,8 @@ void listRange(CoreVM::Params& args)
     }
 
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (auto it = values.rbegin(); it != values.rend(); ++it)
-        acc = args.caller()->makeConsCell(static_cast<uint64_t>(*it), acc, CoreVM::LiteralType::Number);
+    for (long& value: std::ranges::reverse_view(values))
+        acc = args.caller()->makeConsCell(static_cast<uint64_t>(value), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
 
@@ -443,9 +443,9 @@ void stringSplit(CoreVM::Params& args)
 
     // Build cons-cell list right-to-left
     auto* list = runner->makeNilList(CoreVM::LiteralType::String);
-    for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+    for (auto& part: std::ranges::reverse_view(parts))
         list = runner->makeConsCell(
-            reinterpret_cast<uintptr_t>(runner->newString(*it)), list, CoreVM::LiteralType::String);
+            reinterpret_cast<uintptr_t>(runner->newString(part)), list, CoreVM::LiteralType::String);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
 }
 
@@ -1220,7 +1220,7 @@ namespace
             else if (node.is_number_float())
                 results.push_back(std::format("{}", node.get<double>()));
             else if (node.is_boolean())
-                results.push_back(node.get<bool>() ? "true" : "false");
+                results.emplace_back(node.get<bool>() ? "true" : "false");
             else if (node.is_null())
                 results.emplace_back("null");
             return;
@@ -1267,9 +1267,9 @@ void jsonQuery(CoreVM::Params& args)
 
     // Build cons-cell list right-to-left (same pattern as stringSplit)
     auto* list = runner->makeNilList(CoreVM::LiteralType::String);
-    for (auto it = results.rbegin(); it != results.rend(); ++it)
+    for (auto& result: std::ranges::reverse_view(results))
         list = runner->makeConsCell(
-            reinterpret_cast<uintptr_t>(runner->newString(*it)), list, CoreVM::LiteralType::String);
+            reinterpret_cast<uintptr_t>(runner->newString(result)), list, CoreVM::LiteralType::String);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
 }
 

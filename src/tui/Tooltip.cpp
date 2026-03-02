@@ -76,7 +76,7 @@ void Tooltip::render(Canvas& canvas)
     boxStyle.fg = themeRef.colors.text;
 
     // Fill background
-    canvas.fill(Rect { 0, 0, size.width, size.height }, ' ', boxStyle);
+    canvas.fill(Rect { .x = 0, .y = 0, .width = size.width, .height = size.height }, ' ', boxStyle);
 
     // Draw border (simple box characters)
     // Top border
@@ -102,8 +102,10 @@ void Tooltip::render(Canvas& canvas)
                boxStyle); // U+2518 BOX DRAWINGS LIGHT UP AND LEFT
 
     // Render content
-    auto contentCanvas =
-        canvas.subcanvas(Rect { BorderWidth + Padding, BorderWidth, contentArea.width, contentArea.height });
+    auto contentCanvas = canvas.subcanvas(Rect { .x = BorderWidth + Padding,
+                                                 .y = BorderWidth,
+                                                 .width = contentArea.width,
+                                                 .height = contentArea.height });
     _styledContent.renderTo(contentCanvas, _scrollOffset, contentArea.height);
 
     // Render scroll indicators
@@ -134,17 +136,18 @@ EventResult Tooltip::onEvent(InputEvent const& event)
 Size Tooltip::preferredSize() const
 {
     if (_styledContent.empty())
-        return { 0, 0 };
+        return { .width = 0, .height = 0 };
 
     int const contentWidth = _styledContent.maxLineWidth();
     int const contentHeight = _styledContent.lineCount();
 
     // Add border and padding
-    int const totalWidth = contentWidth + 2 * (BorderWidth + Padding);
-    int const totalHeight = contentHeight + 2 * BorderWidth;
+    int const totalWidth = contentWidth + (2 * (BorderWidth + Padding));
+    int const totalHeight = contentHeight + (2 * BorderWidth);
 
     // Clamp to max size
-    return { std::min(totalWidth, _maxSize.width), std::min(totalHeight, _maxSize.height) };
+    return { .width = std::min(totalWidth, _maxSize.width),
+             .height = std::min(totalHeight, _maxSize.height) };
 }
 
 void Tooltip::parseContent()
@@ -156,7 +159,7 @@ void Tooltip::parseContent()
     }
 
     // Calculate content width for wrapping
-    int const wrapWidth = _maxSize.width - 2 * (BorderWidth + Padding);
+    int const wrapWidth = _maxSize.width - (2 * (BorderWidth + Padding));
 
     if (_contentType == TooltipContentType::Markdown)
     {
@@ -171,11 +174,11 @@ void Tooltip::parseContent()
 Size Tooltip::contentAreaSize() const
 {
     auto const pref = preferredSize();
-    return { std::max(0, pref.width - 2 * (BorderWidth + Padding)),
-             std::max(0, pref.height - 2 * BorderWidth) };
+    return { .width = std::max(0, pref.width - (2 * (BorderWidth + Padding))),
+             .height = std::max(0, pref.height - (2 * BorderWidth)) };
 }
 
-void Tooltip::renderScrollIndicators(Canvas& canvas)
+void Tooltip::renderScrollIndicators(Canvas& canvas) const
 {
     auto const size = preferredSize();
     auto const& themeRef = canvas.theme();

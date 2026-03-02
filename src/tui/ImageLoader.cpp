@@ -194,15 +194,15 @@ auto readClipboardImage() -> std::optional<ClipboardImage>
     };
 
     static constexpr auto queries = std::array<ClipboardQuery, 3> { {
-        { "wl-paste --no-newline --type image/png 2>/dev/null",
-          "xclip -selection clipboard -target image/png -o 2>/dev/null",
-          "image/png" },
-        { "wl-paste --no-newline --type image/jpeg 2>/dev/null",
-          "xclip -selection clipboard -target image/jpeg -o 2>/dev/null",
-          "image/jpeg" },
-        { "wl-paste --no-newline --type image/bmp 2>/dev/null",
-          "xclip -selection clipboard -target image/bmp -o 2>/dev/null",
-          "image/bmp" },
+        { .waylandCommand = "wl-paste --no-newline --type image/png 2>/dev/null",
+          .x11Command = "xclip -selection clipboard -target image/png -o 2>/dev/null",
+          .mediaType = "image/png" },
+        { .waylandCommand = "wl-paste --no-newline --type image/jpeg 2>/dev/null",
+          .x11Command = "xclip -selection clipboard -target image/jpeg -o 2>/dev/null",
+          .mediaType = "image/jpeg" },
+        { .waylandCommand = "wl-paste --no-newline --type image/bmp 2>/dev/null",
+          .x11Command = "xclip -selection clipboard -target image/bmp -o 2>/dev/null",
+          .mediaType = "image/bmp" },
     } };
 
     auto const isWayland = std::getenv("WAYLAND_DISPLAY") != nullptr;

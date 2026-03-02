@@ -9,7 +9,9 @@
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 
+#include <algorithm>
 #include <ranges>
+#include <utility>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
@@ -73,11 +75,9 @@ namespace
     auto detectHeadingLevel(std::string_view line) -> int
     {
         auto level = 0;
-        while (level < static_cast<int>(line.size()) && level < 6
-               && line[static_cast<std::size_t>(level)] == '#')
+        while (std::cmp_less(level, line.size()) && level < 6 && line[static_cast<std::size_t>(level)] == '#')
             ++level;
-        if (level > 0 && level < static_cast<int>(line.size())
-            && line[static_cast<std::size_t>(level)] == ' ')
+        if (level > 0 && std::cmp_less(level, line.size()) && line[static_cast<std::size_t>(level)] == ' ')
             return level;
         return 0;
     }
@@ -556,7 +556,7 @@ void StyledText::renderTo(Canvas& canvas, int startLine, int lineCount) const
     for (auto const i: std::views::iota(0, std::min(linesToRender, canvas.height())))
     {
         int const lineIdx = startLine + i;
-        if (lineIdx < 0 || lineIdx >= static_cast<int>(_lines.size()))
+        if (lineIdx < 0 || std::cmp_greater_equal(lineIdx, _lines.size()))
             continue;
 
         auto const& line = _lines[static_cast<std::size_t>(lineIdx)];
@@ -577,8 +577,7 @@ void StyledText::clear()
 void StyledText::addLine(StyledLine line)
 {
     int const width = lineWidth(line);
-    if (width > _maxLineWidth)
-        _maxLineWidth = width;
+    _maxLineWidth = std::max(width, _maxLineWidth);
     _lines.push_back(std::move(line));
 }
 

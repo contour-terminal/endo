@@ -52,24 +52,24 @@ class CommandSpecCompleter: public CompletionProvider
     std::unordered_map<std::string, RegisteredCommand> _commands;
 
     /// @brief Completes subcommand names.
-    [[nodiscard]] std::vector<CompletionItem> completeSubcommand(RegisteredCommand& cmd,
-                                                                 CommandLineState const& state,
-                                                                 std::string_view prefix);
+    [[nodiscard]] static std::vector<CompletionItem> completeSubcommand(RegisteredCommand& cmd,
+                                                                        CommandLineState const& state,
+                                                                        std::string_view prefix);
 
     /// @brief Completes option flags (--flag / -f).
-    [[nodiscard]] std::vector<CompletionItem> completeOption(RegisteredCommand const& cmd,
-                                                             CommandLineState const& state,
-                                                             std::string_view prefix);
+    [[nodiscard]] static std::vector<CompletionItem> completeOption(RegisteredCommand const& cmd,
+                                                                    CommandLineState const& state,
+                                                                    std::string_view prefix);
 
     /// @brief Completes positional arguments.
-    [[nodiscard]] std::vector<CompletionItem> completeArgument(RegisteredCommand& cmd,
-                                                               CommandLineState const& state,
-                                                               std::string_view prefix);
+    [[nodiscard]] static std::vector<CompletionItem> completeArgument(RegisteredCommand& cmd,
+                                                                      CommandLineState const& state,
+                                                                      std::string_view prefix);
 
     /// @brief Completes the value of an option that takes one.
-    [[nodiscard]] std::vector<CompletionItem> completeOptionValue(RegisteredCommand& cmd,
-                                                                  CommandLineState const& state,
-                                                                  std::string_view prefix);
+    [[nodiscard]] static std::vector<CompletionItem> completeOptionValue(RegisteredCommand& cmd,
+                                                                         CommandLineState const& state,
+                                                                         std::string_view prefix);
 
     /// @brief Resolves the active SubcommandDef by walking subcommandChain.
     [[nodiscard]] static SubcommandDef const* resolveSubcommand(CommandSpec const& spec,

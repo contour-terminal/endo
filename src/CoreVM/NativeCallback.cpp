@@ -7,8 +7,7 @@
 namespace CoreVM
 {
 
-NativeCallback::NativeCallback(Runtime* runtime, std::string name, LiteralType returnType):
-    _runtime(runtime), _verifier(), _function(), _signature(), _attributes(0)
+NativeCallback::NativeCallback(Runtime* runtime, std::string name, LiteralType returnType): _runtime(runtime)
 {
     _signature.setName(std::move(name));
     _signature.setReturnType(returnType);
@@ -34,28 +33,28 @@ NativeCallback& NativeCallback::param(LiteralType type, const std::string& name)
 
 int NativeCallback::findParamByName(const std::string& name) const
 {
-    for (int i = 0, e = _names.size(); i != e; ++i)
+    for (size_t i = 0, e = _names.size(); i != e; ++i)
         if (_names[i] == name)
-            return i;
+            return static_cast<int>(i);
 
     return -1;
 }
 
 NativeCallback& NativeCallback::setNoReturn() noexcept
 {
-    _attributes |= (unsigned) Attribute::NoReturn;
+    _attributes |= static_cast<unsigned>(Attribute::NoReturn);
     return *this;
 }
 
 NativeCallback& NativeCallback::setReadOnly() noexcept
 {
-    _attributes |= (unsigned) Attribute::SideEffectFree;
+    _attributes |= static_cast<unsigned>(Attribute::SideEffectFree);
     return *this;
 }
 
 NativeCallback& NativeCallback::setExperimental() noexcept
 {
-    _attributes |= (unsigned) Attribute::Experimental;
+    _attributes |= static_cast<unsigned>(Attribute::Experimental);
     return *this;
 }
 

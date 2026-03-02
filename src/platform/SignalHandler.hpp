@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/Types.hpp>
-
 #include <atomic>
+
+#include <platform/Types.hpp>
 
 namespace endo::platform
 {

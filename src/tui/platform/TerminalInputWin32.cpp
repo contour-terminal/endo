@@ -7,8 +7,9 @@
     #include <array>
     #include <string_view>
 
-    #include <platform/Wakeup.hpp>
     #include <windows.h>
+
+    #include <platform/Wakeup.hpp>
 
 namespace tui
 {

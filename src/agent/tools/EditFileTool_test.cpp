@@ -78,7 +78,7 @@ TEST_CASE("EditFileTool.ambiguous_match_error", "[agent][tools]")
 
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().message.find("ambiguous") != std::string::npos);
-    CHECK(result.error().message.find("3") != std::string::npos);
+    CHECK(result.error().message.find('3') != std::string::npos);
 }
 
 TEST_CASE("EditFileTool.replace_all", "[agent][tools]")

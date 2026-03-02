@@ -10,7 +10,7 @@ TEST_CASE("ConversationHistory.empty_on_construction", "[agent]")
 {
     auto history = ConversationHistory {};
     CHECK(history.empty());
-    CHECK(history.size() == 0);
+    CHECK(history.empty());
     CHECK(history.messages().empty());
 }
 
@@ -36,7 +36,7 @@ TEST_CASE("ConversationHistory.clear", "[agent]")
 
     history.clear();
     CHECK(history.empty());
-    CHECK(history.size() == 0);
+    CHECK(history.empty());
 }
 
 TEST_CASE("ConversationHistory.setSystemPrompt_inserts_when_none", "[agent]")

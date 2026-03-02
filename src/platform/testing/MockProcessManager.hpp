@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/Process.hpp>
-
 #include <functional>
 #include <utility>
 #include <vector>
+
+#include <platform/Process.hpp>
 
 namespace endo::platform::testing
 {
@@ -88,17 +88,20 @@ class MockProcessManager final: public ProcessManager
         return static_cast<ProcessId>(1);
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> setProcessGroup(ProcessId /*pid*/, ProcessId /*pgid*/) override
+    [[nodiscard]] std::expected<void, PlatformError> setProcessGroup(ProcessId /*pid*/,
+                                                                     ProcessId /*pgid*/) override
     {
         return {};
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> duplicateFd(NativeHandle /*src*/, NativeHandle /*dst*/) override
+    [[nodiscard]] std::expected<void, PlatformError> duplicateFd(NativeHandle /*src*/,
+                                                                 NativeHandle /*dst*/) override
     {
         return {};
     }
 
     void closeHandle(NativeHandle /*handle*/) noexcept override {}
+
     void closeExtraHandles() noexcept override {}
 
   private:

@@ -15,7 +15,7 @@ bool rewriteCondBrToSameBranches(IRFunction* function)
     for (BasicBlock* bb: function->basicBlocks())
     {
         // attempt to eliminate useless condbr
-        if (CondBrInstr* condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
+        if (auto* condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
         {
             if (condbr->trueBlock() != condbr->falseBlock())
                 return false;
@@ -42,7 +42,7 @@ bool eliminateUnusedInstr(IRFunction* function)
     {
         for (Instr* instr: bb->instructions())
         {
-            if (auto f = dynamic_cast<CallInstr*>(instr))
+            if (auto* f = dynamic_cast<CallInstr*>(instr))
             {
                 if (f->callee()->getNative().isReadOnly())
                 {
@@ -69,7 +69,7 @@ bool eliminateLinearBr(IRFunction* function)
     for (BasicBlock* bb: function->basicBlocks())
     {
         // attempt to eliminate useless linear br
-        if (BrInstr* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
+        if (auto* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
         {
             if (br->targetBlock()->predecessors().size() != 1)
                 return false;
@@ -103,9 +103,9 @@ bool foldConstantCondBr(IRFunction* function)
 {
     for (BasicBlock* bb: function->basicBlocks())
     {
-        if (auto condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
+        if (auto* condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
         {
-            if (auto cond = dynamic_cast<ConstantBoolean*>(condbr->condition()))
+            if (auto* cond = dynamic_cast<ConstantBoolean*>(condbr->condition()))
             {
                 // COREVM_TRACE("CoreVM: rewrite condbr %{} with constant expression %{}", condbr->name(),
                 // cond->name());
@@ -143,7 +143,7 @@ bool rewriteBrToExit(IRFunction* function)
 {
     for (BasicBlock* bb: function->basicBlocks())
     {
-        if (BrInstr* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
+        if (auto* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
         {
             BasicBlock* targetBB = br->targetBlock();
 
@@ -153,7 +153,7 @@ bool rewriteBrToExit(IRFunction* function)
             if (bb->isAfter(targetBB))
                 return false;
 
-            if (RetInstr* ret = dynamic_cast<RetInstr*>(targetBB->getTerminator()))
+            if (auto* ret = dynamic_cast<RetInstr*>(targetBB->getTerminator()))
             {
                 bb->remove(br);
                 bb->push_back(ret->clone());

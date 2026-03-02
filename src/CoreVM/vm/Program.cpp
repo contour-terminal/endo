@@ -33,8 +33,7 @@ namespace CoreVM
  * {u32, u32, u32}[]    debug source lines segment
  */  // }}}
 
-Program::Program(ConstantPool&& cp):
-    _cp(std::move(cp)), _runtime(nullptr), _functions(), _matches(), _nativeFunctions()
+Program::Program(ConstantPool&& cp): _cp(std::move(cp))
 {
     setup();
 }
@@ -57,9 +56,8 @@ void Program::setup()
     }
 
     const std::vector<MatchDef>& matches = _cp.getMatchDefs();
-    for (size_t i = 0, e = matches.size(); i != e; ++i)
+    for (const auto& def: matches)
     {
-        const MatchDef& def = matches[i];
         switch (def.op)
         {
             case MatchClass::Same: _matches.emplace_back(std::make_unique<MatchSame>(def, this)); break;
@@ -103,9 +101,9 @@ std::vector<std::string> Program::functionNames() const
 
 int Program::indexOf(const Function* that) const noexcept
 {
-    for (int i = 0, e = _functions.size(); i != e; ++i)
+    for (size_t i = 0, e = _functions.size(); i != e; ++i)
         if (_functions[i].get() == that)
-            return i;
+            return static_cast<int>(i);
 
     return -1;
 }

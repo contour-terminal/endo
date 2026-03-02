@@ -89,7 +89,7 @@ auto GitTool::definition() const -> ToolDefinition
                 { "properties",
                   { { "subcommand",
                       { { "type", "string" },
-                        { "description", "The git subcommand (e.g. \"status\", \"diff\")" } } },
+                        { "description", R"(The git subcommand (e.g. "status", "diff"))" } } },
                     { "args",
                       { { "type", "array" },
                         { "items", { { "type", "string" } } },

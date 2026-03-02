@@ -96,8 +96,8 @@ TEST_CASE("StyledText.table.multiple_columns")
         for (auto const& span: line)
             allText += span.text;
 
-    CHECK(allText.find("1") != std::string::npos);
-    CHECK(allText.find("6") != std::string::npos);
+    CHECK(allText.find('1') != std::string::npos);
+    CHECK(allText.find('6') != std::string::npos);
 }
 
 TEST_CASE("StyledText.table.followed_by_paragraph")
@@ -109,8 +109,8 @@ TEST_CASE("StyledText.table.followed_by_paragraph")
         for (auto const& span: line)
             allText += span.text;
 
-    CHECK(allText.find("H") != std::string::npos);
-    CHECK(allText.find("D") != std::string::npos);
+    CHECK(allText.find('H') != std::string::npos);
+    CHECK(allText.find('D') != std::string::npos);
     CHECK(allText.find("After table.") != std::string::npos);
 }
 

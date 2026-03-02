@@ -49,8 +49,8 @@ TEST_CASE("DiagnosticsAdapter.extractSourceLine")
     CHECK(endo::extractSourceLine(source, 0) == "line one");
     CHECK(endo::extractSourceLine(source, 1) == "line two");
     CHECK(endo::extractSourceLine(source, 2) == "line three");
-    CHECK(endo::extractSourceLine(source, 3) == "");
-    CHECK(endo::extractSourceLine(source, -1) == "");
+    CHECK(endo::extractSourceLine(source, 3).empty());
+    CHECK(endo::extractSourceLine(source, -1).empty());
 }
 
 TEST_CASE("DiagnosticsAdapter.extractSourceLine_NoTrailingNewline")

@@ -5,6 +5,8 @@
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
+#include <algorithm>
+
 #include "SymbolCollector.hpp"
 
 namespace endo::lsp
@@ -30,8 +32,7 @@ namespace
         }
 
         // Clamp to source size
-        if (offset > source.size())
-            offset = source.size();
+        offset = std::min(offset, source.size());
 
         return offset;
     }

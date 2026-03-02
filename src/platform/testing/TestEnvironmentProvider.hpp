@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/EnvironmentProvider.hpp>
-
 #include <map>
 #include <set>
 #include <string>
 #include <utility>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo::platform
 {
@@ -53,7 +53,8 @@ class TestEnvironmentProvider final: public EnvironmentProvider
         return result;
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> changeDirectory(std::filesystem::path const& path) override
+    [[nodiscard]] std::expected<void, PlatformError> changeDirectory(
+        std::filesystem::path const& path) override
     {
         auto const resolved = path.is_absolute() ? path : std::filesystem::path(_currentDirectory) / path;
         auto const pathStr = resolved.lexically_normal().generic_string();

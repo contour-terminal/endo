@@ -622,7 +622,7 @@ FunctionCallInstr::FunctionCallInstr(IRFunction* callee,
                                      std::vector<Value*> args,
                                      const std::string& name,
                                      LiteralType returnType):
-    Instr(returnType, std::move(args), name), _callee(callee)
+    Instr(returnType, args, name), _callee(callee)
 {
 }
 
@@ -667,7 +667,7 @@ void FunctionRetInstr::accept(InstructionVisitor& v)
 // }}}
 // {{{ TailCallInstr
 TailCallInstr::TailCallInstr(IRFunction* callee, std::vector<Value*> args, const std::string& name):
-    Instr(LiteralType::Void, std::move(args), name), _callee(callee)
+    Instr(LiteralType::Void, args, name), _callee(callee)
 {
 }
 

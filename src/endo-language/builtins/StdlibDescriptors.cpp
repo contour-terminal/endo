@@ -16,45 +16,45 @@ using LT = CoreVM::LiteralType;
 // ---------------------------------------------------------------------------
 
 // Common single-param patterns
-static constexpr ParamDescriptor textStringParam[] = { { "text", LT::String } };
-static constexpr ParamDescriptor keyStringParam[] = { { "key", LT::String } };
-static constexpr ParamDescriptor listNumberParam[] = { { "list", LT::Number } };
-static constexpr ParamDescriptor objNumberParam[] = { { "obj", LT::Number } };
-static constexpr ParamDescriptor nNumberParam[] = { { "n", LT::Number } };
-static constexpr ParamDescriptor epochNumberParam[] = { { "epoch", LT::Number } };
-static constexpr ParamDescriptor modeNumberParam[] = { { "mode", LT::Number } };
-static constexpr ParamDescriptor programStringParam[] = { { "program", LT::String } };
-static constexpr ParamDescriptor urlStringParam[] = { { "url", LT::String } };
-static constexpr ParamDescriptor nameStringParam[] = { { "name", LT::String } };
-static constexpr ParamDescriptor valueNumberParam[] = { { "value", LT::Number } };
-static constexpr ParamDescriptor pairsNumberParam[] = { { "pairs", LT::Number } };
-static constexpr ParamDescriptor mdNumberParam[] = { { "md", LT::Number } };
+static constexpr ParamDescriptor textStringParam[] = { { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor keyStringParam[] = { { .name="key", .type=LT::String } };
+static constexpr ParamDescriptor listNumberParam[] = { { .name="list", .type=LT::Number } };
+static constexpr ParamDescriptor objNumberParam[] = { { .name="obj", .type=LT::Number } };
+static constexpr ParamDescriptor nNumberParam[] = { { .name="n", .type=LT::Number } };
+static constexpr ParamDescriptor epochNumberParam[] = { { .name="epoch", .type=LT::Number } };
+static constexpr ParamDescriptor modeNumberParam[] = { { .name="mode", .type=LT::Number } };
+static constexpr ParamDescriptor programStringParam[] = { { .name="program", .type=LT::String } };
+static constexpr ParamDescriptor urlStringParam[] = { { .name="url", .type=LT::String } };
+static constexpr ParamDescriptor nameStringParam[] = { { .name="name", .type=LT::String } };
+static constexpr ParamDescriptor valueNumberParam[] = { { .name="value", .type=LT::Number } };
+static constexpr ParamDescriptor pairsNumberParam[] = { { .name="pairs", .type=LT::Number } };
+static constexpr ParamDescriptor mdNumberParam[] = { { .name="md", .type=LT::Number } };
 
 // Multi-param patterns
-static constexpr ParamDescriptor exportTwoParams[] = { { "name", LT::String }, { "value", LT::String } };
-static constexpr ParamDescriptor listConcatParams[] = { { "left", LT::Number }, { "right", LT::Number } };
-static constexpr ParamDescriptor listNthParams[] = { { "index", LT::Number }, { "list", LT::Number } };
-static constexpr ParamDescriptor listReplicateParams[] = { { "count", LT::Number }, { "value", LT::Number } };
-static constexpr ParamDescriptor listCharRangeParams[] = { { "start", LT::Number }, { "end", LT::Number } };
-static constexpr ParamDescriptor listRangeParams[] = { { "start", LT::Number }, { "step", LT::Number }, { "end", LT::Number } };
-static constexpr ParamDescriptor stringRepeatParams[] = { { "str", LT::String }, { "count", LT::Number } };
-static constexpr ParamDescriptor stringReplaceParams[] = { { "old_str", LT::String }, { "new_str", LT::String }, { "text", LT::String } };
-static constexpr ParamDescriptor stringSplitParams[] = { { "delimiter", LT::String }, { "text", LT::String } };
-static constexpr ParamDescriptor stringJoinParams[] = { { "separator", LT::String }, { "list", LT::Number } };
-static constexpr ParamDescriptor stringContainsParams[] = { { "substr", LT::String }, { "text", LT::String } };
-static constexpr ParamDescriptor stringStartsWithParams[] = { { "prefix", LT::String }, { "text", LT::String } };
-static constexpr ParamDescriptor stringEndsWithParams[] = { { "suffix", LT::String }, { "text", LT::String } };
-static constexpr ParamDescriptor formatNumberTwoParams[] = { { "separator", LT::String }, { "number", LT::Number } };
-static constexpr ParamDescriptor formatNumberOneParams[] = { { "number", LT::Number } };
-static constexpr ParamDescriptor randRangeParams[] = { { "min", LT::Number }, { "max", LT::Number } };
-static constexpr ParamDescriptor fetchTwoParams[] = { { "url", LT::String }, { "headers", LT::Number } };
-static constexpr ParamDescriptor jsonQueryParams[] = { { "path", LT::String }, { "json", LT::String } };
+static constexpr ParamDescriptor exportTwoParams[] = { { .name="name", .type=LT::String }, { .name="value", .type=LT::String } };
+static constexpr ParamDescriptor listConcatParams[] = { { .name="left", .type=LT::Number }, { .name="right", .type=LT::Number } };
+static constexpr ParamDescriptor listNthParams[] = { { .name="index", .type=LT::Number }, { .name="list", .type=LT::Number } };
+static constexpr ParamDescriptor listReplicateParams[] = { { .name="count", .type=LT::Number }, { .name="value", .type=LT::Number } };
+static constexpr ParamDescriptor listCharRangeParams[] = { { .name="start", .type=LT::Number }, { .name="end", .type=LT::Number } };
+static constexpr ParamDescriptor listRangeParams[] = { { .name="start", .type=LT::Number }, { .name="step", .type=LT::Number }, { .name="end", .type=LT::Number } };
+static constexpr ParamDescriptor stringRepeatParams[] = { { .name="str", .type=LT::String }, { .name="count", .type=LT::Number } };
+static constexpr ParamDescriptor stringReplaceParams[] = { { .name="old_str", .type=LT::String }, { .name="new_str", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor stringSplitParams[] = { { .name="delimiter", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor stringJoinParams[] = { { .name="separator", .type=LT::String }, { .name="list", .type=LT::Number } };
+static constexpr ParamDescriptor stringContainsParams[] = { { .name="substr", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor stringStartsWithParams[] = { { .name="prefix", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor stringEndsWithParams[] = { { .name="suffix", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor formatNumberTwoParams[] = { { .name="separator", .type=LT::String }, { .name="number", .type=LT::Number } };
+static constexpr ParamDescriptor formatNumberOneParams[] = { { .name="number", .type=LT::Number } };
+static constexpr ParamDescriptor randRangeParams[] = { { .name="min", .type=LT::Number }, { .name="max", .type=LT::Number } };
+static constexpr ParamDescriptor fetchTwoParams[] = { { .name="url", .type=LT::String }, { .name="headers", .type=LT::Number } };
+static constexpr ParamDescriptor jsonQueryParams[] = { { .name="path", .type=LT::String }, { .name="json", .type=LT::String } };
 
 // File I/O params
-static constexpr ParamDescriptor fileOpenParams[] = { { "path", LT::String }, { "mode", LT::String } };
-static constexpr ParamDescriptor fdNumberParam[] = { { "fd", LT::Number } };
-static constexpr ParamDescriptor pathStringParam[] = { { "path", LT::String } };
-static constexpr ParamDescriptor fileWriteParams[] = { { "path", LT::String }, { "content", LT::String } };
+static constexpr ParamDescriptor fileOpenParams[] = { { .name="path", .type=LT::String }, { .name="mode", .type=LT::String } };
+static constexpr ParamDescriptor fdNumberParam[] = { { .name="fd", .type=LT::Number } };
+static constexpr ParamDescriptor pathStringParam[] = { { .name="path", .type=LT::String } };
+static constexpr ParamDescriptor fileWriteParams[] = { { .name="path", .type=LT::String }, { .name="content", .type=LT::String } };
 
 // ---------------------------------------------------------------------------
 // Unified descriptor table
@@ -70,301 +70,301 @@ static const std::array descriptors = {
     // -----------------------------------------------------------------------
     // Output (Shell builtins — not stdlib candidates, but need VM registration)
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "", "print", LT::Void, textStringParam, nullptr, "", "" },
-    StdlibDescriptor { "", "println", LT::Void, textStringParam, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="print", .returnType=LT::Void, .params=textStringParam, .sharedImpl=nullptr, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="println", .returnType=LT::Void, .params=textStringParam, .sharedImpl=nullptr, .description="", .detail="" },
 
     // -----------------------------------------------------------------------
     // Type Conversion (IR-generated, no VM registration)
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "string_length", "", LT::Void, {}, nullptr,
-        "string_length s -> int",
-        "**string_length** `s -> int`\n\nReturns the length of string **s** in characters." },
-    StdlibDescriptor { "int_of_string", "", LT::Void, {}, nullptr,
-        "int_of_string s -> int",
-        "**int_of_string** `s -> int`\n\nParses string **s** as an integer." },
-    StdlibDescriptor { "string_of_int", "", LT::Void, {}, nullptr,
-        "string_of_int n -> string",
-        "**string_of_int** `n -> string`\n\nConverts integer **n** to its string representation." },
-    StdlibDescriptor { "not", "", LT::Void, {}, nullptr,
-        "not b -> bool",
-        "**not** `b -> bool`\n\nLogical negation of boolean **b**." },
-    StdlibDescriptor { "force", "", LT::Void, {}, nullptr,
-        "force lazy<'T> -> 'T",
-        "**force** `lazy<'T> -> 'T`\n\nForces evaluation of a lazy value. First call evaluates and caches the result; subsequent calls return the cached value." },
+    StdlibDescriptor { .userFacingName="string_length", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="string_length s -> int",
+        .detail="**string_length** `s -> int`\n\nReturns the length of string **s** in characters." },
+    StdlibDescriptor { .userFacingName="int_of_string", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="int_of_string s -> int",
+        .detail="**int_of_string** `s -> int`\n\nParses string **s** as an integer." },
+    StdlibDescriptor { .userFacingName="string_of_int", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="string_of_int n -> string",
+        .detail="**string_of_int** `n -> string`\n\nConverts integer **n** to its string representation." },
+    StdlibDescriptor { .userFacingName="not", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="not b -> bool",
+        .detail="**not** `b -> bool`\n\nLogical negation of boolean **b**." },
+    StdlibDescriptor { .userFacingName="force", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="force lazy<'T> -> 'T",
+        .detail="**force** `lazy<'T> -> 'T`\n\nForces evaluation of a lazy value. First call evaluates and caches the result; subsequent calls return the cached value." },
 
     // -----------------------------------------------------------------------
     // String Operations
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "trim", "string_trim", LT::String, textStringParam, &builtins::stringTrim,
-        "trim s -> string",
-        "**trim** `s -> string`\n\nRemoves leading and trailing whitespace from **s**." },
-    StdlibDescriptor { "toLower", "string_toLower", LT::String, textStringParam, &builtins::stringToLower,
-        "toLower s -> string",
-        "**toLower** `s -> string`\n\nConverts all characters in **s** to lowercase." },
-    StdlibDescriptor { "toUpper", "string_toUpper", LT::String, textStringParam, &builtins::stringToUpper,
-        "toUpper s -> string",
-        "**toUpper** `s -> string`\n\nConverts all characters in **s** to uppercase." },
-    StdlibDescriptor { "contains", "string_contains", LT::Boolean, stringContainsParams, &builtins::stringContains,
-        "contains substr s -> bool",
-        "**contains** `substr s -> bool`\n\nReturns true if **s** contains **substr**." },
-    StdlibDescriptor { "startsWith", "string_startsWith", LT::Boolean, stringStartsWithParams, &builtins::stringStartsWith,
-        "startsWith prefix s -> bool",
-        "**startsWith** `prefix s -> bool`\n\nReturns true if **s** starts with **prefix**." },
-    StdlibDescriptor { "endsWith", "string_endsWith", LT::Boolean, stringEndsWithParams, &builtins::stringEndsWith,
-        "endsWith suffix s -> bool",
-        "**endsWith** `suffix s -> bool`\n\nReturns true if **s** ends with **suffix**." },
-    StdlibDescriptor { "replace", "string_replace", LT::String, stringReplaceParams, &builtins::stringReplace,
-        "replace old new s -> string",
-        "**replace** `old new s -> string`\n\nReplaces all occurrences of **old** with **new** in **s**." },
-    StdlibDescriptor { "split", "string_split", LT::Number, stringSplitParams, &builtins::stringSplit,
-        "split delim s -> list<string>",
-        "**split** `delim s -> list<string>`\n\nSplits **s** by delimiter **delim**." },
-    StdlibDescriptor { "join", "string_join", LT::String, stringJoinParams, &builtins::stringJoin,
-        "join delim lst -> string",
-        "**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },
+    StdlibDescriptor { .userFacingName="trim", .vmName="string_trim", .returnType=LT::String, .params=textStringParam, .sharedImpl=&builtins::stringTrim,
+        .description="trim s -> string",
+        .detail="**trim** `s -> string`\n\nRemoves leading and trailing whitespace from **s**." },
+    StdlibDescriptor { .userFacingName="toLower", .vmName="string_toLower", .returnType=LT::String, .params=textStringParam, .sharedImpl=&builtins::stringToLower,
+        .description="toLower s -> string",
+        .detail="**toLower** `s -> string`\n\nConverts all characters in **s** to lowercase." },
+    StdlibDescriptor { .userFacingName="toUpper", .vmName="string_toUpper", .returnType=LT::String, .params=textStringParam, .sharedImpl=&builtins::stringToUpper,
+        .description="toUpper s -> string",
+        .detail="**toUpper** `s -> string`\n\nConverts all characters in **s** to uppercase." },
+    StdlibDescriptor { .userFacingName="contains", .vmName="string_contains", .returnType=LT::Boolean, .params=stringContainsParams, .sharedImpl=&builtins::stringContains,
+        .description="contains substr s -> bool",
+        .detail="**contains** `substr s -> bool`\n\nReturns true if **s** contains **substr**." },
+    StdlibDescriptor { .userFacingName="startsWith", .vmName="string_startsWith", .returnType=LT::Boolean, .params=stringStartsWithParams, .sharedImpl=&builtins::stringStartsWith,
+        .description="startsWith prefix s -> bool",
+        .detail="**startsWith** `prefix s -> bool`\n\nReturns true if **s** starts with **prefix**." },
+    StdlibDescriptor { .userFacingName="endsWith", .vmName="string_endsWith", .returnType=LT::Boolean, .params=stringEndsWithParams, .sharedImpl=&builtins::stringEndsWith,
+        .description="endsWith suffix s -> bool",
+        .detail="**endsWith** `suffix s -> bool`\n\nReturns true if **s** ends with **suffix**." },
+    StdlibDescriptor { .userFacingName="replace", .vmName="string_replace", .returnType=LT::String, .params=stringReplaceParams, .sharedImpl=&builtins::stringReplace,
+        .description="replace old new s -> string",
+        .detail="**replace** `old new s -> string`\n\nReplaces all occurrences of **old** with **new** in **s**." },
+    StdlibDescriptor { .userFacingName="split", .vmName="string_split", .returnType=LT::Number, .params=stringSplitParams, .sharedImpl=&builtins::stringSplit,
+        .description="split delim s -> list<string>",
+        .detail="**split** `delim s -> list<string>`\n\nSplits **s** by delimiter **delim**." },
+    StdlibDescriptor { .userFacingName="join", .vmName="string_join", .returnType=LT::String, .params=stringJoinParams, .sharedImpl=&builtins::stringJoin,
+        .description="join delim lst -> string",
+        .detail="**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },
 
     // -----------------------------------------------------------------------
     // List Basic
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "head", "list_head", LT::Number, listNumberParam, &builtins::listHead,
-        "head lst -> 'a",
-        "**head** `lst -> 'a`\n\nReturns the first element of the list." },
-    StdlibDescriptor { "tail", "list_tail", LT::Number, listNumberParam, &builtins::listTail,
-        "tail lst -> list<'a>",
-        "**tail** `lst -> list<'a>`\n\nReturns the list without its first element." },
-    StdlibDescriptor { "length", "list_length", LT::Number, listNumberParam, &builtins::listLength,
-        "length lst -> int",
-        "**length** `lst -> int`\n\nReturns the number of elements in the list." },
-    StdlibDescriptor { "isEmpty", "list_isEmpty", LT::Boolean, listNumberParam, &builtins::listIsEmpty,
-        "isEmpty lst -> bool",
-        "**isEmpty** `lst -> bool`\n\nReturns true if the list is empty." },
-    StdlibDescriptor { "nth", "list_nth", LT::Number, listNthParams, &builtins::listNth,
-        "nth n lst -> 'a",
-        "**nth** `n lst -> 'a`\n\nReturns the element at index **n** (0-based)." },
-    StdlibDescriptor { "last", "list_last", LT::Number, listNumberParam, &builtins::listLast,
-        "last lst -> 'a",
-        "**last** `lst -> 'a`\n\nReturns the last element of the list." },
-    StdlibDescriptor { "replicate", "list_replicate", LT::Number, listReplicateParams, &builtins::listReplicate,
-        "replicate n x -> list<'a>",
-        "**replicate** `n x -> list<'a>`\n\nCreates a list of **n** copies of **x**." },
+    StdlibDescriptor { .userFacingName="head", .vmName="list_head", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listHead,
+        .description="head lst -> 'a",
+        .detail="**head** `lst -> 'a`\n\nReturns the first element of the list." },
+    StdlibDescriptor { .userFacingName="tail", .vmName="list_tail", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listTail,
+        .description="tail lst -> list<'a>",
+        .detail="**tail** `lst -> list<'a>`\n\nReturns the list without its first element." },
+    StdlibDescriptor { .userFacingName="length", .vmName="list_length", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listLength,
+        .description="length lst -> int",
+        .detail="**length** `lst -> int`\n\nReturns the number of elements in the list." },
+    StdlibDescriptor { .userFacingName="isEmpty", .vmName="list_isEmpty", .returnType=LT::Boolean, .params=listNumberParam, .sharedImpl=&builtins::listIsEmpty,
+        .description="isEmpty lst -> bool",
+        .detail="**isEmpty** `lst -> bool`\n\nReturns true if the list is empty." },
+    StdlibDescriptor { .userFacingName="nth", .vmName="list_nth", .returnType=LT::Number, .params=listNthParams, .sharedImpl=&builtins::listNth,
+        .description="nth n lst -> 'a",
+        .detail="**nth** `n lst -> 'a`\n\nReturns the element at index **n** (0-based)." },
+    StdlibDescriptor { .userFacingName="last", .vmName="list_last", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listLast,
+        .description="last lst -> 'a",
+        .detail="**last** `lst -> 'a`\n\nReturns the last element of the list." },
+    StdlibDescriptor { .userFacingName="replicate", .vmName="list_replicate", .returnType=LT::Number, .params=listReplicateParams, .sharedImpl=&builtins::listReplicate,
+        .description="replicate n x -> list<'a>",
+        .detail="**replicate** `n x -> list<'a>`\n\nCreates a list of **n** copies of **x**." },
 
     // -----------------------------------------------------------------------
     // List HOFs (IR-generated, no VM registration)
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "map", "", LT::Void, {}, nullptr,
-        "map f lst -> list<'b>",
-        "**map** `f lst -> list<'b>`\n\nApplies function **f** to each element of the list." },
-    StdlibDescriptor { "filter", "", LT::Void, {}, nullptr,
-        "filter pred lst -> list<'a>",
-        "**filter** `pred lst -> list<'a>`\n\nKeeps only elements satisfying **pred**." },
-    StdlibDescriptor { "fold", "", LT::Void, {}, nullptr,
-        "fold f init lst -> 'b",
-        "**fold** `f init lst -> 'b`\n\nReduces the list from the left with **f** and initial value **init**." },
-    StdlibDescriptor { "reduce", "", LT::Void, {}, nullptr,
-        "reduce f lst -> 'a",
-        "**reduce** `f lst -> 'a`\n\nReduces the list from the left with **f** using the first element as initial." },
-    StdlibDescriptor { "find", "", LT::Void, {}, nullptr,
-        "find pred lst -> option<'a>",
-        "**find** `pred lst -> option<'a>`\n\nReturns `Some x` for the first element matching **pred**, or `None`." },
-    StdlibDescriptor { "exists", "", LT::Void, {}, nullptr,
-        "exists pred lst -> bool",
-        "**exists** `pred lst -> bool`\n\nReturns true if any element satisfies **pred**." },
-    StdlibDescriptor { "forall", "", LT::Void, {}, nullptr,
-        "forall pred lst -> bool",
-        "**forall** `pred lst -> bool`\n\nReturns true if all elements satisfy **pred**." },
-    StdlibDescriptor { "each", "", LT::Void, {}, nullptr,
-        "each f lst -> unit",
-        "**each** `f lst -> unit`\n\nApplies **f** to each element for side effects." },
+    StdlibDescriptor { .userFacingName="map", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="map f lst -> list<'b>",
+        .detail="**map** `f lst -> list<'b>`\n\nApplies function **f** to each element of the list." },
+    StdlibDescriptor { .userFacingName="filter", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="filter pred lst -> list<'a>",
+        .detail="**filter** `pred lst -> list<'a>`\n\nKeeps only elements satisfying **pred**." },
+    StdlibDescriptor { .userFacingName="fold", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="fold f init lst -> 'b",
+        .detail="**fold** `f init lst -> 'b`\n\nReduces the list from the left with **f** and initial value **init**." },
+    StdlibDescriptor { .userFacingName="reduce", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="reduce f lst -> 'a",
+        .detail="**reduce** `f lst -> 'a`\n\nReduces the list from the left with **f** using the first element as initial." },
+    StdlibDescriptor { .userFacingName="find", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="find pred lst -> option<'a>",
+        .detail="**find** `pred lst -> option<'a>`\n\nReturns `Some x` for the first element matching **pred**, or `None`." },
+    StdlibDescriptor { .userFacingName="exists", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="exists pred lst -> bool",
+        .detail="**exists** `pred lst -> bool`\n\nReturns true if any element satisfies **pred**." },
+    StdlibDescriptor { .userFacingName="forall", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="forall pred lst -> bool",
+        .detail="**forall** `pred lst -> bool`\n\nReturns true if all elements satisfy **pred**." },
+    StdlibDescriptor { .userFacingName="each", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="each f lst -> unit",
+        .detail="**each** `f lst -> unit`\n\nApplies **f** to each element for side effects." },
 
     // -----------------------------------------------------------------------
     // List Transforms
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "sort", "list_sort", LT::Number, listNumberParam, &builtins::listSort,
-        "sort lst -> list<'a>",
-        "**sort** `lst -> list<'a>`\n\nReturns the list sorted in ascending order." },
-    StdlibDescriptor { "reverse", "", LT::Void, {}, nullptr,
-        "reverse lst -> list<'a>",
-        "**reverse** `lst -> list<'a>`\n\nReturns the list in reverse order." },
-    StdlibDescriptor { "distinct", "list_distinct", LT::Number, listNumberParam, &builtins::listDistinct,
-        "distinct lst -> list<'a>",
-        "**distinct** `lst -> list<'a>`\n\nRemoves duplicate elements from the list." },
-    StdlibDescriptor { "sortBy", "", LT::Void, {}, nullptr,
-        "sortBy f lst -> list<'a>",
-        "**sortBy** `f lst -> list<'a>`\n\nSorts the list by the key returned by **f**." },
-    StdlibDescriptor { "groupBy", "", LT::Void, {}, nullptr,
-        "groupBy f lst -> list<list<'a>>",
-        "**groupBy** `f lst -> list<list<'a>>`\n\nGroups consecutive elements with equal keys from **f**." },
-    StdlibDescriptor { "take", "", LT::Void, {}, nullptr,
-        "take n lst -> list<'a>",
-        "**take** `n lst -> list<'a>`\n\nReturns the first **n** elements of the list." },
-    StdlibDescriptor { "drop", "", LT::Void, {}, nullptr,
-        "drop n lst -> list<'a>",
-        "**drop** `n lst -> list<'a>`\n\nSkips the first **n** elements and returns the rest." },
-    StdlibDescriptor { "zip", "", LT::Void, {}, nullptr,
-        "zip lst1 lst2 -> list<'a * 'b>",
-        "**zip** `lst1 lst2 -> list<'a * 'b>`\n\nCombines two lists into a list of pairs." },
-    StdlibDescriptor { "flatten", "", LT::Void, {}, nullptr,
-        "flatten lst -> list<'a>",
-        "**flatten** `lst -> list<'a>`\n\nFlattens a list of lists into a single list." },
+    StdlibDescriptor { .userFacingName="sort", .vmName="list_sort", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listSort,
+        .description="sort lst -> list<'a>",
+        .detail="**sort** `lst -> list<'a>`\n\nReturns the list sorted in ascending order." },
+    StdlibDescriptor { .userFacingName="reverse", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="reverse lst -> list<'a>",
+        .detail="**reverse** `lst -> list<'a>`\n\nReturns the list in reverse order." },
+    StdlibDescriptor { .userFacingName="distinct", .vmName="list_distinct", .returnType=LT::Number, .params=listNumberParam, .sharedImpl=&builtins::listDistinct,
+        .description="distinct lst -> list<'a>",
+        .detail="**distinct** `lst -> list<'a>`\n\nRemoves duplicate elements from the list." },
+    StdlibDescriptor { .userFacingName="sortBy", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="sortBy f lst -> list<'a>",
+        .detail="**sortBy** `f lst -> list<'a>`\n\nSorts the list by the key returned by **f**." },
+    StdlibDescriptor { .userFacingName="groupBy", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="groupBy f lst -> list<list<'a>>",
+        .detail="**groupBy** `f lst -> list<list<'a>>`\n\nGroups consecutive elements with equal keys from **f**." },
+    StdlibDescriptor { .userFacingName="take", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="take n lst -> list<'a>",
+        .detail="**take** `n lst -> list<'a>`\n\nReturns the first **n** elements of the list." },
+    StdlibDescriptor { .userFacingName="drop", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="drop n lst -> list<'a>",
+        .detail="**drop** `n lst -> list<'a>`\n\nSkips the first **n** elements and returns the rest." },
+    StdlibDescriptor { .userFacingName="zip", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="zip lst1 lst2 -> list<'a * 'b>",
+        .detail="**zip** `lst1 lst2 -> list<'a * 'b>`\n\nCombines two lists into a list of pairs." },
+    StdlibDescriptor { .userFacingName="flatten", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="flatten lst -> list<'a>",
+        .detail="**flatten** `lst -> list<'a>`\n\nFlattens a list of lists into a single list." },
 
     // -----------------------------------------------------------------------
     // Seq Conversions
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "toList", "", LT::Void, {}, nullptr,
-        "toList seq -> list<'a>",
-        "**toList** `seq -> list<'a>`\n\nForces a lazy sequence into an eagerly-evaluated list." },
+    StdlibDescriptor { .userFacingName="toList", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="toList seq -> list<'a>",
+        .detail="**toList** `seq -> list<'a>`\n\nForces a lazy sequence into an eagerly-evaluated list." },
 
     // -----------------------------------------------------------------------
     // Formatting Helpers
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "formatNumber", "format_number", LT::String, formatNumberTwoParams, &builtins::formatNumber,
-        "formatNumber sep n -> string  |  formatNumber n -> string (locale)",
-        "**formatNumber** `sep n -> string`\n\nFormats a number with thousands separator **sep**.\nAlso: `formatNumber n` uses locale default." },
-    StdlibDescriptor { "formatDateTime", "format_datetime", LT::String, epochNumberParam, &builtins::formatDatetime,
-        "formatDateTime epoch -> string",
-        "**formatDateTime** `epoch -> string`\n\nFormats an epoch timestamp as a human-readable date/time." },
-    StdlibDescriptor { "formatMode", "format_mode", LT::String, modeNumberParam, &builtins::formatMode,
-        "formatMode mode -> string (rwxrwxrwx)",
-        "**formatMode** `mode -> string`\n\nFormats a file mode as `rwxrwxrwx` permission string." },
-    StdlibDescriptor { "toText", "list_to_string", LT::String, objNumberParam, &builtins::listToString,
-        "toText obj -> string",
-        "**toText** `obj -> string`\n\nConverts a structured object to a text representation." },
-    StdlibDescriptor { "string", "object_to_string", LT::String, objNumberParam, &builtins::objectToString,
-        "string x -> string",
-        "**string** `x -> string`\n\nConverts any value to its string representation." },
+    StdlibDescriptor { .userFacingName="formatNumber", .vmName="format_number", .returnType=LT::String, .params=formatNumberTwoParams, .sharedImpl=&builtins::formatNumber,
+        .description="formatNumber sep n -> string  |  formatNumber n -> string (locale)",
+        .detail="**formatNumber** `sep n -> string`\n\nFormats a number with thousands separator **sep**.\nAlso: `formatNumber n` uses locale default." },
+    StdlibDescriptor { .userFacingName="formatDateTime", .vmName="format_datetime", .returnType=LT::String, .params=epochNumberParam, .sharedImpl=&builtins::formatDatetime,
+        .description="formatDateTime epoch -> string",
+        .detail="**formatDateTime** `epoch -> string`\n\nFormats an epoch timestamp as a human-readable date/time." },
+    StdlibDescriptor { .userFacingName="formatMode", .vmName="format_mode", .returnType=LT::String, .params=modeNumberParam, .sharedImpl=&builtins::formatMode,
+        .description="formatMode mode -> string (rwxrwxrwx)",
+        .detail="**formatMode** `mode -> string`\n\nFormats a file mode as `rwxrwxrwx` permission string." },
+    StdlibDescriptor { .userFacingName="toText", .vmName="list_to_string", .returnType=LT::String, .params=objNumberParam, .sharedImpl=&builtins::listToString,
+        .description="toText obj -> string",
+        .detail="**toText** `obj -> string`\n\nConverts a structured object to a text representation." },
+    StdlibDescriptor { .userFacingName="string", .vmName="object_to_string", .returnType=LT::String, .params=objNumberParam, .sharedImpl=&builtins::objectToString,
+        .description="string x -> string",
+        .detail="**string** `x -> string`\n\nConverts any value to its string representation." },
 
     // -----------------------------------------------------------------------
     // Permission Tests
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "isReadable", "mode_isReadable", LT::Boolean, modeNumberParam, &builtins::modeIsReadable,
-        "isReadable mode -> bool",
-        "**isReadable** `mode -> bool`\n\nReturns true if the file mode indicates read permission." },
-    StdlibDescriptor { "isWritable", "mode_isWritable", LT::Boolean, modeNumberParam, &builtins::modeIsWritable,
-        "isWritable mode -> bool",
-        "**isWritable** `mode -> bool`\n\nReturns true if the file mode indicates write permission." },
-    StdlibDescriptor { "isExecutable", "mode_isExecutable", LT::Boolean, modeNumberParam, &builtins::modeIsExecutable,
-        "isExecutable mode -> bool",
-        "**isExecutable** `mode -> bool`\n\nReturns true if the file mode indicates execute permission." },
+    StdlibDescriptor { .userFacingName="isReadable", .vmName="mode_isReadable", .returnType=LT::Boolean, .params=modeNumberParam, .sharedImpl=&builtins::modeIsReadable,
+        .description="isReadable mode -> bool",
+        .detail="**isReadable** `mode -> bool`\n\nReturns true if the file mode indicates read permission." },
+    StdlibDescriptor { .userFacingName="isWritable", .vmName="mode_isWritable", .returnType=LT::Boolean, .params=modeNumberParam, .sharedImpl=&builtins::modeIsWritable,
+        .description="isWritable mode -> bool",
+        .detail="**isWritable** `mode -> bool`\n\nReturns true if the file mode indicates write permission." },
+    StdlibDescriptor { .userFacingName="isExecutable", .vmName="mode_isExecutable", .returnType=LT::Boolean, .params=modeNumberParam, .sharedImpl=&builtins::modeIsExecutable,
+        .description="isExecutable mode -> bool",
+        .detail="**isExecutable** `mode -> bool`\n\nReturns true if the file mode indicates execute permission." },
 
     // -----------------------------------------------------------------------
     // Environment/System (user-facing, Shell provides callbacks)
     // -----------------------------------------------------------------------
-    StdlibDescriptor { "env", "env.has", LT::Boolean, keyStringParam, nullptr,
-        "env name -> option<string>",
-        "**env** `name -> option<string>`\n\nLooks up environment variable **name**. Returns `Some value` or `None`." },
-    StdlibDescriptor { "which", "which_find", LT::Number, programStringParam, nullptr,
-        "which name -> option<string>",
-        "**which** `name -> option<string>`\n\nFinds the full path of command **name** in `$PATH`." },
-    StdlibDescriptor { "ps", "", LT::Void, {}, nullptr,
-        "ps -> list<ProcessInfo>",
-        "**ps** `-> list<ProcessInfo>`\n\nReturns a list of running processes with pid, user, cpu, mem, command fields." },
-    StdlibDescriptor { "ls", "", LT::Void, {}, nullptr,
-        "ls -> list<FileInfo>  |  ls path -> list<FileInfo>",
-        "**ls** `-> list<FileInfo>`\n\nLists files in the current directory (or given **path**) as structured records." },
-    StdlibDescriptor { "rand", "rand", LT::Number, {}, &builtins::randNoArgs,
-        "rand -> int  |  rand min max -> int",
-        "**rand** `-> int`\n\nReturns a random integer.\nAlso: `rand min max` for a random integer in range." },
-    StdlibDescriptor { "fetch", "fetch", LT::Number, urlStringParam, nullptr,
-        "fetch url -> result<string, string>",
-        "**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
+    StdlibDescriptor { .userFacingName="env", .vmName="env.has", .returnType=LT::Boolean, .params=keyStringParam, .sharedImpl=nullptr,
+        .description="env name -> option<string>",
+        .detail="**env** `name -> option<string>`\n\nLooks up environment variable **name**. Returns `Some value` or `None`." },
+    StdlibDescriptor { .userFacingName="which", .vmName="which_find", .returnType=LT::Number, .params=programStringParam, .sharedImpl=nullptr,
+        .description="which name -> option<string>",
+        .detail="**which** `name -> option<string>`\n\nFinds the full path of command **name** in `$PATH`." },
+    StdlibDescriptor { .userFacingName="ps", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="ps -> list<ProcessInfo>",
+        .detail="**ps** `-> list<ProcessInfo>`\n\nReturns a list of running processes with pid, user, cpu, mem, command fields." },
+    StdlibDescriptor { .userFacingName="ls", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="ls -> list<FileInfo>  |  ls path -> list<FileInfo>",
+        .detail="**ls** `-> list<FileInfo>`\n\nLists files in the current directory (or given **path**) as structured records." },
+    StdlibDescriptor { .userFacingName="rand", .vmName="rand", .returnType=LT::Number, .params={}, .sharedImpl=&builtins::randNoArgs,
+        .description="rand -> int  |  rand min max -> int",
+        .detail="**rand** `-> int`\n\nReturns a random integer.\nAlso: `rand min max` for a random integer in range." },
+    StdlibDescriptor { .userFacingName="fetch", .vmName="fetch", .returnType=LT::Number, .params=urlStringParam, .sharedImpl=nullptr,
+        .description="fetch url -> result<string, string>",
+        .detail="**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
 
     // -----------------------------------------------------------------------
     // Internal-only entries (no user-facing name)
     // -----------------------------------------------------------------------
 
     // env.get — separate VM registration
-    StdlibDescriptor { "", "env.get", LT::String, keyStringParam, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="env.get", .returnType=LT::String, .params=keyStringParam, .sharedImpl=nullptr, .description="", .detail="" },
 
     // export — F#-style overloads
-    StdlibDescriptor { "", "export", LT::Void, exportTwoParams, nullptr, "", "" },
-    StdlibDescriptor { "", "export", LT::Void, nameStringParam, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="export", .returnType=LT::Void, .params=exportTwoParams, .sharedImpl=nullptr, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="export", .returnType=LT::Void, .params=nameStringParam, .sharedImpl=nullptr, .description="", .detail="" },
 
     // display_result — Shell/REPL only
-    StdlibDescriptor { "", "display_result", LT::Void, valueNumberParam, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="display_result", .returnType=LT::Void, .params=valueNumberParam, .sharedImpl=nullptr, .description="", .detail="" },
 
     // Multi-arity overloads
-    StdlibDescriptor { "", "format_number", LT::String, formatNumberOneParams, &builtins::formatNumberWithLocale, "", "" },
-    StdlibDescriptor { "", "rand", LT::Number, randRangeParams, &builtins::randRange, "", "" },
-    StdlibDescriptor { "", "fetch", LT::Number, fetchTwoParams, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="format_number", .returnType=LT::String, .params=formatNumberOneParams, .sharedImpl=&builtins::formatNumberWithLocale, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="rand", .returnType=LT::Number, .params=randRangeParams, .sharedImpl=&builtins::randRange, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="fetch", .returnType=LT::Number, .params=fetchTwoParams, .sharedImpl=nullptr, .description="", .detail="" },
 
     // Internal list operations
-    StdlibDescriptor { "", "list_concat", LT::Number, listConcatParams, &builtins::listConcat, "", "" },
-    StdlibDescriptor { "", "list_sort_pairs", LT::Number, pairsNumberParam, &builtins::listSortPairs, "", "" },
-    StdlibDescriptor { "", "list_group_pairs", LT::Number, pairsNumberParam, &builtins::listGroupPairs, "", "" },
-    StdlibDescriptor { "", "list_char_range", LT::Number, listCharRangeParams, &builtins::listCharRange, "", "" },
-    StdlibDescriptor { "", "list_range", LT::Number, listRangeParams, &builtins::listRange, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="list_concat", .returnType=LT::Number, .params=listConcatParams, .sharedImpl=&builtins::listConcat, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="list_sort_pairs", .returnType=LT::Number, .params=pairsNumberParam, .sharedImpl=&builtins::listSortPairs, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="list_group_pairs", .returnType=LT::Number, .params=pairsNumberParam, .sharedImpl=&builtins::listGroupPairs, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="list_char_range", .returnType=LT::Number, .params=listCharRangeParams, .sharedImpl=&builtins::listCharRange, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="list_range", .returnType=LT::Number, .params=listRangeParams, .sharedImpl=&builtins::listRange, .description="", .detail="" },
 
     // Internal string operations
-    StdlibDescriptor { "", "string_repeat", LT::String, stringRepeatParams, &builtins::stringRepeat, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="string_repeat", .returnType=LT::String, .params=stringRepeatParams, .sharedImpl=&builtins::stringRepeat, .description="", .detail="" },
 
     // FileMode operations
-    StdlibDescriptor { "", "filemode_from_bits", LT::Number, nNumberParam, &builtins::fileModeFromBits, "", "" },
-    StdlibDescriptor { "", "filemode_is_readable", LT::Boolean, objNumberParam, &builtins::fileModeIsReadable, "", "" },
-    StdlibDescriptor { "", "filemode_is_writable", LT::Boolean, objNumberParam, &builtins::fileModeIsWritable, "", "" },
-    StdlibDescriptor { "", "filemode_is_executable", LT::Boolean, objNumberParam, &builtins::fileModeIsExecutable, "", "" },
-    StdlibDescriptor { "", "filemode_owner", LT::Number, objNumberParam, &builtins::fileModeOwner, "", "" },
-    StdlibDescriptor { "", "filemode_group", LT::Number, objNumberParam, &builtins::fileModeGroup, "", "" },
-    StdlibDescriptor { "", "filemode_other", LT::Number, objNumberParam, &builtins::fileModeOther, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_from_bits", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::fileModeFromBits, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_is_readable", .returnType=LT::Boolean, .params=objNumberParam, .sharedImpl=&builtins::fileModeIsReadable, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_is_writable", .returnType=LT::Boolean, .params=objNumberParam, .sharedImpl=&builtins::fileModeIsWritable, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_is_executable", .returnType=LT::Boolean, .params=objNumberParam, .sharedImpl=&builtins::fileModeIsExecutable, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_owner", .returnType=LT::Number, .params=objNumberParam, .sharedImpl=&builtins::fileModeOwner, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_group", .returnType=LT::Number, .params=objNumberParam, .sharedImpl=&builtins::fileModeGroup, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="filemode_other", .returnType=LT::Number, .params=objNumberParam, .sharedImpl=&builtins::fileModeOther, .description="", .detail="" },
 
     // TimeSpan operations
-    StdlibDescriptor { "", "timespan_from_ms", LT::Number, nNumberParam, &builtins::timespanFromMs, "", "" },
-    StdlibDescriptor { "", "timespan_from_seconds", LT::Number, nNumberParam, &builtins::timespanFromSeconds, "", "" },
-    StdlibDescriptor { "", "timespan_from_minutes", LT::Number, nNumberParam, &builtins::timespanFromMinutes, "", "" },
-    StdlibDescriptor { "", "timespan_from_hours", LT::Number, nNumberParam, &builtins::timespanFromHours, "", "" },
-    StdlibDescriptor { "", "timespan_from_days", LT::Number, nNumberParam, &builtins::timespanFromDays, "", "" },
-    StdlibDescriptor { "sleep", "timespan_sleep", LT::Number, objNumberParam, &builtins::timespanSleep,
-        "sleep ts -> unit",
-        "**sleep** `TimeSpan -> unit`\n\nPauses execution for the given TimeSpan duration." },
-    StdlibDescriptor { "formatTimeSpan", "format_timespan", LT::String, objNumberParam, &builtins::formatTimeSpan,
-        "formatTimeSpan ts -> string",
-        "**formatTimeSpan** `TimeSpan -> string`\n\nFormats a TimeSpan as a human-readable duration string." },
+    StdlibDescriptor { .userFacingName="", .vmName="timespan_from_ms", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::timespanFromMs, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="timespan_from_seconds", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::timespanFromSeconds, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="timespan_from_minutes", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::timespanFromMinutes, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="timespan_from_hours", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::timespanFromHours, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="timespan_from_days", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::timespanFromDays, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="sleep", .vmName="timespan_sleep", .returnType=LT::Number, .params=objNumberParam, .sharedImpl=&builtins::timespanSleep,
+        .description="sleep ts -> unit",
+        .detail="**sleep** `TimeSpan -> unit`\n\nPauses execution for the given TimeSpan duration." },
+    StdlibDescriptor { .userFacingName="formatTimeSpan", .vmName="format_timespan", .returnType=LT::String, .params=objNumberParam, .sharedImpl=&builtins::formatTimeSpan,
+        .description="formatTimeSpan ts -> string",
+        .detail="**formatTimeSpan** `TimeSpan -> string`\n\nFormats a TimeSpan as a human-readable duration string." },
 
     // Size operations
-    StdlibDescriptor { "", "size_from_bytes", LT::Number, nNumberParam, &builtins::sizeFromBytes, "", "" },
-    StdlibDescriptor { "", "size_from_kb", LT::Number, nNumberParam, &builtins::sizeFromKB, "", "" },
-    StdlibDescriptor { "", "size_from_mb", LT::Number, nNumberParam, &builtins::sizeFromMB, "", "" },
-    StdlibDescriptor { "", "size_from_gb", LT::Number, nNumberParam, &builtins::sizeFromGB, "", "" },
-    StdlibDescriptor { "", "size_from_tb", LT::Number, nNumberParam, &builtins::sizeFromTB, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="size_from_bytes", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::sizeFromBytes, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="size_from_kb", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::sizeFromKB, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="size_from_mb", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::sizeFromMB, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="size_from_gb", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::sizeFromGB, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="size_from_tb", .returnType=LT::Number, .params=nNumberParam, .sharedImpl=&builtins::sizeFromTB, .description="", .detail="" },
 
     // Timing
-    StdlibDescriptor { "", "__monotonic_ms", LT::Number, {}, &builtins::monotonicMs, "", "" },
-    StdlibDescriptor { "time", "", LT::Void, {}, nullptr,
-        "time { body } -> TimeSpan",
-        "**time** `{ body } -> TimeSpan`\n\n"
+    StdlibDescriptor { .userFacingName="", .vmName="__monotonic_ms", .returnType=LT::Number, .params={}, .sharedImpl=&builtins::monotonicMs, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="time", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
+        .description="time { body } -> TimeSpan",
+        .detail="**time** `{ body } -> TimeSpan`\n\n"
         "Measures the execution time of a computation expression and returns a TimeSpan.\n\n"
         "```endo\ntime { sleep (TimeSpan.fromSeconds 1) }\n```" },
 
     // DateTime operations
-    StdlibDescriptor { "", "datetime_now", LT::Number, {}, &builtins::dateTimeNow, "", "" },
-    StdlibDescriptor { "", "datetime_from_epoch", LT::Number, epochNumberParam, &builtins::dateTimeFromEpoch, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="datetime_now", .returnType=LT::Number, .params={}, .sharedImpl=&builtins::dateTimeNow, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="datetime_from_epoch", .returnType=LT::Number, .params=epochNumberParam, .sharedImpl=&builtins::dateTimeFromEpoch, .description="", .detail="" },
 
     // Markdown operations
-    StdlibDescriptor { "markdown", "markdown_create", LT::Number, textStringParam, &builtins::markdownCreate,
-        "markdown text -> Markdown",
-        "**markdown** `text -> Markdown`\n\nCreates a Markdown object from a string." },
-    StdlibDescriptor { "", "markdown_to_html", LT::String, mdNumberParam, &builtins::markdownToHtml, "", "" },
-    StdlibDescriptor { "", "markdown_to_text", LT::String, mdNumberParam, &builtins::markdownToText, "", "" },
-    StdlibDescriptor { "", "markdown_content", LT::String, mdNumberParam, &builtins::markdownContent, "", "" },
-    StdlibDescriptor { "", "markdown_render", LT::Void, mdNumberParam, nullptr, "", "" },
+    StdlibDescriptor { .userFacingName="markdown", .vmName="markdown_create", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::markdownCreate,
+        .description="markdown text -> Markdown",
+        .detail="**markdown** `text -> Markdown`\n\nCreates a Markdown object from a string." },
+    StdlibDescriptor { .userFacingName="", .vmName="markdown_to_html", .returnType=LT::String, .params=mdNumberParam, .sharedImpl=&builtins::markdownToHtml, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="markdown_to_text", .returnType=LT::String, .params=mdNumberParam, .sharedImpl=&builtins::markdownToText, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="markdown_content", .returnType=LT::String, .params=mdNumberParam, .sharedImpl=&builtins::markdownContent, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="markdown_render", .returnType=LT::Void, .params=mdNumberParam, .sharedImpl=nullptr, .description="", .detail="" },
 
     // Json operations
-    StdlibDescriptor { "", "json_query", LT::Number, jsonQueryParams, &builtins::jsonQuery,
-        "Json.query path json -> list<string>",
-        "**Json.query** `path json -> list<string>`\n\n"
+    StdlibDescriptor { .userFacingName="", .vmName="json_query", .returnType=LT::Number, .params=jsonQueryParams, .sharedImpl=&builtins::jsonQuery,
+        .description="Json.query path json -> list<string>",
+        .detail="**Json.query** `path json -> list<string>`\n\n"
         "Extracts values from a JSON string using a dotted path.\n\n"
         "Path syntax: `.key` accesses an object property, `[]` iterates array elements.\n"
         "Example: `Json.query \".presets[].name\" json_str`" },
 
     // File I/O operations
-    StdlibDescriptor { "", "file_open", LT::Number, fileOpenParams, &builtins::fileOpen, "", "" },
-    StdlibDescriptor { "", "file_close", LT::Void, fdNumberParam, &builtins::fileClose, "", "" },
-    StdlibDescriptor { "", "file_read_line", LT::Number, fdNumberParam, &builtins::fileReadLine, "", "" },
-    StdlibDescriptor { "", "file_read_all", LT::Number, pathStringParam, &builtins::fileReadAll, "", "" },
-    StdlibDescriptor { "", "file_write_all", LT::Number, fileWriteParams, &builtins::fileWriteAll, "", "" },
-    StdlibDescriptor { "", "file_append_all", LT::Number, fileWriteParams, &builtins::fileAppendAll, "", "" },
-    StdlibDescriptor { "", "file_size", LT::Number, pathStringParam, &builtins::fileSize, "", "" },
-    StdlibDescriptor { "", "file_exists", LT::Boolean, pathStringParam, &builtins::fileExists, "", "" },
-    StdlibDescriptor { "", "file_delete", LT::Number, pathStringParam, &builtins::fileDelete, "", "" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_open", .returnType=LT::Number, .params=fileOpenParams, .sharedImpl=&builtins::fileOpen, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_close", .returnType=LT::Void, .params=fdNumberParam, .sharedImpl=&builtins::fileClose, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_read_line", .returnType=LT::Number, .params=fdNumberParam, .sharedImpl=&builtins::fileReadLine, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_read_all", .returnType=LT::Number, .params=pathStringParam, .sharedImpl=&builtins::fileReadAll, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_write_all", .returnType=LT::Number, .params=fileWriteParams, .sharedImpl=&builtins::fileWriteAll, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_append_all", .returnType=LT::Number, .params=fileWriteParams, .sharedImpl=&builtins::fileAppendAll, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_size", .returnType=LT::Number, .params=pathStringParam, .sharedImpl=&builtins::fileSize, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_exists", .returnType=LT::Boolean, .params=pathStringParam, .sharedImpl=&builtins::fileExists, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="file_delete", .returnType=LT::Number, .params=pathStringParam, .sharedImpl=&builtins::fileDelete, .description="", .detail="" },
 };
 // clang-format on
 

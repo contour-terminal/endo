@@ -11,9 +11,7 @@
 namespace CoreVM
 {
 
-IRBuilder::IRBuilder(): _program(nullptr), _function(nullptr), _insertPoint(nullptr)
-{
-}
+IRBuilder::IRBuilder() = default;
 
 // {{{ name management
 std::string IRBuilder::makeName(std::string name)

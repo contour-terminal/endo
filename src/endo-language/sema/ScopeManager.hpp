@@ -32,8 +32,8 @@ struct BindingInfo
 /// Tracks the alloca and the native callback signature to call at scope exit.
 struct DisposeEntry
 {
-    CoreVM::AllocaInstr* storage;      ///< Alloca holding the disposable resource
-    std::string callbackSignature;     ///< Native callback signature (e.g., "file_close(I)V")
+    CoreVM::AllocaInstr* storage;  ///< Alloca holding the disposable resource
+    std::string callbackSignature; ///< Native callback signature (e.g., "file_close(I)V")
 };
 
 /// Manages the F# variable scope chain for name resolution during IR generation.

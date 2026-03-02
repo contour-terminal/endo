@@ -144,7 +144,7 @@ void CompletionPopup::render(Canvas& canvas)
     int innerWidth = menuWidth - 2; // Subtract borders
 
     // Draw border using Canvas API
-    auto borderRect = Rect { 0, 0, menuWidth, menuHeight };
+    auto borderRect = Rect { .x = 0, .y = 0, .width = menuWidth, .height = menuHeight };
     canvas.drawBox(borderRect, BorderStyle::Single, theme.dialogBorder);
 
     // Scroll indicator at top if needed
@@ -180,7 +180,7 @@ void CompletionPopup::render(Canvas& canvas)
         }
 
         // Fill the row background (x=col, y=row, width, height)
-        canvas.fill(Rect { 1, row, innerWidth, 1 }, ' ', itemStyle);
+        canvas.fill(Rect { .x = 1, .y = row, .width = innerWidth, .height = 1 }, ' ', itemStyle);
 
         // Calculate total content width
         int totalContentWidth = textWidth + (descWidth > 0 ? 2 + descWidth : 0);
@@ -330,7 +330,7 @@ EventResult CompletionPopup::onEvent(InputEvent const& event)
 Size CompletionPopup::preferredSize() const
 {
     if (_items.empty())
-        return { 0, 0 };
+        return { .width = 0, .height = 0 };
 
     auto const visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
     auto width = calculateWidth(200);                       // Use large max for preferred size
@@ -341,7 +341,7 @@ Size CompletionPopup::preferredSize() const
     if (dpWidth > 0)
         width += dpWidth - 1;
 
-    return { width, height };
+    return { .width = width, .height = height };
 }
 
 // ============================================================================

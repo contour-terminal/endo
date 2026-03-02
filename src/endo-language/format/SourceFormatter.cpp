@@ -324,8 +324,8 @@ std::optional<int> SourceFormatter::findLastLine(ast::Node const& node)
     // CompoundStmt: check last child
     if (auto const* cs = dynamic_cast<ast::CompoundStmt const*>(&node))
     {
-        for (auto it = cs->statements.rbegin(); it != cs->statements.rend(); ++it)
-            if (auto line = findLastLine(**it))
+        for (const auto& statement: std::ranges::reverse_view(cs->statements))
+            if (auto line = findLastLine(*statement))
                 return line;
     }
 
@@ -355,8 +355,8 @@ std::optional<int> SourceFormatter::findLastLine(ast::Node const& node)
     // CallPipeline: check last call
     if (auto const* cp = dynamic_cast<ast::CallPipeline const*>(&node))
     {
-        for (auto it = cp->calls.rbegin(); it != cp->calls.rend(); ++it)
-            if (auto line = findLastLine(**it))
+        for (const auto& call: std::ranges::reverse_view(cp->calls))
+            if (auto line = findLastLine(*call))
                 return line;
     }
 

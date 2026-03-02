@@ -4,8 +4,7 @@
 namespace CoreVM
 {
 
-NativeProperty::NativeProperty(std::string name, LiteralType type):
-    _name(std::move(name)), _type(type), _getter(), _setter()
+NativeProperty::NativeProperty(std::string name, LiteralType type): _name(std::move(name)), _type(type)
 {
 }
 

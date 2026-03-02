@@ -66,7 +66,7 @@ void Value::addUse(Instr* user)
 
 void Value::removeUse(Instr* user)
 {
-    auto i = std::find(_uses.begin(), _uses.end(), user);
+    auto i = std::ranges::find(_uses, user);
 
     assert(i != _uses.end());
 

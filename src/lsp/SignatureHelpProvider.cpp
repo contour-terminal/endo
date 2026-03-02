@@ -6,6 +6,7 @@
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 
+#include <utility>
 #include <vector>
 
 #include "StubRuntime.hpp"
@@ -244,7 +245,7 @@ std::optional<SignatureHelp> computeSignatureHelp(std::string const& source, Pos
             continue;
 
         // Find function name tokens on the cursor's line
-        for (auto i = 0; i < static_cast<int>(tokens.size()); ++i)
+        for (auto i = 0; std::cmp_less(i, tokens.size()); ++i)
         {
             auto const& tok = tokens[static_cast<size_t>(i)];
             if (tok.token != Token::Identifier || tok.literal != call.functionName)
@@ -258,7 +259,7 @@ std::optional<SignatureHelp> computeSignatureHelp(std::string const& source, Pos
             if (position.character >= tok.endCol0)
             {
                 if (!bestMatch || i > bestMatch->funcTokenIdx)
-                    bestMatch = Match { &call, funcDef, i };
+                    bestMatch = Match { .call = &call, .def = funcDef, .funcTokenIdx = i };
             }
         }
     }
@@ -270,7 +271,7 @@ std::optional<SignatureHelp> computeSignatureHelp(std::string const& source, Pos
     // Each top-level token (at parenthesis depth 0) after the function name counts as one argument.
     auto argCount = 0;
     auto parenDepth = 0;
-    for (auto i = bestMatch->funcTokenIdx + 1; i < static_cast<int>(tokens.size()); ++i)
+    for (auto i = bestMatch->funcTokenIdx + 1; std::cmp_less(i, tokens.size()); ++i)
     {
         auto const& tok = tokens[static_cast<size_t>(i)];
         if (tok.line != position.line)
@@ -297,7 +298,7 @@ std::optional<SignatureHelp> computeSignatureHelp(std::string const& source, Pos
 
     // Determine active parameter (0-indexed, clamped to parameter count)
     auto activeParam = argCount > 0 ? argCount - 1 : 0;
-    if (activeParam >= static_cast<int>(bestMatch->def->parameterNames.size()))
+    if (std::cmp_greater_equal(activeParam, bestMatch->def->parameterNames.size()))
         activeParam = static_cast<int>(bestMatch->def->parameterNames.size()) - 1;
 
     // Build signature information

@@ -194,7 +194,8 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
         {
             auto const paletteX = std::max(0, (area.width - paletteWidth) / 2);
-            auto const paletteRect = tui::Rect { paletteX, paletteRow, paletteWidth, paletteHeight };
+            auto const paletteRect =
+                tui::Rect { .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight };
             _commandPalette.setArea(paletteRect);
             auto paletteCanvas = canvas.subcanvas(paletteRect);
             _commandPalette.render(paletteCanvas);
@@ -271,7 +272,7 @@ tui::Size AgentInputComponent::preferredSize() const
         totalHeight += paletteSize.height;
     }
 
-    return { fieldSize.width + LeftBarWidth + BarPadding, totalHeight };
+    return { .width = fieldSize.width + LeftBarWidth + BarPadding, .height = totalHeight };
 }
 
 AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent const& event)
@@ -783,10 +784,10 @@ void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
         };
 
         static constexpr std::array hints = {
-            Hint { "Esc", "exit" },
-            Hint { "S-Tab", "mode" },
-            Hint { "C-/", "thinking" },
-            Hint { "C-.", "model" },
+            Hint { .key = "Esc", .desc = "exit" },
+            Hint { .key = "S-Tab", .desc = "mode" },
+            Hint { .key = "C-/", .desc = "thinking" },
+            Hint { .key = "C-.", .desc = "model" },
         };
 
         for (auto const& [key, desc]: hints)

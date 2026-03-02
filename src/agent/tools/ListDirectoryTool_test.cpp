@@ -148,7 +148,7 @@ TEST_CASE("ListDirectoryTool.long_format", "[agent][tools]")
     CHECK(result->content.find("data.txt") != std::string::npos);
     CHECK(result->content.find("subdir/") != std::string::npos);
     // Should have a type indicator
-    CHECK(result->content.find("d") != std::string::npos); // directory type
+    CHECK(result->content.find('d') != std::string::npos); // directory type
 }
 
 TEST_CASE("ListDirectoryTool.alphabetical_sort_dirs_first", "[agent][tools]")

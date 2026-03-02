@@ -35,26 +35,26 @@ namespace
     };
 
     constexpr std::array<KeyNameMapping, 26> keyNameMappings = { {
-        { "enter", KeyCode::Enter },   { "return", KeyCode::Enter },
-        { "tab", KeyCode::Tab },       { "backspace", KeyCode::Backspace },
-        { "delete", KeyCode::Delete }, { "del", KeyCode::Delete },
-        { "escape", KeyCode::Escape }, { "esc", KeyCode::Escape },
-        { "up", KeyCode::Up },         { "down", KeyCode::Down },
-        { "left", KeyCode::Left },     { "right", KeyCode::Right },
-        { "home", KeyCode::Home },     { "end", KeyCode::End },
-        { "pageup", KeyCode::PageUp }, { "pagedown", KeyCode::PageDown },
-        { "insert", KeyCode::Insert }, { "f1", KeyCode::F1 },
-        { "f2", KeyCode::F2 },         { "f3", KeyCode::F3 },
-        { "f4", KeyCode::F4 },         { "f5", KeyCode::F5 },
-        { "f6", KeyCode::F6 },         { "f7", KeyCode::F7 },
-        { "f8", KeyCode::F8 },         { "f9", KeyCode::F9 },
+        { .name = "enter", .code = KeyCode::Enter },   { .name = "return", .code = KeyCode::Enter },
+        { .name = "tab", .code = KeyCode::Tab },       { .name = "backspace", .code = KeyCode::Backspace },
+        { .name = "delete", .code = KeyCode::Delete }, { .name = "del", .code = KeyCode::Delete },
+        { .name = "escape", .code = KeyCode::Escape }, { .name = "esc", .code = KeyCode::Escape },
+        { .name = "up", .code = KeyCode::Up },         { .name = "down", .code = KeyCode::Down },
+        { .name = "left", .code = KeyCode::Left },     { .name = "right", .code = KeyCode::Right },
+        { .name = "home", .code = KeyCode::Home },     { .name = "end", .code = KeyCode::End },
+        { .name = "pageup", .code = KeyCode::PageUp }, { .name = "pagedown", .code = KeyCode::PageDown },
+        { .name = "insert", .code = KeyCode::Insert }, { .name = "f1", .code = KeyCode::F1 },
+        { .name = "f2", .code = KeyCode::F2 },         { .name = "f3", .code = KeyCode::F3 },
+        { .name = "f4", .code = KeyCode::F4 },         { .name = "f5", .code = KeyCode::F5 },
+        { .name = "f6", .code = KeyCode::F6 },         { .name = "f7", .code = KeyCode::F7 },
+        { .name = "f8", .code = KeyCode::F8 },         { .name = "f9", .code = KeyCode::F9 },
     } };
 
     // More function keys
     constexpr std::array<KeyNameMapping, 3> moreKeyNameMappings = { {
-        { "f10", KeyCode::F10 },
-        { "f11", KeyCode::F11 },
-        { "f12", KeyCode::F12 },
+        { .name = "f10", .code = KeyCode::F10 },
+        { .name = "f11", .code = KeyCode::F11 },
+        { .name = "f12", .code = KeyCode::F12 },
     } };
 
     std::optional<KeyCode> parseSpecialKey(std::string_view name)
@@ -96,51 +96,51 @@ namespace
 
     constexpr std::array<ActionNameMapping, 37> actionNameMappings = { {
         // Movement
-        { "move-forward-char", EditAction::MoveForwardChar },
-        { "move-backward-char", EditAction::MoveBackwardChar },
-        { "move-forward-word", EditAction::MoveForwardWord },
-        { "move-backward-word", EditAction::MoveBackwardWord },
-        { "move-to-line-start", EditAction::MoveToLineStart },
-        { "move-to-line-end", EditAction::MoveToLineEnd },
-        { "move-to-buffer-start", EditAction::MoveToBufferStart },
-        { "move-to-buffer-end", EditAction::MoveToBufferEnd },
-        { "move-up", EditAction::MoveUp },
-        { "move-down", EditAction::MoveDown },
-        { "smart-move-to-line-start", EditAction::SmartMoveToLineStart },
-        { "smart-move-to-line-end", EditAction::SmartMoveToLineEnd },
+        { .name = "move-forward-char", .action = EditAction::MoveForwardChar },
+        { .name = "move-backward-char", .action = EditAction::MoveBackwardChar },
+        { .name = "move-forward-word", .action = EditAction::MoveForwardWord },
+        { .name = "move-backward-word", .action = EditAction::MoveBackwardWord },
+        { .name = "move-to-line-start", .action = EditAction::MoveToLineStart },
+        { .name = "move-to-line-end", .action = EditAction::MoveToLineEnd },
+        { .name = "move-to-buffer-start", .action = EditAction::MoveToBufferStart },
+        { .name = "move-to-buffer-end", .action = EditAction::MoveToBufferEnd },
+        { .name = "move-up", .action = EditAction::MoveUp },
+        { .name = "move-down", .action = EditAction::MoveDown },
+        { .name = "smart-move-to-line-start", .action = EditAction::SmartMoveToLineStart },
+        { .name = "smart-move-to-line-end", .action = EditAction::SmartMoveToLineEnd },
         // Editing
-        { "delete-char-backward", EditAction::DeleteCharBackward },
-        { "delete-char-forward", EditAction::DeleteCharForward },
-        { "delete-word", EditAction::DeleteWord },
-        { "delete-word-backward", EditAction::DeleteWordBackward },
-        { "kill-to-end", EditAction::KillToEnd },
-        { "kill-to-start", EditAction::KillToStart },
-        { "transpose", EditAction::Transpose },
+        { .name = "delete-char-backward", .action = EditAction::DeleteCharBackward },
+        { .name = "delete-char-forward", .action = EditAction::DeleteCharForward },
+        { .name = "delete-word", .action = EditAction::DeleteWord },
+        { .name = "delete-word-backward", .action = EditAction::DeleteWordBackward },
+        { .name = "kill-to-end", .action = EditAction::KillToEnd },
+        { .name = "kill-to-start", .action = EditAction::KillToStart },
+        { .name = "transpose", .action = EditAction::Transpose },
         // Undo/Redo
-        { "undo", EditAction::Undo },
-        { "redo", EditAction::Redo },
+        { .name = "undo", .action = EditAction::Undo },
+        { .name = "redo", .action = EditAction::Redo },
         // Kill Ring
-        { "yank", EditAction::Yank },
-        { "yank-pop", EditAction::YankPop },
+        { .name = "yank", .action = EditAction::Yank },
+        { .name = "yank-pop", .action = EditAction::YankPop },
         // Selection
-        { "select-all", EditAction::SelectAll },
+        { .name = "select-all", .action = EditAction::SelectAll },
         // Clipboard
-        { "cut", EditAction::Cut },
-        { "copy", EditAction::Copy },
-        { "paste", EditAction::Paste },
+        { .name = "cut", .action = EditAction::Cut },
+        { .name = "copy", .action = EditAction::Copy },
+        { .name = "paste", .action = EditAction::Paste },
         // Control
-        { "submit", EditAction::Submit },
-        { "abort", EditAction::Abort },
-        { "insert-newline", EditAction::InsertNewline },
-        { "agent-mode", EditAction::AgentMode },
-        { "cycle-agent-mode", EditAction::CycleAgentMode },
-        { "cycle-thinking-mode", EditAction::CycleThinkingMode },
-        { "cycle-model", EditAction::CycleModel },
+        { .name = "submit", .action = EditAction::Submit },
+        { .name = "abort", .action = EditAction::Abort },
+        { .name = "insert-newline", .action = EditAction::InsertNewline },
+        { .name = "agent-mode", .action = EditAction::AgentMode },
+        { .name = "cycle-agent-mode", .action = EditAction::CycleAgentMode },
+        { .name = "cycle-thinking-mode", .action = EditAction::CycleThinkingMode },
+        { .name = "cycle-model", .action = EditAction::CycleModel },
         // History
-        { "history-prev", EditAction::HistoryPrev },
-        { "history-next", EditAction::HistoryNext },
+        { .name = "history-prev", .action = EditAction::HistoryPrev },
+        { .name = "history-next", .action = EditAction::HistoryNext },
         // Command Palette
-        { "command-palette", EditAction::CommandPalette },
+        { .name = "command-palette", .action = EditAction::CommandPalette },
     } };
 } // namespace
 

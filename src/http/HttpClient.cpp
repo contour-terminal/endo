@@ -18,14 +18,14 @@ namespace
     {
         static void acquire()
         {
-            std::lock_guard lock { mutex };
+            std::scoped_lock lock { mutex };
             if (refCount++ == 0)
                 curl_global_init(CURL_GLOBAL_DEFAULT);
         }
 
         static void release()
         {
-            std::lock_guard lock { mutex };
+            std::scoped_lock lock { mutex };
             if (--refCount == 0)
                 curl_global_cleanup();
         }
@@ -245,7 +245,7 @@ HttpClient& HttpClient::operator=(HttpClient&& other) noexcept
     return *this;
 }
 
-void HttpClient::setupRequest(void* curlHandle, HttpRequest const& request, void* slist) const
+void HttpClient::setupRequest(void* curlHandle, HttpRequest const& request, void* slist)
 {
     auto* curl = static_cast<CURL*>(curlHandle);
     auto* headerList = static_cast<curl_slist*>(slist);

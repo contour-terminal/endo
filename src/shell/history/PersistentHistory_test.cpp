@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -382,9 +383,9 @@ TEST_CASE("PersistentHistory.entries_returns_unique_set", "[history]")
 
     // Check no duplicates
     auto sorted = entries;
-    std::sort(sorted.begin(), sorted.end());
-    auto const it = std::unique(sorted.begin(), sorted.end());
-    CHECK(it == sorted.end());
+    std::ranges::sort(sorted);
+    auto const [first, last] = std::ranges::unique(sorted);
+    CHECK(first == sorted.end());
 }
 
 TEST_CASE("PersistentHistory.trim_whitespace", "[history]")

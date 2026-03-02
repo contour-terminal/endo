@@ -12,7 +12,7 @@ namespace endo::agent
 namespace
 {
     constexpr auto MaxLineLength = size_t { 2000 };
-    constexpr auto DefaultLimit = int { 2000 };
+    constexpr auto DefaultLimit = 2000;
 } // namespace
 
 auto ReadFileTool::name() const noexcept -> std::string_view

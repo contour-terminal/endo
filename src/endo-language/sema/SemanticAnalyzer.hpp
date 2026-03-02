@@ -21,6 +21,7 @@ class SemanticAnalyzer
 
     /// Access the type definition registry (record types, union types, constructors).
     [[nodiscard]] TypeDefinitionRegistry& types() noexcept { return _types; }
+
     [[nodiscard]] TypeDefinitionRegistry const& types() const noexcept { return _types; }
 
     /// Access the builtin descriptor registry (function and property metadata).
@@ -28,6 +29,7 @@ class SemanticAnalyzer
 
     /// Access the variable scope manager.
     [[nodiscard]] ScopeManager& scopes() noexcept { return _scopes; }
+
     [[nodiscard]] ScopeManager const& scopes() const noexcept { return _scopes; }
 
   private:

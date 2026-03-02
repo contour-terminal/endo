@@ -401,7 +401,7 @@ TEST_CASE("Component.onHover_overrideReturnsPlainText")
         {
             return HoverResult {
                 .text = "hello tooltip",
-                .position = { x, y },
+                .position = { .x = x, .y = y },
                 .contentType = TooltipContentType::PlainText,
             };
         }
@@ -426,7 +426,7 @@ TEST_CASE("Component.onHover_overrideReturnsMarkdown")
         {
             return HoverResult {
                 .text = "## Heading\n\nMulti-line **bold** content\n- item 1\n- item 2",
-                .position = { x, y },
+                .position = { .x = x, .y = y },
                 .contentType = TooltipContentType::Markdown,
             };
         }
@@ -450,7 +450,9 @@ TEST_CASE("Component.onHover_selectiveHover")
         {
             if (x < 5)
                 return std::nullopt;
-            return HoverResult { "hoverable area", { x, 1 }, TooltipContentType::PlainText };
+            return HoverResult { .text = "hoverable area",
+                                 .position = { .x = x, .y = 1 },
+                                 .contentType = TooltipContentType::PlainText };
         }
     };
 
@@ -468,7 +470,9 @@ TEST_CASE("HoverState.confirmedCallback_receivesTarget")
 
         std::optional<HoverResult> onHover(int x, int y) override
         {
-            return HoverResult { "mock hover", { x, y }, TooltipContentType::PlainText };
+            return HoverResult { .text = "mock hover",
+                                 .position = { .x = x, .y = y },
+                                 .contentType = TooltipContentType::PlainText };
         }
     };
 
@@ -527,7 +531,7 @@ TEST_CASE("Tooltip.multiLineContent_growsHeight")
 TEST_CASE("Tooltip.exceedsMaxHeight_enablesScrolling")
 {
     Tooltip tooltip;
-    tooltip.setMaxSize({ 40, 5 }); // max 5 rows total (3 content + 2 border)
+    tooltip.setMaxSize({ .width = 40, .height = 5 }); // max 5 rows total (3 content + 2 border)
 
     // 10 lines of content
     std::string content;

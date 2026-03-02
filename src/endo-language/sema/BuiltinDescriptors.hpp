@@ -19,9 +19,9 @@ namespace endo
 /// logic so that the semantic analyzer can validate calls without generating IR.
 struct BuiltinCallDescriptor
 {
-    std::string_view name;   ///< Builtin name (e.g., "head", "split")
-    size_t minArity = 0;     ///< Minimum number of arguments
-    size_t maxArity = 0;     ///< Maximum number of arguments (same as minArity for fixed-arity)
+    std::string_view name; ///< Builtin name (e.g., "head", "split")
+    size_t minArity = 0;   ///< Minimum number of arguments
+    size_t maxArity = 0;   ///< Maximum number of arguments (same as minArity for fixed-arity)
 
     /// Static return annotations (applied unconditionally to the result).
     std::optional<uint16_t> returnObjectTypeId;            ///< e.g., BuiltinTypeId::Option for head
@@ -30,7 +30,7 @@ struct BuiltinCallDescriptor
     std::optional<CoreVM::LiteralType> returnListElemType; ///< e.g., LiteralType::String for split
 
     /// Whether this builtin propagates input list annotations to the output.
-    bool propagatesListElementType = false;     ///< tail, filter, etc.
+    bool propagatesListElementType = false;       ///< tail, filter, etc.
     bool propagatesListElementAsInnerObj = false; ///< head, nth, last (element becomes inner of Option)
 };
 
@@ -63,7 +63,7 @@ class BuiltinDescriptorRegistry
 
     /// Looks up a builtin property descriptor by (typeId, fieldName).
     [[nodiscard]] BuiltinPropertyDescriptor const* lookupProperty(uint16_t typeId,
-                                                                   std::string_view field) const;
+                                                                  std::string_view field) const;
 
     /// Returns the full call descriptor map (for iteration/testing).
     [[nodiscard]] auto const& calls() const noexcept { return _calls; }

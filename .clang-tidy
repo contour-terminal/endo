@@ -64,10 +64,9 @@ Checks: >-
   -readability-use-anyofallof,
   -readability-use-concise-preprocessor-directives,
 WarningsAsErrors: >-
-  readability-identifier-naming,
-  modernize-use-nullptr,
+  *
 UseColor: true
-HeaderFilterRegex: 'src/(contour|crispy|text_shaper|vtpty|vtparser|vtbackend|vtrasterizer)/'
+HeaderFilterRegex: 'src/(CoreVM|endo-language|shell|tui|agent|lsp|platform|http)/'
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength

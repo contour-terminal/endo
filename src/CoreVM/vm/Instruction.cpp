@@ -18,11 +18,11 @@ namespace CoreVM
 // {{{ InstructionInfo
 struct InstructionInfo
 {
-    Opcode opcode;
     const char* mnemonic;
+    Opcode opcode;
     OperandSig operandSig;
-    int stackChange;
     LiteralType stackOutput;
+    int stackChange;
 
     InstructionInfo() = default;
     InstructionInfo(const InstructionInfo&) = default;
@@ -33,7 +33,7 @@ struct InstructionInfo
 
     InstructionInfo(
         Opcode opc, const char* const m, OperandSig opsig, int stackChange, LiteralType stackOutput):
-        opcode(opc), mnemonic(m), operandSig(opsig), stackChange(stackChange), stackOutput(stackOutput)
+        mnemonic(m), opcode(opc), operandSig(opsig), stackOutput(stackOutput), stackChange(stackChange)
     {
     }
 };
@@ -206,13 +206,13 @@ int getStackChange(Instruction instr)
     switch (opc)
     {
         case Opcode::ALLOCA: return operandA(instr);
-        case Opcode::DISCARD: return -operandA(instr);
+        case Opcode::DISCARD: return -static_cast<int>(operandA(instr));
         case Opcode::CALL:
             // operandC is 1 for non-void (pushes return value) or 0 for void
-            return operandC(instr) - operandB(instr);
+            return static_cast<int>(operandC(instr)) - static_cast<int>(operandB(instr));
         case Opcode::UCALL:
             // Pops argc args, pushes 1 return value: net = 1 - argc
-            return 1 - operandB(instr);
+            return 1 - static_cast<int>(operandB(instr));
         case Opcode::URET:
             // Handled dynamically by restoring caller frame; for static analysis treat as 0
             return 0;
@@ -221,7 +221,7 @@ int getStackChange(Instruction instr)
             return 0;
         case Opcode::IUCALL:
             // Pops callable + argc explicit args, pushes 1 return value: net = 1 - argc - 1
-            return -operandA(instr);
+            return -static_cast<int>(operandA(instr));
         case Opcode::IUTCALL:
             // Indirect tail call: handled dynamically (reuses frame). For static analysis treat as 0.
             return 0;
@@ -233,8 +233,8 @@ size_t computeStackSize(const Instruction* program, size_t programSize)
 {
     const Instruction* i = program;
     const Instruction* e = program + programSize;
-    size_t stackSize = 0;
-    size_t limit = 0;
+    int stackSize = 0;
+    int limit = 0;
 
     while (i != e)
     {
@@ -244,7 +244,7 @@ size_t computeStackSize(const Instruction* program, size_t programSize)
         i++;
     }
 
-    return limit;
+    return static_cast<size_t>(limit);
 }
 
 OperandSig operandSignature(Opcode opc)
@@ -294,7 +294,7 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
 
     std::string word = std::format("{:<10}", mnemo);
     line << word;
-    n += word.size();
+    n = word.size();
 
     // operands
     if (cp != nullptr)
@@ -470,13 +470,13 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
 
     int stackChange = getStackChange(pc);
 
-    word = std::format("; ip={:>3} sp={:>2} ({}{})",
-                       ip,
-                       sp,
-                       stackChange > 0   ? '+'
-                       : stackChange < 0 ? '-'
-                                         : ' ',
-                       std::abs(stackChange));
+    char sign = ' ';
+    if (stackChange > 0)
+        sign = '+';
+    else if (stackChange < 0)
+        sign = '-';
+
+    word = std::format("; ip={:>3} sp={:>2} ({}{})", ip, sp, sign, std::abs(stackChange));
     line << word;
 
     return line.str();

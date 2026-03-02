@@ -356,7 +356,7 @@ class InputField: public Component
 
     // Mouse state
     bool _dragging = false; ///< True during click-and-drag selection
-    std::chrono::steady_clock::time_point _lastClickTime {};
+    std::chrono::steady_clock::time_point _lastClickTime;
     int _lastClickLine = -1;
     int _lastClickColumn = -1;
     int _clickCount = 0; ///< 1=single, 2=double, 3=triple

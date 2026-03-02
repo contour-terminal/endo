@@ -66,7 +66,8 @@ CoreVM::TypedObject* listAt(CoreVM::TypedObject* list, size_t index)
 /// Helper: gets a string from a record slot.
 std::string getStringSlot(CoreVM::TypedObject* record, uint8_t slot)
 {
-    auto* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(record->getSlot(slot)));
+    const auto* str =
+        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(record->getSlot(slot)));
     return str ? std::string(*str) : "";
 }
 
@@ -130,7 +131,7 @@ TEST_CASE("OutputParser.json_lines")
         { "value", "Value", CoreVM::LiteralType::String },
     });
 
-    auto const input = R"({"Name":"foo","Value":"bar"}
+    const auto* const input = R"({"Name":"foo","Value":"bar"}
 {"Name":"baz","Value":"qux"})";
 
     auto* result = OutputParser::parseJson(runner, input, variant);
@@ -158,7 +159,7 @@ TEST_CASE("OutputParser.json_array")
     });
     variant.parser.format = ParserConfig::Format::Array;
 
-    auto const input = R"([{"ID":"abc"},{"ID":"def"}])";
+    const auto* const input = R"([{"ID":"abc"},{"ID":"def"}])";
 
     auto* result = OutputParser::parseJson(runner, input, variant);
     REQUIRE(result != nullptr);
@@ -189,7 +190,7 @@ TEST_CASE("OutputParser.json_malformed_lines_skipped")
         { "name", "Name", CoreVM::LiteralType::String },
     });
 
-    auto const input = R"(not json
+    const auto* const input = R"(not json
 {"Name":"good"}
 {bad json
 {"Name":"also good"})";
@@ -209,7 +210,7 @@ TEST_CASE("OutputParser.json_missing_fields_default")
         { "value", "Value", CoreVM::LiteralType::String },
     });
 
-    auto const input = R"({"Name":"only_name"})";
+    const auto* const input = R"({"Name":"only_name"})";
 
     auto* result = OutputParser::parseJson(runner, input, variant);
     REQUIRE(result != nullptr);
@@ -218,7 +219,7 @@ TEST_CASE("OutputParser.json_missing_fields_default")
     auto* record = listAt(result, 0);
     REQUIRE(record != nullptr);
     CHECK(getStringSlot(record, 0) == "only_name");
-    CHECK(getStringSlot(record, 1) == ""); // Default empty string
+    CHECK(getStringSlot(record, 1).empty()); // Default empty string
 }
 
 TEST_CASE("OutputParser.json_int_field_parsing")
@@ -231,7 +232,7 @@ TEST_CASE("OutputParser.json_int_field_parsing")
         { "name", "Name", CoreVM::LiteralType::String },
     });
 
-    auto const input = R"({"Count":42,"Name":"test"})";
+    const auto* const input = R"({"Count":42,"Name":"test"})";
 
     auto* result = OutputParser::parseJson(runner, input, variant);
     REQUIRE(result != nullptr);
@@ -254,7 +255,7 @@ TEST_CASE("OutputParser.fields_space_separated_max2")
         " ",
         2);
 
-    auto const input = "M src/main.cpp\n?? path with spaces\nA .gitignore\n";
+    const auto* const input = "M src/main.cpp\n?? path with spaces\nA .gitignore\n";
 
     auto* result = OutputParser::parseFields(runner, input, variant);
     REQUIRE(result != nullptr);

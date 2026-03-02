@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/testing/TestEnvironmentProvider.hpp>
-
 #include <catch2/catch_test_macros.hpp>
+
+#include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace endo::platform;
 

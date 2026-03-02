@@ -45,7 +45,7 @@ auto ClaudeProvider::buildRequest(std::span<ChatMessage const> messages,
         request.headers.push_back(
             std::format("anthropic-beta: {},{}", ClaudeCodeBetaHeader, OAuthBetaHeader));
         request.headers.push_back(std::format("user-agent: {}", ClaudeCodeUserAgent));
-        request.headers.push_back("x-app: cli");
+        request.headers.emplace_back("x-app: cli");
     }
     else
     {

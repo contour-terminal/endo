@@ -4,6 +4,8 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
+#include <ranges>
+
 namespace endo
 {
 
@@ -25,10 +27,8 @@ CoreVM::TypedObject* JobsCommand::execute(CoreVM::Runner& runner) const
     list->tag = 0; // Nil
 
     // Build cons-cell list right-to-left so the result is in original order
-    for (auto it = jobs.rbegin(); it != jobs.rend(); ++it)
+    for (const auto& job: std::ranges::reverse_view(jobs))
     {
-        auto const& job = *it;
-
         // Allocate a JobInfo record
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::JobInfo);
         record->setSlot(0, static_cast<uint64_t>(job.id));

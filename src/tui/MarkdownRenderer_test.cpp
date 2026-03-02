@@ -108,10 +108,10 @@ TEST_CASE("MarkdownRenderer.table.multiple_rows")
 
     renderer.render("| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n");
 
-    CHECK(output.captured.find("1") != std::string::npos);
-    CHECK(output.captured.find("2") != std::string::npos);
-    CHECK(output.captured.find("3") != std::string::npos);
-    CHECK(output.captured.find("4") != std::string::npos);
+    CHECK(output.captured.find('1') != std::string::npos);
+    CHECK(output.captured.find('2') != std::string::npos);
+    CHECK(output.captured.find('3') != std::string::npos);
+    CHECK(output.captured.find('4') != std::string::npos);
 }
 
 TEST_CASE("MarkdownRenderer.table.alignment")
@@ -140,8 +140,8 @@ TEST_CASE("MarkdownRenderer.table.streaming")
     renderer.endStream();
 
     CHECK(output.captured.find("\xe2\x95\xad") != std::string::npos); // ╭
-    CHECK(output.captured.find("1") != std::string::npos);
-    CHECK(output.captured.find("2") != std::string::npos);
+    CHECK(output.captured.find('1') != std::string::npos);
+    CHECK(output.captured.find('2') != std::string::npos);
 }
 
 TEST_CASE("MarkdownRenderer.table.followed_by_text")
@@ -151,8 +151,8 @@ TEST_CASE("MarkdownRenderer.table.followed_by_text")
 
     renderer.render("| H |\n|---|\n| D |\n\nParagraph after table.\n");
 
-    CHECK(output.captured.find("H") != std::string::npos);
-    CHECK(output.captured.find("D") != std::string::npos);
+    CHECK(output.captured.find('H') != std::string::npos);
+    CHECK(output.captured.find('D') != std::string::npos);
     CHECK(output.captured.find("Paragraph after table.") != std::string::npos);
 }
 
@@ -308,7 +308,7 @@ TEST_CASE("MarkdownRenderer.inline_code.unmatched_backtick_literal")
     renderer.render("This has a ` stray backtick\n");
 
     // Unmatched backtick should appear literally
-    CHECK(output.captured.find("`") != std::string::npos);
+    CHECK(output.captured.find('`') != std::string::npos);
     CHECK(output.captured.find("stray backtick") != std::string::npos);
 }
 

@@ -397,7 +397,9 @@ std::vector<TokenInfo> Lexer::tokenize(std::unique_ptr<Source> source)
 
     while (lexer.currentToken() != Token::EndOfInput)
     {
-        tokens.emplace_back(TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
+        tokens.emplace_back(TokenInfo { .token = lexer.currentToken(),
+                                        .literal = lexer.currentLiteral(),
+                                        .location = lexer.currentRange() });
         lexer.nextToken();
     }
 
@@ -437,8 +439,9 @@ void Lexer::consumeWhitespace()
                 auto const endLoc = _source->currentSourceLocation();
                 _comments.push_back(CommentTrivia {
                     .style = CommentStyle::Shell,
-                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
-                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                    .location = { .begin = { .line = startLoc.line,
+                                             .column = std::max(0, startLoc.column - 1) },
+                                  .end = { .line = endLoc.line, .column = std::max(0, endLoc.column - 1) },
                                   .name = startLoc.name },
                     .text = std::move(text),
                     .isTrailing = (_lastTokenEndLine == startLoc.line),
@@ -472,8 +475,9 @@ void Lexer::consumeWhitespace()
                 auto const endLoc = _source->currentSourceLocation();
                 _comments.push_back(CommentTrivia {
                     .style = CommentStyle::CStyle,
-                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
-                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                    .location = { .begin = { .line = startLoc.line,
+                                             .column = std::max(0, startLoc.column - 1) },
+                                  .end = { .line = endLoc.line, .column = std::max(0, endLoc.column - 1) },
                                   .name = startLoc.name },
                     .text = std::move(text),
                     .isTrailing = (_lastTokenEndLine == startLoc.line),
@@ -527,8 +531,9 @@ void Lexer::consumeWhitespace()
                 auto const endLoc = _source->currentSourceLocation();
                 _comments.push_back(CommentTrivia {
                     .style = CommentStyle::FSharp,
-                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
-                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                    .location = { .begin = { .line = startLoc.line,
+                                             .column = std::max(0, startLoc.column - 1) },
+                                  .end = { .line = endLoc.line, .column = std::max(0, endLoc.column - 1) },
                                   .name = startLoc.name },
                     .text = std::move(text),
                     .isTrailing = (_lastTokenEndLine == startLoc.line),
