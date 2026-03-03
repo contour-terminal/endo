@@ -3897,7 +3897,12 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     else if constexpr (std::is_same_v<T, agent::TraceEventMessage>)
                     {
                         if (agentConfig.trace.terminal)
+                        {
+                            clearStreamingPrompt();
                             agent::renderTraceEvent(out, m.event);
+                            if (activeRenderer && activeRenderer->isThinking())
+                                activeRenderer->renderSpinner();
+                        }
                     }
                     else if constexpr (std::is_same_v<T, agent::AgentShutdownComplete>)
                     {
