@@ -729,6 +729,139 @@ namespace
         return result;
     }
 
+    /// Returns hover markdown for a field access expression (e.g., `age` in `alice.age`).
+    ///
+    /// Detects that the identifier at the cursor is preceded by a `.` token and an object
+    /// identifier. Resolves the object's record type through its let-binding and looks up
+    /// the field definition in the corresponding RecordTypeDefStmt.
+    ///
+    /// @param source The full document text
+    /// @param fieldName The field identifier name at cursor
+    /// @param tokens The token stream from lexing
+    /// @param currentIndex Index of the current identifier token in the stream
+    /// @return Hover markdown if field access was detected and resolved, otherwise std::nullopt
+    [[nodiscard]] std::optional<std::string> fieldAccessHover(std::string const& source,
+                                                              std::string const& fieldName,
+                                                              std::vector<TokenInfo> const& tokens,
+                                                              size_t currentIndex)
+    {
+        // Need at least obj.field (3 tokens: identifier, dot, identifier)
+        if (currentIndex < 2)
+            return std::nullopt;
+
+        // Check preceding tokens: Identifier Dot <current>
+        if (tokens[currentIndex - 1].token != Token::Dot)
+            return std::nullopt;
+        if (tokens[currentIndex - 2].token != Token::Identifier)
+            return std::nullopt;
+
+        auto const& objectName = tokens[currentIndex - 2].literal;
+
+        // Parse AST to find record type definitions and let bindings
+        CoreVM::Runtime runtime;
+        registerStubRuntime(runtime);
+        CoreVM::diagnostics::BufferedReport report;
+        Parser parser(runtime, report, std::make_unique<StringSource>(source));
+        auto astRoot = parser.parse();
+        if (!astRoot)
+            return std::nullopt;
+
+        std::vector<ast::LetBindingStmt const*> bindings;
+        std::unordered_map<std::string, ast::RecordTypeDefStmt const*> recordTypeDefs;
+        if (auto const* compound = dynamic_cast<ast::CompoundStmt const*>(astRoot.get()))
+        {
+            for (auto const& stmt: compound->statements)
+            {
+                if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(stmt.get()))
+                    bindings.push_back(letStmt);
+                else if (auto const* recordDef = dynamic_cast<ast::RecordTypeDefStmt const*>(stmt.get()))
+                    recordTypeDefs[recordDef->name] = recordDef;
+            }
+        }
+        else if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(astRoot.get()))
+        {
+            bindings.push_back(letStmt);
+        }
+
+        // Find the let binding for the object
+        std::string recordTypeName;
+        for (auto const* letStmt: bindings)
+        {
+            if (letStmt->name != objectName)
+                continue;
+
+            // Determine record type from the binding's value expression
+            if (letStmt->value)
+            {
+                if (auto const* recordExpr = dynamic_cast<ast::RecordExpr const*>(letStmt->value.get()))
+                {
+                    if (!recordExpr->typeName.empty())
+                        recordTypeName = recordExpr->typeName;
+                }
+                else if (auto const* updateExpr =
+                             dynamic_cast<ast::RecordUpdateExpr const*>(letStmt->value.get()))
+                {
+                    // For record update, resolve the base to get the type
+                    if (auto const* baseIdent =
+                            dynamic_cast<ast::IdentifierExpr const*>(updateExpr->base.get()))
+                    {
+                        // Look up the base variable's record type
+                        for (auto const* baseBinding: bindings)
+                        {
+                            if (baseBinding->name != baseIdent->name)
+                                continue;
+                            if (auto const* baseRecord =
+                                    dynamic_cast<ast::RecordExpr const*>(baseBinding->value.get()))
+                            {
+                                if (!baseRecord->typeName.empty())
+                                    recordTypeName = baseRecord->typeName;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Fall back to explicit type annotation
+            if (recordTypeName.empty() && letStmt->returnType)
+            {
+                auto const typeStr = toString(*letStmt->returnType);
+                if (recordTypeDefs.contains(typeStr))
+                    recordTypeName = typeStr;
+            }
+            break;
+        }
+
+        if (recordTypeName.empty())
+            return std::nullopt;
+
+        // Look up the record type definition
+        auto const it = recordTypeDefs.find(recordTypeName);
+        if (it == recordTypeDefs.end())
+            return std::nullopt;
+
+        // Find the field in the record type
+        for (auto const& field: it->second->fields)
+        {
+            if (field.name == fieldName)
+            {
+                std::string result;
+                result += '`';
+                result += fieldName;
+                result += "` \u2014 field of `";
+                result += recordTypeName;
+                result += "` : `";
+                result += toString(field.type);
+                result += "`\n\n```endo\n";
+                result += formatRecordTypeDef(*it->second);
+                result += "\n```";
+                return result;
+            }
+        }
+
+        return std::nullopt;
+    }
+
     /// Returns hover markdown for a user-defined binding or function parameter.
     ///
     /// Parses the source into an AST and searches top-level `let` bindings and their
@@ -863,8 +996,10 @@ std::optional<HoverInfo> computeHover(std::string const& source, SourcePosition 
         lexer.nextToken();
     }
 
-    for (auto const& tokenInfo: tokens)
+    for (size_t i = 0; i < tokens.size(); ++i)
     {
+        auto const& tokenInfo = tokens[i];
+
         if (tokenInfo.token == Token::EndOfInput)
             continue;
 
@@ -902,6 +1037,10 @@ std::optional<HoverInfo> computeHover(std::string const& source, SourcePosition 
         if (tokenInfo.token == Token::Identifier)
         {
             if (auto text = builtinHover(tokenInfo.literal))
+                return HoverInfo { .markdownText = std::move(*text), .range = range };
+
+            // Try field access hover (identifier preceded by a dot)
+            if (auto text = fieldAccessHover(source, tokenInfo.literal, tokens, i))
                 return HoverInfo { .markdownText = std::move(*text), .range = range };
 
             // Try user-defined binding hover (requires AST parsing)
