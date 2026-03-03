@@ -27,6 +27,7 @@ struct InferredFunctionType
 struct InferenceResult
 {
     std::unordered_map<std::string, InferredFunctionType> functions; ///< Function name → inferred types
+    std::unordered_map<std::string, TypePtr> bindings;               ///< Let-binding name → inferred type
     std::vector<std::string> errors;                                 ///< Type errors encountered
 
     /// Check if inference succeeded without errors.
@@ -86,6 +87,9 @@ class TypeInferencer
 
     /// Record an inferred function type in the result.
     void recordFunction(std::string const& name, InferredFunctionType type);
+
+    /// Record an inferred let-binding variable type in the result.
+    void recordBinding(std::string const& name, TypePtr type);
 
     /// Record a type error.
     void recordError(std::string error);
