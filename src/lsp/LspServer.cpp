@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LspServer.hpp"
 
+#include <editor-protocol/JsonTransport.hpp>
+
 #include <iostream>
 #include <string>
 
@@ -11,7 +13,6 @@
 #include "DocumentSymbolProvider.hpp"
 #include "FormattingProvider.hpp"
 #include "HoverProvider.hpp"
-#include "JsonRpc.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
@@ -20,6 +21,8 @@
 
 namespace endo::lsp
 {
+
+using namespace endo::editor_protocol;
 
 LspServer::LspServer(std::istream& input, std::ostream& output): _input(input), _output(output)
 {

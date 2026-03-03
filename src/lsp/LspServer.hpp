@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <editor-protocol/DocumentStore.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 
 #include <istream>
 #include <ostream>
 #include <string>
 
-#include "DocumentStore.hpp"
 #include "LspTypes.hpp"
 
 namespace endo::lsp
 {
+
+using endo::editor_protocol::DocumentStore;
 
 /// LSP server implementing the Language Server Protocol for Endo shell scripts.
 ///

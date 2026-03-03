@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <endo-language/lexer/Lexer.hpp>
+#include <editor-protocol/EditorTypes.hpp>
 
-#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,41 +12,13 @@
 namespace endo::lsp
 {
 
-/// LSP Position (0-based line and character).
-struct Position
-{
-    int line = 0;
-    int character = 0;
-};
-
-inline void to_json(nlohmann::json& j, Position const& p)
-{
-    j = nlohmann::json { { "line", p.line }, { "character", p.character } };
-}
-
-inline void from_json(nlohmann::json const& j, Position& p)
-{
-    j.at("line").get_to(p.line);
-    j.at("character").get_to(p.character);
-}
-
-/// LSP Range (start and end positions).
-struct Range
-{
-    Position start;
-    Position end;
-};
-
-inline void to_json(nlohmann::json& j, Range const& r)
-{
-    j = nlohmann::json { { "start", r.start }, { "end", r.end } };
-}
-
-inline void from_json(nlohmann::json const& j, Range& r)
-{
-    j.at("start").get_to(r.start);
-    j.at("end").get_to(r.end);
-}
+// Re-export generic editor types into the LSP namespace for backward compatibility.
+using endo::editor_protocol::Location;
+using endo::editor_protocol::Position;
+using endo::editor_protocol::Range;
+using endo::editor_protocol::TextEdit;
+using endo::editor_protocol::toRange;
+using endo::editor_protocol::WorkspaceEdit;
 
 /// LSP diagnostic severity levels.
 enum class DiagnosticSeverity : int
@@ -178,36 +149,6 @@ inline void from_json(nlohmann::json const& j, TextDocumentContentChangeEvent& e
     j.at("text").get_to(e.text);
 }
 
-/// Converts an endo SourceLocationRange to an LSP Range.
-/// The endo lexer uses 1-based columns; LSP uses 0-based.
-/// @param loc The source location range from the endo lexer (0-based)
-/// @return The corresponding LSP Range (0-based)
-[[nodiscard]] inline Range toRange(SourceLocationRange const& loc)
-{
-    return Range {
-        .start = Position { .line = loc.begin.line, .character = loc.begin.column },
-        .end = Position { .line = loc.end.line, .character = loc.end.column },
-    };
-}
-
-/// LSP Location (URI + range).
-struct Location
-{
-    std::string uri;
-    Range range;
-};
-
-inline void to_json(nlohmann::json& j, Location const& l)
-{
-    j = nlohmann::json { { "uri", l.uri }, { "range", l.range } };
-}
-
-inline void from_json(nlohmann::json const& j, Location& l)
-{
-    j.at("uri").get_to(l.uri);
-    j.at("range").get_to(l.range);
-}
-
 /// LSP ParameterInformation for signature help.
 struct ParameterInformation
 {
@@ -311,31 +252,6 @@ struct DocumentHighlight
 inline void to_json(nlohmann::json& j, DocumentHighlight const& h)
 {
     j = nlohmann::json { { "range", h.range }, { "kind", static_cast<int>(h.kind) } };
-}
-
-/// LSP TextEdit (a replacement within a document).
-struct TextEdit
-{
-    Range range;
-    std::string newText;
-};
-
-inline void to_json(nlohmann::json& j, TextEdit const& e)
-{
-    j = nlohmann::json { { "range", e.range }, { "newText", e.newText } };
-}
-
-/// LSP WorkspaceEdit (a set of edits across documents).
-struct WorkspaceEdit
-{
-    std::map<std::string, std::vector<TextEdit>> changes; ///< URI -> edits
-};
-
-inline void to_json(nlohmann::json& j, WorkspaceEdit const& w)
-{
-    j = nlohmann::json { { "changes", nlohmann::json::object() } };
-    for (auto const& [uri, edits]: w.changes)
-        j["changes"][uri] = edits;
 }
 
 /// LSP CompletionItemKind enumeration (subset relevant to endo).

@@ -8,7 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace endo::lsp
+namespace endo::editor_protocol
 {
 
 /// JSON-RPC 2.0 standard error codes.
@@ -56,4 +56,4 @@ void writeMessage(std::ostream& output, nlohmann::json const& message);
 /// @return The complete JSON-RPC notification object
 [[nodiscard]] nlohmann::json makeNotification(std::string const& method, nlohmann::json params);
 
-} // namespace endo::lsp
+} // namespace endo::editor_protocol

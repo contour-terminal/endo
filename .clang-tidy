@@ -66,7 +66,7 @@ Checks: >-
 WarningsAsErrors: >-
   *
 UseColor: true
-HeaderFilterRegex: 'src/(CoreVM|endo-language|shell|tui|agent|lsp|platform|http)/'
+HeaderFilterRegex: 'src/(CoreVM|endo-language|shell|tui|agent|editor-protocol|lsp|platform|http)/'
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength

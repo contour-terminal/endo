@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace endo::lsp
+namespace endo::editor_protocol
 {
 
 /// Manages open documents indexed by URI.
@@ -49,4 +49,4 @@ class DocumentStore
     std::unordered_map<std::string, Document> _documents;
 };
 
-} // namespace endo::lsp
+} // namespace endo::editor_protocol

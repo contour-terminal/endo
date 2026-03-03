@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <editor-protocol/DocumentStore.hpp>
+#include <editor-protocol/JsonTransport.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <sstream>
@@ -7,10 +10,8 @@
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentHighlightProvider.hpp"
-#include "DocumentStore.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
-#include "JsonRpc.hpp"
 #include "LspServer.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
@@ -19,6 +20,7 @@
 #include "SymbolCollector.hpp"
 #include <nlohmann/json.hpp>
 
+using namespace endo::editor_protocol;
 using namespace endo::lsp;
 using json = nlohmann::json;
 
@@ -1165,7 +1167,8 @@ TEST_CASE("References.cursor on usage finds all references", "[lsp][references]"
 
 TEST_CASE("DocumentHighlight.at definition shows def and ref", "[lsp][highlight]")
 {
-    auto highlights = computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 0, .character = 4 });
+    auto highlights =
+        computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 0, .character = 4 });
     REQUIRE(highlights.size() == 2);
     // Definition is Write, reference is Read
     CHECK(highlights[0].kind == DocumentHighlightKind::Write);
@@ -1174,7 +1177,8 @@ TEST_CASE("DocumentHighlight.at definition shows def and ref", "[lsp][highlight]
 
 TEST_CASE("DocumentHighlight.at reference shows def and ref", "[lsp][highlight]")
 {
-    auto highlights = computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 1, .character = 8 });
+    auto highlights =
+        computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 1, .character = 8 });
     REQUIRE(highlights.size() == 2);
     CHECK(highlights[0].kind == DocumentHighlightKind::Write);
     CHECK(highlights[1].kind == DocumentHighlightKind::Read);
@@ -1202,8 +1206,7 @@ TEST_CASE("DocumentHighlight.scoped variable only shows inner occurrences", "[ls
 
 TEST_CASE("DocumentHighlight.no identifier at cursor returns empty", "[lsp][highlight]")
 {
-    auto highlights =
-        computeDocumentHighlights("let x = 42", Position { .line = 0, .character = 0 });
+    auto highlights = computeDocumentHighlights("let x = 42", Position { .line = 0, .character = 0 });
     CHECK(highlights.empty());
 }
 
