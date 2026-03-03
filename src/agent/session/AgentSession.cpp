@@ -10,6 +10,7 @@
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tracing/AgentTracer.hpp>
+#include <agent/tracing/TraceEvent.hpp>
 
 namespace endo::agent
 {
@@ -82,6 +83,8 @@ auto AgentSession::processMessage(std::string_view userMessage,
 
     if (_tracer)
         _tracer->writeUserMessage("chat", userMessage);
+    if (_traceEventCallback)
+        _traceEventCallback(TraceUserMessageEvent { .mode = "chat", .content = std::string(userMessage) });
 
     auto const toolDefs = _toolRegistry ? _toolRegistry->definitions() : std::vector<ToolDefinition> {};
     auto const tools = std::span<ToolDefinition const>(toolDefs);
@@ -96,10 +99,18 @@ auto AgentSession::processMessage(std::string_view userMessage,
             auto const beforeMessages = _history.size();
             auto const beforeTokens = _history.estimatedTokenCount();
             auto compactResult = _compactor->compactIfNeeded(_history);
-            if (_tracer && _history.size() != beforeMessages)
+            if (_history.size() != beforeMessages)
             {
-                _tracer->writeCompaction(
-                    beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+                if (_tracer)
+                    _tracer->writeCompaction(
+                        beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+                if (_traceEventCallback)
+                    _traceEventCallback(TraceCompactionEvent {
+                        .beforeMessages = beforeMessages,
+                        .afterMessages = _history.size(),
+                        .beforeTokens = beforeTokens,
+                        .afterTokens = _history.estimatedTokenCount(),
+                    });
             }
             // Log but don't abort on compaction failure
             (void) compactResult;
@@ -107,6 +118,12 @@ auto AgentSession::processMessage(std::string_view userMessage,
 
         if (_tracer)
             _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
+        if (_traceEventCallback)
+            _traceEventCallback(TraceLlmRequestEvent {
+                .iteration = iteration,
+                .messageCount = _history.size(),
+                .tokenEstimate = _history.estimatedTokenCount(),
+            });
 
         auto const generateStart = std::chrono::steady_clock::now();
         auto result = _provider->generate(_history.messages(), tools, streamCb);
@@ -123,6 +140,8 @@ auto AgentSession::processMessage(std::string_view userMessage,
                                     result.error().requestUrl,
                                     result.error().requestBody,
                                     result.error().responseBody);
+            if (_traceEventCallback)
+                _traceEventCallback(TraceErrorEvent { .code = "ProviderError", .message = errorMsg });
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
                 .message = errorMsg,
@@ -141,6 +160,16 @@ auto AgentSession::processMessage(std::string_view userMessage,
                                       result->requestUrl,
                                       result->requestBody,
                                       result->responseBody);
+        if (_traceEventCallback)
+            _traceEventCallback(TraceLlmResponseEvent {
+                .iteration = iteration,
+                .hasToolCalls = result->hasToolCalls(),
+                .toolCount = result->toolCalls.size(),
+                .textLength = result->textContent().size(),
+                .duration = generateElapsed,
+                .usage = result->usage,
+                .toolCalls = { result->toolCalls.begin(), result->toolCalls.end() },
+            });
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
@@ -182,6 +211,8 @@ auto AgentSession::processMessage(std::string_view userMessage,
     auto const errorMsg = std::format("Tool loop exceeded {} iterations", _maxToolIterations);
     if (_tracer)
         _tracer->writeError("ToolLoopExceeded", errorMsg);
+    if (_traceEventCallback)
+        _traceEventCallback(TraceErrorEvent { .code = "ToolLoopExceeded", .message = errorMsg });
 
     return std::unexpected(AgentError {
         .code = AgentErrorCode::ToolLoopExceeded,
@@ -295,6 +326,8 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
 
     if (_tracer)
         _tracer->writeUserMessage("plan", userMessage);
+    if (_traceEventCallback)
+        _traceEventCallback(TraceUserMessageEvent { .mode = "plan", .content = std::string(userMessage) });
 
     // Build filtered tool definitions: only read-only tools + submit_plan
     static constexpr auto allowedTools = std::array<std::string_view, 5> {
@@ -318,15 +351,29 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
             auto const beforeMessages = _history.size();
             auto const beforeTokens = _history.estimatedTokenCount();
             (void) _compactor->compactIfNeeded(_history);
-            if (_tracer && _history.size() != beforeMessages)
+            if (_history.size() != beforeMessages)
             {
-                _tracer->writeCompaction(
-                    beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+                if (_tracer)
+                    _tracer->writeCompaction(
+                        beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+                if (_traceEventCallback)
+                    _traceEventCallback(TraceCompactionEvent {
+                        .beforeMessages = beforeMessages,
+                        .afterMessages = _history.size(),
+                        .beforeTokens = beforeTokens,
+                        .afterTokens = _history.estimatedTokenCount(),
+                    });
             }
         }
 
         if (_tracer)
             _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
+        if (_traceEventCallback)
+            _traceEventCallback(TraceLlmRequestEvent {
+                .iteration = iteration,
+                .messageCount = _history.size(),
+                .tokenEstimate = _history.estimatedTokenCount(),
+            });
 
         auto const generateStart = std::chrono::steady_clock::now();
         auto result = _provider->generate(_history.messages(), tools, streamCb);
@@ -343,6 +390,8 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
                                     result.error().requestUrl,
                                     result.error().requestBody,
                                     result.error().responseBody);
+            if (_traceEventCallback)
+                _traceEventCallback(TraceErrorEvent { .code = "ProviderError", .message = errorMsg });
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
                 .message = errorMsg,
@@ -361,6 +410,16 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
                                       result->requestUrl,
                                       result->requestBody,
                                       result->responseBody);
+        if (_traceEventCallback)
+            _traceEventCallback(TraceLlmResponseEvent {
+                .iteration = iteration,
+                .hasToolCalls = result->hasToolCalls(),
+                .toolCount = result->toolCalls.size(),
+                .textLength = result->textContent().size(),
+                .duration = generateElapsed,
+                .usage = result->usage,
+                .toolCalls = { result->toolCalls.begin(), result->toolCalls.end() },
+            });
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
@@ -383,6 +442,8 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
             auto const errorMsg = std::string("Agent finished exploration without submitting a plan.");
             if (_tracer)
                 _tracer->writeError("ProviderError", errorMsg);
+            if (_traceEventCallback)
+                _traceEventCallback(TraceErrorEvent { .code = "ProviderError", .message = errorMsg });
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
                 .message = errorMsg,
@@ -433,6 +494,8 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
                                       _maxExplorationIterations);
     if (_tracer)
         _tracer->writeError("ToolLoopExceeded", errorMsg);
+    if (_traceEventCallback)
+        _traceEventCallback(TraceErrorEvent { .code = "ToolLoopExceeded", .message = errorMsg });
 
     return std::unexpected(AgentError {
         .code = AgentErrorCode::ToolLoopExceeded,
@@ -470,6 +533,11 @@ void AgentSession::setPermissionManager(PermissionManager* pm)
 void AgentSession::setTracer(AgentTracer* tracer)
 {
     _tracer = tracer;
+}
+
+void AgentSession::setTraceEventCallback(TraceEventCallback callback)
+{
+    _traceEventCallback = std::move(callback);
 }
 
 auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>
@@ -525,6 +593,16 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
                         .duration = std::chrono::milliseconds { 0 },
                     });
                 }
+                if (_traceEventCallback)
+                {
+                    _traceEventCallback(TraceToolCallEvent {
+                        .name = call.name,
+                        .arguments = call.arguments,
+                        .resultContent = deniedResult.content,
+                        .resultIsError = true,
+                        .duration = std::chrono::milliseconds { 0 },
+                    });
+                }
 
                 if (_toolResultCallback)
                     _toolResultCallback(
@@ -551,6 +629,16 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
                 .timestamp = utcTimestampNow(),
                 .callId = call.id,
                 .toolName = call.name,
+                .arguments = call.arguments,
+                .resultContent = result.content,
+                .resultIsError = result.isError,
+                .duration = elapsed,
+            });
+        }
+        if (_traceEventCallback)
+        {
+            _traceEventCallback(TraceToolCallEvent {
+                .name = call.name,
                 .arguments = call.arguments,
                 .resultContent = result.content,
                 .resultIsError = result.isError,

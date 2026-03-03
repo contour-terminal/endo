@@ -1254,6 +1254,10 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.trace.maxFiles)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.trace.maxFiles = static_cast<size_t>(n); });
 
+    _runtime.registerProperty("agent_trace_terminal", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.trace.terminal); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.trace.terminal = args.getBool(1); });
+
     // --- Permissions ---
 
     _runtime.registerProperty("agent_permissions_policy", CoreVM::LiteralType::String)

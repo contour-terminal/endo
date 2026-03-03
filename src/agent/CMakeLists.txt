@@ -46,8 +46,10 @@ add_library(endo-agent STATIC
     session/PlanExecutor.hpp session/PlanExecutor.cpp
 
     # Tracing
+    tracing/TraceEvent.hpp
     tracing/AgentTracer.hpp tracing/AgentTracer.cpp
     tracing/TraceReplay.hpp tracing/TraceReplay.cpp
+    tracing/TraceTerminalRenderer.hpp tracing/TraceTerminalRenderer.cpp
 
     # UI
     ui/AgentInputComponent.hpp ui/AgentInputComponent.cpp

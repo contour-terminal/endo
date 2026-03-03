@@ -15,6 +15,7 @@
 #include <agent/Types.hpp>
 #include <agent/conversation/ConversationHistory.hpp>
 #include <agent/providers/LlmProvider.hpp>
+#include <agent/tracing/TraceEvent.hpp>
 
 namespace endo::agent
 {
@@ -147,6 +148,10 @@ class AgentSession
     /// @param tracer Pointer to the agent tracer (must outlive the session), or nullptr to disable.
     void setTracer(AgentTracer* tracer);
 
+    /// @brief Sets an optional callback for real-time trace event notifications.
+    /// @param callback Callback invoked at each trace point, or empty to disable.
+    void setTraceEventCallback(TraceEventCallback callback);
+
     /// @brief Sets or replaces the system prompt.
     /// @param systemPrompt The system prompt text.
     void setSystemPrompt(std::string systemPrompt);
@@ -210,6 +215,7 @@ class AgentSession
     ToolRegistry* _toolRegistry = nullptr;
     PermissionManager* _permissionManager = nullptr;
     AgentTracer* _tracer = nullptr;
+    TraceEventCallback _traceEventCallback;
     size_t _maxToolIterations = 25;
     size_t _maxExplorationIterations = 15;
     size_t _maxToolResultSize = 30720;

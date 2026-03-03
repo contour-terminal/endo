@@ -22,6 +22,10 @@ AgentWorker::AgentWorker(AgentSession& session, platform::MessageQueue<FromAgent
         _outbound.push(
             ToolResultMessage { .name = name, .content = content, .isError = isError, .duration = duration });
     });
+
+    // Wire trace event callback to push TraceEventMessage to outbound queue.
+    _session.setTraceEventCallback(
+        [this](TraceEvent const& event) { _outbound.push(TraceEventMessage { .event = event }); });
 }
 
 AgentWorker::~AgentWorker()

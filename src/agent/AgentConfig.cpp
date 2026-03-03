@@ -139,6 +139,8 @@ namespace
             return;
         if (node["enabled"])
             config.enabled = node["enabled"].as<bool>();
+        if (node["terminal"])
+            config.terminal = node["terminal"].as<bool>();
         if (node["default_path"])
             config.defaultPath = node["default_path"].as<std::string>();
         if (node["max_files"])

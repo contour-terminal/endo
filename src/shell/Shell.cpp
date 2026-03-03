@@ -84,6 +84,7 @@
 #include <agent/tools/WebSearchTool.hpp>
 #include <agent/tools/WriteFileTool.hpp>
 #include <agent/tracing/AgentTracer.hpp>
+#include <agent/tracing/TraceTerminalRenderer.hpp>
 #include <agent/ui/AgentInputComponent.hpp>
 #include <agent/ui/AgentResponseRenderer.hpp>
 #include <agent/ui/ToolStatusComponent.hpp>
@@ -2090,6 +2091,13 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     _agentSession->setTracer(nullptr);
     _agentSession->setToolStatusCallback(nullptr);
 
+    // Set up terminal trace callback for headless mode (writes to stderr).
+    if (agentConfig.trace.terminal)
+        _agentSession->setTraceEventCallback(
+            [](agent::TraceEvent const& e) { agent::renderTraceEventToStderr(e); });
+    else
+        _agentSession->setTraceEventCallback(nullptr);
+
     // --- Permission manager ---
     auto permConfig = agentConfig.permissions;
     if (options.autoApprove)
@@ -3885,6 +3893,11 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         inputComponent.setArea(tui::Rect {
                             .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                         screen.draw();
+                    }
+                    else if constexpr (std::is_same_v<T, agent::TraceEventMessage>)
+                    {
+                        if (agentConfig.trace.terminal)
+                            agent::renderTraceEvent(out, m.event);
                     }
                     else if constexpr (std::is_same_v<T, agent::AgentShutdownComplete>)
                     {

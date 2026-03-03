@@ -1140,6 +1140,12 @@ Component (base class)
 - [x] `pruneOldTraceFiles()`: retains at most `maxFiles` trace files, removing oldest by modification time
 - [x] `agent_trace_max_files` builtin property (default: 20)
 - [x] Comprehensive test coverage: AgentTracer (13 cases + 5 new), AgentSession tracer (3 cases), AgentConfig trace roundtrip (3 cases)
+- [x] Real-time terminal trace output: `TraceEvent` variant type, `TraceEventCallback` in `AgentSession`, `TraceTerminalRenderer` for formatted ANSI output
+  - [x] `TraceEventMessage` in `FromAgentMessage` variant, wired through `AgentWorker` outbound queue
+  - [x] Interactive mode: renders trace events via `tui::TerminalOutput` in message dispatch loop
+  - [x] Headless mode: renders trace events to stderr with raw ANSI sequences
+  - [x] `agent_trace_terminal` builtin property (Boolean) to toggle real-time trace display
+  - [x] `TraceConfig::terminal` field with YAML persistence
 
 ### Phase 3.14: @-Mention File Path Completion ✅
 

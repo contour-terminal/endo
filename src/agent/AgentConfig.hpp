@@ -91,6 +91,7 @@ struct ExploreConfig
 struct TraceConfig
 {
     bool enabled = false;    ///< Whether tracing is enabled by default.
+    bool terminal = false;   ///< Whether to display trace events on the terminal in real time.
     std::string defaultPath; ///< Default trace file path (empty = auto-generate).
     size_t maxFiles = 20;    ///< Maximum number of trace files to retain (oldest pruned first).
 };

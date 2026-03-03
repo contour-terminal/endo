@@ -404,6 +404,12 @@ static constexpr std::array agentProperties = {
         .description="Max trace files to retain",
         .detail="**agent_trace_max_files** -- property\n\nMaximum number of trace files to retain.",
     },
+    PropertyDescriptor {
+        .name="agent_trace_terminal", .type=CoreVM::LiteralType::Boolean,
+        .description="Display trace events on terminal",
+        .detail="**agent_trace_terminal** -- property\n\nEnables real-time display of agent trace events on the terminal.\nShows LLM requests/responses, tool calls, compaction events, and errors.",
+        .readOnly=false, .enumValues=boolValues,
+    },
     // --- Permissions ---
     PropertyDescriptor {
         .name="agent_permissions_policy", .type=CoreVM::LiteralType::String,

@@ -13,6 +13,7 @@
 #include <agent/Plan.hpp>
 #include <agent/Types.hpp>
 #include <agent/tools/AskUserTool.hpp>
+#include <agent/tracing/TraceEvent.hpp>
 
 namespace endo::agent
 {
@@ -151,6 +152,12 @@ struct PlanCompleteMessage
     bool allSucceeded = false; ///< Whether all steps completed successfully.
 };
 
+/// A trace event to display on the terminal.
+struct TraceEventMessage
+{
+    TraceEvent event; ///< The trace event to render.
+};
+
 /// The agent worker thread has exited.
 struct AgentShutdownComplete
 {
@@ -168,6 +175,7 @@ using FromAgentMessage = std::variant<TokenMessage,
                                       PlanStepStartMessage,
                                       PlanStepCompleteMessage,
                                       PlanCompleteMessage,
+                                      TraceEventMessage,
                                       AgentShutdownComplete>;
 
 } // namespace endo::agent

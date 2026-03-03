@@ -332,6 +332,7 @@ TEST_CASE("agent.config.trace_defaults")
 {
     auto config = AgentConfig {};
     CHECK_FALSE(config.trace.enabled);
+    CHECK_FALSE(config.trace.terminal);
     CHECK(config.trace.defaultPath.empty());
 }
 
@@ -346,6 +347,7 @@ TEST_CASE("agent.config.trace_yaml_loads")
         f << R"(
 trace:
   enabled: true
+  terminal: true
   default_path: /tmp/my-trace.jsonl
 )";
     }
@@ -353,6 +355,7 @@ trace:
     auto loadResult = loadAgentConfig(configPath);
     REQUIRE(loadResult.has_value());
     CHECK(loadResult->trace.enabled == true);
+    CHECK(loadResult->trace.terminal == true);
     CHECK(loadResult->trace.defaultPath == "/tmp/my-trace.jsonl");
 
     std::filesystem::remove_all(tmpDir);
