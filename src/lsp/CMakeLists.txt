@@ -31,6 +31,8 @@ add_library(endo-lsp STATIC
     CompletionProvider.cpp
     FormattingProvider.hpp
     FormattingProvider.cpp
+    InlayHintProvider.hpp
+    InlayHintProvider.cpp
 
     # Server core
     LspServer.hpp

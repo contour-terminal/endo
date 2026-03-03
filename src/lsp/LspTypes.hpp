@@ -293,4 +293,35 @@ inline void to_json(nlohmann::json& j, LspCompletionItem const& c)
         j["insertText"] = c.insertText;
 }
 
+/// LSP InlayHintKind enumeration.
+enum class InlayHintKind : int
+{
+    Type = 1,      ///< Type annotation hint
+    Parameter = 2, ///< Parameter name hint
+};
+
+/// LSP InlayHint for inline virtual text.
+struct InlayHint
+{
+    Position position;                  ///< Position where the hint is rendered
+    std::string label;                  ///< The hint text (e.g., ": int")
+    InlayHintKind kind = InlayHintKind::Type; ///< Kind of inlay hint
+    bool paddingLeft = false;           ///< Whether to add padding before the hint
+    bool paddingRight = false;          ///< Whether to add padding after the hint
+    std::optional<std::string> tooltip; ///< Optional tooltip text
+};
+
+inline void to_json(nlohmann::json& j, InlayHint const& h)
+{
+    j = nlohmann::json {
+        { "position", h.position },
+        { "label", h.label },
+        { "kind", static_cast<int>(h.kind) },
+        { "paddingLeft", h.paddingLeft },
+        { "paddingRight", h.paddingRight },
+    };
+    if (h.tooltip.has_value())
+        j["tooltip"] = *h.tooltip;
+}
+
 } // namespace endo::lsp

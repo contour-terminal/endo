@@ -14,6 +14,7 @@
 #include "DocumentSymbolProvider.hpp"
 #include "FormattingProvider.hpp"
 #include "HoverProvider.hpp"
+#include "InlayHintProvider.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
@@ -133,6 +134,11 @@ void LspServer::dispatch(nlohmann::json const& message)
                 auto const params = message.value("params", nlohmann::json::object());
                 writeMessage(_output, makeResponse(id, handleFormatting(params)));
             }
+            else if (method == "textDocument/inlayHint")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleInlayHint(params)));
+            }
             else
             {
                 writeMessage(_output,
@@ -202,6 +208,7 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
                     { "triggerCharacters", nlohmann::json::array({ ".", "$", " " }) },
                 } },
               { "documentFormattingProvider", true },
+              { "inlayHintProvider", true },
               { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",
                 nlohmann::json {
@@ -420,6 +427,22 @@ nlohmann::json LspServer::handleFormatting(nlohmann::json const& params)
     auto result = nlohmann::json::array();
     for (auto const& edit: edits)
         result.push_back(edit);
+    return result;
+}
+
+nlohmann::json LspServer::handleInlayHint(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const range = params.at("range").get<Range>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto hints = computeInlayHints(*source, range);
+
+    auto result = nlohmann::json::array();
+    for (auto const& hint: hints)
+        result.push_back(hint);
     return result;
 }
 

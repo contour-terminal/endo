@@ -17,6 +17,7 @@
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
+#include "InlayHintProvider.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
 #include <nlohmann/json.hpp>
@@ -2430,6 +2431,176 @@ TEST_CASE("E2E.documentHighlight request returns highlights", "[lsp][e2e][highli
             CHECK(msg["result"][0]["kind"] == 3);
             // Second highlight is the reference (Read=2)
             CHECK(msg["result"][1]["kind"] == 2);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Inlay hint tests
+// =============================================================================
+
+namespace
+{
+
+/// Helper to compute inlay hints for the full document range.
+std::vector<InlayHint> hintsForSource(std::string const& source)
+{
+    auto const range = Range {
+        .start = Position { .line = 0, .character = 0 },
+        .end = Position { .line = 9999, .character = 9999 },
+    };
+    return computeInlayHints(source, range);
+}
+
+} // namespace
+
+TEST_CASE("InlayHint.untyped params get type hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add x y = x + y");
+    // Should have at least 2 param hints (x: int, y: int)
+    auto paramHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+        if (h.label.starts_with(": "))
+            paramHints.push_back(h);
+    REQUIRE(paramHints.size() >= 2);
+    CHECK(paramHints[0].label == ": int");
+    CHECK(paramHints[1].label == ": int");
+    CHECK(paramHints[0].kind == InlayHintKind::Type);
+}
+
+TEST_CASE("InlayHint.typed params are suppressed", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add (x: int) (y: int) : int = x + y");
+    // Fully annotated — no hints expected
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.return type hint shown when not annotated", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add (x: int) (y: int) = x + y");
+    // Only a return type hint expected (params are typed)
+    REQUIRE(hints.size() == 1);
+    CHECK(hints[0].label == ": int");
+    CHECK(hints[0].paddingLeft == true);
+}
+
+TEST_CASE("InlayHint.string typed params", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let greet name = \"Hello, \" + name");
+    auto paramHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+        if (!h.paddingLeft)
+            paramHints.push_back(h);
+    REQUIRE(!paramHints.empty());
+    CHECK(paramHints[0].label == ": string");
+}
+
+TEST_CASE("InlayHint.empty source returns empty", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("");
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.invalid source returns empty", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let = = =");
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.range filtering excludes out-of-range hints", "[lsp][inlayhint]")
+{
+    auto const* source = "let add x y = x + y\nlet sub a b = a - b";
+    // Only request hints for line 1
+    auto const range = Range {
+        .start = Position { .line = 1, .character = 0 },
+        .end = Position { .line = 1, .character = 999 },
+    };
+    auto hints = computeInlayHints(source, range);
+    // All hints should be on line 1
+    for (auto const& h: hints)
+        CHECK(h.position.line == 1);
+}
+
+TEST_CASE("InlayHint.let binding variable type hint", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let x = 42");
+    REQUIRE(hints.size() == 1);
+    CHECK(hints[0].label == ": int");
+    CHECK(hints[0].kind == InlayHintKind::Type);
+}
+
+TEST_CASE("InlayHint.recursive function shows hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let rec fact n = if n <= 1 then 1 else n * fact (n - 1)");
+    // Should have param hint for n and return type hint
+    auto paramHints = std::vector<InlayHint> {};
+    auto returnHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+    {
+        if (h.paddingLeft)
+            returnHints.push_back(h);
+        else
+            paramHints.push_back(h);
+    }
+    CHECK(!paramHints.empty());
+    CHECK(!returnHints.empty());
+}
+
+TEST_CASE("InlayHint.let-in expression shows hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let result = let x = 42 in x + 1");
+    // Should have at least a binding type hint for x
+    bool foundXHint = false;
+    for (auto const& h: hints)
+    {
+        if (h.label == ": int" && !h.paddingLeft)
+            foundXHint = true;
+    }
+    CHECK(foundXHint);
+}
+
+TEST_CASE("E2E.inlayHint request returns array", "[lsp][e2e][inlayhint]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let add x y = x + y" },
+                               } },
+                         }),
+        sendRequest("textDocument/inlayHint",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 99 }, { "character", 0 } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].is_array());
+            CHECK(!msg["result"].empty());
+            // Check that hints have kind == 1 (Type)
+            for (auto const& hint: msg["result"])
+                CHECK(hint["kind"] == 1);
             break;
         }
     }
