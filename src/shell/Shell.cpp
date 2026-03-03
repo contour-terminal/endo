@@ -3974,44 +3974,34 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             // Skip spinner and deferred updates when terminal is unfocused
             if (terminalFocused)
             {
-                // Tick spinner during thinking phase (but not while ask-user prompt is active).
-                if (activeRenderer && activeRenderer->isThinking() && !anyPromptActive())
-                {
-                    if (activeRenderer->tickSpinner())
-                    {
-                        auto guard = out.syncGuard();
-                        clearStreamingPrompt();
-                        activeRenderer->renderSpinner();
-                        renderStreamingPrompt();
-                    }
-                }
+                // Tick all spinners first, then do a single combined render pass.
+                auto const thinkingTicked = activeRenderer && activeRenderer->isThinking()
+                                            && !anyPromptActive() && activeRenderer->tickSpinner();
+                auto const toolTicked = streaming && toolStatusComponent.tickSpinner()
+                                        && !anyPromptActive();
+                auto const inputTicked = inputComponent.tickSpinner();
 
-                // Tick the tool status spinner during tool execution.
-                if (streaming && toolStatusComponent.tickSpinner() && !anyPromptActive())
+                if (streaming && !anyPromptActive()
+                    && (thinkingTicked || toolTicked || inputTicked))
                 {
                     auto guard = out.syncGuard();
                     clearStreamingPrompt();
-                    renderToolStatusDirect();
-                    out.flush();
+                    // Always re-render the spinner if thinking — clearStreamingPrompt erases it.
+                    if (activeRenderer && activeRenderer->isThinking())
+                        activeRenderer->renderSpinner();
+                    if (toolStatusComponent.hasEntries())
+                    {
+                        renderToolStatusDirect();
+                        out.flush();
+                    }
                     renderStreamingPrompt();
                 }
-
-                // Tick the input component's info line spinner.
-                if (inputComponent.tickSpinner())
+                else if (inputTicked && !anyPromptActive())
                 {
-                    if (streaming && !anyPromptActive())
-                    {
-                        auto guard = out.syncGuard();
-                        clearStreamingPrompt();
-                        renderStreamingPrompt();
-                    }
-                    else if (!anyPromptActive())
-                    {
-                        auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect {
-                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                        screen.draw();
-                    }
+                    auto const newPrefSize = inputComponent.preferredSize();
+                    inputComponent.setArea(tui::Rect {
+                        .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+                    screen.draw();
                 }
             }
 
