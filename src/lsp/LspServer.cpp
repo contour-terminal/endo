@@ -7,6 +7,7 @@
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
+#include "DocumentHighlightProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "FormattingProvider.hpp"
 #include "HoverProvider.hpp"
@@ -92,6 +93,11 @@ void LspServer::dispatch(nlohmann::json const& message)
             auto const params = message.value("params", nlohmann::json::object());
             writeMessage(_output, makeResponse(id, handleReferences(params)));
         }
+        else if (method == "textDocument/documentHighlight")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleDocumentHighlight(params)));
+        }
         else if (method == "textDocument/signatureHelp")
         {
             auto const params = message.value("params", nlohmann::json::object());
@@ -171,6 +177,7 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
               { "hoverProvider", true },
               { "definitionProvider", true },
               { "referencesProvider", true },
+              { "documentHighlightProvider", true },
               { "signatureHelpProvider",
                 nlohmann::json {
                     { "triggerCharacters", nlohmann::json::array({ " ", "(" }) },
@@ -296,6 +303,22 @@ nlohmann::json LspServer::handleReferences(nlohmann::json const& params)
     auto result = nlohmann::json::array();
     for (auto const& loc: locations)
         result.push_back(loc);
+    return result;
+}
+
+nlohmann::json LspServer::handleDocumentHighlight(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto highlights = computeDocumentHighlights(*source, position);
+
+    auto result = nlohmann::json::array();
+    for (auto const& hl: highlights)
+        result.push_back(hl);
     return result;
 }
 

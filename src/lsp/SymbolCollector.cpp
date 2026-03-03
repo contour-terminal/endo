@@ -654,4 +654,66 @@ std::optional<SourceLocationRange> findSymbolRangeAt(std::string const& source, 
     return correctedRange(*identToken);
 }
 
+std::vector<HighlightEntry> findHighlights(std::string const& source, Position position)
+{
+    auto tokens = tokenize(source);
+    auto const* identToken = findIdentifierAt(tokens, position);
+    if (!identToken)
+        return {};
+
+    auto const& name = identToken->literal;
+    auto const& tokenBegin = identToken->range.begin;
+
+    auto table = collectSymbols(source);
+    if (!table)
+        return {};
+
+    // Find the target definition index
+    auto targetDefIndex = -1;
+
+    // Check if cursor is on a definition
+    for (auto i = 0; std::cmp_less(i, table->definitions.size()); ++i)
+    {
+        auto const& def = table->definitions[static_cast<size_t>(i)];
+        if (def.name == name && def.location.begin.line == tokenBegin.line
+            && def.location.begin.column == tokenBegin.column)
+        {
+            targetDefIndex = i;
+            break;
+        }
+    }
+
+    // If not on a definition, check references
+    if (targetDefIndex < 0)
+    {
+        for (auto const& ref: table->references)
+        {
+            if (ref.name == name && ref.location.begin.line == tokenBegin.line
+                && ref.location.begin.column == tokenBegin.column && ref.definitionIndex >= 0)
+            {
+                targetDefIndex = ref.definitionIndex;
+                break;
+            }
+        }
+    }
+
+    if (targetDefIndex < 0)
+        return {};
+
+    std::vector<HighlightEntry> result;
+
+    // Add the definition itself (Write kind)
+    auto const& def = table->definitions[static_cast<size_t>(targetDefIndex)];
+    result.push_back(HighlightEntry { .range = def.location, .isDefinition = true });
+
+    // Add all references (Read kind)
+    for (auto const& ref: table->references)
+    {
+        if (ref.definitionIndex == targetDefIndex)
+            result.push_back(HighlightEntry { .range = ref.location, .isDefinition = false });
+    }
+
+    return result;
+}
+
 } // namespace endo::lsp

@@ -293,6 +293,26 @@ inline void to_json(nlohmann::json& j, DocumentSymbol const& s)
         j["children"] = s.children;
 }
 
+/// LSP DocumentHighlightKind enumeration.
+enum class DocumentHighlightKind : int
+{
+    Text = 1,  ///< A textual occurrence
+    Read = 2,  ///< Read-access of a symbol (e.g. variable usage)
+    Write = 3, ///< Write-access of a symbol (e.g. variable definition)
+};
+
+/// LSP DocumentHighlight (a range to highlight in the document).
+struct DocumentHighlight
+{
+    Range range;
+    DocumentHighlightKind kind = DocumentHighlightKind::Text;
+};
+
+inline void to_json(nlohmann::json& j, DocumentHighlight const& h)
+{
+    j = nlohmann::json { { "range", h.range }, { "kind", static_cast<int>(h.kind) } };
+}
+
 /// LSP TextEdit (a replacement within a document).
 struct TextEdit
 {

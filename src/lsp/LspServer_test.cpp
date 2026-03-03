@@ -6,6 +6,7 @@
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
+#include "DocumentHighlightProvider.hpp"
 #include "DocumentStore.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
@@ -1159,6 +1160,54 @@ TEST_CASE("References.cursor on usage finds all references", "[lsp][references]"
 }
 
 // =============================================================================
+// DocumentHighlight tests
+// =============================================================================
+
+TEST_CASE("DocumentHighlight.at definition shows def and ref", "[lsp][highlight]")
+{
+    auto highlights = computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 0, .character = 4 });
+    REQUIRE(highlights.size() == 2);
+    // Definition is Write, reference is Read
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.at reference shows def and ref", "[lsp][highlight]")
+{
+    auto highlights = computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 1, .character = 8 });
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.function with multiple calls", "[lsp][highlight]")
+{
+    const auto* source = "let f x = x + 1\nprintln (f 3)\nprintln (f 5)";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // f appears 3 times: definition + 2 calls
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.scoped variable only shows inner occurrences", "[lsp][highlight]")
+{
+    const auto* source = "let a = let x = 1 in x\nlet b = let x = 2 in x";
+    // cursor on first "x" definition (line 0, col 12)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 12 });
+    // Should find only 2: first "x" def + first "x" ref
+    CHECK(highlights.size() == 2);
+}
+
+TEST_CASE("DocumentHighlight.no identifier at cursor returns empty", "[lsp][highlight]")
+{
+    auto highlights =
+        computeDocumentHighlights("let x = 42", Position { .line = 0, .character = 0 });
+    CHECK(highlights.empty());
+}
+
+// =============================================================================
 // SignatureHelp tests
 // =============================================================================
 
@@ -2169,6 +2218,49 @@ TEST_CASE("E2E.completion_left_arrow_preset_values", "[lsp][e2e][completion][lef
             }
             CHECK(hasPowerline);
             CHECK(hasMinimalArrow);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.documentHighlight request returns highlights", "[lsp][e2e][highlight]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nprintln x" },
+                               } },
+                         }),
+        sendRequest("textDocument/documentHighlight",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            REQUIRE(msg["result"].size() == 2);
+            // First highlight is the definition (Write=3)
+            CHECK(msg["result"][0]["kind"] == 3);
+            // Second highlight is the reference (Read=2)
+            CHECK(msg["result"][1]["kind"] == 2);
             break;
         }
     }

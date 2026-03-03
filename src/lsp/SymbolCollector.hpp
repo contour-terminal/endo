@@ -82,4 +82,19 @@ struct SymbolTable
 [[nodiscard]] std::optional<SourceLocationRange> findSymbolRangeAt(std::string const& source,
                                                                    Position position);
 
+/// A highlight entry: source range and whether it is a definition (write) or reference (read).
+struct HighlightEntry
+{
+    SourceLocationRange range;
+    bool isDefinition = false; ///< true for definitions (Write kind), false for references (Read kind)
+};
+
+/// Finds all highlights for the symbol at the given cursor position.
+///
+/// Returns the definition with isDefinition=true and all references with isDefinition=false.
+/// @param source The full document text
+/// @param position The 0-based cursor position
+/// @return Vector of highlight entries (may be empty)
+[[nodiscard]] std::vector<HighlightEntry> findHighlights(std::string const& source, Position position);
+
 } // namespace endo::lsp

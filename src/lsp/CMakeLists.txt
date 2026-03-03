@@ -32,6 +32,8 @@ add_library(endo-lsp STATIC
     ReferencesProvider.cpp
     SignatureHelpProvider.hpp
     SignatureHelpProvider.cpp
+    DocumentHighlightProvider.hpp
+    DocumentHighlightProvider.cpp
     DocumentSymbolProvider.hpp
     DocumentSymbolProvider.cpp
     RenameProvider.hpp

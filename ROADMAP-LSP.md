@@ -102,9 +102,8 @@ High-value features that significantly improve the day-to-day editing experience
 
 ### Document Highlight
 
-- [ ] `textDocument/documentHighlight`: highlight all occurrences of the symbol under cursor
-  - Reuse: `SymbolCollector::findReferences()` with `DocumentHighlightKind::Read`/`Write` distinction
-  - Low implementation cost — thin wrapper over existing infrastructure
+- [x] `textDocument/documentHighlight`: highlight all occurrences of the symbol under cursor
+  - Uses `SymbolCollector::findHighlights()` with `DocumentHighlightKind::Read`/`Write` distinction
 
 ### Folding Ranges
 
@@ -267,7 +266,7 @@ Features included for completeness. Most have limited relevance to Endo.
 Recommended order of work for maximum impact:
 
 1. **Code Actions** (Tier 2) — highest ROI: diagnostic suggestions already exist, just need LSP wiring
-2. **Document Highlight** (Tier 2) — very low cost, reuses `findReferences()`
+2. ~~**Document Highlight** (Tier 2) — very low cost, reuses `findReferences()`~~ (done)
 3. **Folding Ranges** (Tier 2) — moderate cost, immediate usability improvement
 4. ~~**Document Symbol completeness** (Tier 1) — add type definitions, nested symbols, union variants~~ (done: types, variants, fields, properties; remaining: nested let-in)
 5. **Inlay Hints** (Tier 2) — high value for functional language, requires type inference integration
