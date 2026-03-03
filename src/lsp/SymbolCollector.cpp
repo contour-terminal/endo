@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "StubRuntime.hpp"
+#include <editor-protocol/StubRuntime.hpp>
 
 namespace endo::lsp
 {

@@ -17,8 +17,8 @@ Endo already has strong foundations for DAP integration:
 | JSON transport (Content-Length framing) | Complete | `src/editor-protocol/JsonTransport.hpp` (shared by LSP and DAP) |
 | Document store (URI → text mapping) | Complete | `src/editor-protocol/DocumentStore.hpp` (shared by LSP and DAP) |
 | Source types (Position, Range, Location) | Complete | `src/editor-protocol/EditorTypes.hpp` (shared by LSP and DAP) |
-| Stub runtime initialization | Complete | `src/lsp/StubRuntime.hpp` (reusable) |
-| Test utilities (in-memory I/O) | Complete | `src/lsp/LspServer_test.cpp` (pattern reusable) |
+| Stub runtime initialization | Complete | `src/editor-protocol/StubRuntime.hpp` (shared by LSP and DAP) |
+| Test utilities (in-memory I/O) | Complete | `src/editor-protocol/TestHelpers.hpp` (shared by LSP and DAP) |
 | Type registry & value formatting | Complete | `TypeRegistry`, `valueToString()` |
 | CLI flag pattern | Complete | `--lsp` in `src/shell/main.cpp` |
 
@@ -44,14 +44,14 @@ Endo already has strong foundations for DAP integration:
 - [x] Move `JsonRpc.{hpp,cpp}` → `src/editor-protocol/JsonTransport.{hpp,cpp}` (rename to be protocol-neutral; keep `readMessage()`, `writeMessage()`, `ErrorCode` enum)
 - [x] Extract generic types into `src/editor-protocol/EditorTypes.hpp`: `Position`, `Range`, `Location`, `TextEdit`, `WorkspaceEdit`, `toRange()` (with nlohmann::json serialization)
 - [x] Move `DocumentStore.{hpp,cpp}` → `src/editor-protocol/DocumentStore.{hpp,cpp}` (no changes needed)
-- [ ] Move `StubRuntime.hpp` → `src/editor-protocol/StubRuntime.hpp`
-- [ ] Create `src/editor-protocol/TestHelpers.{hpp,cpp}` with `makeRpcMessage()`, `readAllMessages()`, in-memory session runner utilities
+- [x] Move `StubRuntime.hpp` → `src/editor-protocol/StubRuntime.hpp`
+- [x] Create `src/editor-protocol/TestHelpers.hpp` with `makeRpcMessage()`, `sendRequest()`, `sendNotification()`, `readAllMessages()`
 - [x] Add `add_subdirectory(editor-protocol)` to `src/CMakeLists.txt` (before `lsp` and `dap`)
 - [x] Update `src/lsp/CMakeLists.txt`: replace moved sources with dependency on `endo-editor-protocol`; add `#include` path adjustments
 - [x] Update all `#include` paths in `src/lsp/` to reference `editor-protocol/` headers
 - [x] Keep LSP-specific types (`Diagnostic`, `Hover`, `SemanticTokens`, `CompletionItem`, etc.) in `src/lsp/LspTypes.hpp`
 - [x] Verify LSP still builds and all LSP tests pass after extraction
-- [ ] Update `src/lsp/LspServer_test.cpp` to use shared `TestHelpers` instead of local helpers
+- [x] Update `src/lsp/LspServer_test.cpp` to use shared `TestHelpers` instead of local helpers
 
 **Resulting dependency graph**:
 ```

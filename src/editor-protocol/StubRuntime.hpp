@@ -3,9 +3,9 @@
 
 #include <endo-language/builtins/StubRuntime.hpp>
 
-namespace endo::lsp
+namespace endo::editor_protocol
 {
 
 using endo::registerStubRuntime;
 
-} // namespace endo::lsp
+} // namespace endo::editor_protocol

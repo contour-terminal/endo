@@ -17,7 +17,7 @@
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
-#include "StubRuntime.hpp"
+#include <editor-protocol/StubRuntime.hpp>
 
 namespace endo::lsp
 {

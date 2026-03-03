@@ -7,6 +7,8 @@ add_library(endo-editor-protocol STATIC
     EditorTypes.hpp
     DocumentStore.hpp
     DocumentStore.cpp
+    StubRuntime.hpp
+    TestHelpers.hpp
 )
 target_link_libraries(endo-editor-protocol PUBLIC endo nlohmann_json::nlohmann_json)
 target_include_directories(endo-editor-protocol PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

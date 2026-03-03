@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <editor-protocol/DocumentStore.hpp>
 #include <editor-protocol/JsonTransport.hpp>
+#include <editor-protocol/TestHelpers.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -25,43 +26,10 @@ using namespace endo::lsp;
 using json = nlohmann::json;
 
 // =============================================================================
-// Helper: creates a JSON-RPC message string with Content-Length header
+// Helper: LSP-specific session runner
 // =============================================================================
 namespace
 {
-
-std::string makeRpcMessage(json const& msg)
-{
-    auto const body = msg.dump();
-    std::ostringstream oss;
-    oss << "Content-Length: " << body.size() << "\r\n\r\n" << body;
-    return oss.str();
-}
-
-json sendRequest(std::string const& method, json const& params, int id = 1)
-{
-    return json { { "jsonrpc", "2.0" }, { "id", id }, { "method", method }, { "params", params } };
-}
-
-json sendNotification(std::string const& method, json const& params)
-{
-    return json { { "jsonrpc", "2.0" }, { "method", method }, { "params", params } };
-}
-
-/// Reads all JSON-RPC messages from the output stream.
-std::vector<json> readAllMessages(std::istringstream& output)
-{
-    std::vector<json> messages;
-    while (output.good() && output.peek() != EOF)
-    {
-        auto msg = readMessage(output);
-        if (msg.has_value())
-            messages.push_back(std::move(*msg));
-        else
-            break;
-    }
-    return messages;
-}
 
 /// Runs a full LSP session with the given messages and returns all response messages.
 std::vector<json> runSession(std::vector<json> const& messages)

@@ -6,9 +6,6 @@ add_library(endo-lsp STATIC
     # LSP protocol types
     LspTypes.hpp
 
-    # Shared utilities
-    StubRuntime.hpp
-
     # Language intelligence providers
     SymbolCollector.hpp
     SymbolCollector.cpp

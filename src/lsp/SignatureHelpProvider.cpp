@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "StubRuntime.hpp"
+#include <editor-protocol/StubRuntime.hpp>
 #include "SymbolCollector.hpp"
 
 namespace endo::lsp
