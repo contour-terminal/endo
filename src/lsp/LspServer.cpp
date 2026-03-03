@@ -2,6 +2,7 @@
 #include "LspServer.hpp"
 
 #include <editor-protocol/JsonTransport.hpp>
+#include <editor-protocol/StubRuntime.hpp>
 
 #include <iostream>
 #include <string>
@@ -17,7 +18,6 @@
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
-#include <editor-protocol/StubRuntime.hpp>
 
 namespace endo::lsp
 {
@@ -55,115 +55,126 @@ void LspServer::dispatch(nlohmann::json const& message)
     auto const method = message.value("method", std::string {});
     auto const id = hasId ? message["id"] : nlohmann::json {};
 
-    // Requests (have id and method)
-    if (hasId && !method.empty())
+    try
     {
-        // Before initialize, only allow "initialize"
-        if (!_initialized && method != "initialize")
+        // Requests (have id and method)
+        if (hasId && !method.empty())
         {
-            writeMessage(
-                _output,
-                makeErrorResponse(id, ErrorCode::ServerNotInitialized, "Server not yet initialized"));
-            return;
-        }
+            // Before initialize, only allow "initialize"
+            if (!_initialized && method != "initialize")
+            {
+                writeMessage(
+                    _output,
+                    makeErrorResponse(id, ErrorCode::ServerNotInitialized, "Server not yet initialized"));
+                return;
+            }
 
-        if (method == "initialize")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleInitialize(params)));
+            if (method == "initialize")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleInitialize(params)));
+            }
+            else if (method == "shutdown")
+            {
+                writeMessage(_output, makeResponse(id, handleShutdown()));
+            }
+            else if (method == "textDocument/semanticTokens/full")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleSemanticTokensFull(params)));
+            }
+            else if (method == "textDocument/hover")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleHover(params)));
+            }
+            else if (method == "textDocument/definition")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleDefinition(params)));
+            }
+            else if (method == "textDocument/references")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleReferences(params)));
+            }
+            else if (method == "textDocument/documentHighlight")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleDocumentHighlight(params)));
+            }
+            else if (method == "textDocument/signatureHelp")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleSignatureHelp(params)));
+            }
+            else if (method == "textDocument/documentSymbol")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleDocumentSymbol(params)));
+            }
+            else if (method == "textDocument/rename")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleRename(params)));
+            }
+            else if (method == "textDocument/prepareRename")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handlePrepareRename(params)));
+            }
+            else if (method == "textDocument/completion")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleCompletion(params)));
+            }
+            else if (method == "textDocument/formatting")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleFormatting(params)));
+            }
+            else
+            {
+                writeMessage(_output,
+                             makeErrorResponse(id, ErrorCode::MethodNotFound, "Method not found: " + method));
+            }
         }
-        else if (method == "shutdown")
+        // Notifications (have method but no id)
+        else if (!method.empty())
         {
-            writeMessage(_output, makeResponse(id, handleShutdown()));
-        }
-        else if (method == "textDocument/semanticTokens/full")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleSemanticTokensFull(params)));
-        }
-        else if (method == "textDocument/hover")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleHover(params)));
-        }
-        else if (method == "textDocument/definition")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleDefinition(params)));
-        }
-        else if (method == "textDocument/references")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleReferences(params)));
-        }
-        else if (method == "textDocument/documentHighlight")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleDocumentHighlight(params)));
-        }
-        else if (method == "textDocument/signatureHelp")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleSignatureHelp(params)));
-        }
-        else if (method == "textDocument/documentSymbol")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleDocumentSymbol(params)));
-        }
-        else if (method == "textDocument/rename")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleRename(params)));
-        }
-        else if (method == "textDocument/prepareRename")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handlePrepareRename(params)));
-        }
-        else if (method == "textDocument/completion")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleCompletion(params)));
-        }
-        else if (method == "textDocument/formatting")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            writeMessage(_output, makeResponse(id, handleFormatting(params)));
-        }
-        else
-        {
-            writeMessage(_output,
-                         makeErrorResponse(id, ErrorCode::MethodNotFound, "Method not found: " + method));
+            if (method == "initialized")
+            {
+                // No-op, server is already initialized
+            }
+            else if (method == "exit")
+            {
+                handleExit();
+            }
+            else if (method == "textDocument/didOpen")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                handleDidOpen(params);
+            }
+            else if (method == "textDocument/didChange")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                handleDidChange(params);
+            }
+            else if (method == "textDocument/didClose")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                handleDidClose(params);
+            }
+            // Unknown notifications are silently ignored per LSP spec
         }
     }
-    // Notifications (have method but no id)
-    else if (!method.empty())
+    catch (std::exception const& ex)
     {
-        if (method == "initialized")
-        {
-            // No-op, server is already initialized
-        }
-        else if (method == "exit")
-        {
-            handleExit();
-        }
-        else if (method == "textDocument/didOpen")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            handleDidOpen(params);
-        }
-        else if (method == "textDocument/didChange")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            handleDidChange(params);
-        }
-        else if (method == "textDocument/didClose")
-        {
-            auto const params = message.value("params", nlohmann::json::object());
-            handleDidClose(params);
-        }
-        // Unknown notifications are silently ignored per LSP spec
+        if (hasId && !method.empty())
+            writeMessage(
+                _output,
+                makeErrorResponse(id, ErrorCode::InternalError, std::string("Internal error: ") + ex.what()));
+        // Notifications: silently ignore exceptions per LSP spec
     }
 }
 
