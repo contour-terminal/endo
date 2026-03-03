@@ -6,11 +6,11 @@
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 
+#include <editor-protocol/StubRuntime.hpp>
+
 #include <ranges>
 #include <unordered_map>
 #include <utility>
-
-#include <editor-protocol/StubRuntime.hpp>
 
 namespace endo::lsp
 {
@@ -107,6 +107,21 @@ namespace
             else if (auto const* uni = dynamic_cast<ast::UnionTypeDefStmt const*>(&node))
             {
                 walkUnionTypeDef(*uni);
+            }
+            else if (auto const* forIn = dynamic_cast<ast::ForInStmt const*>(&node))
+            {
+                walkExpr(*forIn->source);
+                pushScope();
+                for (auto const& name: pattern::collectBindings(*forIn->pattern))
+                {
+                    defineSymbol(name,
+                                 SymbolDefinition {
+                                     .name = name,
+                                     .category = SymbolCategory::Parameter,
+                                 });
+                }
+                walkStatement(*forIn->body);
+                popScope();
             }
             else if (auto const* exprStmt = dynamic_cast<ast::ExprStmt const*>(&node))
             {
@@ -400,6 +415,110 @@ namespace
             {
                 walkExpr(*e->body);
                 walkExpr(*e->finallyExpr);
+            }
+            else if (auto const* e = dynamic_cast<ast::BlockExpr const*>(&expr))
+            {
+                pushScope();
+                for (auto const& stmt: e->statements)
+                    walkStatement(*stmt);
+                if (e->result)
+                    walkExpr(*e->result);
+                popScope();
+            }
+            else if (auto const* e = dynamic_cast<ast::FieldAccessExpr const*>(&expr))
+            {
+                walkExpr(*e->object);
+                addReference(e->fieldName);
+            }
+            else if (auto const* e = dynamic_cast<ast::FStringExpr const*>(&expr))
+            {
+                for (auto const& part: e->parts)
+                    walkExpr(*part);
+            }
+            else if (auto const* e = dynamic_cast<ast::ConsExpr const*>(&expr))
+            {
+                walkExpr(*e->head);
+                walkExpr(*e->tail);
+            }
+            else if (auto const* e = dynamic_cast<ast::UnionConstructorExpr const*>(&expr))
+            {
+                for (auto const& arg: e->arguments)
+                    walkExpr(*arg);
+            }
+            else if (auto const* e = dynamic_cast<ast::MutAssignExpr const*>(&expr))
+            {
+                addReference(e->name);
+                walkExpr(*e->value);
+            }
+            else if (auto const* e = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
+            {
+                walkExpr(*e->option);
+                walkExpr(*e->defaultValue);
+            }
+            else if (auto const* e = dynamic_cast<ast::CompositionExpr const*>(&expr))
+            {
+                walkExpr(*e->left);
+                walkExpr(*e->right);
+            }
+            else if (auto const* e = dynamic_cast<ast::RecordExpr const*>(&expr))
+            {
+                for (auto const& field: e->fields)
+                {
+                    addReference(field.name);
+                    walkExpr(*field.value);
+                }
+            }
+            else if (auto const* e = dynamic_cast<ast::RecordUpdateExpr const*>(&expr))
+            {
+                walkExpr(*e->base);
+                for (auto const& update: e->updates)
+                {
+                    addReference(update.name);
+                    walkExpr(*update.value);
+                }
+            }
+            else if (auto const* e = dynamic_cast<ast::ConcatListExpr const*>(&expr))
+            {
+                walkExpr(*e->left);
+                walkExpr(*e->right);
+            }
+            else if (auto const* e = dynamic_cast<ast::ListRangeExpr const*>(&expr))
+            {
+                walkExpr(*e->start);
+                if (e->step)
+                    walkExpr(*e->step);
+                walkExpr(*e->end);
+            }
+            else if (auto const* e = dynamic_cast<ast::LazyExpr const*>(&expr))
+            {
+                walkExpr(*e->body);
+            }
+            else if (auto const* e = dynamic_cast<ast::SeqExpr const*>(&expr))
+            {
+                for (auto const& yield: e->yields)
+                    walkExpr(*yield.value);
+            }
+            else if (auto const* e = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
+            {
+                walkExpr(*e->object);
+                addReference(e->fieldName);
+            }
+            else if (auto const* e = dynamic_cast<ast::PlaceholderLambdaExpr const*>(&expr))
+            {
+                walkExpr(*e->body);
+            }
+            else if (auto const* e = dynamic_cast<ast::SplatExpr const*>(&expr))
+            {
+                addReference(e->name);
+            }
+            else if (auto const* e = dynamic_cast<ast::ExecPipelineExpr const*>(&expr))
+            {
+                for (auto const& cmd: e->commands)
+                {
+                    walkExpr(*cmd.program);
+                    for (auto const& arg: cmd.arguments)
+                        walkExpr(*arg);
+                }
             }
         }
 

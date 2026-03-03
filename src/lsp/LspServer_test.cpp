@@ -1076,6 +1076,204 @@ TEST_CASE("Definition.shadowed variable resolves to inner scope", "[lsp][definit
     CHECK(loc->range.start.line == 1);
 }
 
+TEST_CASE("Definition.field access resolves object variable", "[lsp][definition]")
+{
+    // "let p = 42\nprintln p.name"
+    //  cursor on "p" in "p.name" (line 1, col 8)
+    const auto* source = "let p = 42\nprintln p.name";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 8 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.fstring interpolation resolves variable", "[lsp][definition]")
+{
+    // let name = "world"
+    // let msg = $"hello {name}"
+    //  cursor on "name" inside fstring (line 1, col 20)
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 20 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.record update resolves base variable", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // let older = { alice with age = 31 }
+    //  cursor on "alice" in record update (line 2, col 14)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 14 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 1);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.field access on record field resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // println alice.name
+    //  cursor on "name" in "alice.name" (line 2, col 14)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 14 });
+    REQUIRE(loc.has_value());
+    // "name" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.record expr field name resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    //  cursor on "age" in record literal (line 1, col 30)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 30 });
+    REQUIRE(loc.has_value());
+    // "age" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.record update field name resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // let older = { alice with age = 31 }
+    //  cursor on "age" in record update (line 2, col 25)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 25 });
+    REQUIRE(loc.has_value());
+    // "age" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.cons expression resolves head variable", "[lsp][definition]")
+{
+    const auto* source = "let x = 1\nlet xs = x :: [2; 3]";
+    // cursor on "x" in cons expr (line 1, col 9)
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 9 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("References.field access includes object variable", "[lsp][references]")
+{
+    const auto* source = "let p = 42\nprintln p.name";
+    // cursor on "p" definition (line 0, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 4 }, true);
+    // Should find 2: definition + field access usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.fstring includes interpolated variable", "[lsp][references]")
+{
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    // cursor on "name" definition (line 0, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 4 }, true);
+    // Should find 2: definition + fstring interpolation usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.record update includes base variable", "[lsp][references]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    // cursor on "alice" definition (line 1, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 1, .character = 4 }, true);
+    // Should find 2: definition + record update usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.record field finds type def and all usages", "[lsp][references]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    // cursor on "name" field definition in type def (line 0, col 16)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 16 }, true);
+    // Should find 3: field definition + record expr field + field access
+    CHECK(locs.size() >= 3);
+}
+
+TEST_CASE("DocumentHighlight.field access highlights object variable", "[lsp][highlight]")
+{
+    const auto* source = "let p = 42\nprintln p.name";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // Should find 2: definition + field access usage
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.fstring highlights interpolated variable", "[lsp][highlight]")
+{
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // Should find 2: definition + fstring interpolation usage
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.record field highlights across type def and usages", "[lsp][highlight]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    // cursor on "name" in field access (line 2, col 14)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 2, .character = 14 });
+    // Should find 3: field definition (Write) + record expr field (Read) + field access (Read)
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);
+}
+
+// =============================================================================
+// E2E: error resilience
+// =============================================================================
+
+TEST_CASE("E2E.internal error returns error response not crash", "[lsp][e2e]")
+{
+    // Send a request with missing required fields to trigger an exception
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        // definition request missing textDocument.uri should throw, not crash
+        sendRequest("textDocument/definition",
+                    json { { "textDocument", json::object() },
+                           { "position", json { { "line", 0 }, { "character", 0 } } } },
+                    2),
+        sendRequest("shutdown", json::object(), 3),
+        sendNotification("exit", json::object()),
+    });
+    // Server should still have responded (not crashed)
+    CHECK(responses.size() >= 2);
+    // The definition response should be an error
+    auto foundError = false;
+    for (auto const& r: responses)
+    {
+        if (r.contains("id") && r["id"] == 2 && r.contains("error"))
+        {
+            foundError = true;
+            break;
+        }
+    }
+    CHECK(foundError);
+}
+
 // =============================================================================
 // References tests
 // =============================================================================
