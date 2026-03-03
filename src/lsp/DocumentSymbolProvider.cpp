@@ -6,6 +6,40 @@
 namespace endo::lsp
 {
 
+namespace
+{
+
+    /// Maps a SymbolCategory to the corresponding LSP SymbolKind.
+    [[nodiscard]] SymbolKind categoryToSymbolKind(SymbolCategory category)
+    {
+        switch (category)
+        {
+            case SymbolCategory::Variable: return SymbolKind::Variable;
+            case SymbolCategory::Function: return SymbolKind::Function;
+            case SymbolCategory::Parameter: return SymbolKind::Variable;
+            case SymbolCategory::RecordType: return SymbolKind::Struct;
+            case SymbolCategory::RecordField: return SymbolKind::Field;
+            case SymbolCategory::UnionType: return SymbolKind::Enum;
+            case SymbolCategory::UnionVariant: return SymbolKind::EnumMember;
+            case SymbolCategory::Property: return SymbolKind::Property;
+        }
+        return SymbolKind::Variable; // unreachable
+    }
+
+    /// Returns true if the category represents a child symbol (not top-level).
+    [[nodiscard]] bool isChildCategory(SymbolCategory category)
+    {
+        switch (category)
+        {
+            case SymbolCategory::Parameter:
+            case SymbolCategory::RecordField:
+            case SymbolCategory::UnionVariant: return true;
+            default: return false;
+        }
+    }
+
+} // namespace
+
 std::vector<DocumentSymbol> computeDocumentSymbols(std::string const& source)
 {
     auto table = collectSymbols(source);
@@ -16,34 +50,33 @@ std::vector<DocumentSymbol> computeDocumentSymbols(std::string const& source)
 
     for (auto const& def: table->definitions)
     {
-        // Only top-level symbols: not parameters, not enclosed in a function, at nesting depth 0
-        if (def.isParameter || def.enclosingFunction.has_value() || def.nestingDepth > 0)
+        // Skip child symbols and nested definitions — they are added as children below
+        if (isChildCategory(def.category) || def.enclosingSymbol.has_value() || def.nestingDepth > 0)
             continue;
 
         auto const nameRange = toRange(def.location);
 
         auto symbol = DocumentSymbol {
             .name = def.name,
-            .kind = def.isFunction ? SymbolKind::Function : SymbolKind::Variable,
+            .detail = def.detail,
+            .kind = categoryToSymbolKind(def.category),
             .range = nameRange,
             .selectionRange = nameRange,
         };
 
-        // Add parameters as children for function definitions
-        if (def.isFunction)
+        // Collect children: any definition whose enclosingSymbol matches this symbol's name
+        for (auto const& childDef: table->definitions)
         {
-            for (auto const& childDef: table->definitions)
+            if (childDef.enclosingSymbol == def.name)
             {
-                if (childDef.isParameter && childDef.enclosingFunction == def.name)
-                {
-                    auto const childRange = toRange(childDef.location);
-                    symbol.children.push_back(DocumentSymbol {
-                        .name = childDef.name,
-                        .kind = SymbolKind::Variable,
-                        .range = childRange,
-                        .selectionRange = childRange,
-                    });
-                }
+                auto const childRange = toRange(childDef.location);
+                symbol.children.push_back(DocumentSymbol {
+                    .name = childDef.name,
+                    .detail = childDef.detail,
+                    .kind = categoryToSymbolKind(childDef.category),
+                    .range = childRange,
+                    .selectionRange = childRange,
+                });
             }
         }
 

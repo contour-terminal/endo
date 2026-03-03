@@ -931,7 +931,7 @@ TEST_CASE("SymbolCollector.collectSymbols returns definitions and references", "
         if (def.name == "x")
         {
             foundXDef = true;
-            CHECK_FALSE(def.isFunction);
+            CHECK(def.category == SymbolCategory::Variable);
         }
     }
     CHECK(foundXDef);
@@ -955,7 +955,7 @@ TEST_CASE("SymbolCollector.function definition captures parameters", "[lsp][symb
         if (def.name == "add")
         {
             foundAdd = true;
-            CHECK(def.isFunction);
+            CHECK(def.category == SymbolCategory::Function);
             REQUIRE(def.parameterNames.size() == 2);
             CHECK(def.parameterNames[0] == "x");
             CHECK(def.parameterNames[1] == "y");
@@ -1394,6 +1394,68 @@ TEST_CASE("DocumentSymbol.parse_failure_returns_empty", "[lsp][documentsymbol]")
 {
     auto symbols = computeDocumentSymbols("let = ");
     CHECK(symbols.empty());
+}
+
+TEST_CASE("DocumentSymbol.record_type_with_fields", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("type Person = { name: string; age: int }");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Person");
+    CHECK(symbols[0].kind == SymbolKind::Struct);
+    REQUIRE(symbols[0].children.size() == 2);
+    CHECK(symbols[0].children[0].name == "name");
+    CHECK(symbols[0].children[0].kind == SymbolKind::Field);
+    CHECK(symbols[0].children[0].detail == "string");
+    CHECK(symbols[0].children[1].name == "age");
+    CHECK(symbols[0].children[1].kind == SymbolKind::Field);
+    CHECK(symbols[0].children[1].detail == "int");
+}
+
+TEST_CASE("DocumentSymbol.union_type_with_variants", "[lsp][documentsymbol]")
+{
+    auto symbols =
+        computeDocumentSymbols("type Shape = | Circle of float | Rectangle of float * float | Point");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Shape");
+    CHECK(symbols[0].kind == SymbolKind::Enum);
+    REQUIRE(symbols[0].children.size() == 3);
+    CHECK(symbols[0].children[0].name == "Circle");
+    CHECK(symbols[0].children[0].kind == SymbolKind::EnumMember);
+    CHECK(symbols[0].children[0].detail == "float");
+    CHECK(symbols[0].children[1].name == "Rectangle");
+    CHECK(symbols[0].children[1].kind == SymbolKind::EnumMember);
+    CHECK(symbols[0].children[1].detail == "float * float");
+    CHECK(symbols[0].children[2].name == "Point");
+    CHECK(symbols[0].children[2].kind == SymbolKind::EnumMember);
+    CHECK_FALSE(symbols[0].children[2].detail.has_value());
+}
+
+TEST_CASE("DocumentSymbol.mixed_types_and_bindings", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("type Color = { r: int; g: int; b: int }\n"
+                                          "type Shape = | Circle of float | Point\n"
+                                          "let area (x: float) : float = x\n"
+                                          "let pi = 3.14");
+    REQUIRE(symbols.size() == 4);
+    CHECK(symbols[0].name == "Color");
+    CHECK(symbols[0].kind == SymbolKind::Struct);
+    CHECK(symbols[0].children.size() == 3);
+    CHECK(symbols[1].name == "Shape");
+    CHECK(symbols[1].kind == SymbolKind::Enum);
+    CHECK(symbols[1].children.size() == 2);
+    CHECK(symbols[2].name == "area");
+    CHECK(symbols[2].kind == SymbolKind::Function);
+    CHECK(symbols[2].children.size() == 1); // parameter x
+    CHECK(symbols[3].name == "pi");
+    CHECK(symbols[3].kind == SymbolKind::Variable);
+}
+
+TEST_CASE("DocumentSymbol.property_binding", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let Name with get () = \"test\"");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Name");
+    CHECK(symbols[0].kind == SymbolKind::Property);
 }
 
 // =============================================================================

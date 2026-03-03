@@ -12,19 +12,32 @@
 namespace endo::lsp
 {
 
-/// Represents a symbol definition (variable, function, parameter, pattern binding).
+/// Categorizes the kind of symbol definition.
+enum class SymbolCategory
+{
+    Variable,     ///< Simple variable binding
+    Function,     ///< Function definition (has parameters)
+    Parameter,    ///< Function parameter or pattern binding
+    RecordType,   ///< Record type definition (`type T = { ... }`)
+    RecordField,  ///< Field within a record type
+    UnionType,    ///< Discriminated union type definition (`type T = | ...`)
+    UnionVariant, ///< Variant constructor within a union type
+    Property,     ///< Property binding (get/set)
+};
+
+/// Represents a symbol definition (variable, function, parameter, type, field, variant).
 struct SymbolDefinition
 {
-    std::string name;                             ///< Symbol name
-    SourceLocationRange location;                 ///< Location of the name in source
-    std::vector<std::string> parameterNames;      ///< Parameter names (empty for non-functions)
-    std::vector<std::string> parameterTypes;      ///< Parameter type annotations (empty string if none)
-    std::optional<std::string> returnType;        ///< Return type annotation
-    bool isFunction = false;                      ///< True if this is a function definition
-    bool isParameter = false;                     ///< True if this is a function parameter
-    std::optional<std::string> enclosingFunction; ///< Name of the enclosing function (for parameters)
-    int scopeId = 0;                              ///< Unique scope identifier
-    int nestingDepth = 0;                         ///< Scope nesting depth (0 = top-level)
+    std::string name;                                   ///< Symbol name
+    SourceLocationRange location;                       ///< Location of the name in source
+    SymbolCategory category = SymbolCategory::Variable; ///< Kind of symbol
+    std::vector<std::string> parameterNames;            ///< Parameter names (empty for non-functions)
+    std::vector<std::string> parameterTypes;            ///< Parameter type annotations (empty string if none)
+    std::optional<std::string> returnType;              ///< Return type annotation
+    std::optional<std::string> detail;                  ///< Type signature or other detail string
+    std::optional<std::string> enclosingSymbol;         ///< Name of the enclosing symbol (for children)
+    int scopeId = 0;                                    ///< Unique scope identifier
+    int nestingDepth = 0;                               ///< Scope nesting depth (0 = top-level)
 };
 
 /// Represents a reference to a symbol.

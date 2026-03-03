@@ -258,8 +258,13 @@ inline void to_json(nlohmann::json& j, SignatureHelp const& h)
 enum class SymbolKind : int
 {
     File = 1,
+    Property = 7, ///< Property bindings (get/set)
+    Field = 8,    ///< Record fields
+    Enum = 10,    ///< Discriminated union types
     Function = 12,
     Variable = 13,
+    EnumMember = 22,    ///< Union variant constructors
+    Struct = 23,        ///< Record types
     TypeParameter = 26, ///< For pattern bindings in match arms
 };
 
@@ -267,6 +272,7 @@ enum class SymbolKind : int
 struct DocumentSymbol
 {
     std::string name;
+    std::optional<std::string> detail; ///< Type signature or other detail string
     SymbolKind kind = SymbolKind::Variable;
     Range range;          ///< Full span of the symbol (including body)
     Range selectionRange; ///< Name span (for highlighting)
@@ -281,6 +287,8 @@ inline void to_json(nlohmann::json& j, DocumentSymbol const& s)
         { "range", s.range },
         { "selectionRange", s.selectionRange },
     };
+    if (s.detail.has_value())
+        j["detail"] = *s.detail;
     if (!s.children.empty())
         j["children"] = s.children;
 }
