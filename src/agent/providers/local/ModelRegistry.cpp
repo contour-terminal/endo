@@ -203,7 +203,8 @@ auto curatedModels() -> std::span<CuratedModel const>
 
 auto findCuratedModel(std::string_view name) -> CuratedModel const*
 {
-    auto const it = std::ranges::find_if(CuratedModelCatalog, [name](CuratedModel const& model) {
+    auto const it = std::ranges::find_if( // NOLINT(readability-qualified-auto)
+        CuratedModelCatalog, [name](CuratedModel const& model) {
         return containsCaseInsensitive(model.name, name);
     });
 
