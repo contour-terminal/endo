@@ -173,8 +173,9 @@ TEST_CASE("shell.cd.invalid_path")
 
 TEST_CASE("shell.syntax.pipes")
 {
-    CHECK(escape(TestShell()("echo hello | grep ll").output()) == escape("hello\n"));
-    CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo hello | grep --color=never ll").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo hello | grep --color=never ll | grep --color=never hell").output())
+          == escape("hello\n"));
 }
 
 TEST_CASE("shell.tilde_in_argument")
@@ -4052,4 +4053,372 @@ TEST_CASE("shell.builtin.find_no_results")
     CHECK(out.find("file.txt") == std::string::npos);
 
     fs::remove_all(testDir);
+}
+
+// ============================================================================
+// Grep Builtin — Pipe Input Tests
+// ============================================================================
+
+TEST_CASE("shell.builtin.grep_pipe_basic")
+{
+    CHECK(escape(TestShell()("echo -e \"hello\\nworld\" | grep --color=never hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_no_match")
+{
+    TestShell shell;
+    shell("echo foo | grep --color=never bar");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().empty());
+}
+
+TEST_CASE("shell.builtin.grep_pipe_case_insensitive")
+{
+    CHECK(escape(TestShell()("echo FOO | grep --color=never -i foo").output()) == escape("FOO\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_invert")
+{
+    CHECK(escape(TestShell()("echo -e \"foo\\nbar\\nbaz\" | grep --color=never -v bar").output()) == escape("foo\nbaz\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_count")
+{
+    CHECK(escape(TestShell()("echo -e \"aa\\nab\\nac\" | grep --color=never -c a").output()) == escape("3\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_line_numbers")
+{
+    CHECK(escape(TestShell()("echo -e \"a\\nb\\na\" | grep --color=never -n a").output()) == escape("1:a\n3:a\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_only_matching")
+{
+    CHECK(escape(TestShell()("echo \"hello world\" | grep --color=never -o world").output()) == escape("world\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_fixed_strings")
+{
+    CHECK(escape(TestShell()("echo \"a.b\" | grep --color=never -F \"a.b\"").output()) == escape("a.b\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_word_regexp")
+{
+    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -w foo").output()) == escape("foo\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_max_count")
+{
+    TestShell shell;
+    shell("echo -e \"a\\na\\na\" | grep --color=never -m 2 a");
+    auto const output = std::string(shell.output());
+    auto count = std::ranges::count(output, '\n');
+    CHECK(count == 2);
+}
+
+TEST_CASE("shell.builtin.grep_pipe_quiet_match")
+{
+    TestShell shell;
+    shell("echo hello | grep --color=never -q hello");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.output().empty());
+}
+
+TEST_CASE("shell.builtin.grep_pipe_quiet_no_match")
+{
+    TestShell shell;
+    shell("echo hello | grep --color=never -q xyz");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().empty());
+}
+
+TEST_CASE("shell.builtin.grep_pipe_context")
+{
+    CHECK(escape(TestShell()("echo -e \"a\\nb\\nc\\nd\\ne\" | grep --color=never -C 1 c").output()) == escape("b\nc\nd\n"));
+}
+
+TEST_CASE("shell.builtin.grep_pipe_multiple_e")
+{
+    CHECK(escape(TestShell()("echo -e \"foo\\nbar\\nbaz\" | grep --color=never -e foo -e baz").output())
+          == escape("foo\nbaz\n"));
+}
+
+// ============================================================================
+// Grep Builtin — File-Based Tests
+// ============================================================================
+
+TEST_CASE("shell.builtin.grep_file_basic")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_file";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "test.txt";
+    {
+        std::ofstream ofs(file1);
+        ofs << "hello world\ngoodbye world\nhello again\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never hello {}", file1.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("hello world") != std::string::npos);
+    CHECK(out.find("hello again") != std::string::npos);
+    CHECK(out.find("goodbye") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_file_no_match_exit_code")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_nomatch";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "test.txt";
+    {
+        std::ofstream ofs(file1);
+        ofs << "hello world\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never xyz {}", file1.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_file_multiple_files")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_multi";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "a.txt";
+    auto const file2 = testDir / "b.txt";
+    {
+        std::ofstream(file1) << "hello from a\n";
+        std::ofstream(file2) << "hello from b\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never hello {} {}", file1.string(), file2.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    // With multiple files, filenames should be prefixed
+    CHECK(out.find("a.txt:") != std::string::npos);
+    CHECK(out.find("b.txt:") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_file_with_filename")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_Hflag";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "test.txt";
+    {
+        std::ofstream(file1) << "hello\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -H hello {}", file1.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("test.txt:") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_file_no_filename")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_hflag";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "a.txt";
+    auto const file2 = testDir / "b.txt";
+    {
+        std::ofstream(file1) << "hello\n";
+        std::ofstream(file2) << "hello\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -h hello {} {}", file1.string(), file2.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("a.txt:") == std::string::npos);
+    CHECK(out.find("b.txt:") == std::string::npos);
+    CHECK(out == "hello\nhello\n");
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_files_with_matches")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_lflag";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "a.txt";
+    auto const file2 = testDir / "b.txt";
+    {
+        std::ofstream(file1) << "hello\n";
+        std::ofstream(file2) << "world\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -l hello {} {}", file1.string(), file2.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("a.txt") != std::string::npos);
+    CHECK(out.find("b.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_files_without_match")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_Lflag";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const file1 = testDir / "a.txt";
+    auto const file2 = testDir / "b.txt";
+    {
+        std::ofstream(file1) << "hello\n";
+        std::ofstream(file2) << "world\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -L hello {} {}", file1.string(), file2.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("a.txt") == std::string::npos);
+    CHECK(out.find("b.txt") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_recursive";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "sub");
+    {
+        std::ofstream(testDir / "top.txt") << "hello top\n";
+        std::ofstream(testDir / "sub" / "nested.txt") << "hello nested\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -r hello {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("hello top") != std::string::npos);
+    CHECK(out.find("hello nested") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_recursive_include")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_include";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    {
+        std::ofstream(testDir / "a.txt") << "hello\n";
+        std::ofstream(testDir / "b.cpp") << "hello\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -r --include=*.txt hello {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("a.txt") != std::string::npos);
+    CHECK(out.find("b.cpp") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_recursive_exclude_dir")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_exdir";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "src");
+    fs::create_directories(testDir / "build");
+    {
+        std::ofstream(testDir / "src" / "main.cpp") << "hello\n";
+        std::ofstream(testDir / "build" / "out.cpp") << "hello\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -rH --exclude-dir=build hello {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("main.cpp") != std::string::npos);
+    CHECK(out.find("out.cpp") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_binary_skip")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_grep_test_binary";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    auto const binFile = testDir / "binary.bin";
+    auto const txtFile = testDir / "text.txt";
+    {
+        std::ofstream bin(binFile, std::ios::binary);
+        bin << "hello";
+        bin.put('\0');
+        bin << "world";
+    }
+    {
+        std::ofstream(txtFile) << "hello text\n";
+    }
+
+    TestShell shell;
+    shell(std::format("grep --color=never -I hello {} {}", binFile.string(), txtFile.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("hello text") != std::string::npos);
+    // Binary file should be skipped
+    CHECK(out.find("binary.bin") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.grep_line_regexp")
+{
+    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -x foo").output()) == escape("foo\n"));
+}
+
+TEST_CASE("shell.builtin.grep_nonexistent_file")
+{
+    TestShell shell;
+    shell("grep --color=never hello /nonexistent/path/file.txt");
+    CHECK(shell.exitCode == 2);
+}
+
+TEST_CASE("shell.builtin.grep_help")
+{
+    TestShell shell;
+    shell("grep --help");
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("Usage") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.grep_pipe_chain")
+{
+    CHECK(escape(TestShell()("echo -e \"aa\\nbb\\ncc\" | grep --color=never -v bb | grep --color=never -c .").output())
+          == escape("2\n"));
 }

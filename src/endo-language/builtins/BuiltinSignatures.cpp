@@ -646,6 +646,7 @@ namespace
         ShellBuiltinDescriptor { .name="bind", .description="builtin", .detail="**bind** -- builtin\n\nBinds a key sequence to a command." },
         ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
         ShellBuiltinDescriptor { .name="echo", .description="builtin", .detail="**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
+        ShellBuiltinDescriptor { .name="grep", .description="builtin", .detail="**grep** -- builtin\n\nSearches for patterns in files.\n\n```\ngrep -rn TODO src/\n```" },
         ShellBuiltinDescriptor { .name="print", .description="F# print function", .detail="**print** -- builtin\n\nPrints a value without newline (F# style).\n\n```\nprint 42\nprint \"hello\"\n```" },
         ShellBuiltinDescriptor { .name="println", .description="F# print with newline", .detail="**println** -- builtin\n\nPrints a value followed by a newline (F# style).\n\n```\nprintln \"hello world\"\n```" },
         // MCP server management
