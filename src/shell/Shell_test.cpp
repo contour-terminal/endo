@@ -4061,7 +4061,8 @@ TEST_CASE("shell.builtin.find_no_results")
 
 TEST_CASE("shell.builtin.grep_pipe_basic")
 {
-    CHECK(escape(TestShell()("echo -e \"hello\\nworld\" | grep --color=never hello").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo -e \"hello\\nworld\" | grep --color=never hello").output())
+          == escape("hello\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_no_match")
@@ -4079,22 +4080,26 @@ TEST_CASE("shell.builtin.grep_pipe_case_insensitive")
 
 TEST_CASE("shell.builtin.grep_pipe_invert")
 {
-    CHECK(escape(TestShell()("echo -e \"foo\\nbar\\nbaz\" | grep --color=never -v bar").output()) == escape("foo\nbaz\n"));
+    CHECK(escape(TestShell()("echo -e \"foo\\nbar\\nbaz\" | grep --color=never -v bar").output())
+          == escape("foo\nbaz\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_count")
 {
-    CHECK(escape(TestShell()("echo -e \"aa\\nab\\nac\" | grep --color=never -c a").output()) == escape("3\n"));
+    CHECK(escape(TestShell()("echo -e \"aa\\nab\\nac\" | grep --color=never -c a").output())
+          == escape("3\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_line_numbers")
 {
-    CHECK(escape(TestShell()("echo -e \"a\\nb\\na\" | grep --color=never -n a").output()) == escape("1:a\n3:a\n"));
+    CHECK(escape(TestShell()("echo -e \"a\\nb\\na\" | grep --color=never -n a").output())
+          == escape("1:a\n3:a\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_only_matching")
 {
-    CHECK(escape(TestShell()("echo \"hello world\" | grep --color=never -o world").output()) == escape("world\n"));
+    CHECK(escape(TestShell()("echo \"hello world\" | grep --color=never -o world").output())
+          == escape("world\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_fixed_strings")
@@ -4104,13 +4109,14 @@ TEST_CASE("shell.builtin.grep_pipe_fixed_strings")
 
 TEST_CASE("shell.builtin.grep_pipe_word_regexp")
 {
-    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -w foo").output()) == escape("foo\n"));
+    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -w foo").output())
+          == escape("foo\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_max_count")
 {
     TestShell shell;
-    shell("echo -e \"a\\na\\na\" | grep --color=never -m 2 a");
+    shell(R"(echo -e "a\na\na" | grep --color=never -m 2 a)");
     auto const output = std::string(shell.output());
     auto count = std::ranges::count(output, '\n');
     CHECK(count == 2);
@@ -4134,7 +4140,8 @@ TEST_CASE("shell.builtin.grep_pipe_quiet_no_match")
 
 TEST_CASE("shell.builtin.grep_pipe_context")
 {
-    CHECK(escape(TestShell()("echo -e \"a\\nb\\nc\\nd\\ne\" | grep --color=never -C 1 c").output()) == escape("b\nc\nd\n"));
+    CHECK(escape(TestShell()("echo -e \"a\\nb\\nc\\nd\\ne\" | grep --color=never -C 1 c").output())
+          == escape("b\nc\nd\n"));
 }
 
 TEST_CASE("shell.builtin.grep_pipe_multiple_e")
@@ -4398,7 +4405,8 @@ TEST_CASE("shell.builtin.grep_binary_skip")
 
 TEST_CASE("shell.builtin.grep_line_regexp")
 {
-    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -x foo").output()) == escape("foo\n"));
+    CHECK(escape(TestShell()("echo -e \"foo\\nfoobar\" | grep --color=never -x foo").output())
+          == escape("foo\n"));
 }
 
 TEST_CASE("shell.builtin.grep_nonexistent_file")
@@ -4419,6 +4427,7 @@ TEST_CASE("shell.builtin.grep_help")
 
 TEST_CASE("shell.builtin.grep_pipe_chain")
 {
-    CHECK(escape(TestShell()("echo -e \"aa\\nbb\\ncc\" | grep --color=never -v bb | grep --color=never -c .").output())
+    CHECK(escape(TestShell()("echo -e \"aa\\nbb\\ncc\" | grep --color=never -v bb | grep --color=never -c .")
+                     .output())
           == escape("2\n"));
 }

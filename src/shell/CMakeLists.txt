@@ -154,6 +154,8 @@ add_library(endo-shell STATIC
     commands/FindCommand.cpp
     commands/GrepCommand.hpp
     commands/GrepCommand.cpp
+    commands/TimeoutCommand.hpp
+    commands/TimeoutCommand.cpp
     commands/JobProvider.hpp
     commands/JobsCommand.hpp
     commands/JobsCommand.cpp
@@ -224,6 +226,7 @@ add_executable(test-endo-shell
     Shell_test.cpp
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp
+    commands/TimeoutCommand_test.cpp
     CrashHandler_test.cpp
     ui/PromptComponent_test.cpp
     ui/Gradient_test.cpp

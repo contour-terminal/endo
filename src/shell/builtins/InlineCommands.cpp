@@ -2,6 +2,7 @@
 #include <shell/Shell.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
+#include <shell/commands/TimeoutCommand.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
@@ -2124,7 +2125,8 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         if (!currentLine.empty())
             lines.push_back(std::move(currentLine));
 
-        totalMatches = grep::searchLines(lines, *regex, opts, "(standard input)", showFilename, useColor, writer);
+        totalMatches =
+            grep::searchLines(lines, *regex, opts, "(standard input)", showFilename, useColor, writer);
     }
     else
     {
@@ -2166,6 +2168,190 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         return 2;
 
     return totalMatches > 0 ? 0 : 1;
+}
+
+int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    // Parse arguments (skip args[0] which is "timeout")
+    auto timeoutArgs = std::vector<std::string>();
+    for (auto const i: std::views::iota(1uz, args.size()))
+        timeoutArgs.push_back(args.at(i));
+
+    auto parsed = timeout::parseTimeoutArgs(timeoutArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 125;
+    }
+
+    auto& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(
+            outputFd,
+            "# timeout\n"
+            "\n"
+            "Run a command with a time limit.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`timeout [OPTIONS] DURATION COMMAND [ARG...]`\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|--------|-------------|\n"
+            "| `-s SIGNAL`, `--signal=SIGNAL` | Signal to send on timeout (default: TERM) |\n"
+            "| `-k DURATION`, `--kill-after=DURATION` | Send SIGKILL after grace period |\n"
+            "| `--preserve-status` | Return the command's exit status on timeout |\n"
+            "| `--foreground` | Don't create a separate process group |\n"
+            "| `-v`, `--verbose` | Diagnose to stderr when signal is sent |\n"
+            "| `-h`, `--help` | Show this help |\n"
+            "\n"
+            "## Duration Format\n"
+            "\n"
+            "A floating-point number with optional suffix: `s` (seconds, default), `m` (minutes), "
+            "`h` (hours), `d` (days).\n"
+            "\n"
+            "## Exit Codes\n"
+            "\n"
+            "| Code | Meaning |\n"
+            "|------|--------|\n"
+            "| 124 | Command timed out |\n"
+            "| 125 | timeout command itself failed |\n"
+            "| 126 | Command found but not executable |\n"
+            "| 127 | Command not found |\n"
+            "| 128+N | Command was killed by signal N |\n");
+
+    // Resolve the sub-command
+    auto const programPath = resolveProgram(opts.command[0]);
+    if (!programPath.has_value())
+    {
+        if (programPath.error() == ShellError::ProgramNotFound)
+        {
+            error("timeout: {}: command not found", opts.command[0]);
+            return 127;
+        }
+        error("timeout: {}: not executable", opts.command[0]);
+        return 126;
+    }
+
+    // Build spawn config
+    auto config = SpawnConfig {};
+    config.program = programPath.value();
+    for (auto const i: std::views::iota(1uz, opts.command.size()))
+        config.arguments.push_back(opts.command[i]);
+    config.stdoutFd = outputFd;
+    if (!opts.foreground)
+        config.processGroup = 0; // New process group
+
+    // Spawn the sub-command
+    auto spawnResult = _processManager.spawn(config);
+    if (!spawnResult.has_value())
+    {
+        error("timeout: failed to spawn {}: {}", opts.command[0], static_cast<int>(spawnResult.error()));
+        return 125;
+    }
+    auto const pid = spawnResult.value();
+
+    // If duration is 0, just do a blocking wait (no timeout)
+    if (opts.durationSeconds == 0.0)
+    {
+        auto waitResult = _processManager.wait(pid);
+        if (!waitResult.has_value())
+            return 125;
+        if (waitResult->signaled)
+            return 128 + waitResult->signal;
+        return waitResult->exitCode;
+    }
+
+    // Poll loop with timeout
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::duration<double>(opts.durationSeconds);
+    auto timedOut = false;
+
+    while (true)
+    {
+        auto waitResult = _processManager.wait(pid, WaitFlag::NoHang);
+        if (!waitResult.has_value())
+            return 125;
+
+        if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
+        {
+            // Child has exited
+            if (waitResult->signaled)
+                return 128 + waitResult->signal;
+            return waitResult->exitCode;
+        }
+
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            timedOut = true;
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Timeout reached — send configured signal
+    if (opts.verbose)
+        std::cerr << std::format(
+            "timeout: sending signal {} to command '{}'\n", opts.signal, opts.command[0]);
+    if (auto const sendResult = _processManager.sendSignal(pid, opts.signal); !sendResult.has_value())
+        return 125;
+
+    // If kill-after is set, wait the grace period then send SIGKILL
+    if (opts.killAfterSeconds > 0.0)
+    {
+        auto const killDeadline =
+            std::chrono::steady_clock::now() + std::chrono::duration<double>(opts.killAfterSeconds);
+
+        while (std::chrono::steady_clock::now() < killDeadline)
+        {
+            auto waitResult = _processManager.wait(pid, WaitFlag::NoHang);
+            if (!waitResult.has_value())
+                return 125;
+
+            if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
+            {
+                if (opts.preserveStatus)
+                {
+                    if (waitResult->signaled)
+                        return 128 + waitResult->signal;
+                    return waitResult->exitCode;
+                }
+                return 124;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        // Grace period expired — send SIGKILL
+        if (opts.verbose)
+            std::cerr << std::format("timeout: sending SIGKILL to command '{}'\n", opts.command[0]);
+
+#if !defined(_WIN32)
+        if (auto const sendResult = _processManager.sendSignal(pid, 9); !sendResult.has_value())
+            return 125;
+#else
+        if (auto const sendResult = _processManager.sendSignal(pid, opts.signal); !sendResult.has_value())
+            return 125;
+#endif
+    }
+
+    // Reap the child
+    auto finalResult = _processManager.wait(pid);
+    if (!finalResult.has_value())
+        return 125;
+
+    if (opts.preserveStatus)
+    {
+        if (finalResult->signaled)
+            return 128 + finalResult->signal;
+        return finalResult->exitCode;
+    }
+
+    return timedOut ? 124 : finalResult->exitCode;
 }
 
 } // namespace endo

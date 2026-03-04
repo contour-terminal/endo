@@ -218,6 +218,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineGrep(CoreVM::CoreStringArray const& args,
                                         NativeHandle outputFd,
                                         NativeHandle stdinFd);
+    /// Executes the timeout builtin, running a command with a time limit. Returns exit code.
+    [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
     void finalizePipelineBuiltin(bool lastInChain,
                                  CoreVM::CoreStringArray const& args,

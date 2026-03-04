@@ -109,6 +109,13 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    if (program == "timeout")
+    {
+        _exitCode = executeInlineTimeout(args, outputFd);
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
     {
@@ -279,6 +286,14 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
         _exitCode = executeInlineGrep(args, stdoutFd, stdinFd);
         finalizePipelineBuiltin(lastInChain, args, "grep", context);
+        return;
+    }
+
+    if (program == "timeout")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+        _exitCode = executeInlineTimeout(args, stdoutFd);
+        finalizePipelineBuiltin(lastInChain, args, "timeout", context);
         return;
     }
 
