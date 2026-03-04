@@ -55,15 +55,21 @@ class CommandResolver
     /// @brief Returns the list of builtin command names.
     [[nodiscard]] static std::set<std::string> const& builtinNames();
 
+    /// @brief Searches $PATH for an executable matching @p command.
+    ///
+    /// On POSIX, also verifies execute permission bits.
+    /// On Windows, reads PATHEXT and tries each extension.
+    ///
+    /// @param command  Bare command name (no path separators).
+    /// @return Full path string if found, empty string if not found.
+    [[nodiscard]] std::string findInPath(std::string_view command) const;
+
   private:
     EnvironmentProvider const& _env;
 
     // Cache for efficiency
     mutable std::string _cachedPath;
     mutable std::unordered_map<std::string, std::string> _pathCache; // command -> full path
-
-    /// @brief Searches $PATH for an executable.
-    [[nodiscard]] std::string findInPath(std::string_view command) const;
 
     /// @brief Refreshes the PATH cache if $PATH has changed.
     void refreshCacheIfNeeded() const;

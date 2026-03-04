@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
 #include <shell/Shell.hpp>
+#include <shell/util/CommandResolver.hpp>
 
 #include <endo-language/LogCategories.hpp>
 
@@ -516,31 +517,36 @@ void Shell::applyRedirects(SpawnConfig& config)
 
 std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::string const& program) const
 {
-    if (program.contains('/'))
+    auto const programPath = std::filesystem::path(program);
+
+    // Absolute path or explicitly relative path (contains a directory separator).
+    if (programPath.is_absolute() || program.contains('/')
+#if defined(_WIN32)
+        || program.contains('\\')
+#endif
+    )
     {
-        if (std::filesystem::exists(program))
-            return std::filesystem::path(program);
+        std::error_code ec;
+        if (std::filesystem::exists(programPath, ec)
+            && (std::filesystem::is_regular_file(programPath, ec)
+                || std::filesystem::is_symlink(programPath, ec)))
+        {
+            return programPath;
+        }
         return std::unexpected(ShellError::ProgramNotFound);
     }
 
-    auto const pathEnv = _env.get("PATH");
-    if (!pathEnv.has_value())
+    // Bare command name: search PATH (with PATHEXT awareness on Windows).
+    if (!_env.get("PATH").has_value())
         return std::unexpected(ShellError::VariableNotFound);
 
-    auto const pathEnvValue = pathEnv.value();
-    auto const paths = crispy::split(pathEnvValue, ':');
+    auto const resolver = CommandResolver(_env);
+    auto const found = resolver.findInPath(program);
+    if (found.empty())
+        return std::unexpected(ShellError::ProgramNotFound);
 
-    for (auto const& pathStr: paths)
-    {
-        auto const programPath = std::filesystem::path(pathStr) / program;
-        if (std::filesystem::exists(programPath))
-        {
-            debugLog()()("Found program: {}", programPath.string());
-            return programPath;
-        }
-    }
-
-    return std::unexpected(ShellError::ProgramNotFound);
+    debugLog()()("Found program: {}", found);
+    return std::filesystem::path(found);
 }
 
 } // namespace endo

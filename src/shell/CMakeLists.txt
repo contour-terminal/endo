@@ -233,6 +233,7 @@ add_executable(test-endo-shell
     history/PersistentHistory_test.cpp
     output/OutputDefinitionRegistry_test.cpp
     output/OutputParser_test.cpp
+    util/CommandResolver_test.cpp
     util/Suggestions_test.cpp
     ui/RichConsoleReport_test.cpp
     ui/SyntaxHighlighter_test.cpp
