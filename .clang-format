@@ -74,6 +74,8 @@ IncludeCategories:
     Priority:  2
   - Regex:     '^<(http)/'
     Priority:  3
+  - Regex:     '^<(editor-protocol)/'
+    Priority:  3
   - Regex:     '^<(lsp)/'
     Priority:  4
   - Regex:     '^<(tui)/'

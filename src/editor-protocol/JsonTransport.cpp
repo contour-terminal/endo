@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "JsonRpc.hpp"
+#include "JsonTransport.hpp"
 
 #include <charconv>
 #include <format>
 
-namespace endo::lsp
+namespace endo::editor_protocol
 {
 
 std::expected<nlohmann::json, std::string> readMessage(std::istream& input)
@@ -99,4 +99,4 @@ nlohmann::json makeNotification(std::string const& method, nlohmann::json params
     };
 }
 
-} // namespace endo::lsp
+} // namespace endo::editor_protocol

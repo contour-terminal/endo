@@ -6,11 +6,11 @@
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 
+#include <editor-protocol/StubRuntime.hpp>
+
 #include <ranges>
 #include <unordered_map>
 #include <utility>
-
-#include "StubRuntime.hpp"
 
 namespace endo::lsp
 {
@@ -100,6 +100,29 @@ namespace
             {
                 walkLetBinding(*letStmt);
             }
+            else if (auto const* rec = dynamic_cast<ast::RecordTypeDefStmt const*>(&node))
+            {
+                walkRecordTypeDef(*rec);
+            }
+            else if (auto const* uni = dynamic_cast<ast::UnionTypeDefStmt const*>(&node))
+            {
+                walkUnionTypeDef(*uni);
+            }
+            else if (auto const* forIn = dynamic_cast<ast::ForInStmt const*>(&node))
+            {
+                walkExpr(*forIn->source);
+                pushScope();
+                for (auto const& name: pattern::collectBindings(*forIn->pattern))
+                {
+                    defineSymbol(name,
+                                 SymbolDefinition {
+                                     .name = name,
+                                     .category = SymbolCategory::Parameter,
+                                 });
+                }
+                walkStatement(*forIn->body);
+                popScope();
+            }
             else if (auto const* exprStmt = dynamic_cast<ast::ExprStmt const*>(&node))
             {
                 walkExpr(*exprStmt->expr);
@@ -108,8 +131,12 @@ namespace
 
         void walkLetBinding(ast::LetBindingStmt const& letStmt)
         {
-            // Define the binding
-            auto def = SymbolDefinition { .name = letStmt.name, .isFunction = letStmt.isFunction() };
+            // Determine category
+            auto const category = letStmt.isProperty()   ? SymbolCategory::Property
+                                  : letStmt.isFunction() ? SymbolCategory::Function
+                                                         : SymbolCategory::Variable;
+
+            auto def = SymbolDefinition { .name = letStmt.name, .category = category };
             for (auto const& param: letStmt.parameters)
             {
                 def.parameterNames.push_back(param.name);
@@ -127,8 +154,8 @@ namespace
                 defineSymbol(param.name,
                              SymbolDefinition {
                                  .name = param.name,
-                                 .isParameter = true,
-                                 .enclosingFunction = letStmt.name,
+                                 .category = SymbolCategory::Parameter,
+                                 .enclosingSymbol = letStmt.name,
                              });
             }
             if (letStmt.value)
@@ -140,7 +167,8 @@ namespace
             {
                 auto andDef = SymbolDefinition {
                     .name = andBinding.name,
-                    .isFunction = !andBinding.parameters.empty(),
+                    .category =
+                        andBinding.parameters.empty() ? SymbolCategory::Variable : SymbolCategory::Function,
                 };
                 for (auto const& param: andBinding.parameters)
                 {
@@ -158,13 +186,57 @@ namespace
                     defineSymbol(param.name,
                                  SymbolDefinition {
                                      .name = param.name,
-                                     .isParameter = true,
-                                     .enclosingFunction = andBinding.name,
+                                     .category = SymbolCategory::Parameter,
+                                     .enclosingSymbol = andBinding.name,
                                  });
                 }
                 if (andBinding.value)
                     walkExpr(*andBinding.value);
                 popScope();
+            }
+        }
+
+        void walkRecordTypeDef(ast::RecordTypeDefStmt const& rec)
+        {
+            defineSymbol(rec.name,
+                         SymbolDefinition { .name = rec.name, .category = SymbolCategory::RecordType });
+            for (auto const& field: rec.fields)
+            {
+                defineSymbol(field.name,
+                             SymbolDefinition {
+                                 .name = field.name,
+                                 .category = SymbolCategory::RecordField,
+                                 .detail = toString(*field.type),
+                                 .enclosingSymbol = rec.name,
+                             });
+            }
+        }
+
+        void walkUnionTypeDef(ast::UnionTypeDefStmt const& uni)
+        {
+            defineSymbol(uni.name,
+                         SymbolDefinition { .name = uni.name, .category = SymbolCategory::UnionType });
+            for (auto const& variant: uni.variants)
+            {
+                auto detail = std::optional<std::string> {};
+                if (!variant.payloadTypes.empty())
+                {
+                    auto parts = std::string {};
+                    for (auto const& pt: variant.payloadTypes)
+                    {
+                        if (!parts.empty())
+                            parts += " * ";
+                        parts += toString(*pt);
+                    }
+                    detail = std::move(parts);
+                }
+                defineSymbol(variant.name,
+                             SymbolDefinition {
+                                 .name = variant.name,
+                                 .category = SymbolCategory::UnionVariant,
+                                 .detail = std::move(detail),
+                                 .enclosingSymbol = uni.name,
+                             });
             }
         }
 
@@ -198,7 +270,10 @@ namespace
             else if (auto const* e = dynamic_cast<ast::LetInExpr const*>(&expr))
             {
                 pushScope();
-                auto def = SymbolDefinition { .name = e->name, .isFunction = e->isFunction() };
+                auto def = SymbolDefinition {
+                    .name = e->name,
+                    .category = e->isFunction() ? SymbolCategory::Function : SymbolCategory::Variable,
+                };
                 for (auto const& param: e->parameters)
                 {
                     def.parameterNames.push_back(param.name);
@@ -215,8 +290,8 @@ namespace
                     defineSymbol(param.name,
                                  SymbolDefinition {
                                      .name = param.name,
-                                     .isParameter = true,
-                                     .enclosingFunction = e->name,
+                                     .category = SymbolCategory::Parameter,
+                                     .enclosingSymbol = e->name,
                                  });
                 }
                 if (e->value)
@@ -235,7 +310,7 @@ namespace
                     defineSymbol(param.name,
                                  SymbolDefinition {
                                      .name = param.name,
-                                     .isParameter = true,
+                                     .category = SymbolCategory::Parameter,
                                  });
                 }
                 walkExpr(*e->body);
@@ -254,7 +329,7 @@ namespace
                             defineSymbol(name,
                                          SymbolDefinition {
                                              .name = name,
-                                             .isParameter = true,
+                                             .category = SymbolCategory::Parameter,
                                          });
                         }
                     }
@@ -291,7 +366,7 @@ namespace
                 defineSymbol(e->variable,
                              SymbolDefinition {
                                  .name = e->variable,
-                                 .isParameter = true,
+                                 .category = SymbolCategory::Parameter,
                              });
                 if (e->filter)
                     walkExpr(*e->filter);
@@ -325,7 +400,7 @@ namespace
                             defineSymbol(name,
                                          SymbolDefinition {
                                              .name = name,
-                                             .isParameter = true,
+                                             .category = SymbolCategory::Parameter,
                                          });
                         }
                     }
@@ -340,6 +415,110 @@ namespace
             {
                 walkExpr(*e->body);
                 walkExpr(*e->finallyExpr);
+            }
+            else if (auto const* e = dynamic_cast<ast::BlockExpr const*>(&expr))
+            {
+                pushScope();
+                for (auto const& stmt: e->statements)
+                    walkStatement(*stmt);
+                if (e->result)
+                    walkExpr(*e->result);
+                popScope();
+            }
+            else if (auto const* e = dynamic_cast<ast::FieldAccessExpr const*>(&expr))
+            {
+                walkExpr(*e->object);
+                addReference(e->fieldName);
+            }
+            else if (auto const* e = dynamic_cast<ast::FStringExpr const*>(&expr))
+            {
+                for (auto const& part: e->parts)
+                    walkExpr(*part);
+            }
+            else if (auto const* e = dynamic_cast<ast::ConsExpr const*>(&expr))
+            {
+                walkExpr(*e->head);
+                walkExpr(*e->tail);
+            }
+            else if (auto const* e = dynamic_cast<ast::UnionConstructorExpr const*>(&expr))
+            {
+                for (auto const& arg: e->arguments)
+                    walkExpr(*arg);
+            }
+            else if (auto const* e = dynamic_cast<ast::MutAssignExpr const*>(&expr))
+            {
+                addReference(e->name);
+                walkExpr(*e->value);
+            }
+            else if (auto const* e = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
+            {
+                walkExpr(*e->option);
+                walkExpr(*e->defaultValue);
+            }
+            else if (auto const* e = dynamic_cast<ast::CompositionExpr const*>(&expr))
+            {
+                walkExpr(*e->left);
+                walkExpr(*e->right);
+            }
+            else if (auto const* e = dynamic_cast<ast::RecordExpr const*>(&expr))
+            {
+                for (auto const& field: e->fields)
+                {
+                    addReference(field.name);
+                    walkExpr(*field.value);
+                }
+            }
+            else if (auto const* e = dynamic_cast<ast::RecordUpdateExpr const*>(&expr))
+            {
+                walkExpr(*e->base);
+                for (auto const& update: e->updates)
+                {
+                    addReference(update.name);
+                    walkExpr(*update.value);
+                }
+            }
+            else if (auto const* e = dynamic_cast<ast::ConcatListExpr const*>(&expr))
+            {
+                walkExpr(*e->left);
+                walkExpr(*e->right);
+            }
+            else if (auto const* e = dynamic_cast<ast::ListRangeExpr const*>(&expr))
+            {
+                walkExpr(*e->start);
+                if (e->step)
+                    walkExpr(*e->step);
+                walkExpr(*e->end);
+            }
+            else if (auto const* e = dynamic_cast<ast::LazyExpr const*>(&expr))
+            {
+                walkExpr(*e->body);
+            }
+            else if (auto const* e = dynamic_cast<ast::SeqExpr const*>(&expr))
+            {
+                for (auto const& yield: e->yields)
+                    walkExpr(*yield.value);
+            }
+            else if (auto const* e = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
+            {
+                walkExpr(*e->object);
+                addReference(e->fieldName);
+            }
+            else if (auto const* e = dynamic_cast<ast::PlaceholderLambdaExpr const*>(&expr))
+            {
+                walkExpr(*e->body);
+            }
+            else if (auto const* e = dynamic_cast<ast::SplatExpr const*>(&expr))
+            {
+                addReference(e->name);
+            }
+            else if (auto const* e = dynamic_cast<ast::ExecPipelineExpr const*>(&expr))
+            {
+                for (auto const& cmd: e->commands)
+                {
+                    walkExpr(*cmd.program);
+                    for (auto const& arg: cmd.arguments)
+                        walkExpr(*arg);
+                }
             }
         }
 
@@ -592,6 +771,68 @@ std::optional<SourceLocationRange> findSymbolRangeAt(std::string const& source, 
         return std::nullopt;
 
     return correctedRange(*identToken);
+}
+
+std::vector<HighlightEntry> findHighlights(std::string const& source, Position position)
+{
+    auto tokens = tokenize(source);
+    auto const* identToken = findIdentifierAt(tokens, position);
+    if (!identToken)
+        return {};
+
+    auto const& name = identToken->literal;
+    auto const& tokenBegin = identToken->range.begin;
+
+    auto table = collectSymbols(source);
+    if (!table)
+        return {};
+
+    // Find the target definition index
+    auto targetDefIndex = -1;
+
+    // Check if cursor is on a definition
+    for (auto i = 0; std::cmp_less(i, table->definitions.size()); ++i)
+    {
+        auto const& def = table->definitions[static_cast<size_t>(i)];
+        if (def.name == name && def.location.begin.line == tokenBegin.line
+            && def.location.begin.column == tokenBegin.column)
+        {
+            targetDefIndex = i;
+            break;
+        }
+    }
+
+    // If not on a definition, check references
+    if (targetDefIndex < 0)
+    {
+        for (auto const& ref: table->references)
+        {
+            if (ref.name == name && ref.location.begin.line == tokenBegin.line
+                && ref.location.begin.column == tokenBegin.column && ref.definitionIndex >= 0)
+            {
+                targetDefIndex = ref.definitionIndex;
+                break;
+            }
+        }
+    }
+
+    if (targetDefIndex < 0)
+        return {};
+
+    std::vector<HighlightEntry> result;
+
+    // Add the definition itself (Write kind)
+    auto const& def = table->definitions[static_cast<size_t>(targetDefIndex)];
+    result.push_back(HighlightEntry { .range = def.location, .isDefinition = true });
+
+    // Add all references (Read kind)
+    for (auto const& ref: table->references)
+    {
+        if (ref.definitionIndex == targetDefIndex)
+            result.push_back(HighlightEntry { .range = ref.location, .isDefinition = false });
+    }
+
+    return result;
 }
 
 } // namespace endo::lsp

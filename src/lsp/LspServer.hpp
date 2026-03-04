@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <editor-protocol/DocumentStore.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 
 #include <istream>
 #include <ostream>
 #include <string>
 
-#include "DocumentStore.hpp"
 #include "LspTypes.hpp"
 
 namespace endo::lsp
 {
+
+using endo::editor_protocol::DocumentStore;
 
 /// LSP server implementing the Language Server Protocol for Endo shell scripts.
 ///
@@ -48,12 +51,14 @@ class LspServer
     [[nodiscard]] nlohmann::json handleHover(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleDefinition(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleReferences(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleDocumentHighlight(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleSignatureHelp(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleDocumentSymbol(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleRename(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handlePrepareRename(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleCompletion(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleFormatting(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleInlayHint(nlohmann::json const& params);
 
     // Notifications
     void publishDiagnostics(std::string const& uri);

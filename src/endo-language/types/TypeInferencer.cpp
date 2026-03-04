@@ -29,6 +29,11 @@ void TypeInferencer::recordFunction(std::string const& name, InferredFunctionTyp
     _result.functions[name] = std::move(type);
 }
 
+void TypeInferencer::recordBinding(std::string const& name, TypePtr type)
+{
+    _result.bindings[name] = std::move(type);
+}
+
 void TypeInferencer::recordError(std::string error)
 {
     _result.errors.push_back(std::move(error));
@@ -363,6 +368,9 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             if (!valResult)
                 return valResult;
             auto [valType, s1] = *valResult;
+
+            // Record let-in binding type
+            recordBinding(letIn->name, s1.apply(valType));
 
             auto bodyEnv = env->childScope();
             auto scheme = bodyEnv->generalize(s1.apply(valType));
@@ -1409,6 +1417,11 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 }
                 inferred.returnType = current;
                 recordFunction(letStmt->name, std::move(inferred));
+            }
+            else
+            {
+                // Record simple value binding type
+                recordBinding(letStmt->name, s1.apply(valType));
             }
 
             auto scheme = env->generalize(s1.apply(valType));

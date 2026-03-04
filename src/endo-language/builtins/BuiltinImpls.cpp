@@ -119,7 +119,7 @@ void listConcat(CoreVM::Params& args)
     // Propagate element type from source list's type tag slot
     auto elemType = static_cast<CoreVM::LiteralType>(left->getSlot(2));
     CoreVM::TypedObject* acc = right;
-    for (unsigned long& element: std::ranges::reverse_view(elements))
+    for (auto& element: std::ranges::reverse_view(elements))
         acc = args.caller()->makeConsCell(element, acc, elemType);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
@@ -183,7 +183,7 @@ void listSort(CoreVM::Params& args)
     }
     std::ranges::sort(elements);
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (long& element: std::ranges::reverse_view(elements))
+    for (auto& element: std::ranges::reverse_view(elements))
         acc = args.caller()->makeConsCell(static_cast<uint64_t>(element), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
@@ -201,7 +201,7 @@ void listDistinct(CoreVM::Params& args)
         cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
     }
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (long& element: std::ranges::reverse_view(elements))
+    for (auto& element: std::ranges::reverse_view(elements))
         acc = args.caller()->makeConsCell(static_cast<uint64_t>(element), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }
@@ -365,7 +365,7 @@ void listRange(CoreVM::Params& args)
     }
 
     auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
-    for (long& value: std::ranges::reverse_view(values))
+    for (auto& value: std::ranges::reverse_view(values))
         acc = args.caller()->makeConsCell(static_cast<uint64_t>(value), acc, CoreVM::LiteralType::Number);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
 }

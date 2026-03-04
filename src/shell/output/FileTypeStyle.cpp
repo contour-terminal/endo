@@ -242,7 +242,7 @@ FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode
         auto const ext = extractExtension(name);
         if (!ext.empty())
         {
-            const auto* const it =
+            auto const it = // NOLINT(readability-qualified-auto)
                 std::ranges::lower_bound(ExtensionTable, ext, {}, &ExtensionMapping::extension);
             if (it != ExtensionTable.end() && it->extension == ext)
                 decoration.icon = it->icon;
@@ -254,7 +254,7 @@ FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode
         auto const ext = extractExtension(name);
         if (!ext.empty())
         {
-            const auto* const it =
+            auto const it = // NOLINT(readability-qualified-auto)
                 std::ranges::lower_bound(ExtensionTable, ext, {}, &ExtensionMapping::extension);
             if (it != ExtensionTable.end() && it->extension == ext)
             {

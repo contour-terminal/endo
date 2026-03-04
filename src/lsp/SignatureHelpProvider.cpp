@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "StubRuntime.hpp"
+#include <editor-protocol/StubRuntime.hpp>
 #include "SymbolCollector.hpp"
 
 namespace endo::lsp
@@ -141,7 +141,7 @@ namespace
     {
         for (auto const& def: table.definitions)
         {
-            if (def.name == name && def.isFunction)
+            if (def.name == name && def.category == SymbolCategory::Function)
                 return &def;
         }
         return nullptr;

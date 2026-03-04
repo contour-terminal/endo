@@ -3,19 +3,8 @@
 # Reuses the endo language library for lexing, parsing, and AST.
 
 add_library(endo-lsp STATIC
-    # JSON-RPC transport
-    JsonRpc.hpp
-    JsonRpc.cpp
-
     # LSP protocol types
     LspTypes.hpp
-
-    # Document management
-    DocumentStore.hpp
-    DocumentStore.cpp
-
-    # Shared utilities
-    StubRuntime.hpp
 
     # Language intelligence providers
     SymbolCollector.hpp
@@ -32,6 +21,8 @@ add_library(endo-lsp STATIC
     ReferencesProvider.cpp
     SignatureHelpProvider.hpp
     SignatureHelpProvider.cpp
+    DocumentHighlightProvider.hpp
+    DocumentHighlightProvider.cpp
     DocumentSymbolProvider.hpp
     DocumentSymbolProvider.cpp
     RenameProvider.hpp
@@ -40,13 +31,15 @@ add_library(endo-lsp STATIC
     CompletionProvider.cpp
     FormattingProvider.hpp
     FormattingProvider.cpp
+    InlayHintProvider.hpp
+    InlayHintProvider.cpp
 
     # Server core
     LspServer.hpp
     LspServer.cpp
 )
 
-target_link_libraries(endo-lsp PUBLIC endo nlohmann_json::nlohmann_json)
+target_link_libraries(endo-lsp PUBLIC endo-editor-protocol endo nlohmann_json::nlohmann_json)
 target_include_directories(endo-lsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Tests

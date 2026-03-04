@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <editor-protocol/DocumentStore.hpp>
+#include <editor-protocol/JsonTransport.hpp>
+#include <editor-protocol/TestHelpers.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <sstream>
@@ -6,59 +10,27 @@
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
-#include "DocumentStore.hpp"
+#include "DocumentHighlightProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
-#include "JsonRpc.hpp"
 #include "LspServer.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
+#include "InlayHintProvider.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
 #include <nlohmann/json.hpp>
 
+using namespace endo::editor_protocol;
 using namespace endo::lsp;
 using json = nlohmann::json;
 
 // =============================================================================
-// Helper: creates a JSON-RPC message string with Content-Length header
+// Helper: LSP-specific session runner
 // =============================================================================
 namespace
 {
-
-std::string makeRpcMessage(json const& msg)
-{
-    auto const body = msg.dump();
-    std::ostringstream oss;
-    oss << "Content-Length: " << body.size() << "\r\n\r\n" << body;
-    return oss.str();
-}
-
-json sendRequest(std::string const& method, json const& params, int id = 1)
-{
-    return json { { "jsonrpc", "2.0" }, { "id", id }, { "method", method }, { "params", params } };
-}
-
-json sendNotification(std::string const& method, json const& params)
-{
-    return json { { "jsonrpc", "2.0" }, { "method", method }, { "params", params } };
-}
-
-/// Reads all JSON-RPC messages from the output stream.
-std::vector<json> readAllMessages(std::istringstream& output)
-{
-    std::vector<json> messages;
-    while (output.good() && output.peek() != EOF)
-    {
-        auto msg = readMessage(output);
-        if (msg.has_value())
-            messages.push_back(std::move(*msg));
-        else
-            break;
-    }
-    return messages;
-}
 
 /// Runs a full LSP session with the given messages and returns all response messages.
 std::vector<json> runSession(std::vector<json> const& messages)
@@ -931,7 +903,7 @@ TEST_CASE("SymbolCollector.collectSymbols returns definitions and references", "
         if (def.name == "x")
         {
             foundXDef = true;
-            CHECK_FALSE(def.isFunction);
+            CHECK(def.category == SymbolCategory::Variable);
         }
     }
     CHECK(foundXDef);
@@ -955,7 +927,7 @@ TEST_CASE("SymbolCollector.function definition captures parameters", "[lsp][symb
         if (def.name == "add")
         {
             foundAdd = true;
-            CHECK(def.isFunction);
+            CHECK(def.category == SymbolCategory::Function);
             REQUIRE(def.parameterNames.size() == 2);
             CHECK(def.parameterNames[0] == "x");
             CHECK(def.parameterNames[1] == "y");
@@ -1105,6 +1077,204 @@ TEST_CASE("Definition.shadowed variable resolves to inner scope", "[lsp][definit
     CHECK(loc->range.start.line == 1);
 }
 
+TEST_CASE("Definition.field access resolves object variable", "[lsp][definition]")
+{
+    // "let p = 42\nprintln p.name"
+    //  cursor on "p" in "p.name" (line 1, col 8)
+    const auto* source = "let p = 42\nprintln p.name";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 8 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.fstring interpolation resolves variable", "[lsp][definition]")
+{
+    // let name = "world"
+    // let msg = $"hello {name}"
+    //  cursor on "name" inside fstring (line 1, col 20)
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 20 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.record update resolves base variable", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // let older = { alice with age = 31 }
+    //  cursor on "alice" in record update (line 2, col 14)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 14 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 1);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("Definition.field access on record field resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // println alice.name
+    //  cursor on "name" in "alice.name" (line 2, col 14)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 14 });
+    REQUIRE(loc.has_value());
+    // "name" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.record expr field name resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    //  cursor on "age" in record literal (line 1, col 30)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 30 });
+    REQUIRE(loc.has_value());
+    // "age" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.record update field name resolves to type definition", "[lsp][definition]")
+{
+    // type Person = { name: string; age: int }
+    // let alice = { name = "Alice"; age = 30 }
+    // let older = { alice with age = 31 }
+    //  cursor on "age" in record update (line 2, col 25)
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 2, .character = 25 });
+    REQUIRE(loc.has_value());
+    // "age" field is defined in the record type at line 0
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.cons expression resolves head variable", "[lsp][definition]")
+{
+    const auto* source = "let x = 1\nlet xs = x :: [2; 3]";
+    // cursor on "x" in cons expr (line 1, col 9)
+    auto loc = computeDefinition(source, "file:///test.endo", Position { .line = 1, .character = 9 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+    CHECK(loc->range.start.character == 4);
+}
+
+TEST_CASE("References.field access includes object variable", "[lsp][references]")
+{
+    const auto* source = "let p = 42\nprintln p.name";
+    // cursor on "p" definition (line 0, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 4 }, true);
+    // Should find 2: definition + field access usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.fstring includes interpolated variable", "[lsp][references]")
+{
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    // cursor on "name" definition (line 0, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 4 }, true);
+    // Should find 2: definition + fstring interpolation usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.record update includes base variable", "[lsp][references]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "let older = { alice with age = 31 }";
+    // cursor on "alice" definition (line 1, col 4)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 1, .character = 4 }, true);
+    // Should find 2: definition + record update usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.record field finds type def and all usages", "[lsp][references]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    // cursor on "name" field definition in type def (line 0, col 16)
+    auto locs = computeReferences(source, "file:///test.endo", Position { .line = 0, .character = 16 }, true);
+    // Should find 3: field definition + record expr field + field access
+    CHECK(locs.size() >= 3);
+}
+
+TEST_CASE("DocumentHighlight.field access highlights object variable", "[lsp][highlight]")
+{
+    const auto* source = "let p = 42\nprintln p.name";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // Should find 2: definition + field access usage
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.fstring highlights interpolated variable", "[lsp][highlight]")
+{
+    const auto* source = "let name = \"world\"\nlet msg = $\"hello {name}\"";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // Should find 2: definition + fstring interpolation usage
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.record field highlights across type def and usages", "[lsp][highlight]")
+{
+    const auto* source = "type Person = { name: string; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "println alice.name";
+    // cursor on "name" in field access (line 2, col 14)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 2, .character = 14 });
+    // Should find 3: field definition (Write) + record expr field (Read) + field access (Read)
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);
+}
+
+// =============================================================================
+// E2E: error resilience
+// =============================================================================
+
+TEST_CASE("E2E.internal error returns error response not crash", "[lsp][e2e]")
+{
+    // Send a request with missing required fields to trigger an exception
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        // definition request missing textDocument.uri should throw, not crash
+        sendRequest("textDocument/definition",
+                    json { { "textDocument", json::object() },
+                           { "position", json { { "line", 0 }, { "character", 0 } } } },
+                    2),
+        sendRequest("shutdown", json::object(), 3),
+        sendNotification("exit", json::object()),
+    });
+    // Server should still have responded (not crashed)
+    CHECK(responses.size() >= 2);
+    // The definition response should be an error
+    auto foundError = false;
+    for (auto const& r: responses)
+    {
+        if (r.contains("id") && r["id"] == 2 && r.contains("error"))
+        {
+            foundError = true;
+            break;
+        }
+    }
+    CHECK(foundError);
+}
+
 // =============================================================================
 // References tests
 // =============================================================================
@@ -1156,6 +1326,55 @@ TEST_CASE("References.cursor on usage finds all references", "[lsp][references]"
     auto locs = computeReferences(
         "let x = 42\nprintln x", "file:///test.endo", Position { .line = 1, .character = 8 }, true);
     CHECK(locs.size() >= 2);
+}
+
+// =============================================================================
+// DocumentHighlight tests
+// =============================================================================
+
+TEST_CASE("DocumentHighlight.at definition shows def and ref", "[lsp][highlight]")
+{
+    auto highlights =
+        computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 0, .character = 4 });
+    REQUIRE(highlights.size() == 2);
+    // Definition is Write, reference is Read
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.at reference shows def and ref", "[lsp][highlight]")
+{
+    auto highlights =
+        computeDocumentHighlights("let x = 42\nprintln x", Position { .line = 1, .character = 8 });
+    REQUIRE(highlights.size() == 2);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.function with multiple calls", "[lsp][highlight]")
+{
+    const auto* source = "let f x = x + 1\nprintln (f 3)\nprintln (f 5)";
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 4 });
+    // f appears 3 times: definition + 2 calls
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write);
+    CHECK(highlights[1].kind == DocumentHighlightKind::Read);
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);
+}
+
+TEST_CASE("DocumentHighlight.scoped variable only shows inner occurrences", "[lsp][highlight]")
+{
+    const auto* source = "let a = let x = 1 in x\nlet b = let x = 2 in x";
+    // cursor on first "x" definition (line 0, col 12)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 12 });
+    // Should find only 2: first "x" def + first "x" ref
+    CHECK(highlights.size() == 2);
+}
+
+TEST_CASE("DocumentHighlight.no identifier at cursor returns empty", "[lsp][highlight]")
+{
+    auto highlights = computeDocumentHighlights("let x = 42", Position { .line = 0, .character = 0 });
+    CHECK(highlights.empty());
 }
 
 // =============================================================================
@@ -1394,6 +1613,68 @@ TEST_CASE("DocumentSymbol.parse_failure_returns_empty", "[lsp][documentsymbol]")
 {
     auto symbols = computeDocumentSymbols("let = ");
     CHECK(symbols.empty());
+}
+
+TEST_CASE("DocumentSymbol.record_type_with_fields", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("type Person = { name: string; age: int }");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Person");
+    CHECK(symbols[0].kind == SymbolKind::Struct);
+    REQUIRE(symbols[0].children.size() == 2);
+    CHECK(symbols[0].children[0].name == "name");
+    CHECK(symbols[0].children[0].kind == SymbolKind::Field);
+    CHECK(symbols[0].children[0].detail == "string");
+    CHECK(symbols[0].children[1].name == "age");
+    CHECK(symbols[0].children[1].kind == SymbolKind::Field);
+    CHECK(symbols[0].children[1].detail == "int");
+}
+
+TEST_CASE("DocumentSymbol.union_type_with_variants", "[lsp][documentsymbol]")
+{
+    auto symbols =
+        computeDocumentSymbols("type Shape = | Circle of float | Rectangle of float * float | Point");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Shape");
+    CHECK(symbols[0].kind == SymbolKind::Enum);
+    REQUIRE(symbols[0].children.size() == 3);
+    CHECK(symbols[0].children[0].name == "Circle");
+    CHECK(symbols[0].children[0].kind == SymbolKind::EnumMember);
+    CHECK(symbols[0].children[0].detail == "float");
+    CHECK(symbols[0].children[1].name == "Rectangle");
+    CHECK(symbols[0].children[1].kind == SymbolKind::EnumMember);
+    CHECK(symbols[0].children[1].detail == "float * float");
+    CHECK(symbols[0].children[2].name == "Point");
+    CHECK(symbols[0].children[2].kind == SymbolKind::EnumMember);
+    CHECK_FALSE(symbols[0].children[2].detail.has_value());
+}
+
+TEST_CASE("DocumentSymbol.mixed_types_and_bindings", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("type Color = { r: int; g: int; b: int }\n"
+                                          "type Shape = | Circle of float | Point\n"
+                                          "let area (x: float) : float = x\n"
+                                          "let pi = 3.14");
+    REQUIRE(symbols.size() == 4);
+    CHECK(symbols[0].name == "Color");
+    CHECK(symbols[0].kind == SymbolKind::Struct);
+    CHECK(symbols[0].children.size() == 3);
+    CHECK(symbols[1].name == "Shape");
+    CHECK(symbols[1].kind == SymbolKind::Enum);
+    CHECK(symbols[1].children.size() == 2);
+    CHECK(symbols[2].name == "area");
+    CHECK(symbols[2].kind == SymbolKind::Function);
+    CHECK(symbols[2].children.size() == 1); // parameter x
+    CHECK(symbols[3].name == "pi");
+    CHECK(symbols[3].kind == SymbolKind::Variable);
+}
+
+TEST_CASE("DocumentSymbol.property_binding", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let Name with get () = \"test\"");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "Name");
+    CHECK(symbols[0].kind == SymbolKind::Property);
 }
 
 // =============================================================================
@@ -2107,6 +2388,219 @@ TEST_CASE("E2E.completion_left_arrow_preset_values", "[lsp][e2e][completion][lef
             }
             CHECK(hasPowerline);
             CHECK(hasMinimalArrow);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.documentHighlight request returns highlights", "[lsp][e2e][highlight]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nprintln x" },
+                               } },
+                         }),
+        sendRequest("textDocument/documentHighlight",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            REQUIRE(msg["result"].size() == 2);
+            // First highlight is the definition (Write=3)
+            CHECK(msg["result"][0]["kind"] == 3);
+            // Second highlight is the reference (Read=2)
+            CHECK(msg["result"][1]["kind"] == 2);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Inlay hint tests
+// =============================================================================
+
+namespace
+{
+
+/// Helper to compute inlay hints for the full document range.
+std::vector<InlayHint> hintsForSource(std::string const& source)
+{
+    auto const range = Range {
+        .start = Position { .line = 0, .character = 0 },
+        .end = Position { .line = 9999, .character = 9999 },
+    };
+    return computeInlayHints(source, range);
+}
+
+} // namespace
+
+TEST_CASE("InlayHint.untyped params get type hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add x y = x + y");
+    // Should have at least 2 param hints (x: int, y: int)
+    auto paramHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+        if (h.label.starts_with(": "))
+            paramHints.push_back(h);
+    REQUIRE(paramHints.size() >= 2);
+    CHECK(paramHints[0].label == ": int");
+    CHECK(paramHints[1].label == ": int");
+    CHECK(paramHints[0].kind == InlayHintKind::Type);
+}
+
+TEST_CASE("InlayHint.typed params are suppressed", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add (x: int) (y: int) : int = x + y");
+    // Fully annotated — no hints expected
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.return type hint shown when not annotated", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let add (x: int) (y: int) = x + y");
+    // Only a return type hint expected (params are typed)
+    REQUIRE(hints.size() == 1);
+    CHECK(hints[0].label == ": int");
+    CHECK(hints[0].paddingLeft == true);
+}
+
+TEST_CASE("InlayHint.string typed params", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let greet name = \"Hello, \" + name");
+    auto paramHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+        if (!h.paddingLeft)
+            paramHints.push_back(h);
+    REQUIRE(!paramHints.empty());
+    CHECK(paramHints[0].label == ": string");
+}
+
+TEST_CASE("InlayHint.empty source returns empty", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("");
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.invalid source returns empty", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let = = =");
+    CHECK(hints.empty());
+}
+
+TEST_CASE("InlayHint.range filtering excludes out-of-range hints", "[lsp][inlayhint]")
+{
+    auto const* source = "let add x y = x + y\nlet sub a b = a - b";
+    // Only request hints for line 1
+    auto const range = Range {
+        .start = Position { .line = 1, .character = 0 },
+        .end = Position { .line = 1, .character = 999 },
+    };
+    auto hints = computeInlayHints(source, range);
+    // All hints should be on line 1
+    for (auto const& h: hints)
+        CHECK(h.position.line == 1);
+}
+
+TEST_CASE("InlayHint.let binding variable type hint", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let x = 42");
+    REQUIRE(hints.size() == 1);
+    CHECK(hints[0].label == ": int");
+    CHECK(hints[0].kind == InlayHintKind::Type);
+}
+
+TEST_CASE("InlayHint.recursive function shows hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let rec fact n = if n <= 1 then 1 else n * fact (n - 1)");
+    // Should have param hint for n and return type hint
+    auto paramHints = std::vector<InlayHint> {};
+    auto returnHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+    {
+        if (h.paddingLeft)
+            returnHints.push_back(h);
+        else
+            paramHints.push_back(h);
+    }
+    CHECK(!paramHints.empty());
+    CHECK(!returnHints.empty());
+}
+
+TEST_CASE("InlayHint.let-in expression shows hints", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let result = let x = 42 in x + 1");
+    // Should have at least a binding type hint for x
+    bool foundXHint = false;
+    for (auto const& h: hints)
+    {
+        if (h.label == ": int" && !h.paddingLeft)
+            foundXHint = true;
+    }
+    CHECK(foundXHint);
+}
+
+TEST_CASE("E2E.inlayHint request returns array", "[lsp][e2e][inlayhint]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let add x y = x + y" },
+                               } },
+                         }),
+        sendRequest("textDocument/inlayHint",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 99 }, { "character", 0 } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].is_array());
+            CHECK(!msg["result"].empty());
+            // Check that hints have kind == 1 (Type)
+            for (auto const& hint: msg["result"])
+                CHECK(hint["kind"] == 1);
             break;
         }
     }

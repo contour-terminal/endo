@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "DocumentStore.hpp"
 
-namespace endo::lsp
+namespace endo::editor_protocol
 {
 
 void DocumentStore::open(std::string const& uri, std::string text, int version)
@@ -39,4 +39,4 @@ int DocumentStore::version(std::string const& uri) const
     return it->second.version;
 }
 
-} // namespace endo::lsp
+} // namespace endo::editor_protocol

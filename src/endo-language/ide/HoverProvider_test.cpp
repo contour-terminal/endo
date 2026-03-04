@@ -210,3 +210,65 @@ TEST_CASE("HoverProvider.binding_anonymous_record", "[hover]")
     auto const typePos = result->markdownText.find("binding : `");
     CHECK(typePos == std::string::npos);
 }
+
+// =============================================================================
+// Record field access hover tests
+// =============================================================================
+
+TEST_CASE("HoverProvider.field_access_shows_field_type", "[hover]")
+{
+    const auto* source = "type Person = { name: str; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "alice.age";
+    // Hover on "age" in "alice.age" (line 2, character 6)
+    auto result = computeHover(source, SourcePosition { .line = 2, .character = 6 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("`age`") != std::string::npos);
+    CHECK(result->markdownText.find("`int`") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.field_access_shows_record_type", "[hover]")
+{
+    const auto* source = "type Person = { name: str; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "alice.age";
+    auto result = computeHover(source, SourcePosition { .line = 2, .character = 6 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("Person") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.field_access_shows_type_definition", "[hover]")
+{
+    const auto* source = "type Person = { name: str; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "alice.age";
+    auto result = computeHover(source, SourcePosition { .line = 2, .character = 6 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("```endo") != std::string::npos);
+    // toString(TypePtr) renders "str" as "string"
+    CHECK(result->markdownText.find("type Person = { name: string; age: int }") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.field_access_string_field", "[hover]")
+{
+    const auto* source = "type Person = { name: str; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "alice.name";
+    // Hover on "name" in "alice.name" (line 2, character 6)
+    auto result = computeHover(source, SourcePosition { .line = 2, .character = 6 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("`name`") != std::string::npos);
+    CHECK(result->markdownText.find("`string`") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.field_access_no_hover_without_dot", "[hover]")
+{
+    const auto* source = "type Person = { name: str; age: int }\n"
+                         "let alice = { name = \"Alice\"; age = 30 }\n"
+                         "age";
+    // Hover on standalone "age" (line 2, character 0) — not a field access
+    auto result = computeHover(source, SourcePosition { .line = 2, .character = 0 });
+    // Should not show field access hover (no preceding dot)
+    if (result.has_value())
+        CHECK(result->markdownText.find("field of") == std::string::npos);
+}

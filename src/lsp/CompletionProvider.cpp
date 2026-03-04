@@ -65,12 +65,12 @@ namespace
         for (auto const& def: table.definitions)
         {
             // Skip parameters — we only want top-level symbols for completion
-            if (def.isParameter)
+            if (def.category == SymbolCategory::Parameter)
                 continue;
 
             endo::SymbolDefinitionInfo info;
             info.name = def.name;
-            info.isFunction = def.isFunction;
+            info.isFunction = (def.category == SymbolCategory::Function);
             info.parameterNames = def.parameterNames;
 
             for (auto const& pt: def.parameterTypes)

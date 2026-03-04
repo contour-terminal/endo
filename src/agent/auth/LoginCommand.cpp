@@ -67,7 +67,8 @@ namespace
     /// Finds a ProviderInfo by name, or nullptr if not found.
     auto findProvider(std::string_view name) -> ProviderInfo const*
     {
-        const auto* const it = std::ranges::find(KnownProviders, name, &ProviderInfo::name);
+        auto const it = // NOLINT(readability-qualified-auto)
+            std::ranges::find(KnownProviders, name, &ProviderInfo::name);
         return (it != KnownProviders.end()) ? &(*it) : nullptr;
     }
 

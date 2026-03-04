@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <endo-language/lexer/Lexer.hpp>
+#include <editor-protocol/EditorTypes.hpp>
 
-#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,41 +12,13 @@
 namespace endo::lsp
 {
 
-/// LSP Position (0-based line and character).
-struct Position
-{
-    int line = 0;
-    int character = 0;
-};
-
-inline void to_json(nlohmann::json& j, Position const& p)
-{
-    j = nlohmann::json { { "line", p.line }, { "character", p.character } };
-}
-
-inline void from_json(nlohmann::json const& j, Position& p)
-{
-    j.at("line").get_to(p.line);
-    j.at("character").get_to(p.character);
-}
-
-/// LSP Range (start and end positions).
-struct Range
-{
-    Position start;
-    Position end;
-};
-
-inline void to_json(nlohmann::json& j, Range const& r)
-{
-    j = nlohmann::json { { "start", r.start }, { "end", r.end } };
-}
-
-inline void from_json(nlohmann::json const& j, Range& r)
-{
-    j.at("start").get_to(r.start);
-    j.at("end").get_to(r.end);
-}
+// Re-export generic editor types into the LSP namespace for backward compatibility.
+using endo::editor_protocol::Location;
+using endo::editor_protocol::Position;
+using endo::editor_protocol::Range;
+using endo::editor_protocol::TextEdit;
+using endo::editor_protocol::toRange;
+using endo::editor_protocol::WorkspaceEdit;
 
 /// LSP diagnostic severity levels.
 enum class DiagnosticSeverity : int
@@ -178,36 +149,6 @@ inline void from_json(nlohmann::json const& j, TextDocumentContentChangeEvent& e
     j.at("text").get_to(e.text);
 }
 
-/// Converts an endo SourceLocationRange to an LSP Range.
-/// The endo lexer uses 1-based columns; LSP uses 0-based.
-/// @param loc The source location range from the endo lexer (0-based)
-/// @return The corresponding LSP Range (0-based)
-[[nodiscard]] inline Range toRange(SourceLocationRange const& loc)
-{
-    return Range {
-        .start = Position { .line = loc.begin.line, .character = loc.begin.column },
-        .end = Position { .line = loc.end.line, .character = loc.end.column },
-    };
-}
-
-/// LSP Location (URI + range).
-struct Location
-{
-    std::string uri;
-    Range range;
-};
-
-inline void to_json(nlohmann::json& j, Location const& l)
-{
-    j = nlohmann::json { { "uri", l.uri }, { "range", l.range } };
-}
-
-inline void from_json(nlohmann::json const& j, Location& l)
-{
-    j.at("uri").get_to(l.uri);
-    j.at("range").get_to(l.range);
-}
-
 /// LSP ParameterInformation for signature help.
 struct ParameterInformation
 {
@@ -258,8 +199,13 @@ inline void to_json(nlohmann::json& j, SignatureHelp const& h)
 enum class SymbolKind : int
 {
     File = 1,
+    Property = 7, ///< Property bindings (get/set)
+    Field = 8,    ///< Record fields
+    Enum = 10,    ///< Discriminated union types
     Function = 12,
     Variable = 13,
+    EnumMember = 22,    ///< Union variant constructors
+    Struct = 23,        ///< Record types
     TypeParameter = 26, ///< For pattern bindings in match arms
 };
 
@@ -267,6 +213,7 @@ enum class SymbolKind : int
 struct DocumentSymbol
 {
     std::string name;
+    std::optional<std::string> detail; ///< Type signature or other detail string
     SymbolKind kind = SymbolKind::Variable;
     Range range;          ///< Full span of the symbol (including body)
     Range selectionRange; ///< Name span (for highlighting)
@@ -281,33 +228,30 @@ inline void to_json(nlohmann::json& j, DocumentSymbol const& s)
         { "range", s.range },
         { "selectionRange", s.selectionRange },
     };
+    if (s.detail.has_value())
+        j["detail"] = *s.detail;
     if (!s.children.empty())
         j["children"] = s.children;
 }
 
-/// LSP TextEdit (a replacement within a document).
-struct TextEdit
+/// LSP DocumentHighlightKind enumeration.
+enum class DocumentHighlightKind : int
+{
+    Text = 1,  ///< A textual occurrence
+    Read = 2,  ///< Read-access of a symbol (e.g. variable usage)
+    Write = 3, ///< Write-access of a symbol (e.g. variable definition)
+};
+
+/// LSP DocumentHighlight (a range to highlight in the document).
+struct DocumentHighlight
 {
     Range range;
-    std::string newText;
+    DocumentHighlightKind kind = DocumentHighlightKind::Text;
 };
 
-inline void to_json(nlohmann::json& j, TextEdit const& e)
+inline void to_json(nlohmann::json& j, DocumentHighlight const& h)
 {
-    j = nlohmann::json { { "range", e.range }, { "newText", e.newText } };
-}
-
-/// LSP WorkspaceEdit (a set of edits across documents).
-struct WorkspaceEdit
-{
-    std::map<std::string, std::vector<TextEdit>> changes; ///< URI -> edits
-};
-
-inline void to_json(nlohmann::json& j, WorkspaceEdit const& w)
-{
-    j = nlohmann::json { { "changes", nlohmann::json::object() } };
-    for (auto const& [uri, edits]: w.changes)
-        j["changes"][uri] = edits;
+    j = nlohmann::json { { "range", h.range }, { "kind", static_cast<int>(h.kind) } };
 }
 
 /// LSP CompletionItemKind enumeration (subset relevant to endo).
@@ -347,6 +291,37 @@ inline void to_json(nlohmann::json& j, LspCompletionItem const& c)
         j["documentation"] = c.documentation;
     if (!c.insertText.empty())
         j["insertText"] = c.insertText;
+}
+
+/// LSP InlayHintKind enumeration.
+enum class InlayHintKind : int
+{
+    Type = 1,      ///< Type annotation hint
+    Parameter = 2, ///< Parameter name hint
+};
+
+/// LSP InlayHint for inline virtual text.
+struct InlayHint
+{
+    Position position;                  ///< Position where the hint is rendered
+    std::string label;                  ///< The hint text (e.g., ": int")
+    InlayHintKind kind = InlayHintKind::Type; ///< Kind of inlay hint
+    bool paddingLeft = false;           ///< Whether to add padding before the hint
+    bool paddingRight = false;          ///< Whether to add padding after the hint
+    std::optional<std::string> tooltip; ///< Optional tooltip text
+};
+
+inline void to_json(nlohmann::json& j, InlayHint const& h)
+{
+    j = nlohmann::json {
+        { "position", h.position },
+        { "label", h.label },
+        { "kind", static_cast<int>(h.kind) },
+        { "paddingLeft", h.paddingLeft },
+        { "paddingRight", h.paddingRight },
+    };
+    if (h.tooltip.has_value())
+        j["tooltip"] = *h.tooltip;
 }
 
 } // namespace endo::lsp
