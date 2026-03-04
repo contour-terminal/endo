@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 #include <shell/commands/FindExpression.hpp>
+#include <shell/commands/GrepCommand.hpp>
+#include <shell/commands/TimeoutCommand.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
@@ -13,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <ranges>
 #include <span>
@@ -1979,6 +1982,376 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     return 0;
+}
+
+int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    // Parse arguments (skip args[0] which is "grep")
+    std::vector<std::string> grepArgs;
+    for (auto const i: std::views::iota(1uz, args.size()))
+        grepArgs.push_back(args.at(i));
+
+    auto parsed = grep::parseGrepArgs(grepArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 2;
+    }
+
+    auto& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(outputFd,
+                                  "# grep\n"
+                                  "\n"
+                                  "Search for patterns in files.\n"
+                                  "\n"
+                                  "## Usage\n"
+                                  "\n"
+                                  "`grep [OPTIONS] PATTERN [FILE...]`\n"
+                                  "\n"
+                                  "## Pattern Selection\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|--------|-------------|\n"
+                                  "| `-e PATTERN` | Use PATTERN for matching (repeatable) |\n"
+                                  "| `-F` | Interpret PATTERN as fixed strings |\n"
+                                  "| `-E` | Interpret PATTERN as extended regex (default) |\n"
+                                  "| `-i` | Ignore case distinctions |\n"
+                                  "| `-w` | Match whole words only |\n"
+                                  "| `-x` | Match whole lines only |\n"
+                                  "\n"
+                                  "## Output Control\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|--------|-------------|\n"
+                                  "| `-c` | Print count of matching lines |\n"
+                                  "| `-l` | Print only filenames with matches |\n"
+                                  "| `-L` | Print only filenames without matches |\n"
+                                  "| `-n` | Prefix output with line numbers |\n"
+                                  "| `-H` | Print filename for each match |\n"
+                                  "| `-h` | Suppress filename prefix |\n"
+                                  "| `-o` | Print only matching parts |\n"
+                                  "| `-v` | Invert match (select non-matching lines) |\n"
+                                  "| `-q` | Quiet mode (no output, exit code only) |\n"
+                                  "| `-s` | Suppress error messages |\n"
+                                  "\n"
+                                  "## Context\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|--------|-------------|\n"
+                                  "| `-A NUM` | Print NUM lines of trailing context |\n"
+                                  "| `-B NUM` | Print NUM lines of leading context |\n"
+                                  "| `-C NUM` | Print NUM lines of context (before + after) |\n"
+                                  "\n"
+                                  "## File Selection\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|--------|-------------|\n"
+                                  "| `-r` | Recurse into directories |\n"
+                                  "| `-m NUM` | Stop after NUM matches per file |\n"
+                                  "| `-I` | Skip binary files |\n"
+                                  "| `--include=GLOB` | Search only matching files |\n"
+                                  "| `--exclude=GLOB` | Skip matching files |\n"
+                                  "| `--exclude-dir=DIR` | Skip matching directories |\n"
+                                  "| `--color=MODE` | Colorize output (auto/always/never) |\n");
+
+    auto regex = grep::buildRegex(opts);
+    if (!regex.has_value())
+    {
+        error("{}", regex.error());
+        return 2;
+    }
+
+    // Determine color mode
+    bool useColor = false;
+    if (opts.colorMode == grep::ColorMode::Always)
+        useColor = true;
+    else if (opts.colorMode == grep::ColorMode::Auto)
+    {
+#if !defined(_WIN32)
+        useColor = (isatty(outputFd) != 0);
+#endif
+    }
+
+    // Output + error writer lambdas
+    auto const writer = [outputFd](std::string_view sv) {
+        platformWrite(outputFd, sv.data(), sv.size());
+    };
+
+    bool hasError = false;
+    auto const errWriter = [this](std::string_view sv) {
+        error("{}", sv.substr(0, sv.size() - (sv.ends_with('\n') ? 1 : 0)));
+    };
+
+    // Collect files
+    auto files = grep::collectFiles(opts, errWriter, hasError);
+
+    // Determine file count for filename display
+    auto const readingStdin = opts.files.empty() && !opts.recursive;
+    auto const fileCount = readingStdin ? 0uz : files.size();
+    auto const showFilename = opts.showFilename(fileCount);
+
+    size_t totalMatches = 0;
+
+    if (readingStdin)
+    {
+        // Read from stdin
+        std::string stdinData;
+        std::array<char, 4096> buffer {};
+        while (true)
+        {
+            auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+            if (bytesRead <= 0)
+                break;
+            stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
+        }
+
+        // Split into lines
+        std::vector<std::string> lines;
+        std::string currentLine;
+        for (auto const ch: stdinData)
+        {
+            if (ch == '\n')
+            {
+                lines.push_back(std::move(currentLine));
+                currentLine.clear();
+            }
+            else
+            {
+                currentLine += ch;
+            }
+        }
+        if (!currentLine.empty())
+            lines.push_back(std::move(currentLine));
+
+        totalMatches =
+            grep::searchLines(lines, *regex, opts, "(standard input)", showFilename, useColor, writer);
+    }
+    else
+    {
+        // Search files
+        for (auto const& filePath: files)
+        {
+            // Binary detection
+            if (opts.skipBinary && grep::isBinaryFile(filePath))
+                continue;
+
+            // Read file
+            std::ifstream file(filePath);
+            if (!file.is_open())
+            {
+                if (!opts.suppressErrors)
+                    error("grep: {}: Permission denied", filePath.string());
+                hasError = true;
+                continue;
+            }
+
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(file, line))
+                lines.push_back(std::move(line));
+
+            auto const matches =
+                grep::searchLines(lines, *regex, opts, filePath.string(), showFilename, useColor, writer);
+            totalMatches += matches;
+
+            // For -q, bail out early on first match
+            if (opts.quiet && totalMatches > 0)
+                return 0;
+
+            // For -l, bail out of this file after first match (already handled in searchLines)
+        }
+    }
+
+    if (hasError && totalMatches == 0)
+        return 2;
+
+    return totalMatches > 0 ? 0 : 1;
+}
+
+int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    // Parse arguments (skip args[0] which is "timeout")
+    auto timeoutArgs = std::vector<std::string>();
+    for (auto const i: std::views::iota(1uz, args.size()))
+        timeoutArgs.push_back(args.at(i));
+
+    auto parsed = timeout::parseTimeoutArgs(timeoutArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 125;
+    }
+
+    auto& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(
+            outputFd,
+            "# timeout\n"
+            "\n"
+            "Run a command with a time limit.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`timeout [OPTIONS] DURATION COMMAND [ARG...]`\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|--------|-------------|\n"
+            "| `-s SIGNAL`, `--signal=SIGNAL` | Signal to send on timeout (default: TERM) |\n"
+            "| `-k DURATION`, `--kill-after=DURATION` | Send SIGKILL after grace period |\n"
+            "| `--preserve-status` | Return the command's exit status on timeout |\n"
+            "| `--foreground` | Don't create a separate process group |\n"
+            "| `-v`, `--verbose` | Diagnose to stderr when signal is sent |\n"
+            "| `-h`, `--help` | Show this help |\n"
+            "\n"
+            "## Duration Format\n"
+            "\n"
+            "A floating-point number with optional suffix: `s` (seconds, default), `m` (minutes), "
+            "`h` (hours), `d` (days).\n"
+            "\n"
+            "## Exit Codes\n"
+            "\n"
+            "| Code | Meaning |\n"
+            "|------|--------|\n"
+            "| 124 | Command timed out |\n"
+            "| 125 | timeout command itself failed |\n"
+            "| 126 | Command found but not executable |\n"
+            "| 127 | Command not found |\n"
+            "| 128+N | Command was killed by signal N |\n");
+
+    // Resolve the sub-command
+    auto const programPath = resolveProgram(opts.command[0]);
+    if (!programPath.has_value())
+    {
+        if (programPath.error() == ShellError::ProgramNotFound)
+        {
+            error("timeout: {}: command not found", opts.command[0]);
+            return 127;
+        }
+        error("timeout: {}: not executable", opts.command[0]);
+        return 126;
+    }
+
+    // Build spawn config
+    auto config = SpawnConfig {};
+    config.program = programPath.value();
+    for (auto const i: std::views::iota(1uz, opts.command.size()))
+        config.arguments.push_back(opts.command[i]);
+    config.stdoutFd = outputFd;
+    if (!opts.foreground)
+        config.processGroup = 0; // New process group
+
+    // Spawn the sub-command
+    auto spawnResult = _processManager.spawn(config);
+    if (!spawnResult.has_value())
+    {
+        error("timeout: failed to spawn {}: {}", opts.command[0], static_cast<int>(spawnResult.error()));
+        return 125;
+    }
+    auto const pid = spawnResult.value();
+
+    // If duration is 0, just do a blocking wait (no timeout)
+    if (opts.durationSeconds == 0.0)
+    {
+        auto waitResult = _processManager.wait(pid);
+        if (!waitResult.has_value())
+            return 125;
+        if (waitResult->signaled)
+            return 128 + waitResult->signal;
+        return waitResult->exitCode;
+    }
+
+    // Poll loop with timeout
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::duration<double>(opts.durationSeconds);
+    auto timedOut = false;
+
+    while (true)
+    {
+        auto waitResult = _processManager.wait(pid, WaitFlag::NoHang);
+        if (!waitResult.has_value())
+            return 125;
+
+        if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
+        {
+            // Child has exited
+            if (waitResult->signaled)
+                return 128 + waitResult->signal;
+            return waitResult->exitCode;
+        }
+
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            timedOut = true;
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Timeout reached — send configured signal
+    if (opts.verbose)
+        std::cerr << std::format(
+            "timeout: sending signal {} to command '{}'\n", opts.signal, opts.command[0]);
+    if (auto const sendResult = _processManager.sendSignal(pid, opts.signal); !sendResult.has_value())
+        return 125;
+
+    // If kill-after is set, wait the grace period then send SIGKILL
+    if (opts.killAfterSeconds > 0.0)
+    {
+        auto const killDeadline =
+            std::chrono::steady_clock::now() + std::chrono::duration<double>(opts.killAfterSeconds);
+
+        while (std::chrono::steady_clock::now() < killDeadline)
+        {
+            auto waitResult = _processManager.wait(pid, WaitFlag::NoHang);
+            if (!waitResult.has_value())
+                return 125;
+
+            if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
+            {
+                if (opts.preserveStatus)
+                {
+                    if (waitResult->signaled)
+                        return 128 + waitResult->signal;
+                    return waitResult->exitCode;
+                }
+                return 124;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        // Grace period expired — send SIGKILL
+        if (opts.verbose)
+            std::cerr << std::format("timeout: sending SIGKILL to command '{}'\n", opts.command[0]);
+
+#if !defined(_WIN32)
+        if (auto const sendResult = _processManager.sendSignal(pid, 9); !sendResult.has_value())
+            return 125;
+#else
+        if (auto const sendResult = _processManager.sendSignal(pid, opts.signal); !sendResult.has_value())
+            return 125;
+#endif
+    }
+
+    // Reap the child
+    auto finalResult = _processManager.wait(pid);
+    if (!finalResult.has_value())
+        return 125;
+
+    if (opts.preserveStatus)
+    {
+        if (finalResult->signaled)
+            return 128 + finalResult->signal;
+        return finalResult->exitCode;
+    }
+
+    return timedOut ? 124 : finalResult->exitCode;
 }
 
 } // namespace endo

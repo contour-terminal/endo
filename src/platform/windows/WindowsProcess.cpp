@@ -132,7 +132,7 @@ std::expected<WaitResult, PlatformError> WindowsProcessManager::wait(ProcessId p
     auto const waitResult = WaitForSingleObject(handle, timeout);
 
     if (waitResult == WAIT_TIMEOUT)
-        return WaitResult { .exitCode = 0, .signaled = false, .stopped = false, .signal = 0 };
+        return WaitResult { .exitCode = -1, .signaled = false, .stopped = false, .signal = 0 };
 
     if (waitResult != WAIT_OBJECT_0)
         return std::unexpected(PlatformError::WaitFailed);
