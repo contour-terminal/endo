@@ -2162,6 +2162,34 @@ TEST_CASE("shell.logical.chained_or")
     CHECK(escape(shell("false || false || echo hello").output()) == escape("hello\n"));
 }
 
+TEST_CASE("shell.logical.chained_and_real_commands")
+{
+    // 3 chained real commands (not builtins like true/false) - all succeed
+    TestShell shell;
+    CHECK(escape(shell("echo a && echo b && echo c").output()) == escape("a\nb\nc\n"));
+}
+
+TEST_CASE("shell.logical.chained_and_first_fails")
+{
+    // First command fails, rest should be skipped
+    TestShell shell;
+    CHECK(shell("false && echo b && echo c").output().empty());
+}
+
+TEST_CASE("shell.logical.chained_and_middle_fails")
+{
+    // Second command fails, third should be skipped
+    TestShell shell;
+    CHECK(escape(shell("echo a && false && echo c").output()) == escape("a\n"));
+}
+
+TEST_CASE("shell.logical.chained_or_real_commands")
+{
+    // 3 chained || with real commands, last succeeds
+    TestShell shell;
+    CHECK(escape(shell("false || false || echo c").output()) == escape("c\n"));
+}
+
 TEST_CASE("shell.logical.mixed_operators")
 {
     // true && false || echo hello - && has same precedence as ||, left-to-right

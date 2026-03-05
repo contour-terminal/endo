@@ -1688,52 +1688,58 @@ void IRGenerator::visit(ast::FileDescriptor const& node)
 void IRGenerator::visit(ast::LogicalAndStmt const& node)
 {
     // Short-circuit AND: execute right only if left succeeds (exit code 0)
-    // A && B:
-    //   eval A
-    //   if A succeeded (exit code == 0): eval B, result = B's exit code
-    //   else: result = A's exit code
+    // Use a Boolean alloca to safely propagate the success flag across basic
+    // blocks, avoiding SSA dominance violations when LogicalAnd/Or nodes are nested.
+    auto* successStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "and.ok");
+
+    // Evaluate left side FIRST — this ensures any inner blocks are created
+    // before outer blocks, maintaining correct block ordering.
+    auto* leftResult = codegen(node.left.get());
+    if (!leftResult)
+        leftResult = _builder.createLoad(successStorage, "and.left.ok");
+    auto* leftSuccess = toBool(leftResult);
+    _builder.createStore(successStorage, leftSuccess);
+
     CoreVM::BasicBlock* evalRight = _builder.createBlock("and.evalRight");
     CoreVM::BasicBlock* end = _builder.createBlock("and.end");
 
-    // Evaluate left side
-    auto* leftResult = codegen(node.left.get());
+    _builder.createCondBr(leftSuccess, evalRight, end);
 
-    // If left succeeded (exit code == 0), evaluate right side
-    _builder.createCondBr(toBool(leftResult), evalRight, end);
-
-    // Evaluate right side
     _builder.setInsertPoint(evalRight);
-    codegen(node.right.get());
+    auto* rightResult = codegen(node.right.get());
+    if (rightResult)
+        _builder.createStore(successStorage, toBool(rightResult));
     _builder.createBr(end);
 
     _builder.setInsertPoint(end);
-    // Note: The exit code is automatically set by the last executed command
+    _result = _builder.createLoad(successStorage, "and.result");
 }
 
 void IRGenerator::visit(ast::LogicalOrStmt const& node)
 {
     // Short-circuit OR: execute right only if left fails (exit code != 0)
-    // A || B:
-    //   eval A
-    //   if A failed (exit code != 0): eval B, result = B's exit code
-    //   else: result = A's exit code (which is 0, success)
+    auto* successStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "or.ok");
+
+    auto* leftResult = codegen(node.left.get());
+    if (!leftResult)
+        leftResult = _builder.createLoad(successStorage, "or.left.ok");
+    auto* leftSuccess = toBool(leftResult);
+    _builder.createStore(successStorage, leftSuccess);
+
     CoreVM::BasicBlock* evalRight = _builder.createBlock("or.evalRight");
     CoreVM::BasicBlock* end = _builder.createBlock("or.end");
 
-    // Evaluate left side
-    auto* leftResult = codegen(node.left.get());
-
-    // If left failed (exit code != 0), evaluate right side
     // toBool returns true for exit code 0 (success), so we flip the branches
-    _builder.createCondBr(toBool(leftResult), end, evalRight);
+    _builder.createCondBr(leftSuccess, end, evalRight);
 
-    // Evaluate right side
     _builder.setInsertPoint(evalRight);
-    codegen(node.right.get());
+    auto* rightResult = codegen(node.right.get());
+    if (rightResult)
+        _builder.createStore(successStorage, toBool(rightResult));
     _builder.createBr(end);
 
     _builder.setInsertPoint(end);
-    // Note: The exit code is automatically set by the last executed command
+    _result = _builder.createLoad(successStorage, "or.result");
 }
 
 void IRGenerator::visit(ast::InputRedirect const& node)

@@ -6,6 +6,7 @@
 #include <CoreVM/enums.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 #include <CoreVM/util.hpp>
+#include <CoreVM/util/assert.hpp>
 
 #include <cstdint>
 #include <expected>
@@ -75,7 +76,9 @@ class Runner
         {
             if (relativeIndex < 0)
             {
-                return _stack[_stack.size() + relativeIndex];
+                auto const absIndex = static_cast<size_t>(-relativeIndex);
+                COREVM_ASSERT(absIndex <= _stack.size(), "VM stack underflow");
+                return _stack[_stack.size() - absIndex];
             }
             else
             {
@@ -87,7 +90,9 @@ class Runner
         {
             if (relativeIndex < 0)
             {
-                return _stack[_stack.size() + relativeIndex];
+                auto const absIndex = static_cast<size_t>(-relativeIndex);
+                COREVM_ASSERT(absIndex <= _stack.size(), "VM stack underflow");
+                return _stack[_stack.size() - absIndex];
             }
             else
             {
