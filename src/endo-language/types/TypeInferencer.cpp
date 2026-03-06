@@ -800,6 +800,102 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         return std::pair { types::unitType(), s1 };
     }
 
+    // --- Record expression ---
+    if (auto const* recExpr = dynamic_cast<ast::RecordExpr const*>(&expr))
+    {
+        auto currentSubst = std::move(subst);
+        std::vector<RecordField> fields;
+
+        for (auto const& field: recExpr->fields)
+        {
+            auto valResult = inferExpr(*field.value, env, currentSubst);
+            if (!valResult)
+                return valResult;
+            auto [valType, s1] = *valResult;
+            fields.push_back(RecordField { .name = field.name, .type = s1.apply(valType) });
+            currentSubst = s1;
+        }
+
+        // If type name is given, look up the named record type and unify
+        if (!recExpr->typeName.empty())
+        {
+            auto scheme = env->lookup(recExpr->typeName);
+            if (scheme)
+            {
+                auto namedType = env->instantiate(*scheme);
+                auto anonType = types::anonymousRecord(fields);
+                auto s = unifyAndCompose(anonType, namedType, currentSubst);
+                if (s)
+                    return std::pair { namedType, *s };
+            }
+            // Even if lookup fails, return the named record type
+            return std::pair { types::record(recExpr->typeName, std::move(fields)), currentSubst };
+        }
+
+        return std::pair { types::anonymousRecord(std::move(fields)), currentSubst };
+    }
+
+    // --- Record update expression ---
+    if (auto const* recUpdate = dynamic_cast<ast::RecordUpdateExpr const*>(&expr))
+    {
+        auto baseResult = inferExpr(*recUpdate->base, env, std::move(subst));
+        if (!baseResult)
+            return baseResult;
+        auto [baseType, s1] = *baseResult;
+
+        auto currentSubst = s1;
+        for (auto const& upd: recUpdate->updates)
+        {
+            auto valResult = inferExpr(*upd.value, env, currentSubst);
+            if (!valResult)
+                return valResult;
+            auto [valType, s2] = *valResult;
+            currentSubst = s2;
+        }
+
+        return std::pair { currentSubst.apply(baseType), currentSubst };
+    }
+
+    // --- Field access expression ---
+    if (auto const* fieldAccess = dynamic_cast<ast::FieldAccessExpr const*>(&expr))
+    {
+        auto objResult = inferExpr(*fieldAccess->object, env, std::move(subst));
+        if (!objResult)
+            return objResult;
+        auto [objType, s1] = *objResult;
+
+        auto resolvedObj = s1.apply(objType);
+        if (auto const* rec = resolvedObj->asRecord())
+        {
+            auto fieldType = rec->fieldType(fieldAccess->fieldName);
+            if (fieldType)
+                return std::pair { *fieldType, s1 };
+        }
+
+        // Unknown object type — return fresh type var
+        return std::pair { env->freshTypeVarType(), s1 };
+    }
+
+    // --- Union constructor expression ---
+    if (auto const* unionCtor = dynamic_cast<ast::UnionConstructorExpr const*>(&expr))
+    {
+        auto scheme = env->lookup(unionCtor->typeName);
+        if (scheme)
+        {
+            auto unionType = env->instantiate(*scheme);
+            auto currentSubst = std::move(subst);
+            for (auto const& arg: unionCtor->arguments)
+            {
+                auto argResult = inferExpr(*arg, env, currentSubst);
+                if (!argResult)
+                    return argResult;
+                currentSubst = argResult->second;
+            }
+            return std::pair { unionType, currentSubst };
+        }
+        return std::pair { env->freshTypeVarType(), std::move(subst) };
+    }
+
     // Unknown expression type — use fresh type variable to avoid blocking inference
     return std::pair { env->freshTypeVarType(), std::move(subst) };
 }
@@ -1148,6 +1244,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
     if (auto const* recPat = dynamic_cast<pattern::RecordPattern const*>(&pat))
     {
         std::vector<std::pair<std::string, TypePtr>> allBindings;
+        std::vector<RecordField> recordFields;
         auto currentSubst = std::move(subst);
 
         for (auto const& field: recPat->fields)
@@ -1159,6 +1256,7 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                     return fieldResult;
                 for (auto& b: fieldResult->bindings)
                     allBindings.push_back(std::move(b));
+                recordFields.push_back(RecordField { .name = field.name, .type = fieldResult->type });
                 currentSubst = fieldResult->subst;
             }
             else
@@ -1166,13 +1264,13 @@ std::expected<TypeInferencer::PatternResult, std::string> TypeInferencer::inferP
                 // Punning: { name } means { name = name }
                 auto freshType = env->freshTypeVarType();
                 allBindings.emplace_back(field.name, freshType);
+                recordFields.push_back(RecordField { .name = field.name, .type = freshType });
             }
         }
 
-        // Use a fresh type variable for the record — we don't have enough info to construct the record type
-        return PatternResult { .type = env->freshTypeVarType(),
-                               .bindings = std::move(allBindings),
-                               .subst = currentSubst };
+        // Build anonymous record type from fields to enable unification with known record types
+        auto recType = types::anonymousRecord(std::move(recordFields));
+        return PatternResult { .type = recType, .bindings = std::move(allBindings), .subst = currentSubst };
     }
 
     // Unknown pattern type
@@ -1456,6 +1554,54 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
         }
 
         return s1;
+    }
+
+    // --- Record type definition ---
+    if (auto const* recDef = dynamic_cast<ast::RecordTypeDefStmt const*>(&stmt))
+    {
+        std::vector<RecordField> fields;
+        fields.reserve(recDef->fields.size());
+        for (auto const& field: recDef->fields)
+            fields.push_back(RecordField { .name = field.name, .type = field.type });
+        auto recType = types::record(recDef->name, std::move(fields));
+        env->bindMono(recDef->name, recType);
+        return subst;
+    }
+
+    // --- Union type definition ---
+    if (auto const* unionDef = dynamic_cast<ast::UnionTypeDefStmt const*>(&stmt))
+    {
+        std::vector<UnionCase> cases;
+        for (auto const& variant: unionDef->variants)
+        {
+            std::optional<TypePtr> payloadType;
+            if (variant.payloadTypes.size() == 1)
+                payloadType = variant.payloadTypes[0];
+            else if (variant.payloadTypes.size() > 1)
+                payloadType = types::tuple(variant.payloadTypes);
+            cases.push_back(UnionCase { .name = variant.name, .payloadType = payloadType });
+        }
+        auto unionType = types::unionType(unionDef->name, std::move(cases));
+        env->bindMono(unionDef->name, unionType);
+
+        // Bind each constructor as a function (payload -> unionType) or as the type directly
+        for (auto const& variant: unionDef->variants)
+        {
+            if (variant.payloadTypes.empty())
+            {
+                env->bindMono(variant.name, unionType);
+            }
+            else if (variant.payloadTypes.size() == 1)
+            {
+                env->bindMono(variant.name, types::function(variant.payloadTypes[0], unionType));
+            }
+            else
+            {
+                auto tupleParam = types::tuple(variant.payloadTypes);
+                env->bindMono(variant.name, types::function(tupleParam, unionType));
+            }
+        }
+        return subst;
     }
 
     // --- Shell statements: skip type inference for these ---

@@ -58,7 +58,7 @@ class Substitution
 /// Type error for unification failures
 struct TypeError
 {
-    enum class Kind
+    enum class Kind // NOLINT(performance-enum-size)
     {
         Mismatch,       // Types don't match (e.g., int vs str)
         OccursCheck,    // Infinite type (type variable occurs in its own solution)
@@ -73,8 +73,8 @@ struct TypeError
     TypePtr expected; // The type we expected
     TypePtr actual;   // The type we got
 
-    static TypeError mismatch(TypePtr expected, TypePtr actual);
-    static TypeError occursCheck(TypeVarId varId, TypePtr type);
+    static TypeError mismatch(TypePtr const& expected, TypePtr const& actual);
+    static TypeError occursCheck(TypeVarId varId, TypePtr const& type);
     static TypeError arityMismatch(size_t expected, size_t actual);
     static TypeError fieldMismatch(std::string const& expected, std::string const& actual);
     static TypeError caseMismatch(std::string const& expected, std::string const& actual);

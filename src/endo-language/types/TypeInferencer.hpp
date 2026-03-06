@@ -95,9 +95,9 @@ class TypeInferencer
     void recordError(std::string error);
 
     /// Helper: unify two types and compose with existing substitution.
-    [[nodiscard]] std::expected<Substitution, std::string> unifyAndCompose(TypePtr const& t1,
-                                                                           TypePtr const& t2,
-                                                                           Substitution const& subst);
+    [[nodiscard]] static std::expected<Substitution, std::string> unifyAndCompose(TypePtr const& t1,
+                                                                                  TypePtr const& t2,
+                                                                                  Substitution const& subst);
 
     TypeEnvPtr _env;         ///< Root type environment
     InferenceResult _result; ///< Accumulated inference results

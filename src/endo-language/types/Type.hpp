@@ -21,7 +21,7 @@ using TypePtr = std::shared_ptr<Type>;
 using TypeVarId = uint32_t;
 
 // Primitive type kinds
-enum class PrimitiveType
+enum class PrimitiveType // NOLINT(performance-enum-size)
 {
     Int,   // 64-bit signed integer
     Float, // 64-bit floating point
@@ -106,7 +106,7 @@ struct RecordType
     bool operator==(RecordType const& other) const;
 
     // Find a field by name
-    std::optional<TypePtr> fieldType(std::string const& fieldName) const;
+    [[nodiscard]] std::optional<TypePtr> fieldType(std::string const& fieldName) const;
 };
 
 // Union case (variant)
@@ -127,7 +127,7 @@ struct UnionType
     bool operator==(UnionType const& other) const;
 
     // Find a case by name
-    std::optional<UnionCase const*> findCase(std::string const& caseName) const;
+    [[nodiscard]] std::optional<UnionCase const*> findCase(std::string const& caseName) const;
 };
 
 // Type scheme for let-polymorphism: forall a b c. T
@@ -138,7 +138,7 @@ struct TypeScheme
     TypePtr type;                          // The underlying type
 
     // Instantiate the scheme with fresh type variables
-    TypePtr instantiate(std::function<TypeVarId()> freshVarGen) const;
+    TypePtr instantiate(std::function<TypeVarId()> const& freshVarGen) const;
 
     bool operator==(TypeScheme const& other) const;
 };
@@ -160,42 +160,45 @@ struct Type
     bool operator==(Type const& other) const { return node == other.node; }
 
     // Type predicates
-    bool isTypeVar() const { return std::holds_alternative<TypeVar>(node); }
+    [[nodiscard]] bool isTypeVar() const { return std::holds_alternative<TypeVar>(node); }
 
-    bool isPrimitive() const { return std::holds_alternative<PrimitiveTypeNode>(node); }
+    [[nodiscard]] bool isPrimitive() const { return std::holds_alternative<PrimitiveTypeNode>(node); }
 
-    bool isFunction() const { return std::holds_alternative<FunctionType>(node); }
+    [[nodiscard]] bool isFunction() const { return std::holds_alternative<FunctionType>(node); }
 
-    bool isList() const { return std::holds_alternative<ListType>(node); }
+    [[nodiscard]] bool isList() const { return std::holds_alternative<ListType>(node); }
 
-    bool isTuple() const { return std::holds_alternative<TupleType>(node); }
+    [[nodiscard]] bool isTuple() const { return std::holds_alternative<TupleType>(node); }
 
-    bool isOption() const { return std::holds_alternative<OptionType>(node); }
+    [[nodiscard]] bool isOption() const { return std::holds_alternative<OptionType>(node); }
 
-    bool isResult() const { return std::holds_alternative<ResultType>(node); }
+    [[nodiscard]] bool isResult() const { return std::holds_alternative<ResultType>(node); }
 
-    bool isRecord() const { return std::holds_alternative<RecordType>(node); }
+    [[nodiscard]] bool isRecord() const { return std::holds_alternative<RecordType>(node); }
 
-    bool isUnion() const { return std::holds_alternative<UnionType>(node); }
+    [[nodiscard]] bool isUnion() const { return std::holds_alternative<UnionType>(node); }
 
     // Accessors (return nullptr if wrong type)
-    TypeVar const* asTypeVar() const { return std::get_if<TypeVar>(&node); }
+    [[nodiscard]] TypeVar const* asTypeVar() const { return std::get_if<TypeVar>(&node); }
 
-    PrimitiveTypeNode const* asPrimitive() const { return std::get_if<PrimitiveTypeNode>(&node); }
+    [[nodiscard]] PrimitiveTypeNode const* asPrimitive() const
+    {
+        return std::get_if<PrimitiveTypeNode>(&node);
+    }
 
-    FunctionType const* asFunction() const { return std::get_if<FunctionType>(&node); }
+    [[nodiscard]] FunctionType const* asFunction() const { return std::get_if<FunctionType>(&node); }
 
-    ListType const* asList() const { return std::get_if<ListType>(&node); }
+    [[nodiscard]] ListType const* asList() const { return std::get_if<ListType>(&node); }
 
-    TupleType const* asTuple() const { return std::get_if<TupleType>(&node); }
+    [[nodiscard]] TupleType const* asTuple() const { return std::get_if<TupleType>(&node); }
 
-    OptionType const* asOption() const { return std::get_if<OptionType>(&node); }
+    [[nodiscard]] OptionType const* asOption() const { return std::get_if<OptionType>(&node); }
 
-    ResultType const* asResult() const { return std::get_if<ResultType>(&node); }
+    [[nodiscard]] ResultType const* asResult() const { return std::get_if<ResultType>(&node); }
 
-    RecordType const* asRecord() const { return std::get_if<RecordType>(&node); }
+    [[nodiscard]] RecordType const* asRecord() const { return std::get_if<RecordType>(&node); }
 
-    UnionType const* asUnion() const { return std::get_if<UnionType>(&node); }
+    [[nodiscard]] UnionType const* asUnion() const { return std::get_if<UnionType>(&node); }
 
     // Mutable accessors
     TypeVar* asTypeVar() { return std::get_if<TypeVar>(&node); }

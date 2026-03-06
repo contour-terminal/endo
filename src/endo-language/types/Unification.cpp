@@ -161,7 +161,7 @@ std::string Substitution::toString() const
 
 // TypeError implementation
 
-TypeError TypeError::mismatch(TypePtr expected, TypePtr actual)
+TypeError TypeError::mismatch(TypePtr const& expected, TypePtr const& actual)
 {
     return TypeError { .kind = Kind::Mismatch,
                        .message = std::format(
@@ -170,7 +170,7 @@ TypeError TypeError::mismatch(TypePtr expected, TypePtr actual)
                        .actual = actual };
 }
 
-TypeError TypeError::occursCheck(TypeVarId varId, TypePtr type)
+TypeError TypeError::occursCheck(TypeVarId varId, TypePtr const& type)
 {
     auto const letter = static_cast<char>('a' + (varId % 26));
     return TypeError { .kind = Kind::OccursCheck,
