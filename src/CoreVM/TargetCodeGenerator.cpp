@@ -168,14 +168,19 @@ void TargetCodeGenerator::generate(IRFunction* function)
         basicBlockEntryPoints[bb] = getInstructionPointer();
         for (Instr* instr: bb->instructions())
         {
-            // Record source location if it changed (sparse location table)
+            // Record source location AFTER instruction emission, only if bytecodes were actually emitted.
+            // This avoids phantom entries from BrInstr fall-through optimizations (which emit no bytecodes).
             SourceLocation const& loc = instr->sourceLocation();
-            if (!loc.filename.empty() && loc != _lastRecordedLocation)
+            auto const ipBefore = getInstructionPointer();
+            bool const locationChanged = !loc.filename.empty() && loc != _lastRecordedLocation;
+
+            instr->accept(*this);
+
+            if (locationChanged && getInstructionPointer() > ipBefore)
             {
-                _locationTable.emplace_back(getInstructionPointer(), loc);
+                _locationTable.emplace_back(ipBefore, loc);
                 _lastRecordedLocation = loc;
             }
-            instr->accept(*this);
         }
     }
 
@@ -229,6 +234,26 @@ void TargetCodeGenerator::generate(IRFunction* function)
     // Store the sparse location table for this function
     if (!_locationTable.empty())
         _cp.setFunctionLocationTable(_functionId, std::move(_locationTable));
+
+    // Collect debug variable info from allocas for debugger inspection
+    {
+        std::vector<DebugVarInfo> debugVars;
+        for (auto const& [value, index]: _allocaIndices)
+        {
+            auto const* alloca = dynamic_cast<AllocaInstr const*>(value);
+            if (!alloca)
+                continue;
+            auto const& varName = alloca->name();
+            // Skip internal/unnamed variables (empty names or compiler-generated with '.')
+            if (varName.empty() || varName.find('.') != std::string::npos)
+                continue;
+            debugVars.push_back({ varName, index, alloca->type() });
+        }
+        // Sort by alloca index for deterministic ordering
+        std::ranges::sort(debugVars, {}, &DebugVarInfo::allocaIndex);
+        if (!debugVars.empty())
+            _cp.setFunctionDebugVarInfo(_functionId, std::move(debugVars));
+    }
 
     // cleanup remaining function-local work vars
     // COREVM_TRACE("CoreVM: stack depth after function code generation: {}", _stack.size());
@@ -655,7 +680,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
         // We must update _stack tracking to match the physical stack order.
         emitInstr(Opcode::STACKROT, si);
         const Value* v = _stack[si];
-        _stack.erase(_stack.begin() + si);
+        _stack.erase(_stack.begin() + static_cast<std::ptrdiff_t>(si));
         _stack.push_back(v);
         return;
     }
@@ -718,7 +743,7 @@ void TargetCodeGenerator::visit(CondBrInstr& condBrInstr)
             emitInstr(Opcode::STACKROT, conditionPos - 1);
             // Update tracking: element at conditionPos-1 moves to top
             const Value* below = _stack[conditionPos - 1];
-            _stack.erase(_stack.begin() + (conditionPos - 1));
+            _stack.erase(_stack.begin() + static_cast<std::ptrdiff_t>(conditionPos - 1));
             _stack.push_back(below);
             // Condition is now at conditionPos - 1
             conditionPos--;

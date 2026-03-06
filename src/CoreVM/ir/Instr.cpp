@@ -13,7 +13,7 @@
 namespace CoreVM
 {
 
-Instr::Instr(const Instr& v): Value(v), _basicBlock(nullptr), _operands(v._operands)
+Instr::Instr(const Instr& v): Value(v), _operands(v._operands)
 {
     for (Value* op: _operands)
     {
@@ -25,7 +25,7 @@ Instr::Instr(const Instr& v): Value(v), _basicBlock(nullptr), _operands(v._opera
 }
 
 Instr::Instr(LiteralType ty, const std::vector<Value*>& ops, const std::string& name):
-    Value(ty, name), _basicBlock(nullptr), _operands(ops)
+    Value(ty, name), _operands(ops)
 {
     for (Value* op: _operands)
     {

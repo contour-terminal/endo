@@ -52,6 +52,11 @@ namespace CoreVM
     do                                                             \
     {                                                              \
         _traceLogger((Instruction) * pc, get_pc(), _stack.size()); \
+        if (_state == State::Suspended)                            \
+        {                                                          \
+            _ip = get_pc();                                        \
+            return false;                                          \
+        }                                                          \
     } while (0)
 
 #if defined(COREVM_VM_LOOP_SWITCH)
@@ -427,6 +432,16 @@ RuntimeError Runner::makeError(std::string message) const
     return RuntimeError { .message = std::move(message), .location = _function->locationOf(_ip) };
 }
 
+Runner::RunResult Runner::handleRuntimeError(RuntimeError error)
+{
+    if (_errorCallback && _errorCallback(error))
+    {
+        _state = State::Suspended;
+        return false; // Suspended for debugger, not an error exit
+    }
+    return std::unexpected(std::move(error));
+}
+
 void Runner::suspend()
 {
     assert(_state == State::Running);
@@ -445,11 +460,18 @@ bool Runner::resume()
     return result.value();
 }
 
+Runner::RunResult Runner::resumeWithResult()
+{
+    assert(_state == State::Suspended);
+    return loopWithResult();
+}
+
 void Runner::rewind()
 {
     _ip = 0;
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 Runner::RunResult Runner::loopWithResult()
 {
 // {{{ jump table
@@ -814,7 +836,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && divisor == 0)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("division by zero"));
+            return handleRuntimeError(makeError("division by zero"));
         }
         SP(-2) = getNumber(-2) / divisor;
         pop();
@@ -827,7 +849,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && divisor == 0)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("division by zero"));
+            return handleRuntimeError(makeError("division by zero"));
         }
         SP(-2) = getNumber(-2) % divisor;
         pop();
@@ -850,7 +872,7 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(NPOW)
     {
-        SP(-2) = powl(getNumber(-2), getNumber(-1));
+        SP(-2) = static_cast<Value>(powl(getNumber(-2), getNumber(-1)));
         pop();
         next;
     }
@@ -1214,7 +1236,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !typeRegistry().get(A))
         {
             _ip = get_pc();
-            return std::unexpected(makeError(std::format("invalid type ID: {}", A)));
+            return handleRuntimeError(makeError(std::format("invalid type ID: {}", A)));
         }
         TypedObject* obj = allocObject(A);
         pushObject(obj);
@@ -1228,7 +1250,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in ORETAIN"));
+            return handleRuntimeError(makeError("null object dereference in ORETAIN"));
         }
         retainObject(obj);
         next;
@@ -1242,7 +1264,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in ORELEASE"));
+            return handleRuntimeError(makeError("null object dereference in ORELEASE"));
         }
         if (releaseObject(obj))
         {
@@ -1258,7 +1280,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OGETTAG"));
+            return handleRuntimeError(makeError("null object dereference in OGETTAG"));
         }
         SP(-1) = obj->tag;
         next;
@@ -1273,7 +1295,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OSETTAG"));
+            return handleRuntimeError(makeError("null object dereference in OSETTAG"));
         }
         obj->tag = static_cast<uint8_t>(tag);
         // Object stays on stack
@@ -1288,12 +1310,12 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OGETSLOT"));
+            return handleRuntimeError(makeError("null object dereference in OGETSLOT"));
         }
         if (_config.typeChecksEnabled && A >= obj->type->slotCount)
         {
             _ip = get_pc();
-            return std::unexpected(makeError(
+            return handleRuntimeError(makeError(
                 std::format("slot index {} out of bounds (object has {} slots)", A, obj->type->slotCount)));
         }
         SP(-1) = obj->getSlot(static_cast<uint8_t>(A));
@@ -1309,12 +1331,12 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OSETSLOT"));
+            return handleRuntimeError(makeError("null object dereference in OSETSLOT"));
         }
         if (_config.typeChecksEnabled && A >= obj->type->slotCount)
         {
             _ip = get_pc();
-            return std::unexpected(makeError(
+            return handleRuntimeError(makeError(
                 std::format("slot index {} out of bounds (object has {} slots)", A, obj->type->slotCount)));
         }
         obj->setSlot(static_cast<uint8_t>(A), value);
@@ -1329,7 +1351,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OTYPEID"));
+            return handleRuntimeError(makeError("null object dereference in OTYPEID"));
         }
         SP(-1) = obj->type->id;
         next;
@@ -1343,7 +1365,7 @@ Runner::RunResult Runner::loopWithResult()
         if (_config.typeChecksEnabled && !obj)
         {
             _ip = get_pc();
-            return std::unexpected(makeError("null object dereference in OISTYPE"));
+            return handleRuntimeError(makeError("null object dereference in OISTYPE"));
         }
         SP(-1) = (obj->type->id == A) ? 1 : 0;
         next;
@@ -1539,7 +1561,7 @@ Runner::RunResult Runner::loopWithResult()
         {
             f = std::stod(getString(-1));
         }
-        catch (...)
+        catch (...) // NOLINT(bugprone-empty-catch)
         {
             // Intentionally empty: invalid string-to-float conversions default to 0.0
         }
@@ -1555,10 +1577,10 @@ Runner::RunResult Runner::loopWithResult()
             auto functionId = A;
             auto argc = B;
 
-            if (_callStack.size() >= MaxCallDepth)
+            if (_callStack.size() >= maxCallDepth)
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+                return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
             }
 
             // Save caller state
@@ -1601,7 +1623,7 @@ Runner::RunResult Runner::loopWithResult()
             if (_callStack.empty())
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("URET without matching UCALL"));
+                return handleRuntimeError(makeError("URET without matching UCALL"));
             }
 
             Value retVal = pop();
@@ -1683,7 +1705,7 @@ Runner::RunResult Runner::loopWithResult()
             if (!callable)
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("null object dereference in IUCALL"));
+                return handleRuntimeError(makeError("null object dereference in IUCALL"));
             }
 
             // Read function ID from slot 0
@@ -1727,10 +1749,10 @@ Runner::RunResult Runner::loopWithResult()
 
             auto const totalArgc = captureCount + argc;
 
-            if (_callStack.size() >= MaxCallDepth)
+            if (_callStack.size() >= maxCallDepth)
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+                return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
             }
 
             // Save caller state
@@ -1775,7 +1797,7 @@ Runner::RunResult Runner::loopWithResult()
             if (!callable)
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("null object dereference in IUTCALL"));
+                return handleRuntimeError(makeError("null object dereference in IUTCALL"));
             }
 
             auto funcId = static_cast<uint16_t>(callable->getSlot(0));
@@ -1860,7 +1882,7 @@ Runner::RunResult Runner::loopWithResult()
             if (!lazy)
             {
                 _ip = get_pc();
-                return std::unexpected(makeError("null object dereference in LFORCE"));
+                return handleRuntimeError(makeError("null object dereference in LFORCE"));
             }
 
             if (lazy->tag == 1)
@@ -1888,12 +1910,12 @@ Runner::RunResult Runner::loopWithResult()
 
             auto argc = captureCount;
 
-            if (_callStack.size() >= MaxCallDepth)
+            if (_callStack.size() >= maxCallDepth)
             {
                 if (releaseObject(lazy))
                     freeObject(lazy);
                 _ip = get_pc();
-                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+                return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
             }
 
             // Save caller state

@@ -41,7 +41,7 @@ IRProgram::~IRProgram()
     _builtinFunctions.clear();
 }
 
-void IRProgram::dump()
+void IRProgram::dump() const
 {
     std::cerr << dumpToString();
 }

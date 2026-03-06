@@ -66,7 +66,7 @@ void IRFunction::setEntryBlock(BasicBlock* bb)
     _blocks.push_front(std::move(t));
 }
 
-void IRFunction::dump()
+void IRFunction::dump() const
 {
     std::cerr << dumpToString();
 }

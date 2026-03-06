@@ -32,16 +32,18 @@ bool IsSameInstruction::isSameOperands(Instr* a, Instr* b)
     return true;
 }
 
-IsSameInstruction::IsSameInstruction(Instr* a): _other(a), _result(false)
+IsSameInstruction::IsSameInstruction(Instr* a): _other(a)
 {
 }
 
 // {{{ impl
-#define IS_SAME_INSTR_IMPL(Type)               \
-    void IsSameInstruction::visit(Type&)       \
-    {                                          \
-        _result = dynamic_cast<Type*>(_other); \
+// NOLINTBEGIN(bugprone-macro-parentheses)
+#define IS_SAME_INSTR_IMPL(Type)                          \
+    void IsSameInstruction::visit(Type&)                  \
+    {                                                     \
+        _result = dynamic_cast<Type*>(_other) != nullptr; \
     }
+// NOLINTEND(bugprone-macro-parentheses)
 
 IS_SAME_INSTR_IMPL(NopInstr)
 IS_SAME_INSTR_IMPL(AllocaInstr)
