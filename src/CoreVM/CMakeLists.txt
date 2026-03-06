@@ -63,6 +63,7 @@ if(WIN32)
 endif()
 
 enable_sanitizers(CoreVM)
+enable_clang_tidy(CoreVM)
 
 # Tests
 if(ENDO_TESTING)

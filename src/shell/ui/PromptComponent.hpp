@@ -216,7 +216,7 @@ class PromptComponent: public tui::Component
     [[nodiscard]] bool hasPendingCompletionErrors() const noexcept;
 
     /// @brief Result of processing input.
-    enum class Action
+    enum class Action // NOLINT(performance-enum-size)
     {
         None,           ///< No action needed.
         Changed,        ///< Content changed, re-render needed.
@@ -256,9 +256,9 @@ class PromptComponent: public tui::Component
         std::vector<std::string> const& moduleNames) const;
 
     // Style constants
-    static constexpr int HorizontalMargin = 1; // Left and right margin
-    static constexpr int LeftBarWidth = 1;
-    static constexpr int PaddingAfterBar = 1;
+    static constexpr int HorizontalMargin = 1; // NOLINT(readability-identifier-naming) Left and right margin
+    static constexpr int LeftBarWidth = 1;     // NOLINT(readability-identifier-naming)
+    static constexpr int PaddingAfterBar = 1;  // NOLINT(readability-identifier-naming)
 
     /// @brief Translates a component-relative MouseEvent to InputField buffer coordinates
     /// and delegates to InputField::handleMouse().
@@ -343,6 +343,7 @@ class PromptComponent: public tui::Component
 
     // Ghost text debounce timer
     std::optional<std::chrono::steady_clock::time_point> _ghostTextPendingSince;
+    // NOLINTNEXTLINE(readability-identifier-naming)
     static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
 
     // suggest() result cache (avoids repeated filesystem/history lookups)
@@ -357,6 +358,7 @@ class PromptComponent: public tui::Component
 
     // Diagnostics debounce timer
     std::optional<std::chrono::steady_clock::time_point> _diagnosticsPendingSince;
+    // NOLINTNEXTLINE(readability-identifier-naming)
     static constexpr auto DiagnosticsDebounceMs = std::chrono::milliseconds(300);
 
     /// @brief Recomputes diagnostics if the input text has changed.
@@ -383,6 +385,7 @@ class PromptComponent: public tui::Component
 
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime;
+    // NOLINTNEXTLINE(readability-identifier-naming)
     static constexpr auto DoubleTabThreshold = std::chrono::milliseconds(400);
 
     // Ctrl+D exit confirmation state

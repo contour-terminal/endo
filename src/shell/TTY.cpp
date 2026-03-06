@@ -284,7 +284,7 @@ void TestPTY::outputUpdateLoop()
             break;
         else if (writeResult > 0)
         {
-            auto _ = std::lock_guard<std::mutex> { _outputMutex };
+            auto _ = std::scoped_lock { _outputMutex };
             _output.append(buffer, writeResult);
         }
         else if (errno == EINTR || errno == EAGAIN)

@@ -39,7 +39,7 @@ class AgentInputComponent: public tui::Component
 {
   public:
     /// @brief Result of processing input.
-    enum class Action
+    enum class Action // NOLINT(performance-enum-size)
     {
         None,              ///< No action needed.
         Changed,           ///< Content changed, re-render needed.
@@ -233,12 +233,13 @@ class AgentInputComponent: public tui::Component
     ThinkingMode _thinkingMode = ThinkingMode::Off; ///< Active thinking mode for header display.
     int _topPadding = 0;                            ///< Blank rows above content (from promptSpacing).
 
-    static constexpr int LeftBarWidth = 2;   ///< Width of the left bar chrome (╭─, ╰─, │).
-    static constexpr int BarPadding = 1;     ///< Padding after the bar.
-    static constexpr int HeaderHeight = 1;   ///< Height of the header line (shows agent/provider/model).
-    static constexpr int InfoLineHeight = 1; ///< Height of the info/status line below input.
-    static constexpr int BottomPadding = 1;  ///< Empty padding line at the page bottom.
-    static constexpr int FooterHeight = InfoLineHeight + BottomPadding; ///< Total footer height.
+    static constexpr int LeftBarWidth = 2;   // NOLINT(readability-identifier-naming)
+    static constexpr int BarPadding = 1;     // NOLINT(readability-identifier-naming)
+    static constexpr int HeaderHeight = 1;   // NOLINT(readability-identifier-naming)
+    static constexpr int InfoLineHeight = 1; // NOLINT(readability-identifier-naming)
+    static constexpr int BottomPadding = 1;  // NOLINT(readability-identifier-naming)
+    // NOLINTNEXTLINE(readability-identifier-naming)
+    static constexpr int FooterHeight = InfoLineHeight + BottomPadding;
 
     // Completion helpers
     void triggerCompletion(bool forceShowPopup);
@@ -254,6 +255,7 @@ class AgentInputComponent: public tui::Component
 
     bool _ghostTextDirty = false; ///< Ghost text needs recomputation.
     std::optional<std::chrono::steady_clock::time_point> _ghostTextPendingSince;
+    // NOLINTNEXTLINE(readability-identifier-naming)
     static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
     std::string _suggestCacheText;                  ///< Last input text for suggest cache.
     std::optional<std::string> _suggestCacheResult; ///< Cached suggest result.
@@ -269,6 +271,7 @@ class AgentInputComponent: public tui::Component
     // Escape double-press confirmation state
     void restoreFromEscapeHint();
 
+    // NOLINTNEXTLINE(readability-identifier-naming)
     static constexpr auto EscapeHintTimeout = std::chrono::milliseconds(1000);
     std::chrono::steady_clock::time_point _lastEscapeTime;
     bool _escapeHintVisible = false;
@@ -288,10 +291,10 @@ class AgentInputComponent: public tui::Component
     std::vector<PreviewLayout> _previewLayouts;               ///< Cached layout per preview image.
     int _cellPixelWidth = 0;                                  ///< Terminal cell width in pixels.
     int _cellPixelHeight = 0;                                 ///< Terminal cell height in pixels.
-    static constexpr int MaxAttachedImages = 5;               ///< Maximum images per message.
-    static constexpr int PreviewMaxColumns = 30;              ///< Max preview width in terminal columns.
-    static constexpr int PreviewMaxLines = 8;                 ///< Max preview height in terminal lines.
-    static constexpr size_t MaxImageBytes = 10 * 1024 * 1024; ///< Max image size: 10 MB.
+    static constexpr int MaxAttachedImages = 5;               // NOLINT(readability-identifier-naming)
+    static constexpr int PreviewMaxColumns = 30;              // NOLINT(readability-identifier-naming)
+    static constexpr int PreviewMaxLines = 8;                 // NOLINT(readability-identifier-naming)
+    static constexpr size_t MaxImageBytes = 10 * 1024 * 1024; // NOLINT(readability-identifier-naming)
 };
 
 } // namespace endo::agent

@@ -25,7 +25,7 @@ Wakeup::~Wakeup()
         ::close(_handle);
 }
 
-void Wakeup::signal()
+void Wakeup::signal() const
 {
     auto const value = uint64_t { 1 };
     // Retry on EINTR; ignore EAGAIN (already signaled).
@@ -37,7 +37,7 @@ void Wakeup::signal()
     }
 }
 
-void Wakeup::reset()
+void Wakeup::reset() const
 {
     auto value = uint64_t {};
     // Drain the eventfd counter. Ignore errors (EAGAIN means not signaled).

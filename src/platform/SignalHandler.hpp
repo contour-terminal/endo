@@ -88,8 +88,8 @@ class SignalHandler
     static void suspendSelf();
 
   private:
-    static SignalCallback* _callback;
-    static int _signalFd;
+    static SignalCallback* _callback; // NOLINT(readability-identifier-naming)
+    static int _signalFd;             // NOLINT(readability-identifier-naming)
 
 #if !defined(__linux__)
     /// Traditional signal handlers for non-Linux platforms.

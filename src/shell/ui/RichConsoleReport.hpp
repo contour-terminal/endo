@@ -10,7 +10,7 @@ namespace endo
 {
 
 /// Controls whether ANSI color output is used.
-enum class ColorMode
+enum class ColorMode // NOLINT(performance-enum-size)
 {
     Auto,     ///< Detect via isatty() and NO_COLOR environment variable.
     Enabled,  ///< Always use color.

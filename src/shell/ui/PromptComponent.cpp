@@ -778,7 +778,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
             if (!commonPrefix.empty())
             {
-                auto const ctx = _completer->analyzeContext(_inputField.text(), _inputField.cursor());
+                auto const ctx = Completer::analyzeContext(_inputField.text(), _inputField.cursor());
                 if (commonPrefix.size() > ctx.prefix.size())
                 {
                     insertCompletion(commonPrefix);
@@ -1265,7 +1265,7 @@ void PromptComponent::insertCompletion(std::string_view text)
     auto const cursor = _inputField.cursor();
 
     // Get the context to find what prefix to replace
-    auto ctx = _completer->analyzeContext(inputText, cursor);
+    auto ctx = Completer::analyzeContext(inputText, cursor);
 
     // Calculate how much text to replace (the prefix being completed)
     auto const prefixLen = ctx.prefix.size();
@@ -1387,10 +1387,6 @@ std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
 
 std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn) const
 {
-    // Calculate the prompt prefix width
-    auto const totalPromptWidth =
-        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
-
     // Check if column is within command bounds
     auto const [cmdStart, cmdEnd] = getCommandBounds();
     if (screenColumn < cmdStart || screenColumn >= cmdEnd)

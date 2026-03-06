@@ -29,18 +29,18 @@ class ProjectContextLoader
     /// @brief Loads all available project context for the given project root.
     /// @param projectRoot The root directory of the current project.
     /// @return The collected project context.
-    [[nodiscard]] auto load(std::filesystem::path const& projectRoot) const -> ProjectContext;
+    [[nodiscard]] static auto load(std::filesystem::path const& projectRoot) -> ProjectContext;
 
   private:
     /// Loads project rules files from the project root.
     /// Search order: CLAUDE.md, AGENT.md, .endo/agent-rules.md
-    [[nodiscard]] auto loadRulesFiles(std::filesystem::path const& root) const -> std::vector<std::string>;
+    [[nodiscard]] static auto loadRulesFiles(std::filesystem::path const& root) -> std::vector<std::string>;
 
     /// Loads global agent rules from ~/.config/endo/agent-rules/*.md
-    [[nodiscard]] auto loadGlobalRules() const -> std::vector<std::string>;
+    [[nodiscard]] static auto loadGlobalRules() -> std::vector<std::string>;
 
     /// Loads agent memory files from ~/.config/endo/agent-memory/*.md
-    [[nodiscard]] auto loadMemoryFiles() const -> std::vector<std::string>;
+    [[nodiscard]] static auto loadMemoryFiles() -> std::vector<std::string>;
 };
 
 } // namespace endo::agent

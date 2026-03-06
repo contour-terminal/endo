@@ -48,7 +48,7 @@ class SlashCommandCompleter final: public tui::CompletionProvider
     /// @brief Generates model name completions for `/model <prefix>`.
     /// @param prefix The prefix to filter model names by.
     /// @return Completion items for matching model names.
-    [[nodiscard]] std::vector<tui::CompletionItem> completeModelArgument(std::string_view prefix);
+    [[nodiscard]] static std::vector<tui::CompletionItem> completeModelArgument(std::string_view prefix);
 
     /// @brief Generates session name completions for `/load-session` and `/delete-session`.
     /// @param cmdName The command name (for generating full completion text).

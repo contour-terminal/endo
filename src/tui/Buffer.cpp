@@ -58,8 +58,9 @@ void Buffer::resize(int rows, int cols)
     {
         for (auto const c: std::views::iota(0, copyCols))
         {
-            size_t oldIdx = static_cast<size_t>(r) * static_cast<size_t>(_cols) + static_cast<size_t>(c);
-            size_t newIdx = static_cast<size_t>(r) * static_cast<size_t>(cols) + static_cast<size_t>(c);
+            auto const oldIdx =
+                (static_cast<size_t>(r) * static_cast<size_t>(_cols)) + static_cast<size_t>(c);
+            auto const newIdx = (static_cast<size_t>(r) * static_cast<size_t>(cols)) + static_cast<size_t>(c);
             newCells[newIdx] = _cells[oldIdx];
         }
     }

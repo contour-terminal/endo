@@ -51,7 +51,7 @@ class EnvironmentProvider
     ///
     /// @param name  Variable name
     /// @param value Variable value
-    inline void setAndExport(std::string_view name, std::string_view value)
+    void setAndExport(std::string_view name, std::string_view value)
     {
         set(name, value);
         exportVariable(name);
@@ -72,7 +72,7 @@ class EnvironmentProvider
     /// Tries HOME (Unix), then USERPROFILE (Windows).
     ///
     /// @return The home directory path, or std::nullopt if neither variable is set.
-    [[nodiscard]] inline auto homeDirectory() const -> std::optional<std::filesystem::path>
+    [[nodiscard]] auto homeDirectory() const -> std::optional<std::filesystem::path>
     {
         if (auto home = get("HOME"))
             return std::filesystem::path(std::string(*home));
@@ -87,7 +87,7 @@ class EnvironmentProvider
     /// On Windows: APPDATA (typically ~/AppData/Roaming).
     ///
     /// @return The configuration directory path, or std::nullopt if it cannot be determined.
-    [[nodiscard]] inline auto configHome() const -> std::optional<std::filesystem::path>
+    [[nodiscard]] auto configHome() const -> std::optional<std::filesystem::path>
     {
         if (auto xdg = get("XDG_CONFIG_HOME"); xdg && !xdg->empty())
             return std::filesystem::path(std::string(*xdg));

@@ -38,7 +38,7 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
         if (!prefix.empty() && !isPrefixMatch && !isFuzzyMatch)
             continue;
 
-        int score;
+        int score = 0;
         std::vector<size_t> matchPositions;
 
         if (isPrefixMatch || prefix.empty())

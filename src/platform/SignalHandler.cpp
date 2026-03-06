@@ -129,7 +129,7 @@ bool SignalHandler::processSignalFd()
     if (_signalFd < 0 || !_callback)
         return false;
 
-    signalfd_siginfo info;
+    signalfd_siginfo info {};
     bool processed = false;
 
     // Read all pending signals from signalfd

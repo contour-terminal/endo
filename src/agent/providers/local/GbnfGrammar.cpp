@@ -91,7 +91,9 @@ null ::= "null"
 
             for (auto const& [propName, propSchema]: properties.items())
             {
-                auto const propRuleName = ruleName + "-" + propName;
+                auto propRuleName = ruleName;
+                propRuleName += "-";
+                propRuleName += propName;
                 emitRules(propSchema, propRuleName, rules);
                 propertyParts.emplace_back(std::format(R"("\"{}\":" ws {})", propName, propRuleName));
             }

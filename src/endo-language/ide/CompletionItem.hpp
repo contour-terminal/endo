@@ -9,7 +9,7 @@ namespace endo
 {
 
 /// @brief Kind of a completion candidate.
-enum class CompletionKind
+enum class CompletionKind // NOLINT(performance-enum-size)
 {
     Keyword,     ///< Language keyword (let, match, if, etc.)
     Function,    ///< User-defined function

@@ -84,7 +84,7 @@ std::vector<ProcessEntry> LinuxProcessProvider::listProcesses() const
         if (filename.empty() || !std::ranges::all_of(filename, ::isdigit))
             continue;
 
-        auto const pidPath = dirEntry.path();
+        auto const& pidPath = dirEntry.path();
 
         auto const statContents = readFileContents(pidPath / "stat");
         if (statContents.empty())
@@ -104,11 +104,23 @@ std::vector<ProcessEntry> LinuxProcessProvider::listProcesses() const
         std::istringstream fields(statContents.substr(commEnd + 2));
         std::string state;
         int64_t ppid = 0;
-        int64_t pgrp = 0, session = 0, ttyNr = 0, tpgid = 0;
-        uint64_t flags = 0, minflt = 0, cminflt = 0, majflt = 0, cmajflt = 0;
-        uint64_t utime = 0, stime = 0;
-        int64_t cutime = 0, cstime = 0;
-        int64_t priority = 0, nice = 0, numThreads = 0, itrealvalue = 0;
+        int64_t pgrp = 0;
+        int64_t session = 0;
+        int64_t ttyNr = 0;
+        int64_t tpgid = 0;
+        uint64_t flags = 0;
+        uint64_t minflt = 0;
+        uint64_t cminflt = 0;
+        uint64_t majflt = 0;
+        uint64_t cmajflt = 0;
+        uint64_t utime = 0;
+        uint64_t stime = 0;
+        int64_t cutime = 0;
+        int64_t cstime = 0;
+        int64_t priority = 0;
+        int64_t nice = 0;
+        int64_t numThreads = 0;
+        int64_t itrealvalue = 0;
         uint64_t starttime = 0;
 
         fields >> state >> ppid >> pgrp >> session >> ttyNr >> tpgid >> flags >> minflt >> cminflt >> majflt

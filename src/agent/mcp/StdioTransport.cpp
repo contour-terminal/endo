@@ -39,7 +39,7 @@ StdioTransport::StdioTransport(): _impl(std::make_unique<Impl>())
 
 StdioTransport::~StdioTransport()
 {
-    close();
+    StdioTransport::close(); // Call non-virtually to avoid virtual dispatch in destructor.
 }
 
 auto StdioTransport::start(StdioTransportConfig const& config) -> McpVoidResult

@@ -62,6 +62,7 @@ void Shell::builtinForCleanup([[maybe_unused]] CoreVM::Params& context)
         _forLoopStack.pop_back();
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinCaseMatch(CoreVM::Params& context)
 {
     auto const& word = context.getString(1);

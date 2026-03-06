@@ -16,8 +16,6 @@
     #endif
 #endif
 
-#include <algorithm>
-
 namespace endo::platform
 {
 

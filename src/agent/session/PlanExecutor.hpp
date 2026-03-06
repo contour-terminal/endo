@@ -33,6 +33,7 @@ class PlanExecutor
     /// and sets the step to Completed or Failed based on the result.
     /// @param streamCb Optional callback for streaming tokens.
     /// @return The resulting step status, or an error.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     [[nodiscard]] auto executeNextStep(StreamCallback streamCb) -> std::expected<PlanStepStatus, AgentError>;
 
     /// @brief Returns the current plan (read-only).

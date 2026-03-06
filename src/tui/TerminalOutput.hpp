@@ -39,8 +39,12 @@ struct RgbColor
 [[nodiscard]] constexpr RgbColor lerpColor(RgbColor a, RgbColor b, float t) noexcept
 {
     auto const lerp = [](std::uint8_t x, std::uint8_t y, float s) noexcept -> std::uint8_t {
-        auto const val = static_cast<float>(x) + (static_cast<float>(y) - static_cast<float>(x)) * s;
-        return static_cast<std::uint8_t>(val < 0.0f ? 0.0f : (val > 255.0f ? 255.0f : val));
+        auto const val = static_cast<float>(x) + ((static_cast<float>(y) - static_cast<float>(x)) * s);
+        if (val < 0.0f)
+            return 0;
+        if (val > 255.0f)
+            return 255;
+        return static_cast<std::uint8_t>(val);
     };
     return { .r = lerp(a.r, b.r, t), .g = lerp(a.g, b.g, t), .b = lerp(a.b, b.b, t) };
 }

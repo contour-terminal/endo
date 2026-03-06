@@ -201,7 +201,7 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     [[nodiscard]] static std::optional<int> findLastLine(ast::Node const& node);
 
     // Width estimation for line-break decisions
-    [[nodiscard]] size_t estimateWidth(ast::Node const& node) const;
+    [[nodiscard]] static size_t estimateWidth(ast::Node const& node);
 
     // Arithmetic expression helper (mirrors ASTPrinter)
     void printArithExpr(ast::ArithExpr const* expr);

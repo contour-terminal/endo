@@ -86,6 +86,7 @@ class AgentSession
     /// @param userMessage The user's query text.
     /// @param streamCb Optional callback for streaming tokens as they arrive.
     /// @return The complete response text, or an error.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     [[nodiscard]] auto processMessage(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<std::string, AgentError>;
 
@@ -96,6 +97,7 @@ class AgentSession
     /// @param images Image attachments to include.
     /// @param streamCb Optional callback for streaming tokens as they arrive.
     /// @return The complete response text, or an error.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     [[nodiscard]] auto processMessage(std::string_view userMessage,
                                       std::span<ImageBlock const> images,
                                       StreamCallback streamCb) -> std::expected<std::string, AgentError>;
@@ -108,6 +110,7 @@ class AgentSession
     /// @param userMessage The user's planning request.
     /// @param streamCb Optional callback for streaming tokens during exploration.
     /// @return The submitted plan, or an error.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     [[nodiscard]] auto processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<Plan, AgentError>;
 
@@ -117,6 +120,7 @@ class AgentSession
     /// @param images Image attachments providing context.
     /// @param streamCb Optional callback for streaming tokens during exploration.
     /// @return The submitted plan, or an error.
+    // NOLINTNEXTLINE(performance-unnecessary-value-param)
     [[nodiscard]] auto processMessageForPlan(std::string_view userMessage,
                                              std::span<ImageBlock const> images,
                                              StreamCallback streamCb) -> std::expected<Plan, AgentError>;

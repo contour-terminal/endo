@@ -9,7 +9,7 @@ namespace endo::agent::mcp
 {
 
 McpClient::McpClient(std::unique_ptr<Transport> transport):
-    _transport(std::move(transport)), _ioThread([this](std::stop_token st) { ioLoop(st); })
+    _transport(std::move(transport)), _ioThread([this](std::stop_token const& st) { ioLoop(st); })
 {
 }
 
@@ -22,7 +22,7 @@ McpClient::~McpClient()
     // jthread destructor joins.
 }
 
-void McpClient::ioLoop(std::stop_token stopToken)
+void McpClient::ioLoop(std::stop_token const& stopToken)
 {
     while (!stopToken.stop_requested())
     {
@@ -80,7 +80,7 @@ auto McpClient::initialize() -> McpResult<McpServerCapabilities>
 
             // Send initialized notification
             auto notif = jsonrpc::makeNotification("notifications/initialized");
-            (void) _transport->send(notif);
+            auto const sendResult [[maybe_unused]] = _transport->send(notif);
 
             _initialized = true;
             return _capabilities;

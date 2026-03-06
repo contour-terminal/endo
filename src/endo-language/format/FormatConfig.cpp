@@ -63,7 +63,7 @@ std::optional<std::filesystem::path> FormatConfig::findConfigFile(std::filesyste
 
     while (true)
     {
-        auto const candidate = dir / ".endo-format";
+        auto candidate = dir / ".endo-format";
         if (std::filesystem::exists(candidate))
             return candidate;
 

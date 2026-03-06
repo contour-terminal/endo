@@ -197,7 +197,7 @@ auto SessionManager::renameSession(std::string_view oldName, std::string_view ne
     {
         auto& [meta, messages] = *loaded;
         meta.name = std::string(newName);
-        (void) store.save(messages, meta);
+        (void) store.save(messages, meta); // NOLINT(bugprone-unused-return-value)
     }
 
     // Update the .last marker if it pointed to the old name.

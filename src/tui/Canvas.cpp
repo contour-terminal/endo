@@ -107,12 +107,12 @@ void Canvas::drawBox(
         int maxTitleWidth = clipped.width - 4; // Leave space for corners and padding
         std::string_view displayTitle = title.substr(0, static_cast<size_t>(maxTitleWidth));
 
-        int titleCol = left + 2;
+        auto titleCol = 0;
         switch (align)
         {
             case TitleAlign::Left: titleCol = left + 2; break;
             case TitleAlign::Center:
-                titleCol = left + (clipped.width - static_cast<int>(displayTitle.size())) / 2;
+                titleCol = left + ((clipped.width - static_cast<int>(displayTitle.size())) / 2);
                 break;
             case TitleAlign::Right: titleCol = right - static_cast<int>(displayTitle.size()) - 1; break;
         }

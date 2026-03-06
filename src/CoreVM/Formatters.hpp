@@ -22,7 +22,7 @@ struct hash<CoreVM::util::Cidr>
         auto const len = v.address().size();
         size_t h = 0;
         for (size_t i = 0; i < len; ++i)
-            h = h * 131 + bytes[i];
+            h = (h * 131) + bytes[i];
         return h ^ static_cast<size_t>(v.prefix());
     }
 };

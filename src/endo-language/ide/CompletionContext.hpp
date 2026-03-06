@@ -9,7 +9,7 @@ namespace endo
 {
 
 /// @brief Type of completion context.
-enum class CompletionContextType
+enum class CompletionContextType // NOLINT(performance-enum-size)
 {
     Command,       ///< First token position - complete executables/builtins.
     Argument,      ///< General argument position.

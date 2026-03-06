@@ -16,13 +16,6 @@ namespace tui
 
 namespace
 {
-    /// Writes a string_view to the terminal (stdout) using WriteFile.
-    void writeToTerminal(HANDLE hStdout, std::string_view data)
-    {
-        DWORD written = 0;
-        WriteFile(hStdout, data.data(), static_cast<DWORD>(data.size()), &written, nullptr);
-    }
-
     /// @brief Appends a UTF-16 code unit as UTF-8 bytes to a string.
     ///
     /// Handles BMP characters (U+0000..U+FFFF). Surrogate pairs are not handled
@@ -245,25 +238,31 @@ void TerminalInput::disableRawMode()
     }
 }
 
+void TerminalInput::writeProtocol(std::string_view data) const
+{
+    DWORD written = 0;
+    WriteFile(_hStdout, data.data(), static_cast<DWORD>(data.size()), &written, nullptr);
+}
+
 void TerminalInput::enableProtocols()
 {
-    writeToTerminal(_hStdout, protocols::EnableCsiU);
-    writeToTerminal(_hStdout, protocols::EnableSGRMouse);
-    writeToTerminal(_hStdout, protocols::EnablePassiveMouseTracking);
-    writeToTerminal(_hStdout, protocols::EnableAnyMotionTracking);
-    writeToTerminal(_hStdout, protocols::EnableBracketedPaste);
-    writeToTerminal(_hStdout, protocols::EnableColorSchemeNotify);
-    writeToTerminal(_hStdout, protocols::QueryColorScheme);
+    writeProtocol(protocols::EnableCsiU);
+    writeProtocol(protocols::EnableSGRMouse);
+    writeProtocol(protocols::EnablePassiveMouseTracking);
+    writeProtocol(protocols::EnableAnyMotionTracking);
+    writeProtocol(protocols::EnableBracketedPaste);
+    writeProtocol(protocols::EnableColorSchemeNotify);
+    writeProtocol(protocols::QueryColorScheme);
 }
 
 void TerminalInput::disableProtocols()
 {
-    writeToTerminal(_hStdout, protocols::DisableColorSchemeNotify);
-    writeToTerminal(_hStdout, protocols::DisableBracketedPaste);
-    writeToTerminal(_hStdout, protocols::DisableAnyMotionTracking);
-    writeToTerminal(_hStdout, protocols::DisablePassiveMouseTracking);
-    writeToTerminal(_hStdout, protocols::DisableSGRMouse);
-    writeToTerminal(_hStdout, protocols::DisableCsiU);
+    writeProtocol(protocols::DisableColorSchemeNotify);
+    writeProtocol(protocols::DisableBracketedPaste);
+    writeProtocol(protocols::DisableAnyMotionTracking);
+    writeProtocol(protocols::DisablePassiveMouseTracking);
+    writeProtocol(protocols::DisableSGRMouse);
+    writeProtocol(protocols::DisableCsiU);
 }
 
 } // namespace tui

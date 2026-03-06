@@ -65,8 +65,8 @@ class History
     {
         std::string_view entry;        ///< The matched history entry.
         std::vector<size_t> positions; ///< Grapheme indices of matched characters.
-        int score;                     ///< Match score (higher = better).
-        bool isPrefixMatch;            ///< True if this is a prefix match (vs fuzzy).
+        int score = 0;                 ///< Match score (higher = better).
+        bool isPrefixMatch = false;    ///< True if this is a prefix match (vs fuzzy).
     };
 
     /// @brief Searches for entries using both prefix and fuzzy matching.

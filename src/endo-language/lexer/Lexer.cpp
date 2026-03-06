@@ -771,9 +771,13 @@ Token Lexer::consumeIdentifier(Token token)
     // Arithmetic operators that should be lexed as single-char tokens
     auto constexpr ArithOperators = U"+-*/%^:?,"sv;
 
-    auto const& reserved = _fsharpDepth > 0  ? FSharpReservedSymbols
-                           : _arithDepth > 0 ? ArithReservedSymbols
-                                             : ReservedSymbols;
+    auto const& reserved = [&]() -> auto const& {
+        if (_fsharpDepth > 0)
+            return FSharpReservedSymbols;
+        if (_arithDepth > 0)
+            return ArithReservedSymbols;
+        return ReservedSymbols;
+    }();
 
     // In arithmetic mode, if current char is an operator, consume it as a single-char token
     if (_arithDepth > 0 && ArithOperators.find(_currentChar) != std::u32string_view::npos)

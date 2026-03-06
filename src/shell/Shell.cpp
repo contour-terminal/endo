@@ -199,7 +199,7 @@ auto Shell::PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
 
-void Shell::PipelineBuilder::closeCurrentPipeWriter()
+void Shell::PipelineBuilder::closeCurrentPipeWriter() const
 {
     if (currentPipe)
         currentPipe->closeWriter();
@@ -463,11 +463,18 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
 
                 // Register record type fields for completion
                 std::vector<RecordFieldInfo> fieldInfos;
+                fieldInfos.reserve(variant.schema.size());
                 for (auto const& field: variant.schema)
-                    fieldInfos.push_back({ field.name,
-                                           field.type == CoreVM::LiteralType::Number    ? "int"
-                                           : field.type == CoreVM::LiteralType::Boolean ? "bool"
-                                                                                        : "string" });
+                {
+                    auto const* typeName = [&]() -> char const* {
+                        if (field.type == CoreVM::LiteralType::Number)
+                            return "int";
+                        if (field.type == CoreVM::LiteralType::Boolean)
+                            return "bool";
+                        return "string";
+                    }();
+                    fieldInfos.push_back({ field.name, typeName });
+                }
                 _fsharpState.recordTypeFields[variant.recordTypeName] = std::move(fieldInfos);
 
                 ++nextTypeId;
@@ -1745,7 +1752,7 @@ namespace
                                          std::optional<GitInfo> cachedGitInfo) -> AgentContextResult
     {
         auto projectContext =
-            cachedContext ? std::move(*cachedContext) : agent::ProjectContextLoader {}.load(cwd);
+            cachedContext ? std::move(*cachedContext) : agent::ProjectContextLoader::load(cwd);
 
         auto promptBuilder = agent::SystemPromptBuilder {};
         promptBuilder.setWorkingDirectory(cwd.string());
@@ -2001,10 +2008,16 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
 
         fflush(stdout);
         fflush(stderr);
-        dup2(savedStdout, STDOUT_FILENO);
-        dup2(savedStderr, STDERR_FILENO);
-        close(savedStdout);
-        close(savedStderr);
+        if (savedStdout >= 0)
+        {
+            dup2(savedStdout, STDOUT_FILENO);
+            close(savedStdout);
+        }
+        if (savedStderr >= 0)
+        {
+            dup2(savedStderr, STDERR_FILENO);
+            close(savedStderr);
+        }
 
         fflush(tmpFile);
         auto const outputSize = lseek(tmpFd, 0, SEEK_END);
@@ -2396,6 +2409,7 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     prompt.terminal().output().updateDimensions();
 }
 
+// NOLINTNEXTLINE(readability-function-size)
 void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
     // Lazy initialization of agent infrastructure
@@ -2508,7 +2522,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     auto* historyProviderPtr = historyProvider.get();
 
     auto const saveHistory = [&] {
-        (void) historyStore.save(_agentSession->history().messages());
+        (void) historyStore.save( // NOLINT(bugprone-unused-return-value)
+            _agentSession->history().messages());
         // Also save to named session if active.
         if (!_activeSessionName.empty())
         {
@@ -2523,8 +2538,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 .turnCount = _agentSession->turnCount(),
                 .tokenUsage = _agentSession->sessionUsage(),
             };
-            (void) sessionManager.saveSession(
-                _activeSessionName, _agentSession->history().messages(), metadata);
+            (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
+                _activeSessionName,
+                _agentSession->history().messages(),
+                metadata);
             sessionManager.setLastActiveSession(_activeSessionName);
         }
     };
@@ -2653,10 +2670,16 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
         fflush(stdout);
         fflush(stderr);
-        dup2(savedStdout, STDOUT_FILENO);
-        dup2(savedStderr, STDERR_FILENO);
-        close(savedStdout);
-        close(savedStderr);
+        if (savedStdout >= 0)
+        {
+            dup2(savedStdout, STDOUT_FILENO);
+            close(savedStdout);
+        }
+        if (savedStderr >= 0)
+        {
+            dup2(savedStderr, STDERR_FILENO);
+            close(savedStderr);
+        }
 
         fflush(tmpFile);
         auto const outputSize = lseek(tmpFd, 0, SEEK_END);
@@ -2837,9 +2860,9 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "reset", "Clear conversation history", [&](std::string_view) -> agent::SlashCommandResult {
-            _agentSession->reset();
+            (*_agentSession).reset();
             permissionManager.resetApprovals();
-            (void) historyStore.remove();
+            (void) historyStore.remove(); // NOLINT(bugprone-unused-return-value)
             historyProviderPtr->setEntries({});
             _activeSessionName.clear();
             _sessionCreatedAt = {};
@@ -2887,13 +2910,16 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     .turnCount = _agentSession->turnCount(),
                     .tokenUsage = _agentSession->sessionUsage(),
                 };
-                (void) sessionManager.saveSession(savedName, _agentSession->history().messages(), metadata);
+                (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
+                    savedName,
+                    _agentSession->history().messages(),
+                    metadata);
             }
 
             // Reset everything for a fresh conversation.
-            _agentSession->reset();
+            (*_agentSession).reset();
             permissionManager.resetApprovals();
-            (void) historyStore.remove();
+            (void) historyStore.remove(); // NOLINT(bugprone-unused-return-value)
             historyProviderPtr->setEntries({});
             _activeSessionName.clear();
             _sessionCreatedAt = {};
@@ -3002,7 +3028,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                                                  "Failed to load session: " + loaded.error().message + "\n" };
 
             auto& [meta, messages] = *loaded;
-            _agentSession->reset();
+            (*_agentSession).reset();
             historyProviderPtr->setEntries({});
             for (auto const& msg: messages)
             {
@@ -3977,12 +4003,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 // Tick all spinners first, then do a single combined render pass.
                 auto const thinkingTicked = activeRenderer && activeRenderer->isThinking()
                                             && !anyPromptActive() && activeRenderer->tickSpinner();
-                auto const toolTicked = streaming && toolStatusComponent.tickSpinner()
-                                        && !anyPromptActive();
+                auto const toolTicked = streaming && toolStatusComponent.tickSpinner() && !anyPromptActive();
                 auto const inputTicked = inputComponent.tickSpinner();
 
-                if (streaming && !anyPromptActive()
-                    && (thinkingTicked || toolTicked || inputTicked))
+                if (streaming && !anyPromptActive() && (thinkingTicked || toolTicked || inputTicked))
                 {
                     auto guard = out.syncGuard();
                     clearStreamingPrompt();
@@ -4255,7 +4279,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                             if (loaded.has_value())
                             {
                                 auto& [meta, messages] = *loaded;
-                                _agentSession->reset();
+                                (*_agentSession).reset();
                                 historyProviderPtr->setEntries({});
                                 for (auto const& msg: messages)
                                 {

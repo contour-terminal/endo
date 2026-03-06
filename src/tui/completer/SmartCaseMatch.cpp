@@ -33,7 +33,7 @@ bool SmartCaseMatch::matchesPrefixCaseSensitive(std::string_view text, std::stri
     if (pattern.size() > text.size())
         return false;
 
-    return text.substr(0, pattern.size()) == pattern;
+    return text.starts_with(pattern);
 }
 
 bool SmartCaseMatch::matchesPrefix(std::string_view text, std::string_view pattern) noexcept

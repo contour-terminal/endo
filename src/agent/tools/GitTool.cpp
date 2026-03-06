@@ -23,17 +23,6 @@ namespace
     /// Checks whether a git command string contains blocked dangerous patterns.
     auto isBlockedPattern(std::string_view subcommand, std::vector<std::string> const& args) -> bool
     {
-        auto const joinedArgs = [&]() {
-            auto result = std::string {};
-            for (auto const& arg: args)
-            {
-                if (!result.empty())
-                    result += ' ';
-                result += arg;
-            }
-            return result;
-        }();
-
         // Block force push
         if (subcommand == "push")
         {

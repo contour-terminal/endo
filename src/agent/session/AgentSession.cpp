@@ -64,7 +64,8 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
 
 auto AgentSession::processMessage(std::string_view userMessage,
                                   std::span<ImageBlock const> images,
-                                  StreamCallback streamCb) -> std::expected<std::string, AgentError>
+                                  StreamCallback streamCb) // NOLINT(performance-unnecessary-value-param)
+    -> std::expected<std::string, AgentError>
 {
     auto trimmedMessage = std::string(userMessage);
     trimInPlace(trimmedMessage);
@@ -284,9 +285,11 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
     return processMessageForPlan(userMessage, std::span<ImageBlock const> {}, std::move(streamCb));
 }
 
-auto AgentSession::processMessageForPlan(std::string_view userMessage,
-                                         std::span<ImageBlock const> images,
-                                         StreamCallback streamCb) -> std::expected<Plan, AgentError>
+auto AgentSession::processMessageForPlan(
+    std::string_view userMessage,
+    std::span<ImageBlock const> images,
+    StreamCallback streamCb) // NOLINT(performance-unnecessary-value-param)
+    -> std::expected<Plan, AgentError>
 {
     if (!_toolRegistry)
     {
@@ -350,7 +353,7 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage,
         {
             auto const beforeMessages = _history.size();
             auto const beforeTokens = _history.estimatedTokenCount();
-            (void) _compactor->compactIfNeeded(_history);
+            (void) _compactor->compactIfNeeded(_history); // NOLINT(bugprone-unused-return-value)
             if (_history.size() != beforeMessages)
             {
                 if (_tracer)

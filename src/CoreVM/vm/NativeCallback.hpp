@@ -66,7 +66,7 @@ class Params
 
     [[nodiscard]] bool getBool(size_t offset) const { return at(offset); }
 
-    [[nodiscard]] CoreNumber getInt(size_t offset) const { return at(offset); }
+    [[nodiscard]] CoreNumber getInt(size_t offset) const { return static_cast<CoreNumber>(at(offset)); }
 
     [[nodiscard]] const CoreString& getString(size_t offset) const { return *(CoreString*) at(offset); }
 

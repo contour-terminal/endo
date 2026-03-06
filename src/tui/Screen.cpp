@@ -312,7 +312,9 @@ void Screen::focusNext()
     }
 
     auto it = std::ranges::find(focusable, current);
-    if (it == focusable.end() || ++it == focusable.end())
+    if (it != focusable.end())
+        ++it;
+    if (it == focusable.end())
         setFocus(focusable.front()); // Wrap around
     else
         setFocus(*it);

@@ -7,7 +7,7 @@ namespace endo
 {
 
 /// @brief Semantic category for a lexer token, shared between LSP and shell syntax highlighting.
-enum class TokenCategory
+enum class TokenCategory // NOLINT(performance-enum-size)
 {
     Default,
     Keyword,

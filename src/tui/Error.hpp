@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <string>
 #include <string_view>
@@ -9,7 +10,7 @@ namespace tui
 {
 
 /// @brief Error codes for TUI operations.
-enum class ErrorCode
+enum class ErrorCode : std::uint8_t
 {
     IoError,
     InvalidArgument,

@@ -7,9 +7,9 @@ function(enable_clang_tidy target)
         return()
     endif()
 
-    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
-    if(CLANG_TIDY_EXE)
-        set(CLANG_TIDY_CMD "${CLANG_TIDY_EXE}")
+    find_program(_ENDO_CLANG_TIDY_EXE NAMES clang-tidy)
+    if(_ENDO_CLANG_TIDY_EXE)
+        set(CLANG_TIDY_CMD "${_ENDO_CLANG_TIDY_EXE}")
 
         # When using Clang with GCC's libstdc++, clang-tidy's internal parser may not
         # find the same GCC toolchain as the compiler. Detect the GCC install directory

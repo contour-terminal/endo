@@ -37,7 +37,7 @@ void safeClosePipe(NativeHandle* fd) noexcept
     if (fd && *fd != InvalidHandle)
     {
         pipeLog()()("Closing fd {}\n", *fd);
-        ::close(*fd);
+        ::close(*fd); // NOLINT(clang-analyzer-unix.StdCLibraryFunctions)
         *fd = InvalidHandle;
     }
 }
@@ -127,7 +127,7 @@ class PosixPipe final: public Pipe
         closeWriter();
     }
 
-    NativeHandle _pfd[2];
+    NativeHandle _pfd[2] { InvalidHandle, InvalidHandle };
 };
 
 std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags)

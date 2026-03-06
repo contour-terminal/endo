@@ -45,7 +45,7 @@ bool Cidr::contains(const IPAddress& ipaddr) const
     }
 
     // IPv6
-    int bits = prefix();
+    auto bits = static_cast<int>(prefix());
     const auto* words = (const uint32_t*) address().data();
     const auto* input = (const uint32_t*) ipaddr.data();
     while (bits >= 32)

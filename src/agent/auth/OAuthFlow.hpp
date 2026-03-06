@@ -42,7 +42,7 @@ struct PkceParams
 };
 
 /// OAuth authorization mode for Anthropic Claude.
-enum class OAuthMode
+enum class OAuthMode // NOLINT(performance-enum-size)
 {
     ClaudeAi, ///< Claude.ai subscription (MAX/Pro).
     Console,  ///< Anthropic Console (Teams/Enterprise).

@@ -298,7 +298,6 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
         if (json.contains("error"))
         {
             auto const& err = json["error"];
-            auto const msg = err.value("message", "Unknown streaming error");
             result = GenerateResult {};
             return false;
         }

@@ -197,7 +197,7 @@ class Shell final: public SignalCallback
 
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] static int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the cat builtin, writing to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineCat(CoreVM::CoreStringArray const& args,
                                        NativeHandle outputFd,
@@ -237,8 +237,10 @@ class Shell final: public SignalCallback
     void builtinSet(CoreVM::Params& context);
     void builtinUnset(CoreVM::Params& context);
     void builtinGetVar(CoreVM::Params& context);
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void builtinGetExitStatus(CoreVM::Params& context);
     void builtinSetExitStatus(CoreVM::Params& context);
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void builtinGetProcessId(CoreVM::Params& context);
     void builtinGetBackgroundId(CoreVM::Params& context);
     void builtinGetPositional(CoreVM::Params& context);
@@ -323,7 +325,7 @@ class Shell final: public SignalCallback
     // --- Read command builtins (builtins/ReadCommand.cpp) ---
     void builtinReadDefault(CoreVM::Params& context);
     void builtinRead(CoreVM::Params& context);
-    [[nodiscard]] std::string readInputLine(NativeHandle inputFd, ReadOptions const& options);
+    [[nodiscard]] static std::string readInputLine(NativeHandle inputFd, ReadOptions const& options);
     [[nodiscard]] std::vector<std::string> splitByIFS(std::string_view input) const;
 
     // --- User commands (builtins/UserCommands.cpp) ---
@@ -346,7 +348,9 @@ class Shell final: public SignalCallback
     void builtinPrintln(CoreVM::Params& context);
     void builtinDisplayResult(CoreVM::Params& context);
     void builtinMarkdownRender(CoreVM::Params& context);
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void builtinFetch(CoreVM::Params& context);
+    // NOLINTNEXTLINE(readability-make-member-function-const)
     void builtinFetchWithHeaders(CoreVM::Params& context);
 
     // --- Core shell methods ---
@@ -420,7 +424,7 @@ class Shell final: public SignalCallback
         auto requestShellPipe(bool lastInChain) -> IODescriptors;
 
         /// Close the current pipe's writer (for builtin commands that write to pipe)
-        void closeCurrentPipeWriter();
+        void closeCurrentPipeWriter() const;
 
         /// Close pipe file descriptors retained by the parent after child process spawn.
         void closePipeFdsInParent();
@@ -449,7 +453,7 @@ class Shell final: public SignalCallback
 
     struct RedirectState
     {
-        enum class Type
+        enum class Type // NOLINT(performance-enum-size)
         {
             InputFile,
             OutputFile,

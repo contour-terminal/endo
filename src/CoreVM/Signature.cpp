@@ -21,7 +21,7 @@ Signature::Signature(const std::string& signature)
     // assocArray ::= '>' primitive primitive
     // primitive  ::= 'B' | 'I' | 'S' | 'P' | 'C' | 'R' | 'H'
 
-    enum class State
+    enum class State : uint8_t
     {
         END = 0,
         Name = 1,

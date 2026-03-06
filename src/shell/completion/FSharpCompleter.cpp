@@ -82,9 +82,15 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
         if (!memberPrefix.empty() && !isPrefixMatch && !isFuzzyMatch)
             continue;
 
-        int score;
+        int score = 0;
         std::vector<size_t> matchPositions;
-        int const baseScore = (objectPart == "Option") ? 90 : (objectPart == "_") ? 85 : 80;
+        auto const baseScore = [&]() -> int {
+            if (objectPart == "Option")
+                return 90;
+            if (objectPart == "_")
+                return 85;
+            return 80;
+        }();
 
         if (isPrefixMatch || memberPrefix.empty())
         {

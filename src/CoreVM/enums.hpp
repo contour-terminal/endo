@@ -7,7 +7,7 @@
 namespace CoreVM
 {
 
-enum Opcode : uint16_t
+enum Opcode : uint16_t // NOLINT(performance-enum-size,cppcoreguidelines-use-enum-class)
 {
     // misc
     NOP = 0,  // NOP                 ; no operation
@@ -348,7 +348,7 @@ enum class OperandSig : uint8_t
 // --------------------------------------------------------------------------
 // opcode pricing
 
-constexpr inline unsigned getPrice(Opcode opcode)
+constexpr unsigned getPrice(Opcode opcode)
 {
     switch (opcode)
     {

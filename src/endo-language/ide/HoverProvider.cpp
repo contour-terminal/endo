@@ -668,9 +668,11 @@ namespace
         else
         {
             // Determine the display type: explicit returnType takes precedence, then detectedType
-            auto const displayType = returnType     ? std::optional<std::string>(toString(*returnType))
-                                     : detectedType ? detectedType
-                                                    : std::nullopt;
+            std::optional<std::string> displayType;
+            if (returnType)
+                displayType = toString(*returnType);
+            else if (detectedType)
+                displayType = detectedType;
 
             result = "`" + name + "` \u2014 ";
             if (isExported)

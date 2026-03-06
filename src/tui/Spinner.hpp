@@ -142,9 +142,9 @@ class ProgressBar
     int _width = 20;
 
     // Characters for the progress bar
-    static constexpr std::string_view FilledChar = "\u2588"; // █
-    static constexpr std::string_view EmptyChar = "\u2591";  // ░
-    static constexpr std::string_view PartialChars[] = {
+    static constexpr std::string_view filledChar = "\u2588"; // █
+    static constexpr std::string_view emptyChar = "\u2591";  // ░
+    static constexpr std::string_view partialChars[] = {
         "\u2588", // █ (full)
         "\u2589", // ▉ (7/8)
         "\u258A", // ▊ (3/4)

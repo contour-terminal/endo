@@ -100,9 +100,9 @@ class QuestionComponent: public Component
     bool _otherActive = false;  ///< Whether the "Other..." free-text input is shown.
     bool _inputFocused = false; ///< Whether the InputField has focus (vs the List).
 
-    static constexpr int LeftBarWidth = 2; ///< Width of left bar chrome (╭─, ╰─, │).
-    static constexpr int BarPadding = 1;   ///< Padding after the bar.
-    static constexpr int HeaderHeight = 1; ///< Height of the header line.
+    static constexpr int leftBarWidth = 2; ///< Width of left bar chrome (╭─, ╰─, │).
+    static constexpr int barPadding = 1;   ///< Padding after the bar.
+    static constexpr int headerHeight = 1; ///< Height of the header line.
 
     /// @brief Returns true if operating in free-text-only mode.
     [[nodiscard]] bool isFreeTextOnly() const noexcept { return _config.options.empty(); }

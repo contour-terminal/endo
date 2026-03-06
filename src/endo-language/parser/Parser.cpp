@@ -2129,7 +2129,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithComparison()
 
     while (true)
     {
-        ast::ArithOp op;
+        auto op = ast::ArithOp {};
         bool found = false;
 
         switch (_lexer.currentToken())
@@ -2189,7 +2189,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithShift()
 
     while (true)
     {
-        ast::ArithOp op;
+        auto op = ast::ArithOp {};
         bool found = false;
 
         // << is LessLess token, >> would be GreaterGreater
@@ -2226,7 +2226,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithAddSub()
 
     while (true)
     {
-        ast::ArithOp op;
+        auto op = ast::ArithOp {};
         bool found = false;
 
         if (_lexer.currentToken() == Token::Identifier)
@@ -2264,7 +2264,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithMulDiv()
 
     while (true)
     {
-        ast::ArithOp op;
+        auto op = ast::ArithOp {};
         bool found = false;
 
         if (_lexer.currentToken() == Token::Identifier)
@@ -2975,14 +2975,24 @@ std::vector<std::string> Parser::expandBraces(std::string const& input)
     {
         auto const rangeExpansion = expandRange(content);
         for (auto const& item: rangeExpansion)
-            expansions.push_back(prefix + item + suffix);
+        {
+            auto expanded = prefix;
+            expanded += item;
+            expanded += suffix;
+            expansions.push_back(std::move(expanded));
+        }
     }
     else
     {
         // Comma-separated list
         auto const items = splitBraceItems(content);
         for (auto const& item: items)
-            expansions.push_back(prefix + item + suffix);
+        {
+            auto expanded = prefix;
+            expanded += item;
+            expanded += suffix;
+            expansions.push_back(std::move(expanded));
+        }
     }
 
     // Recursively expand any remaining brace patterns
@@ -4289,7 +4299,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComparison()
 
     while (true)
     {
-        ast::BinaryOp op;
+        auto op = ast::BinaryOp {};
         bool found = false;
 
         switch (_lexer.currentToken())
@@ -4375,7 +4385,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpAddSub()
 
     while (true)
     {
-        ast::BinaryOp op;
+        auto op = ast::BinaryOp {};
         bool found = false;
 
         switch (_lexer.currentToken())
@@ -4412,7 +4422,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpMulDivMod()
 
     while (true)
     {
-        ast::BinaryOp op;
+        auto op = ast::BinaryOp {};
         bool found = false;
 
         switch (_lexer.currentToken())
@@ -5347,11 +5357,6 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
     // - Record update:  { expr with field = val; ... }
     // - Block expression: { let x = 1; x + 2 } or { expr; expr }
 
-    // Save current position for backtracking
-    auto savedToken = _lexer.currentToken();
-    auto savedLiteral = _lexer.currentLiteral();
-    auto savedRange = _lexer.currentRange();
-
     _lexer.nextToken(); // consume '{'
     consumeNewlines();
 
@@ -5482,6 +5487,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
             // Resolve the record type name by matching field names
             std::string typeName;
             std::vector<std::string> fieldNames;
+            fieldNames.reserve(fields.size());
             for (auto const& f: fields)
                 fieldNames.push_back(f.name);
 
@@ -5904,8 +5910,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                             return std::make_unique<ast::SizeLiteralExpr>(0);
                         }
                         _lexer.nextToken();
-                        auto sizeNode =
-                            std::make_unique<ast::SizeLiteralExpr>(static_cast<int64_t>(value * multiplier));
+                        auto sizeNode = std::make_unique<ast::SizeLiteralExpr>(
+                            static_cast<int64_t>(value * static_cast<double>(multiplier)));
                         sizeNode->location = loc;
                         return sizeNode;
                     }
@@ -5936,7 +5942,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                         }
                         _lexer.nextToken();
                         auto tsNode = std::make_unique<ast::TimeSpanLiteralExpr>(
-                            static_cast<int64_t>(value * multiplier));
+                            static_cast<int64_t>(value * static_cast<double>(multiplier)));
                         tsNode->location = loc;
                         return tsNode;
                     }
@@ -5952,9 +5958,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             if (hasBasePrefix)
             {
                 auto const baseDigits = digits.substr(2); // skip "0x"/"0o"/"0b"
-                auto const base = (digits[1] == 'x' || digits[1] == 'X')   ? 16
-                                  : (digits[1] == 'o' || digits[1] == 'O') ? 8
-                                                                           : 2;
+                int base = 2;
+                if (digits[1] == 'x' || digits[1] == 'X')
+                    base = 16;
+                else if (digits[1] == 'o' || digits[1] == 'O')
+                    base = 8;
                 auto [ptr, ec] =
                     std::from_chars(baseDigits.data(), baseDigits.data() + baseDigits.size(), value, base);
                 if (ec != std::errc())
@@ -7078,7 +7086,7 @@ std::unique_ptr<ast::Expr> Parser::parseListElementFromString(std::string_view e
             double value = std::stod(elemStrCopy);
             return std::make_unique<ast::FloatLiteralExpr>(value);
         }
-        catch (...)
+        catch (...) // NOLINT(bugprone-empty-catch)
         {
             // Fall through to identifier
         }

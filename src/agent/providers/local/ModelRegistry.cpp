@@ -15,7 +15,7 @@ namespace
 {
 
     // clang-format off
-    auto static const CuratedModelCatalog = std::array<CuratedModel, 6> {{
+    auto const CuratedModelCatalog = std::array<CuratedModel, 6> {{
         {
             .name = "qwen2.5-coder-7b",
             .displayName = "Qwen 2.5 Coder 7B",
@@ -204,9 +204,8 @@ auto curatedModels() -> std::span<CuratedModel const>
 auto findCuratedModel(std::string_view name) -> CuratedModel const*
 {
     auto const it = std::ranges::find_if( // NOLINT(readability-qualified-auto)
-        CuratedModelCatalog, [name](CuratedModel const& model) {
-        return containsCaseInsensitive(model.name, name);
-    });
+        CuratedModelCatalog,
+        [name](CuratedModel const& model) { return containsCaseInsensitive(model.name, name); });
 
     if (it != CuratedModelCatalog.end())
         return &(*it);

@@ -6,8 +6,6 @@
 
 #include <unistd.h>
 
-extern char** environ;
-
 namespace endo::platform
 {
 

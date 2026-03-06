@@ -44,7 +44,7 @@ class ProjectFileTree
 
   private:
     /// Checks whether the given path is inside a git repository.
-    [[nodiscard]] auto isGitRepo(std::filesystem::path const& path) const -> bool;
+    [[nodiscard]] static auto isGitRepo(std::filesystem::path const& path) -> bool;
 
     /// Gets the list of tracked and untracked files from git.
     [[nodiscard]] auto getGitTrackedFiles(std::filesystem::path const& path) const

@@ -89,7 +89,7 @@ std::string processEscapeSequences(std::string_view input)
                     int digits = 0;
                     while (i < input.size() && digits < 3 && input[i] >= '0' && input[i] <= '7')
                     {
-                        value = value * 8 + (input[i] - '0');
+                        value = (value * 8) + (input[i] - '0');
                         ++i;
                         ++digits;
                     }
@@ -107,11 +107,11 @@ std::string processEscapeSequences(std::string_view input)
                     {
                         char c = input[i];
                         if (c >= '0' && c <= '9')
-                            value = value * 16 + (c - '0');
+                            value = (value * 16) + (c - '0');
                         else if (c >= 'a' && c <= 'f')
-                            value = value * 16 + (c - 'a' + 10);
+                            value = (value * 16) + (c - 'a' + 10);
                         else if (c >= 'A' && c <= 'F')
-                            value = value * 16 + (c - 'A' + 10);
+                            value = (value * 16) + (c - 'A' + 10);
                         else
                             break;
                         ++i;
@@ -746,7 +746,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     auto readFromFd = [](NativeHandle fd) -> std::string {
         std::string content;
         char buffer[4096];
-        intptr_t bytesRead;
+        intptr_t bytesRead = 0;
         while ((bytesRead = platformRead(fd, buffer, sizeof(buffer))) > 0)
             content.append(buffer, static_cast<size_t>(bytesRead));
         return content;
@@ -1417,14 +1417,14 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
         }
         if (!endOfOptions && arg == "--force")
         {
-            force = true;
+            force = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
             noClobber = false;
             continue;
         }
         if (!endOfOptions && arg == "--no-clobber")
         {
             noClobber = true;
-            force = false;
+            force = false; // NOLINT(clang-analyzer-deadcode.DeadStores)
             continue;
         }
         if (!endOfOptions && arg == "--verbose")
@@ -1444,12 +1444,12 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                     case 'r':
                     case 'R': recursive = true; break;
                     case 'f':
-                        force = true;
+                        force = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
                         noClobber = false;
                         break;
                     case 'n':
                         noClobber = true;
-                        force = false;
+                        force = false; // NOLINT(clang-analyzer-deadcode.DeadStores)
                         break;
                     case 'v': verbose = true; break;
                     default: validFlags = false; break;

@@ -90,6 +90,7 @@ void Shell::builtinGetVar(CoreVM::Params& context)
     context.setResult(std::string(value.value_or("")));
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::builtinGetExitStatus(CoreVM::Params& context)
 {
     context.setResult(std::to_string(_exitCode));
@@ -100,6 +101,7 @@ void Shell::builtinSetExitStatus(CoreVM::Params& context)
     _exitCode = static_cast<int>(context.getInt(1));
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::builtinGetProcessId(CoreVM::Params& context)
 {
     context.setResult(std::to_string(_shellPid));

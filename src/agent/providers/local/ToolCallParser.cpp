@@ -334,7 +334,7 @@ namespace
                     lastEnd = braceEnd + 1;
                 }
             }
-            catch (nlohmann::json::parse_error const&)
+            catch (nlohmann::json::parse_error const&) // NOLINT(bugprone-empty-catch)
             {
                 // Not valid JSON; skip past this brace.
             }

@@ -689,7 +689,7 @@ void Shell::registerStructuredBuiltins()
                     pipe->closeReader();
 
                     if (pidResult.has_value())
-                        (void) _processManager.wait(*pidResult);
+                        (void) _processManager.wait(*pidResult); // NOLINT(bugprone-unused-return-value)
 
                     // Parse the output into structured records
                     CoreVM::TypedObject* result = nullptr;
@@ -728,8 +728,9 @@ void Shell::registerStructuredBuiltins()
                                     std::istreambuf_iterator<char>());
                 }
             }
-            catch (...)
+            catch (...) // NOLINT(bugprone-empty-catch)
             {
+                // Intentionally ignored: file read failure leaves contents empty.
             }
 
             // Build variant from schema descriptor
@@ -768,8 +769,9 @@ void Shell::registerStructuredBuiltins()
                                     std::istreambuf_iterator<char>());
                 }
             }
-            catch (...)
+            catch (...) // NOLINT(bugprone-empty-catch)
             {
+                // Intentionally ignored: file read failure leaves contents empty.
             }
 
             auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Fields);
@@ -831,7 +833,7 @@ void Shell::registerStructuredBuiltins()
                     }
                     pipe->closeReader();
                     if (pidResult.has_value())
-                        (void) _processManager.wait(*pidResult);
+                        (void) _processManager.wait(*pidResult); // NOLINT(bugprone-unused-return-value)
                 }
             }
 
@@ -885,7 +887,7 @@ void Shell::registerStructuredBuiltins()
                     }
                     pipe->closeReader();
                     if (pidResult.has_value())
-                        (void) _processManager.wait(*pidResult);
+                        (void) _processManager.wait(*pidResult); // NOLINT(bugprone-unused-return-value)
                 }
             }
 

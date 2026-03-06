@@ -17,9 +17,10 @@
     #if !defined(ENDO_HAS_STACKTRACE)
         #include <execinfo.h>
     #endif
+    #include <csignal>
+    #include <ctime>
+
     #include <fcntl.h>
-    #include <signal.h>
-    #include <time.h>
     #include <unistd.h>
 #else
     #if defined(ENDO_HAS_STACKTRACE)

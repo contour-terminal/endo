@@ -439,7 +439,7 @@ void SourceFormatter::emitDanglingBodyComments(ast::Node const& blockParent)
 // Width estimation
 // ============================================================================
 
-size_t SourceFormatter::estimateWidth(ast::Node const& node) const
+size_t SourceFormatter::estimateWidth(ast::Node const& node)
 {
     return ast::ASTPrinter::print(node).size();
 }

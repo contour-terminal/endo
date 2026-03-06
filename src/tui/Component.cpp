@@ -5,6 +5,7 @@
 #include <tui/Screen.hpp>
 
 #include <algorithm>
+#include <utility>
 
 namespace tui
 {
@@ -63,7 +64,7 @@ void Component::addChild(Component& child, LayoutParams params)
         child._parent->removeChild(child);
 
     // Set layout parameters
-    child._layout = params;
+    child._layout = std::move(params);
 
     // Add to our children
     _children.push_back(&child);

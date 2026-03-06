@@ -21,8 +21,8 @@ namespace endo
 /// Information about a variable binding in the scope chain.
 struct BindingInfo
 {
-    CoreVM::Value* value;
-    bool isMutable;
+    CoreVM::Value* value = nullptr;
+    bool isMutable = false;
     bool isExported = false;
     bool isUsed = false;                                ///< Whether the binding has been referenced
     std::optional<SourceLocationRange> bindingLocation; ///< Source location of the binding definition

@@ -66,6 +66,7 @@ target_include_directories(endo-platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(endo-platform PUBLIC crispy::core)
 
 enable_sanitizers(endo-platform)
+enable_clang_tidy(endo-platform)
 
 # Tests
 add_executable(test-endo-platform

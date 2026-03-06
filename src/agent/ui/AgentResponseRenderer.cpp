@@ -181,7 +181,6 @@ void AgentResponseRenderer::renderPlanProgress(Plan const& plan, size_t currentS
 {
     auto const& theme = tui::currentTheme();
     auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
     auto const defaultStyle = tui::Style {};
     auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
 

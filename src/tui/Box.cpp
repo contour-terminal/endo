@@ -136,7 +136,7 @@ void Box::renderTopBorder(TerminalOutput& output, BorderChars const& chars) cons
 
         auto const actualTitleLen = static_cast<int>(displayTitle.size());
         auto leftPad = 0;
-        auto rightPad = innerWidth - actualTitleLen;
+        auto rightPad = 0;
 
         switch (_config.titleAlign)
         {

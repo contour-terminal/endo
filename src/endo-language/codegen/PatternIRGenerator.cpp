@@ -350,7 +350,7 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
             reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
 
         // For the element sub-pattern: create success block that chains to next element or final check
-        CoreVM::BasicBlock* elemSuccess;
+        CoreVM::BasicBlock* elemSuccess = nullptr;
         if (isLast)
         {
             // After last element, verify tail is Nil

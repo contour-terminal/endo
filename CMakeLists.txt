@@ -52,6 +52,7 @@ include(StaticLinking)
 include(EndoThirdParties)
 include(PedanticCompiler)
 include(Sanitizers)
+include(ClangTidy)
 
 if(NOT EMSCRIPTEN)
     check_static_system_requirements()

@@ -24,7 +24,7 @@ namespace endo::test
 {
 
 /// Error type for test execution failures
-enum class TestError
+enum class TestError // NOLINT(performance-enum-size)
 {
     ParseFailed,
     IRGenerationFailed,

@@ -22,6 +22,7 @@ void Shell::builtinExpandTilde(CoreVM::Params& context)
     context.setResult(home + suffix);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinExpandTildeUser(CoreVM::Params& context)
 {
     auto const& user = context.getString(1);
@@ -64,6 +65,7 @@ void Shell::builtinExpandGlob(CoreVM::Params& context)
     }
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinArithToString(CoreVM::Params& context)
 {
     auto const unsignedValue = context.getInt(1);
@@ -81,10 +83,12 @@ void Shell::builtinArithGetVar(CoreVM::Params& context)
         return;
     }
     int64_t result = 0;
+    // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
     auto [ptr, ec] = std::from_chars(value->data(), value->data() + value->size(), result);
     context.setResult(CoreVM::CoreNumber(result));
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinArithPow(CoreVM::Params& context)
 {
     auto const base = context.getInt(1);
