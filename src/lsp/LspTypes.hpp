@@ -21,7 +21,7 @@ using endo::editor_protocol::toRange;
 using endo::editor_protocol::WorkspaceEdit;
 
 /// LSP diagnostic severity levels.
-enum class DiagnosticSeverity : int
+enum class DiagnosticSeverity : int // NOLINT(performance-enum-size)
 {
     Error = 1,
     Warning = 2,
@@ -196,7 +196,7 @@ inline void to_json(nlohmann::json& j, SignatureHelp const& h)
 }
 
 /// LSP SymbolKind enumeration (subset relevant to endo).
-enum class SymbolKind : int
+enum class SymbolKind : int // NOLINT(performance-enum-size)
 {
     File = 1,
     Property = 7, ///< Property bindings (get/set)
@@ -235,7 +235,7 @@ inline void to_json(nlohmann::json& j, DocumentSymbol const& s)
 }
 
 /// LSP DocumentHighlightKind enumeration.
-enum class DocumentHighlightKind : int
+enum class DocumentHighlightKind : int // NOLINT(performance-enum-size)
 {
     Text = 1,  ///< A textual occurrence
     Read = 2,  ///< Read-access of a symbol (e.g. variable usage)
@@ -255,7 +255,7 @@ inline void to_json(nlohmann::json& j, DocumentHighlight const& h)
 }
 
 /// LSP CompletionItemKind enumeration (subset relevant to endo).
-enum class CompletionItemKind : int
+enum class CompletionItemKind : int // NOLINT(performance-enum-size)
 {
     Text = 1,
     Function = 3,
@@ -294,7 +294,7 @@ inline void to_json(nlohmann::json& j, LspCompletionItem const& c)
 }
 
 /// LSP InlayHintKind enumeration.
-enum class InlayHintKind : int
+enum class InlayHintKind : int // NOLINT(performance-enum-size)
 {
     Type = 1,      ///< Type annotation hint
     Parameter = 2, ///< Parameter name hint
@@ -303,21 +303,19 @@ enum class InlayHintKind : int
 /// LSP InlayHint for inline virtual text.
 struct InlayHint
 {
-    Position position;                  ///< Position where the hint is rendered
-    std::string label;                  ///< The hint text (e.g., ": int")
+    Position position;                        ///< Position where the hint is rendered
+    std::string label;                        ///< The hint text (e.g., ": int")
     InlayHintKind kind = InlayHintKind::Type; ///< Kind of inlay hint
-    bool paddingLeft = false;           ///< Whether to add padding before the hint
-    bool paddingRight = false;          ///< Whether to add padding after the hint
-    std::optional<std::string> tooltip; ///< Optional tooltip text
+    bool paddingLeft = false;                 ///< Whether to add padding before the hint
+    bool paddingRight = false;                ///< Whether to add padding after the hint
+    std::optional<std::string> tooltip;       ///< Optional tooltip text
 };
 
 inline void to_json(nlohmann::json& j, InlayHint const& h)
 {
     j = nlohmann::json {
-        { "position", h.position },
-        { "label", h.label },
-        { "kind", static_cast<int>(h.kind) },
-        { "paddingLeft", h.paddingLeft },
+        { "position", h.position },           { "label", h.label },
+        { "kind", static_cast<int>(h.kind) }, { "paddingLeft", h.paddingLeft },
         { "paddingRight", h.paddingRight },
     };
     if (h.tooltip.has_value())

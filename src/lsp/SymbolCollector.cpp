@@ -8,6 +8,7 @@
 
 #include <editor-protocol/StubRuntime.hpp>
 
+#include <cstdint>
 #include <ranges>
 #include <unordered_map>
 #include <utility>
@@ -21,7 +22,7 @@ namespace
     /// Represents a symbol event emitted during AST traversal.
     struct SymbolEvent
     {
-        enum class Kind
+        enum class Kind : std::uint8_t
         {
             Definition,
             Reference,
@@ -132,9 +133,11 @@ namespace
         void walkLetBinding(ast::LetBindingStmt const& letStmt)
         {
             // Determine category
-            auto const category = letStmt.isProperty()   ? SymbolCategory::Property
-                                  : letStmt.isFunction() ? SymbolCategory::Function
-                                                         : SymbolCategory::Variable;
+            auto category = SymbolCategory::Variable;
+            if (letStmt.isProperty())
+                category = SymbolCategory::Property;
+            else if (letStmt.isFunction())
+                category = SymbolCategory::Function;
 
             auto def = SymbolDefinition { .name = letStmt.name, .category = category };
             for (auto const& param: letStmt.parameters)

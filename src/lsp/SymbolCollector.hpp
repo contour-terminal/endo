@@ -3,6 +3,7 @@
 
 #include <endo-language/lexer/Lexer.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,7 +14,7 @@ namespace endo::lsp
 {
 
 /// Categorizes the kind of symbol definition.
-enum class SymbolCategory
+enum class SymbolCategory : std::uint8_t
 {
     Variable,     ///< Simple variable binding
     Function,     ///< Function definition (has parameters)
