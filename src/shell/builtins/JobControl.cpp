@@ -34,9 +34,13 @@ void Shell::builtinJobs(CoreVM::Params& context)
     auto const jobs = jobTable.listJobs();
     for (auto const* job: jobs)
     {
-        char const marker = (jobTable.getCurrentJob() && job->id == jobTable.getCurrentJob()->id)     ? '+'
-                            : (jobTable.getPreviousJob() && job->id == jobTable.getPreviousJob()->id) ? '-'
-                                                                                                      : ' ';
+        auto const marker = [&]() -> char {
+            if (jobTable.getCurrentJob() && job->id == jobTable.getCurrentJob()->id)
+                return '+';
+            if (jobTable.getPreviousJob() && job->id == jobTable.getPreviousJob()->id)
+                return '-';
+            return ' ';
+        }();
         std::string stateStr;
         switch (job->state)
         {

@@ -21,7 +21,7 @@ int PromptLayoutEngine::render(tui::Canvas& canvas,
                                PromptConfig const& config,
                                std::vector<PromptSegments> const& infoModules,
                                std::vector<PromptSegments> const& rightModules,
-                               tui::Theme const& theme) const
+                               tui::Theme const& theme)
 {
     switch (config.layout)
     {
@@ -78,7 +78,7 @@ int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
     // Indicator
     auto indicatorStyle = tui::Style {};
     indicatorStyle.fg = theme.promptColors.indicator;
-    col += canvas.putString(0, col, config.indicator, indicatorStyle);
+    canvas.putString(0, col, config.indicator, indicatorStyle);
 
     return 1;
 }

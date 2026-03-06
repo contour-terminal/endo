@@ -63,7 +63,7 @@ namespace
     }
 } // namespace
 
-auto ProjectContextLoader::load(std::filesystem::path const& projectRoot) const -> ProjectContext
+auto ProjectContextLoader::load(std::filesystem::path const& projectRoot) -> ProjectContext
 {
     auto context = ProjectContext {};
 
@@ -84,7 +84,7 @@ auto ProjectContextLoader::load(std::filesystem::path const& projectRoot) const 
     return context;
 }
 
-auto ProjectContextLoader::loadRulesFiles(std::filesystem::path const& root) const -> std::vector<std::string>
+auto ProjectContextLoader::loadRulesFiles(std::filesystem::path const& root) -> std::vector<std::string>
 {
     auto results = std::vector<std::string> {};
 
@@ -109,7 +109,7 @@ auto ProjectContextLoader::loadRulesFiles(std::filesystem::path const& root) con
     return results;
 }
 
-auto ProjectContextLoader::loadGlobalRules() const -> std::vector<std::string>
+auto ProjectContextLoader::loadGlobalRules() -> std::vector<std::string>
 {
     auto const home = homeDirectory();
     if (home.empty())
@@ -118,7 +118,7 @@ auto ProjectContextLoader::loadGlobalRules() const -> std::vector<std::string>
     return loadMarkdownFiles(home / ".config" / "endo" / "agent-rules");
 }
 
-auto ProjectContextLoader::loadMemoryFiles() const -> std::vector<std::string>
+auto ProjectContextLoader::loadMemoryFiles() -> std::vector<std::string>
 {
     auto const home = homeDirectory();
     if (home.empty())

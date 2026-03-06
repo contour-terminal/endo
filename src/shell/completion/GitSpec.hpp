@@ -28,15 +28,15 @@ class GitQueryProvider: public CommandQueryProvider
     [[nodiscard]] std::vector<QueryResult> query(std::string_view queryTag) override;
 
   private:
-    [[nodiscard]] std::vector<QueryResult> queryBranches(bool localOnly, bool remoteOnly) const;
-    [[nodiscard]] std::vector<QueryResult> queryTags() const;
-    [[nodiscard]] std::vector<QueryResult> queryRemotes() const;
-    [[nodiscard]] std::vector<QueryResult> queryStashes() const;
-    [[nodiscard]] std::vector<QueryResult> queryRecentCommits() const;
-    [[nodiscard]] std::vector<QueryResult> queryAliases() const;
-    [[nodiscard]] std::vector<QueryResult> queryStatusFiles() const;
-    [[nodiscard]] std::vector<QueryResult> queryTrackedFiles() const;
-    [[nodiscard]] std::vector<QueryResult> queryConfigKeys() const;
+    [[nodiscard]] static std::vector<QueryResult> queryBranches(bool localOnly, bool remoteOnly);
+    [[nodiscard]] static std::vector<QueryResult> queryTags();
+    [[nodiscard]] static std::vector<QueryResult> queryRemotes();
+    [[nodiscard]] static std::vector<QueryResult> queryStashes();
+    [[nodiscard]] static std::vector<QueryResult> queryRecentCommits();
+    [[nodiscard]] static std::vector<QueryResult> queryAliases();
+    [[nodiscard]] static std::vector<QueryResult> queryStatusFiles();
+    [[nodiscard]] static std::vector<QueryResult> queryTrackedFiles();
+    [[nodiscard]] static std::vector<QueryResult> queryConfigKeys();
 
     /// @brief Runs a command and returns stdout lines.
     [[nodiscard]] static std::vector<std::string> runCommand(std::string const& cmd);

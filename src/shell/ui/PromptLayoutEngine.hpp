@@ -31,11 +31,11 @@ class PromptLayoutEngine
     /// @param rightModules Evaluated segments for right-aligned modules.
     /// @param theme The current theme.
     /// @return The number of rows consumed by the prompt chrome.
-    int render(tui::Canvas& canvas,
-               PromptConfig const& config,
-               std::vector<PromptSegments> const& infoModules,
-               std::vector<PromptSegments> const& rightModules,
-               tui::Theme const& theme) const;
+    static int render(tui::Canvas& canvas,
+                      PromptConfig const& config,
+                      std::vector<PromptSegments> const& infoModules,
+                      std::vector<PromptSegments> const& rightModules,
+                      tui::Theme const& theme);
 
     /// @brief Returns the preferred height for the given layout configuration.
     /// @param config The prompt configuration.

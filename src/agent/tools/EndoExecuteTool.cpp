@@ -65,13 +65,11 @@ auto EndoExecuteTool::execute(nlohmann::json const& arguments) -> std::expected<
     auto output = std::move(result.output);
 
     // Truncate output if it exceeds the maximum size
-    auto truncated = false;
     if (output.size() > MaxOutputSize)
     {
         auto const truncatedBytes = output.size() - MaxOutputSize;
         output.resize(MaxOutputSize);
         output += std::format("\n\n[truncated — {} bytes omitted]", truncatedBytes);
-        truncated = true;
     }
 
     if (result.timedOut)

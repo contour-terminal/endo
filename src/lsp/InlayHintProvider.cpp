@@ -10,6 +10,7 @@
 
 #include <editor-protocol/StubRuntime.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -22,7 +23,7 @@ namespace
     /// Describes a hint to be placed after a specific identifier token.
     struct HintEvent
     {
-        enum class Kind
+        enum class Kind : std::uint8_t
         {
             ParamType,      ///< `: <type>` after an untyped parameter name
             ReturnType,     ///< `: <type>` after the last parameter (before `=`)
@@ -30,8 +31,9 @@ namespace
         };
 
         Kind kind;
-        std::string name;  ///< Identifier name to match in the token stream
-        std::string label; ///< The hint label text (e.g., ": int")
+        std::string name;                 ///< Identifier name to match in the token stream
+        std::string label;                ///< The hint label text (e.g., ": int")
+        std::optional<Position> position; ///< Direct position (bypasses name-based token matching)
     };
 
     /// Checks if a type contains unresolved type variables.
@@ -56,7 +58,85 @@ namespace
             return containsTypeVar(opt->innerType);
         if (auto const* res = type->asResult())
             return containsTypeVar(res->okType) || containsTypeVar(res->errorType);
+        if (auto const* rec = type->asRecord())
+        {
+            for (auto const& field: rec->fields)
+                if (containsTypeVar(field.type))
+                    return true;
+            return false;
+        }
+        if (auto const* un = type->asUnion())
+        {
+            for (auto const& c: un->cases)
+                if (c.payloadType && containsTypeVar(*c.payloadType))
+                    return true;
+            return false;
+        }
         return false;
+    }
+
+    /// Token entry for position lookup.
+    struct TokenEntry
+    {
+        Token token;
+        std::string literal;
+        SourceLocationRange range;
+    };
+
+    /// Tokenizes the source and returns all tokens.
+    [[nodiscard]] std::vector<TokenEntry> tokenize(std::string const& source)
+    {
+        std::vector<TokenEntry> tokens;
+        auto lexer = Lexer { std::make_unique<StringSource>(source) };
+        lexer.enterFSharpExpr();
+        while (lexer.currentToken() != Token::EndOfInput)
+        {
+            tokens.push_back(TokenEntry {
+                .token = lexer.currentToken(),
+                .literal = lexer.currentLiteral(),
+                .range = lexer.currentRange(),
+            });
+            lexer.nextToken();
+        }
+        return tokens;
+    }
+
+    /// Returns a short display string for a type, using just the type name for named records/unions.
+    [[nodiscard]] std::string toHintString(TypePtr const& type)
+    {
+        if (auto const* rec = type->asRecord(); rec && !rec->name.empty())
+            return rec->name;
+        if (auto const* un = type->asUnion())
+            return un->name;
+        return toString(type);
+    }
+
+    /// Finds the position just before the `=` token that follows the function header.
+    /// Scans forward from @p startIdx looking for a Token::Equal.
+    [[nodiscard]] std::optional<Position> findEqualsPosition(std::vector<TokenEntry> const& tokens,
+                                                             std::string const& funcName)
+    {
+        // Find the function name token first, then scan forward for `=`
+        for (size_t i = 0; i < tokens.size(); ++i)
+        {
+            if (tokens[i].token == Token::Identifier && tokens[i].literal == funcName)
+            {
+                // Scan forward from this identifier for the `=` sign
+                for (size_t j = i + 1; j < tokens.size(); ++j)
+                {
+                    if (tokens[j].token == Token::Equal)
+                    {
+                        // Position just before the `=`
+                        return Position { .line = tokens[j].range.begin.line,
+                                          .character = tokens[j].range.begin.column };
+                    }
+                    // Stop at line boundary or semicolons to avoid matching wrong `=`
+                    if (tokens[j].token == Token::LineFeed || tokens[j].token == Token::Semicolon)
+                        break;
+                }
+            }
+        }
+        return std::nullopt;
     }
 
     /// Collects hint events from function parameters and return types.
@@ -64,6 +144,7 @@ namespace
                               std::vector<ast::TypedParameter> const& parameters,
                               std::optional<TypePtr> const& returnTypeAnnotation,
                               InferenceResult const& inference,
+                              std::vector<TokenEntry> const& tokens,
                               std::vector<HintEvent>& events)
     {
         auto const it = inference.functions.find(funcName);
@@ -84,24 +165,28 @@ namespace
             events.push_back(HintEvent {
                 .kind = HintEvent::Kind::ParamType,
                 .name = param.name,
-                .label = ": " + toString(paramType),
+                .label = ": " + toHintString(paramType),
             });
         }
 
-        // Return type hint
+        // Return type hint — positioned just before `=`
         if (!returnTypeAnnotation && inferred.returnType)
         {
             auto const& retType = *inferred.returnType;
             if (!containsTypeVar(retType))
             {
-                // Use the last parameter name as anchor — the hint is placed after it
                 if (!parameters.empty())
                 {
-                    events.push_back(HintEvent {
-                        .kind = HintEvent::Kind::ReturnType,
-                        .name = parameters.back().name,
-                        .label = ": " + toString(retType),
-                    });
+                    auto eqPos = findEqualsPosition(tokens, funcName);
+                    if (eqPos)
+                    {
+                        events.push_back(HintEvent {
+                            .kind = HintEvent::Kind::ReturnType,
+                            .name = {},
+                            .label = ": " + toHintString(retType),
+                            .position = eqPos,
+                        });
+                    }
                 }
             }
         }
@@ -111,7 +196,10 @@ namespace
     class HintWalker
     {
       public:
-        explicit HintWalker(InferenceResult const& inference): _inference(inference) {}
+        HintWalker(InferenceResult const& inference, std::vector<TokenEntry> const& tokens):
+            _inference(inference), _tokens(tokens)
+        {
+        }
 
         void walkStatement(ast::Node const& node)
         {
@@ -143,13 +231,13 @@ namespace
             if (letStmt.isFunction())
             {
                 collectFunctionHints(
-                    letStmt.name, letStmt.parameters, letStmt.returnType, _inference, _events);
+                    letStmt.name, letStmt.parameters, letStmt.returnType, _inference, _tokens, _events);
 
                 // Walk and-bindings
                 for (auto const& andBind: letStmt.andBindings)
                 {
                     collectFunctionHints(
-                        andBind.name, andBind.parameters, andBind.returnType, _inference, _events);
+                        andBind.name, andBind.parameters, andBind.returnType, _inference, _tokens, _events);
                     if (andBind.value)
                         walkExpr(*andBind.value);
                 }
@@ -162,7 +250,7 @@ namespace
                     // Lambda assigned to let binding: use function inference
                     auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(letStmt.value.get());
                     collectFunctionHints(
-                        letStmt.name, lambda->parameters, lambda->returnType, _inference, _events);
+                        letStmt.name, lambda->parameters, lambda->returnType, _inference, _tokens, _events);
                 }
                 else
                 {
@@ -173,7 +261,7 @@ namespace
                         _events.push_back(HintEvent {
                             .kind = HintEvent::Kind::LetBindingType,
                             .name = letStmt.name,
-                            .label = ": " + toString(it->second),
+                            .label = ": " + toHintString(it->second),
                         });
                     }
                 }
@@ -190,7 +278,7 @@ namespace
                 if (letIn->isFunction())
                 {
                     collectFunctionHints(
-                        letIn->name, letIn->parameters, letIn->returnType, _inference, _events);
+                        letIn->name, letIn->parameters, letIn->returnType, _inference, _tokens, _events);
                 }
                 else if (!letIn->isDestructuring())
                 {
@@ -200,7 +288,7 @@ namespace
                         _events.push_back(HintEvent {
                             .kind = HintEvent::Kind::LetBindingType,
                             .name = letIn->name,
-                            .label = ": " + toString(it->second),
+                            .label = ": " + toHintString(it->second),
                         });
                     }
                 }
@@ -261,34 +349,9 @@ namespace
         }
 
         InferenceResult const& _inference;
+        std::vector<TokenEntry> const& _tokens;
         std::vector<HintEvent> _events;
     };
-
-    /// Token entry for position lookup.
-    struct TokenEntry
-    {
-        Token token;
-        std::string literal;
-        SourceLocationRange range;
-    };
-
-    /// Tokenizes the source and returns all tokens.
-    [[nodiscard]] std::vector<TokenEntry> tokenize(std::string const& source)
-    {
-        std::vector<TokenEntry> tokens;
-        auto lexer = Lexer { std::make_unique<StringSource>(source) };
-        lexer.enterFSharpExpr();
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.push_back(TokenEntry {
-                .token = lexer.currentToken(),
-                .literal = lexer.currentLiteral(),
-                .range = lexer.currentRange(),
-            });
-            lexer.nextToken();
-        }
-        return tokens;
-    }
 
     /// Checks if a position is within the given range (inclusive start, exclusive end).
     [[nodiscard]] bool positionInRange(Position pos, Range range)
@@ -329,15 +392,15 @@ std::vector<InlayHint> computeInlayHints(std::string const& source, Range range)
         return {};
     }
 
+    // Tokenize source for position lookup
+    auto const tokens = tokenize(source);
+
     // Walk AST to collect hint events
-    HintWalker walker(inference);
+    HintWalker walker(inference, tokens);
     walker.walkStatement(*astRoot);
     auto const& events = walker.events();
     if (events.empty())
         return {};
-
-    // Tokenize source for position lookup
-    auto const tokens = tokenize(source);
 
     // Collect identifier tokens in order
     std::vector<TokenEntry const*> identTokens;
@@ -353,6 +416,21 @@ std::vector<InlayHint> computeInlayHints(std::string const& source, Range range)
 
     for (auto const& event: events)
     {
+        // Events with a direct position bypass name-based token matching
+        if (event.position)
+        {
+            if (positionInRange(*event.position, range))
+            {
+                hints.push_back(InlayHint {
+                    .position = *event.position,
+                    .label = event.label,
+                    .kind = InlayHintKind::Type,
+                    .paddingLeft = true,
+                });
+            }
+            continue;
+        }
+
         // Find the next identifier token with matching name
         auto searchIt = tokenIt;
         while (searchIt < identTokens.size() && identTokens[searchIt]->literal != event.name)

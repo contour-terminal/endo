@@ -99,7 +99,7 @@ class ToolStatusComponent: public tui::Component
     tui::Spinner _spinner { tui::SpinnerType::Dots };
 
     /// Maximum number of completed entries to show.
-    static constexpr auto MaxVisibleCompleted = size_t { 5 };
+    static constexpr auto MaxVisibleCompleted = size_t { 5 }; // NOLINT(readability-identifier-naming)
 
     /// Returns whether there is an active (in-progress) entry.
     [[nodiscard]] bool hasActiveEntry() const noexcept;

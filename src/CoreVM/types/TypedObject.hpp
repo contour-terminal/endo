@@ -41,7 +41,7 @@ struct TypedObject
     const TypeDescriptor* type;     ///< Type metadata (never null)
     std::atomic<uint32_t> refCount; ///< Reference count (starts at 1)
     uint8_t tag;                    ///< Variant tag for sum types
-    uint8_t _padding[3];            ///< Alignment padding
+    uint8_t padding[3] {};          ///< Alignment padding
 
     // Payload slots follow immediately after the header.
     // Access via slots() method.
@@ -64,7 +64,7 @@ struct TypedObject
     /// Returns the total allocation size for an object of the given type.
     [[nodiscard]] static size_t allocationSize(const TypeDescriptor* type) noexcept
     {
-        return sizeof(TypedObject) + type->slotCount * sizeof(SlotValue);
+        return sizeof(TypedObject) + (type->slotCount * sizeof(SlotValue));
     }
 
     /// Returns the allocation size for this object.

@@ -106,7 +106,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
 
     _procSubstChildPids.push_back(static_cast<ProcessId>(pid));
 
-    NativeHandle exposedFd;
+    NativeHandle exposedFd = InvalidHandle;
     if (isWrite)
     {
         pipe->closeReader();
@@ -133,6 +133,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
 #endif
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinProcSubstExit(CoreVM::Params&)
 {
 #if !defined(_WIN32)

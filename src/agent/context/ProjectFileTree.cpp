@@ -96,7 +96,7 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
                 files.push_back(relPath.generic_string());
             }
         }
-        catch (std::filesystem::filesystem_error const&)
+        catch (std::filesystem::filesystem_error const&) // NOLINT(bugprone-empty-catch)
         {
             // Permission denied or other FS errors — return what we have
         }
@@ -117,7 +117,7 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
     return files;
 }
 
-auto ProjectFileTree::isGitRepo(std::filesystem::path const& path) const -> bool
+auto ProjectFileTree::isGitRepo(std::filesystem::path const& path) -> bool
 {
     auto const result =
         runCommand(std::format("git -C \"{}\" rev-parse --is-inside-work-tree 2>/dev/null", path.string()));
@@ -247,7 +247,7 @@ auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> 
             ++entryCount;
         }
     }
-    catch (std::filesystem::filesystem_error const&)
+    catch (std::filesystem::filesystem_error const&) // NOLINT(bugprone-empty-catch)
     {
         // Permission denied or other FS errors — return what we have
     }

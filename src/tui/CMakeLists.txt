@@ -64,6 +64,7 @@ target_compile_features(tui PUBLIC cxx_std_23)
 
 set_pedantic_compiler_warnings(tui)
 enable_sanitizers(tui)
+enable_clang_tidy(tui)
 
 # Disable sanitizers for third-party stb code (known UBSan false positives in stb_image_resize2)
 set_source_files_properties(StbImageImpl.cpp PROPERTIES COMPILE_OPTIONS "-fno-sanitize=undefined")

@@ -93,8 +93,6 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
     auto pendingOptionName = std::string {};   ///< Option awaiting its value (set when skipNext=true).
     auto lastValueOptionName = std::string {}; ///< Option that consumed the most recent skipNext token.
 
-    // Current context: which options are valid
-    auto const* currentOptions = &spec.globalOptions;
     SubcommandDef const* activeSub = nullptr;
 
     for (size_t i = 1; i < tokens.size(); ++i)
@@ -155,7 +153,6 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
             {
                 state.subcommandChain.push_back(resolved);
                 activeSub = &*it;
-                currentOptions = &activeSub->options;
                 expectingSubcommand = !activeSub->subcommands.empty();
                 continue;
             }

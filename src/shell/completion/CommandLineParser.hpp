@@ -13,7 +13,7 @@ namespace endo
 {
 
 /// @brief The phase of completion the cursor is in.
-enum class CompletionPhase
+enum class CompletionPhase // NOLINT(performance-enum-size)
 {
     Subcommand,  ///< Completing a subcommand name.
     Option,      ///< Completing an option (--flag / -f).

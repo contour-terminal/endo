@@ -5,6 +5,7 @@
 #include <tui/InputEvent.hpp>
 #include <tui/VtParser.hpp>
 
+#include <string_view>
 #include <vector>
 
 #include <platform/Types.hpp>
@@ -99,7 +100,8 @@ class TerminalInput
     DWORD _originalOutputMode = 0;
     HANDLE _resizeEvent = nullptr; ///< Manual-reset event for resize notification.
 #else
-    int _fd = 0; // STDIN_FILENO
+    int _fd = 0;        // STDIN_FILENO
+    int _outFd = 1;     // STDOUT_FILENO
     struct termios _origTermios {};
     int _resizePipe[2] = { -1, -1 }; ///< Self-pipe for SIGWINCH.
 #endif
@@ -110,6 +112,7 @@ class TerminalInput
     void disableRawMode();
     void enableProtocols();
     void disableProtocols();
+    void writeProtocol(std::string_view data) const;
 };
 
 } // namespace tui

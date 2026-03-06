@@ -72,10 +72,10 @@ class LogPanel
     void scrollDown();
 
     /// @brief Maximum number of entries retained in the log.
-    static constexpr int MaxEntries = 100;
+    static constexpr int maxEntries = 100;
 
     /// @brief Maximum visible entries when expanded.
-    static constexpr int MaxVisibleExpanded = 7;
+    static constexpr int maxVisibleExpanded = 7;
 
   private:
     mutable std::mutex _mutex;

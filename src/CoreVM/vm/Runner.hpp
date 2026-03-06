@@ -13,6 +13,7 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -42,10 +43,23 @@ class Runner
         QuotaExceeded(): std::runtime_error { "CoreVM runtime quota exceeded." } {}
     };
 
+    /// Represents a single frame on the call stack.
+    struct CallFrame
+    {
+        size_t ip = 0;
+        const Function* function = nullptr;
+        size_t fp = 0;
+        size_t argsBase = 0;
+        TypedObject* lazyObj = nullptr;
+    };
+
     using Value = uint64_t;
     using Globals = std::vector<Value>;
 
     using TraceLogger = std::function<void(Instruction instr, size_t ip, size_t sp)>;
+
+    /// Callback invoked on runtime errors. Returns true to suspend (debugger break), false to propagate.
+    using ErrorCallback = std::function<bool(RuntimeError const&)>;
 
     class Stack
     {
@@ -70,7 +84,7 @@ class Runner
         void rotate(size_t n);
         void rotate(size_t fp, size_t n);
 
-        size_t size() const { return _stack.size(); }
+        [[nodiscard]] size_t size() const { return _stack.size(); }
 
         Value operator[](int relativeIndex) const
         {
@@ -109,6 +123,9 @@ class Runner
     };
 
   public:
+    Runner(Runner&) = delete;
+    Runner& operator=(Runner&) = delete;
+
     using RunResult = std::expected<bool, RuntimeError>;
 
     Runner(
@@ -120,6 +137,9 @@ class Runner
            RuntimeConfig config,
            TraceLogger logger);
     ~Runner() = default;
+
+    /// Returns the current execution state.
+    [[nodiscard]] State state() const noexcept { return _state; }
 
     const RuntimeConfig& config() const noexcept { return _config; }
 
@@ -134,11 +154,21 @@ class Runner
 
     void suspend();
     bool resume();
+    RunResult resumeWithResult();
     void rewind();
 
     size_t getInstructionPointer() const noexcept { return _ip; }
 
     size_t getStackPointer() const noexcept { return _stack.size(); }
+
+    /// Returns the current call stack depth.
+    [[nodiscard]] size_t callStackDepth() const noexcept { return _callStack.size(); }
+
+    /// Returns a read-only view of the call stack.
+    [[nodiscard]] std::span<CallFrame const> callStack() const noexcept { return _callStack; }
+
+    /// Returns the current frame pointer.
+    [[nodiscard]] size_t framePointer() const noexcept { return _fp; }
 
     const util::RegExpContext* regexpContext() const noexcept { return &_regexpContext; }
 
@@ -159,6 +189,12 @@ class Runner
 
     [[nodiscard]] bool isKnownObject(uint64_t rawValue) const noexcept;
     [[nodiscard]] bool isKnownString(uint64_t rawValue) const noexcept;
+
+    /// Sets the error callback for debugger exception breakpoints.
+    void setErrorCallback(ErrorCallback callback) { _errorCallback = std::move(callback); }
+
+    /// Provides mutable access to the stack for variable mutation.
+    Stack& mutableStack() noexcept { return _stack; }
 
   private:
     void consume(Opcode op);
@@ -199,19 +235,18 @@ class Runner
     void pushObject(TypedObject* obj) { push(reinterpret_cast<Value>(obj)); }
 
     RunResult loopWithResult();
+    RunResult handleRuntimeError(RuntimeError error);
 
     TypedObject* createPartialCallable(TypedObject* callable, std::vector<Value> const& partialArgs);
 
     [[nodiscard]] RuntimeError makeError(std::string message) const;
-
-    Runner(Runner&) = delete;
-    Runner& operator=(Runner&) = delete;
 
   private:
     Quota _quota;
     RuntimeConfig _config;
     const Function* _function;
     TraceLogger _traceLogger;
+    ErrorCallback _errorCallback;
 
     const Program* _program = nullptr;
 
@@ -233,18 +268,9 @@ class Runner
 
     size_t _fp = 0;
 
-    struct CallFrame
-    {
-        size_t ip = 0;
-        const Function* function = nullptr;
-        size_t fp = 0;
-        size_t argsBase = 0;
-        TypedObject* lazyObj = nullptr;
-    };
-
     std::vector<CallFrame> _callStack;
 
-    static constexpr size_t MaxCallDepth = 10000;
+    static constexpr size_t maxCallDepth = 10000;
 };
 
 } // namespace CoreVM

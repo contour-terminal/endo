@@ -278,24 +278,24 @@ void ProgressBar::render(TerminalOutput& output, Style const& filledStyle, Style
 
     // Render filled blocks
     for (auto i = 0; i < fullBlocks && i < _width; ++i)
-        output.writeText(FilledChar, filledStyle);
+        output.writeText(filledChar, filledStyle);
 
     // Render partial block if any
     if (fullBlocks < _width && remainder > 0.0f)
     {
         auto const partialIdx = static_cast<std::size_t>((1.0f - remainder) * 7.0f);
         auto const safeIdx = std::min(partialIdx, std::size_t { 7 });
-        output.writeText(PartialChars[safeIdx], filledStyle);
+        output.writeText(partialChars[safeIdx], filledStyle);
 
         // Render empty blocks
         for (auto i = fullBlocks + 1; i < _width; ++i)
-            output.writeText(EmptyChar, emptyStyle);
+            output.writeText(emptyChar, emptyStyle);
     }
     else
     {
         // Render empty blocks
         for (auto i = fullBlocks; i < _width; ++i)
-            output.writeText(EmptyChar, emptyStyle);
+            output.writeText(emptyChar, emptyStyle);
     }
 }
 

@@ -59,7 +59,7 @@ class Prompt
     void addHistory(std::string entry);
 
     /// @brief Returns the input file descriptor for poll() integration.
-    [[nodiscard]] int inputFd() const noexcept;
+    [[nodiscard]] static int inputFd() noexcept;
 
     /// @brief Processes pending input events without blocking.
     ///

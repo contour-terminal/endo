@@ -22,7 +22,7 @@ namespace endo
 {
 
 /// Describes the return type category of a function for auto-wrapping support.
-enum class ReturnKind
+enum class ReturnKind // NOLINT(performance-enum-size)
 {
     Plain,  ///< Function returns a plain value (no wrapping needed)
     Result, ///< Function returns a Result type (Ok/Error)
@@ -43,7 +43,7 @@ struct FSharpPersistentState
         std::vector<std::string> parameters;                ///< Parameter names in order
         std::vector<std::optional<TypePtr>> parameterTypes; ///< Type annotations (parallel to parameters)
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
-        ast::Expr const* body;                              ///< Function body expression (for inlining)
+        ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
         bool isRecursive = false;                           ///< Whether function is declared with `let rec`
         bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
@@ -384,7 +384,7 @@ class IRGenerator final: public ast::Visitor
         std::vector<std::string> parameters;                ///< Parameter names in order
         std::vector<std::optional<TypePtr>> parameterTypes; ///< Type annotations (parallel to parameters)
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
-        ast::Expr const* body;                              ///< Function body expression (for inlining)
+        ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
         bool isRecursive = false;                           ///< Whether function is declared with `let rec`
         bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)

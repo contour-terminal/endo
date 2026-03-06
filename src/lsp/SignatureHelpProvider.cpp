@@ -6,10 +6,11 @@
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 
+#include <editor-protocol/StubRuntime.hpp>
+
 #include <utility>
 #include <vector>
 
-#include <editor-protocol/StubRuntime.hpp>
 #include "SymbolCollector.hpp"
 
 namespace endo::lsp
@@ -157,9 +158,17 @@ namespace
             auto const& paramName = def.parameterNames[i];
             auto const& paramType = i < def.parameterTypes.size() ? def.parameterTypes[i] : std::string {};
             if (!paramType.empty())
-                label += "(" + paramName + ": " + paramType + ")";
-            else
+            {
+                label += "(";
                 label += paramName;
+                label += ": ";
+                label += paramType;
+                label += ")";
+            }
+            else
+            {
+                label += paramName;
+            }
         }
         if (def.returnType)
             label += ": " + *def.returnType;

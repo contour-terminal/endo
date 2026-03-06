@@ -1,0 +1,177 @@
+{
+  "name": "endo",
+  "displayName": "Endo",
+  "description": "Language support and debugging for the Endo shell language",
+  "version": "0.1.0",
+  "publisher": "contour-terminal",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/contour-terminal/endo"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "keywords": [
+    "endo",
+    "shell",
+    "debugger",
+    "dap",
+    "functional"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Snippets"
+  ],
+  "activationEvents": [
+    "onLanguage:endo",
+    "onDebugResolve:endo"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "endo",
+        "aliases": [
+          "Endo",
+          "endo"
+        ],
+        "extensions": [
+          ".endo"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "endo",
+        "scopeName": "source.endo",
+        "path": "./syntaxes/endo.tmLanguage.json"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "endo"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "endo",
+        "languages": [
+          "endo"
+        ],
+        "label": "Endo Debug",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .endo script to debug",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Command-line arguments passed to the script",
+                "default": []
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause at the first line before any code runs",
+                "default": false
+              },
+              "noDebug": {
+                "type": "boolean",
+                "description": "Run without debug instrumentation (no breakpoints or stepping)",
+                "default": false
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "endo",
+            "request": "launch",
+            "name": "Launch Endo Script",
+            "program": "${file}"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Endo: Launch Script",
+            "description": "Launch the current .endo file",
+            "body": {
+              "type": "endo",
+              "request": "launch",
+              "name": "Launch Endo Script",
+              "program": "^\"\\${file}\""
+            }
+          },
+          {
+            "label": "Endo: Launch Script (Stop on Entry)",
+            "description": "Launch the current .endo file and pause at the first line",
+            "body": {
+              "type": "endo",
+              "request": "launch",
+              "name": "Launch Endo Script (Stop on Entry)",
+              "program": "^\"\\${file}\"",
+              "stopOnEntry": true
+            }
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Endo",
+      "properties": {
+        "endo.path": {
+          "type": "string",
+          "default": "endo",
+          "description": "Path to the endo binary. Defaults to 'endo' (resolved from PATH)."
+        },
+        "endo.lsp.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Endo Language Server for code intelligence."
+        },
+        "endo.lsp.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace communication between VS Code and the Endo language server."
+        }
+      }
+    },
+    "snippets": [
+      {
+        "language": "endo",
+        "path": "./snippets/endo.json"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap --target=es2022",
+    "watch": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap --target=es2022 --watch",
+    "package": "npm run compile -- --minify && cp ../../LICENSE.txt LICENSE.txt && vsce package --no-dependencies",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.3.0"
+  }
+}

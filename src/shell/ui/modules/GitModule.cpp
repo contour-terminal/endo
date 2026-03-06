@@ -95,7 +95,7 @@ void GitModule::refreshIfNeeded(std::string const& cwd) const
 {
     auto const now = std::chrono::steady_clock::now();
 
-    if (_cachePopulated && _cachedCwd == cwd && (now - _cacheTime) < CacheTtl)
+    if (_cachePopulated && _cachedCwd == cwd && (now - _cacheTime) < _cacheTtl)
         return;
 
     _cache = queryGitInfo(cwd);

@@ -22,12 +22,12 @@ Wakeup::~Wakeup()
         CloseHandle(_handle);
 }
 
-void Wakeup::signal()
+void Wakeup::signal() const
 {
     SetEvent(_handle);
 }
 
-void Wakeup::reset()
+void Wakeup::reset() const
 {
     ResetEvent(_handle);
 }

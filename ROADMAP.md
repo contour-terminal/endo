@@ -1386,14 +1386,16 @@ to perform syntax/semantic validation without executing code.
 
 **Dependency:** Milestone 1 (complete language), Phase 1.6 (functions)
 
+See `ROADMAP-DAP.md` for the detailed phase breakdown.
+
 **Tasks:**
-- [ ] Implement DAP server protocol handling, asseccsible via CLI `endo --dap`
-- [ ] Implement breakpoint support
-- [ ] Implement step execution (into, over, out)
-- [ ] Implement variable inspection
-- [ ] Implement call stack display
-- [ ] Integrate with VS Code DAP extension
-- [ ] Add DAP tests
+- [x] Implement DAP server protocol handling, accessible via CLI `endo --dap`
+- [x] Implement breakpoint support
+- [x] Implement step execution (into, over, out)
+- [x] Implement variable inspection
+- [x] Implement call stack display
+- [x] Integrate with VS Code DAP extension
+- [x] Add DAP tests
 
 ### Phase 5.2: Profiling and Tracing
 

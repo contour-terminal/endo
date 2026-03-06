@@ -12,7 +12,7 @@ namespace endo
 {
 
 /// @brief Type of command resolved.
-enum class CommandType
+enum class CommandType // NOLINT(performance-enum-size)
 {
     External, ///< Executable found in $PATH.
     Builtin,  ///< Shell builtin command.

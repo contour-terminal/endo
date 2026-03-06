@@ -51,7 +51,7 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
         if (!isPrefixMatch && !isFuzzyMatch)
             return;
 
-        int score;
+        auto score = 0;
         std::vector<size_t> matchPositions;
 
         if (isPrefixMatch)

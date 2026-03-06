@@ -34,7 +34,7 @@ struct SpawnConfig
 ///
 /// These flags can be combined using the | operator.
 /// Example: WaitFlag::NoHang | WaitFlag::Untraced
-enum class WaitFlag
+enum class WaitFlag // NOLINT(performance-enum-size)
 {
     None = 0,
     NoHang = 1 << 0,   ///< Return immediately if no state change (WNOHANG)

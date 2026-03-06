@@ -56,7 +56,7 @@ void SelectDialog::render(Canvas& canvas)
     auto const hintRow = startRow + dialogHeight;
     auto const hintText =
         std::string(_config.confirmHint) + " select  " + std::string(_config.cancelHint) + " cancel";
-    auto const hintCol = startCol + (dialogWidth - static_cast<int>(hintText.size())) / 2;
+    auto const hintCol = startCol + ((dialogWidth - static_cast<int>(hintText.size())) / 2);
 
     auto hintStyle = Style {};
     hintStyle.dim = true;
@@ -191,7 +191,7 @@ void ConfirmDialog::render(Canvas& canvas)
     auto const confirmBtn = " " + _config.confirmLabel + " ";
     auto const cancelBtn = " " + _config.cancelLabel + " ";
     auto const buttonsWidth = static_cast<int>(confirmBtn.size() + cancelBtn.size() + 4);
-    auto buttonsCol = startCol + (dialogWidth - buttonsWidth) / 2;
+    auto buttonsCol = startCol + ((dialogWidth - buttonsWidth) / 2);
 
     canvas.putString(buttonRow, buttonsCol, "[", _config.borderStyle);
     buttonsCol += 1;

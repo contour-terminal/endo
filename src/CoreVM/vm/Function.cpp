@@ -59,4 +59,15 @@ SourceLocation const& Function::locationOf(size_t offset) const
     return std::prev(it)->second;
 }
 
+void Function::dumpLocationTable() const noexcept
+{
+    std::println(
+        "  Location table for '{}' ({} entries):", _name, _locationTable ? _locationTable->size() : 0);
+    if (!_locationTable)
+        return;
+
+    for (auto const& [ip, loc]: *_locationTable)
+        std::println("    IP {:4} -> {}:{}:{}", ip, loc.filename, loc.begin.line, loc.begin.column);
+}
+
 } // namespace CoreVM

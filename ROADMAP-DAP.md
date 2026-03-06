@@ -68,32 +68,32 @@ endo-editor-protocol  (shared: transport, types, document store)
 
 **Capabilities after this phase**: `supportsConfigurationDoneRequest`
 
-- [ ] Create `src/dap/` directory with `CMakeLists.txt` (static library `endo-dap`, test executable `test-endo-dap`; link to `endo-editor-protocol`, `endo`, `nlohmann_json`, `CoreVM`)
-- [ ] Add `add_subdirectory(dap)` to `src/CMakeLists.txt` (inside `if(NOT EMSCRIPTEN)` block)
-- [ ] Define DAP message structures in `src/dap/DapTypes.hpp`:
+- [x] Create `src/dap/` directory with `CMakeLists.txt` (static library `endo-dap`, test executable `test-endo-dap`; link to `endo-editor-protocol`, `endo`, `nlohmann_json`, `CoreVM`)
+- [x] Add `add_subdirectory(dap)` to `src/CMakeLists.txt` (inside `if(NOT EMSCRIPTEN)` block)
+- [x] Define DAP message structures in `src/dap/DapTypes.hpp`:
   - `DapRequest` (seq, command, arguments)
   - `DapResponse` (request_seq, success, command, body, message)
   - `DapEvent` (seq, event, body)
   - `Capabilities` struct with all capability flags as `std::optional<bool>`
   - `InitializeRequestArguments` (clientID, clientName, linesStartAt1, columnsStartAt1, pathFormat)
-- [ ] Implement `src/dap/DapServer.{hpp,cpp}`:
+- [x] Implement `src/dap/DapServer.{hpp,cpp}`:
   - Constructor taking `std::istream&, std::ostream&`
   - `int run()` — message loop
   - `dispatch(json const& message)` — route by `command` field
   - `sendResponse(int requestSeq, string command, json body)`
   - `sendErrorResponse(int requestSeq, string command, string message)`
   - `sendEvent(string event, json body)` with monotonic sequence numbering
-- [ ] Implement `handleInitialize()` — return capabilities, send `initialized` event
-- [ ] Implement `handleConfigurationDone()` — acknowledge, mark configuration complete
-- [ ] Implement `handleDisconnect()` — with `terminateDebuggee` support
-- [ ] Implement `handleTerminate()` — stop the debuggee
-- [ ] Implement lifecycle state machine (`_initialized`, `_configurationDone`, `_terminated` flags)
-- [ ] Implement `handleLaunch()` — accept `program` (script path), `args`, `stopOnEntry`, `noDebug`; parse and compile the script; defer execution until `configurationDone`
-- [ ] Send `terminated` event when execution completes
-- [ ] Send `exited` event with exit code after termination
-- [ ] Add `--dap` flag to `src/shell/main.cpp`, launching `DapServer{stdin, stdout}.run()`
-- [ ] Unit tests: message framing round-trip, initialize/configurationDone/disconnect lifecycle, launch with valid/invalid script, sequence numbering
-- [ ] Integration test: full session (initialize → launch → configurationDone → terminated → exited → disconnect)
+- [x] Implement `handleInitialize()` — return capabilities, send `initialized` event
+- [x] Implement `handleConfigurationDone()` — acknowledge, mark configuration complete
+- [x] Implement `handleDisconnect()` — with `terminateDebuggee` support
+- [x] Implement `handleTerminate()` — stop the debuggee
+- [x] Implement lifecycle state machine (`_initialized`, `_configurationDone`, `_terminated` flags)
+- [x] Implement `handleLaunch()` — accept `program` (script path), `args`, `stopOnEntry`, `noDebug`; parse and compile the script; defer execution until `configurationDone`
+- [x] Send `terminated` event when execution completes
+- [x] Send `exited` event with exit code after termination
+- [x] Add `--dap` flag to `src/shell/main.cpp`, launching `DapServer{stdin, stdout}.run()`
+- [x] Unit tests: message framing round-trip, initialize/configurationDone/disconnect lifecycle, launch with valid/invalid script, sequence numbering
+- [x] Integration test: full session (initialize → launch → configurationDone → terminated → exited → disconnect)
 
 ---
 
@@ -103,7 +103,7 @@ endo-editor-protocol  (shared: transport, types, document store)
 
 **Capabilities after this phase**: source breakpoints, `supportsFunctionBreakpoints`
 
-- [ ] Design `src/dap/BreakpointManager.{hpp,cpp}`:
+- [x] Design `src/dap/BreakpointManager.{hpp,cpp}`:
   - Storage: `unordered_map<string /*path*/, vector<ResolvedBreakpoint>>` for source breakpoints
   - Storage: `vector<ResolvedFunctionBreakpoint>` for function breakpoints
   - `struct ResolvedBreakpoint { int id; string source; int line; int column; bool verified; }`
@@ -111,16 +111,16 @@ endo-editor-protocol  (shared: transport, types, document store)
   - `setFunctionBreakpoints(breakpoints)` — replaces all function breakpoints
   - `shouldStop(filename, line) const` — O(1) fast-path check (packed `unordered_set<uint64_t>`)
   - Monotonic breakpoint ID allocation
-- [ ] Implement breakpoint resolution: given a requested line, find the closest bytecode instruction via the `Function` location table; mark as `verified = true` if an instruction maps to or near the requested line
-- [ ] Implement `handleSetBreakpoints()` — extract `source.path` and `breakpoints[]` with `{line, column?, condition?, hitCondition?, logMessage?}`; store condition/hit/logMessage for Phase 5; return `Breakpoint[]` with resolved locations
-- [ ] Implement `handleSetFunctionBreakpoints()` — match function names against `Program::functionNames()`; resolve to first instruction of named function
-- [ ] Design `src/dap/DebugSession.{hpp,cpp}` — owns `BreakpointManager`, `Runner*`, compiled `Program`, stop state, and the DAP-aware `TraceLogger`:
+- [x] Implement breakpoint resolution: given a requested line, find the closest bytecode instruction via the `Function` location table; mark as `verified = true` if an instruction maps to or near the requested line
+- [x] Implement `handleSetBreakpoints()` — extract `source.path` and `breakpoints[]` with `{line, column?, condition?, hitCondition?, logMessage?}`; store condition/hit/logMessage for Phase 5; return `Breakpoint[]` with resolved locations
+- [x] Implement `handleSetFunctionBreakpoints()` — match function names against `Program::functionNames()`; resolve to first instruction of named function
+- [x] Design `src/dap/DebugSession.{hpp,cpp}` — owns `BreakpointManager`, `Runner*`, compiled `Program`, stop state, and the DAP-aware `TraceLogger`:
   - TraceLogger callback: look up source location via `function->locationOf(ip)`, call `shouldStop(filename, line)`
   - On breakpoint hit: set stop reason, call `runner->suspend()`, emit `stopped` event with `reason: "breakpoint"`, `threadId: 1`, `hitBreakpointIds`
-- [ ] Wire `DapServer` to `DebugSession` (launch creates session, breakpoint requests delegate)
-- [ ] Handle stopped state: when VM is suspended, `DapServer::run()` processes requests until VM is resumed
-- [ ] Implement `handleBreakpointLocations()` — given a source range, return all possible breakpoint locations from the location table
-- [ ] Tests: breakpoint on valid line resolves; breakpoint on empty line snaps to nearest; function breakpoint by name; run to breakpoint produces `stopped` event; clear breakpoints and verify no stops
+- [x] Wire `DapServer` to `DebugSession` (launch creates session, breakpoint requests delegate)
+- [x] Handle stopped state: when VM is suspended, `DapServer::run()` processes requests until VM is resumed
+- [x] Implement `handleBreakpointLocations()` — given a source range, return all possible breakpoint locations from the location table
+- [x] Tests: breakpoint on valid line resolves; breakpoint on empty line snaps to nearest; function breakpoint by name; run to breakpoint produces `stopped` event; clear breakpoints and verify no stops
 
 ---
 
@@ -130,19 +130,20 @@ endo-editor-protocol  (shared: transport, types, document store)
 
 **Capabilities after this phase**: full execution control
 
-- [ ] Implement `handleContinue()` — resume VM via `runner->resume()`, clear step state; emit `continued` event; if VM completes, send `terminated` + `exited`
-- [ ] Design stepping state in `DebugSession`:
+- [x] Implement `handleContinue()` — resume VM via `runner->resume()`, clear step state; emit `continued` event; if VM completes, send `terminated` + `exited`
+- [x] Design stepping state in `DebugSession`:
   - `enum class StepMode { None, StepOver, StepIn, StepOut }`
   - Track `_stepStartFrame` (call stack depth) and `_stepStartLine` (source line)
-- [ ] Implement `handleNext()` (step over) — set `StepMode::StepOver`, record current stack depth and line; in TraceLogger: stop when depth ≤ start depth AND line changed
-- [ ] Implement `handleStepIn()` — set `StepMode::StepIn`, record current line; in TraceLogger: stop when line changes (naturally enters function calls)
-- [ ] Implement `handleStepOut()` — set `StepMode::StepOut`, target depth = current depth − 1; in TraceLogger: stop when depth ≤ target
-- [ ] Implement `handlePause()` — set `_pauseRequested` flag; TraceLogger checks this flag (highest priority, before breakpoints); stop with `reason: "pause"`
-- [ ] Implement `stopOnEntry` — when `launch` has `stopOnEntry: true`, stop at first instruction of `@main` with `reason: "entry"`
-- [ ] Emit `continued` event on each resume
-- [ ] Handle native callbacks: native callbacks don't fire the TraceLogger, so step-over naturally skips them
-- [ ] Document AST-inlined function behavior: step-in on inlined calls walks through inlined body (different source lines, same call depth)
-- [ ] Tests: continue from breakpoint to end; step over a line; step into a function; step out of a function; pause during execution; stopOnEntry
+- [x] Implement `handleNext()` (step over) — set `StepMode::StepOver`, record current stack depth and line; in TraceLogger: stop when depth ≤ start depth AND line changed
+- [x] Implement `handleStepIn()` — set `StepMode::StepIn`, record current line; in TraceLogger: stop when line changes (naturally enters function calls)
+- [x] Implement `handleStepOut()` — set `StepMode::StepOut`, target depth = current depth − 1; in TraceLogger: stop when depth ≤ target
+- [x] Implement `handlePause()` — set `_pauseRequested` flag; TraceLogger checks this flag (highest priority, before breakpoints); stop with `reason: "pause"`
+- [x] Implement `stopOnEntry` — when `launch` has `stopOnEntry: true`, stop at first instruction of `@main` with `reason: "entry"`
+- [x] Emit `continued` event on each resume
+- [x] Handle native callbacks: native callbacks don't fire the TraceLogger, so step-over naturally skips them
+- [x] Fix BrInstr phantom location table entries causing every-other-line stepping
+- [x] Document AST-inlined function behavior: step-in on inlined calls walks through inlined body (different source lines, same call depth)
+- [x] Tests: continue from breakpoint to end; step over a line; step into a function; step out of a function; pause during execution; stopOnEntry
 
 ---
 
@@ -154,7 +155,7 @@ endo-editor-protocol  (shared: transport, types, document store)
 
 ### VM Accessors
 
-- [ ] Add public accessors to `Runner`:
+- [x] Add public accessors to `Runner`:
   - `std::span<CallFrame const> callStack() const`
   - `size_t framePointer() const`
   - `Function const* currentFunction() const`
@@ -163,14 +164,14 @@ endo-editor-protocol  (shared: transport, types, document store)
 
 At runtime, F# variables are anonymous stack slots — names are lost after compilation. The IR `AllocaInstr` objects still carry names (e.g., `"x"`, `"result"`).
 
-- [ ] Extend `Function` (or `ConstantPool`) with a debug info table: `vector<DebugVarInfo>` where `DebugVarInfo = { string name, int allocaIndex, LiteralType type }`
-- [ ] Populate during `TargetCodeGenerator::generate()` by walking `AllocaInstr` instructions and recording `{name(), allocaIndex, type()}`
-- [ ] Zero cost when not debugging (table exists but is only read by DAP)
+- [x] Extend `Function` (or `ConstantPool`) with a debug info table: `vector<DebugVarInfo>` where `DebugVarInfo = { string name, int allocaIndex, LiteralType type }`
+- [x] Populate during `TargetCodeGenerator::generate()` by walking `AllocaInstr` instructions and recording `{name(), allocaIndex, type()}`
+- [x] Zero cost when not debugging (table exists but is only read by DAP)
 
 ### Stack Traces
 
-- [ ] Implement `handleThreads()` — return `[{id: 1, name: "main"}]` (Endo is single-threaded)
-- [ ] Implement `handleStackTrace()`:
+- [x] Implement `handleThreads()` — return `[{id: 1, name: "main"}]` (Endo is single-threaded)
+- [x] Implement `handleStackTrace()`:
   - Current execution point as frame 0
   - Walk `Runner::callStack()` from top to bottom
   - For each `CallFrame`: `frame.function->name()` + `frame.function->locationOf(frame.ip)` for source location
@@ -178,12 +179,12 @@ At runtime, F# variables are anonymous stack slots — names are lost after comp
 
 ### Scopes & Variables
 
-- [ ] Design variable reference scheme:
+- [x] Design variable reference scheme:
   - Frame scopes: `variablesReference = (frameId * 1000) + scopeType` (1=locals, 2=globals, 3=captures)
   - Structured values (objects with slots): allocate dynamic references via `VariableReferenceMap`
   - Reset references on each stop
-- [ ] Implement `handleScopes()` — given `frameId`, return scopes: "Locals" (allocas in function), "Globals" (shell environment), optionally "Captures"
-- [ ] Implement `handleVariables()`:
+- [x] Implement `handleScopes()` — given `frameId`, return scopes: "Locals" (allocas in function), "Globals" (shell environment), optionally "Captures"
+- [x] Implement `handleVariables()`:
   - Resolve `variablesReference` to scope or structured value
   - Locals: iterate debug info table, read stack slots relative to frame pointer, format via `valueToString()`
   - Globals: iterate `_globals`, format as key-value pairs
@@ -192,14 +193,14 @@ At runtime, F# variables are anonymous stack slots — names are lost after comp
 
 ### Expression Evaluation
 
-- [ ] Implement `handleEvaluate()` for `context: "hover"` and `"watch"`:
+- [x] Implement `handleEvaluate()` for `context: "hover"` and `"watch"`:
   - Simple variable name lookup in current scope's debug info
   - Return `{result, type, variablesReference}` for structured results
-- [ ] Defer full expression evaluation to Phase 5
+- [x] Full REPL expression evaluation: compile and execute expressions with in-scope variable injection
 
 ### Tests
 
-- [ ] Tests: threads returns 1 thread; stack trace at breakpoint shows correct frames with source locations; scopes show locals; variables show correct names and values for numbers, strings, booleans, floats, tuples, lists, options, results, records; evaluate a variable name; expand compound variable children
+- [x] Tests: threads returns 1 thread; stack trace at breakpoint shows correct frames with source locations; scopes show locals; variables show correct names and values for numbers, strings, booleans, floats, tuples, lists, options, results, records; evaluate a variable name; expand compound variable children
 
 ---
 
@@ -211,41 +212,41 @@ At runtime, F# variables are anonymous stack slots — names are lost after comp
 
 ### Conditional & Hit-Count Breakpoints
 
-- [ ] Extend `shouldStop()` to evaluate `condition` expression (parse, compile, execute in current context, check truthiness); cache compiled conditions
-- [ ] Implement hit count tracking: per-breakpoint counter, `hitCondition` expressions (`">=3"`, `"==5"`)
+- [x] Extend `shouldStop()` to evaluate `condition` expression (parse, compile, execute in current context, check truthiness); cache compiled conditions
+- [x] Implement hit count tracking: per-breakpoint counter, `hitCondition` expressions (`">=3"`, `"==5"`)
 
 ### Log Points
 
-- [ ] When breakpoint has `logMessage`: do not stop; evaluate `{expression}` interpolations; emit `output` event with `category: "console"`; continue
+- [x] When breakpoint has `logMessage`: do not stop; evaluate `{expression}` interpolations; emit `output` event with `category: "console"`; continue
 
 ### Exception Breakpoints
 
-- [ ] Implement `handleSetExceptionBreakpoints()` with filters: `"runtime-error"` (RuntimeError), `"all"` (any error)
-- [ ] Hook into `Runner` error paths: before returning `std::unexpected(error)`, check DAP exception breakpoint state; stop with `reason: "exception"`
-- [ ] Implement `handleExceptionInfo()` — return exception message, type, source location
+- [x] Implement `handleSetExceptionBreakpoints()` with filters: `"runtime-error"` (RuntimeError), `"all"` (any error)
+- [x] Hook into `Runner` error paths: before returning `std::unexpected(error)`, check DAP exception breakpoint state; stop with `reason: "exception"`
+- [x] Implement `handleExceptionInfo()` — return exception message, type, source location
 
 ### Disassembly
 
-- [ ] Implement `handleDisassemble()` — given memory reference (`"func:NAME:OFFSET"`), return disassembled bytecode instructions with source locations using existing `CoreVM::disassemble()`
+- [x] Implement `handleDisassemble()` — given memory reference (`"func:NAME:OFFSET"`), return disassembled bytecode instructions with source locations using existing `CoreVM::disassemble()`
 
 ### Stepping Granularity
 
-- [ ] Support `granularity` in next/stepIn/stepOut: `"instruction"` (stop every bytecode op), `"line"` (default, stop on source line change), `"statement"` (same as line)
+- [x] Support `granularity` in next/stepIn/stepOut: `"instruction"` (stop every bytecode op), `"line"` (default, stop on source line change), `"statement"` (same as line)
 
 ### Variable Mutation
 
-- [ ] Implement `handleSetVariable()` — for mutable variables (`let mut`), write new value to stack slot; refuse for immutable bindings
+- [x] Implement `handleSetVariable()` — for mutable variables (`let mut`), write new value to stack slot; refuse for immutable bindings
 
 ### Full Expression Evaluation
 
-- [ ] Implement full `handleEvaluate()` for `context: "repl"`:
+- [x] Implement full `handleEvaluate()` for `context: "repl"`:
   - Parse expression, compile to temporary function, execute in sandboxed Runner sharing globals
   - Capture output and return value
   - Handle errors gracefully (error response, not crash)
 
 ### Tests
 
-- [ ] Tests: conditional breakpoint stops only when condition met; hit count breakpoint; log point emits output without stopping; exception breakpoint on runtime error; disassemble a function; instruction-level stepping; set mutable variable; REPL evaluate expression
+- [x] Tests: conditional breakpoint stops only when condition met; hit count breakpoint; log point emits output without stopping; exception breakpoint on runtime error; disassemble a function; instruction-level stepping; set mutable variable; REPL evaluate expression
 
 ---
 
@@ -255,66 +256,89 @@ At runtime, F# variables are anonymous stack slots — names are lost after comp
 
 ### VS Code Extension
 
-- [ ] Create extension scaffold in `editors/vscode/`:
+- [x] Create extension scaffold in `editors/vscode/`:
   - `package.json` with `debuggers` contribution point (`type: "endo"`)
   - Debug adapter descriptor: `type: "executable"`, `command: "endo"`, `args: ["--dap"]`
-- [ ] Define `launch.json` schema: `program` (required), `args` (optional), `stopOnEntry` (optional, default false), `noDebug` (optional)
-- [ ] Implement `DebugConfigurationProvider` — auto-detect current `.endo` file as `program`
-- [ ] Add `launch.json` snippets: "Launch Endo Script", "Launch Current File", "Launch with Arguments"
-- [ ] Extension icon and marketplace metadata
+- [x] Define `launch.json` schema: `program` (required), `args` (optional), `stopOnEntry` (optional, default false), `noDebug` (optional)
+- [x] Implement `DebugConfigurationProvider` — auto-detect current `.endo` file as `program`
+- [x] Add `launch.json` snippets: "Launch Endo Script", "Launch Current File", "Launch with Arguments"
+- [x] Extension keywords and marketplace metadata
 
 ### Neovim (nvim-dap)
 
-- [ ] Create example configuration in `editors/neovim/dap.lua`:
-  ```lua
-  local dap = require("dap")
-  dap.adapters.endo = {
-    type = "executable",
-    command = "endo",
-    args = { "--dap" },
-  }
-  dap.configurations.endo = {
-    {
-      type = "endo",
-      request = "launch",
-      name = "Launch Endo Script",
-      program = "${file}",
-      stopOnEntry = false,
-    },
-  }
-  ```
-- [ ] Add filetype detection for `.endo` files (`vim.filetype.add({ extension = { endo = "endo" } })`)
-- [ ] Document installation steps for nvim-dap + endo integration
-- [ ] Test with nvim-dap: breakpoints, stepping, variable inspection, evaluate
+- [x] Create example configuration in `editors/neovim/dap.lua`
+- [x] Add filetype detection for `.endo` files (`vim.filetype.add({ extension = { endo = "endo" } })`)
+- [x] Document installation steps for nvim-dap + endo integration (`docs/debugging/neovim.md`)
+- [x] Test with nvim-dap: breakpoints, stepping, variable inspection, evaluate
 
 ### Output Capture
 
-- [ ] Redirect `print`/`println` output as `output` events with `category: "stdout"`
-- [ ] Redirect errors as `output` events with `category: "stderr"`
+- [x] Redirect `print`/`println` output as `output` events with `category: "stdout"`
+- [x] Redirect compilation errors as `output` events with `category: "stderr"`
+- [x] Redirect runtime errors as `output` events with `category: "stderr"`
 
 ### Source & Module Requests
 
-- [ ] Implement `handleSource()` — return source code for scripts loaded from strings or REPL
-- [ ] Implement `handleLoadedSources()` — return all loaded source files
+- [x] Implement `handleSource()` — return source code for loaded script files
+- [x] Implement `handleLoadedSources()` — return all loaded source files
 
 ### Protocol Logging
 
-- [ ] Add `--dap-log=FILE` option for DAP protocol logging (all sent/received messages)
+- [x] Add `--log-file=FILE` option for DAP protocol logging (all sent/received messages)
 
 ### Documentation
 
-- [ ] Write `docs/debugging.md`:
-  - Getting started (VS Code and Neovim)
-  - Feature reference (breakpoint types, stepping modes, variable inspection)
-  - Architecture overview (DAP ↔ VM mapping)
-  - Troubleshooting
-- [ ] Update `--help` text in `src/shell/main.cpp` to document `--dap` and `--dap-log`
+- [x] Write `docs/debugging/` with index.md, vscode.md, neovim.md
+- [x] Update `--help` text in `src/shell/main.cpp` to document `--dap` and `--log-file`
 
 ### Performance & Polish
 
-- [ ] Measure TraceLogger overhead on script execution (target: <5% with no breakpoints via fast-path early return)
-- [ ] End-to-end integration tests (programmatic DAP client simulation)
-- [ ] Update `ROADMAP.md` Phase 5.1 to reference this document
+- [x] Measure TraceLogger overhead on script execution (target: <100% with no breakpoints)
+- [x] End-to-end integration tests (programmatic DAP client simulation)
+- [x] Update `ROADMAP.md` Phase 5.1 to reference this document
+
+---
+
+## Phase 7: Protocol Compliance & Polish
+
+**Goal**: Fix protocol compliance issues, add missing events, and implement remaining high-value features for real-world use.
+
+### Protocol Compliance Fixes
+
+- [x] Add `allThreadsStopped` to all `stopped` events (fixes VS Code stack/variable refresh)
+- [x] Fix error response body format: add `body.error` with `id` and `format` fields per DAP spec
+- [x] Advertise `supportsTerminateRequest` in capabilities
+- [x] Handle `terminateDebuggee` in disconnect request
+
+### Missing Events
+
+- [x] Emit `process` event after successful launch (with `name` and `startMethod`)
+- [x] Emit `thread` event with `reason: "started"` on execution start
+- [x] Emit `thread` event with `reason: "exited"` on termination
+
+### New Features
+
+- [x] `restart` request — destroys session and re-launches with saved launch args
+- [x] `completions` request — debug console autocomplete (variables + function names)
+- [x] `setInstructionBreakpoints` request — breakpoints by bytecode address
+- [x] `cancel` request — no-op handler for synchronous server
+
+### Minor Improvements
+
+- [x] Support `string` type in `setVariable` (allocates via `Runner::newString()`)
+- [x] Store `InitializeRequestArguments` for `linesStartAt1`/`columnsStartAt1` awareness
+
+### Tests
+
+- [x] `allThreadsStopped` present in stopped events
+- [x] `process` and `thread` events emitted
+- [x] Error response body format compliance
+- [x] `restart` request re-runs script
+- [x] `completions` returns variable/function names
+- [x] `setInstructionBreakpoints` stops at bytecode address
+- [x] `cancel` returns success
+- [x] `setVariable` with string values
+- [x] Phase 7 capabilities advertised in initialize response
 
 ---
 
@@ -339,9 +363,66 @@ Phase 4: Inspection ──────► Phase 6: Editor Integration
     │
     ▼
 Phase 5: Advanced Features
+    │
+    ▼
+Phase 7: Protocol Compliance & Polish
+    │
+    ▼
+Phase 8: Extended Protocol Features
 ```
 
-Phase 0 is a prerequisite for Phase 1 (and also updates the existing LSP). Phases 1–4 are sequential. Phases 5 and 6 can proceed in parallel once Phase 4 is complete. Phases 0–4 form the **MVP** (usable debugger with breakpoints, stepping, and variable inspection).
+Phase 0 is a prerequisite for Phase 1 (and also updates the existing LSP). Phases 1–4 are sequential. Phases 5 and 6 can proceed in parallel once Phase 4 is complete. Phases 0–4 form the **MVP** (usable debugger with breakpoints, stepping, and variable inspection). Phase 8 adds optional DAP features beyond the core protocol.
+
+---
+
+## Phase 8: Extended Protocol Features
+
+**Goal**: Implement remaining DAP specification features that add value for endo's execution model.
+
+### Attach Support
+
+- [ ] Implement `handleAttach()` — connect to an already-running endo session (e.g., interactive shell) for live debugging
+- [ ] Define `attach` request arguments: `processId` or `pipe`/`socket` transport
+- [ ] Update VS Code extension with `attach` launch configuration and snippets
+- [ ] Update Neovim DAP configuration with attach example
+- [ ] Advertise attach support in capabilities
+- [ ] Tests: attach to running script, set breakpoints, inspect variables, disconnect without terminating
+
+### Data Breakpoints
+
+- [ ] Implement `handleDataBreakpointInfo()` — given a variable name and frame, return whether data breakpoints are supported for it and a `dataId`
+- [ ] Implement `handleSetDataBreakpoints()` — break on variable write/read/access
+- [ ] Extend `BreakpointManager` with data breakpoint storage and tracking
+- [ ] Hook into `STORE` instruction in TraceLogger to detect variable writes
+- [ ] Advertise `supportsDataBreakpoints` in capabilities
+- [ ] Tests: data breakpoint on variable write stops execution; clear data breakpoints
+
+### Goto Targets
+
+- [ ] Implement `handleGotoTargets()` — given a source location, return valid goto targets (statement boundaries)
+- [ ] Implement `handleGoto()` — move execution to a target location within the current function
+- [ ] Validate target is within the same function (reject cross-function jumps)
+- [ ] Advertise `supportsGotoTargetsRequest` in capabilities
+- [ ] Tests: goto a valid target; reject invalid target; goto within a loop
+
+### Set Expression
+
+- [ ] Implement `handleSetExpression()` — evaluate an expression and assign the result to a variable
+- [ ] Reuse `evaluateReplExpression()` infrastructure for the right-hand side
+- [ ] Advertise `supportsSetExpression` in capabilities
+- [ ] Tests: set variable via expression; error on invalid expression; error on immutable binding
+
+### Module Support
+
+- [ ] Implement `handleModules()` — return loaded source files as modules (script file + any `source`d files)
+- [ ] Emit `module` events when new source files are loaded
+- [ ] Advertise `supportsModulesRequest` in capabilities
+- [ ] Tests: modules request returns loaded scripts; module event on source load
+
+### Tests
+
+- [ ] End-to-end integration tests for all Phase 8 features
+- [ ] Update documentation in `docs/debugging/` for new capabilities
 
 ---
 

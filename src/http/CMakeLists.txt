@@ -17,6 +17,7 @@ add_executable(test-endo-http
 target_link_libraries(test-endo-http endo-http Catch2::Catch2)
 add_test(NAME test-endo-http COMMAND test-endo-http)
 
-# Enable sanitizers
+# Enable sanitizers and clang-tidy
 enable_sanitizers(endo-http)
+enable_clang_tidy(endo-http)
 enable_sanitizers(test-endo-http)

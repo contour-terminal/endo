@@ -7,11 +7,11 @@
 namespace endo
 {
 
-TypeEnv::TypeEnv(): _parent(nullptr), _nextTypeVarId(0)
+TypeEnv::TypeEnv(): _parent(nullptr)
 {
 }
 
-TypeEnv::TypeEnv(TypeEnvPtr parent): _parent(std::move(parent)), _nextTypeVarId(0)
+TypeEnv::TypeEnv(TypeEnvPtr parent): _parent(std::move(parent))
 {
     // Inherit the type variable counter from parent to ensure uniqueness
     if (_parent)
@@ -158,7 +158,7 @@ std::vector<TypeVarId> TypeEnv::freeTypeVars() const
     return result;
 }
 
-TypeScheme TypeEnv::generalize(TypePtr type) const
+TypeScheme TypeEnv::generalize(TypePtr const& type) const
 {
     // Get free type variables in the type
     std::vector<TypeVarId> typeVars;

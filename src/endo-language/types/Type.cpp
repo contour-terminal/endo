@@ -113,7 +113,7 @@ bool TypeScheme::operator==(TypeScheme const& other) const
     return *type == *other.type;
 }
 
-TypePtr TypeScheme::instantiate(std::function<TypeVarId()> freshVarGen) const
+TypePtr TypeScheme::instantiate(std::function<TypeVarId()> const& freshVarGen) const
 {
     if (quantifiedVars.empty())
         return type;
@@ -145,6 +145,7 @@ TypePtr TypeScheme::instantiate(std::function<TypeVarId()> freshVarGen) const
         else if (auto* tup = t->asTuple())
         {
             std::vector<TypePtr> newElements;
+            newElements.reserve(tup->elementTypes.size());
             for (auto const& elem: tup->elementTypes)
                 newElements.push_back(substitute(elem));
             return types::tuple(std::move(newElements));
@@ -160,6 +161,7 @@ TypePtr TypeScheme::instantiate(std::function<TypeVarId()> freshVarGen) const
         else if (auto* rec = t->asRecord())
         {
             std::vector<RecordField> newFields;
+            newFields.reserve(rec->fields.size());
             for (auto const& field: rec->fields)
                 newFields.push_back({ field.name, substitute(field.type) });
             return types::record(rec->name, std::move(newFields));
@@ -327,7 +329,7 @@ std::string toString(Type const& type)
     {
         // Use lowercase letters for type variables: a, b, c, ...
         // For ids >= 26, use a1, b1, etc.
-        char letter = 'a' + static_cast<char>(tv->id % 26);
+        auto letter = static_cast<char>('a' + static_cast<int>(tv->id % 26));
         uint32_t suffix = tv->id / 26;
         if (suffix == 0)
             return std::string(1, letter);

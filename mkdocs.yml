@@ -106,6 +106,10 @@ nav:
     - Configuration: shell/configuration.md
     - Builtins: shell/builtins.md
     - Structured Output: shell/structured-output.md
+  - Debugging:
+    - Overview: debugging/index.md
+    - Neovim (nvim-dap): debugging/neovim.md
+    - VS Code: debugging/vscode.md
   - AI Agent:
     - Overview: agent/index.md
     - Configuration: agent/configuration.md

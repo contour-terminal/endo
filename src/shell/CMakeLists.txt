@@ -218,7 +218,7 @@ if(MSVC)
     target_sources(endo-bin PRIVATE endo.manifest)
 endif()
 set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
-target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
+target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp endo-dap)
 enable_static_linking(endo-bin)
 
 add_executable(test-endo-shell
@@ -278,7 +278,9 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/definitions/
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/completers)
 
-# Enable sanitizers for all targets
+# Enable sanitizers and clang-tidy for all targets
 enable_sanitizers(endo-shell)
 enable_sanitizers(endo-bin)
+enable_clang_tidy(endo-shell)
+enable_clang_tidy(endo-bin)
 enable_sanitizers(test-endo-shell)

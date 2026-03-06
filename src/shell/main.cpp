@@ -17,6 +17,8 @@
 #include <string>
 #include <string_view>
 
+#include <dap/DapServer.hpp>
+
 #if defined(_WIN32)
     #include <windows.h>
 #endif
@@ -50,6 +52,8 @@ Options:
   --check            Compile without executing (syntax and semantic check)
   --unused-detection Enable unused-value detection for F# bindings
   --lsp              Launch Language Server Protocol server over stdio
+  --dap              Launch Debug Adapter Protocol server over stdio
+  --log-file=FILE    Log protocol messages to FILE (e.g. DAP I/O)
   --log=<PATTERNS>   Enable logging for categories matching PATTERNS
                      (comma-separated, supports wildcards)
   --log-list         List all available log categories and exit
@@ -128,6 +132,7 @@ struct ParsedArgs
     bool showVersion = false;
     bool showLogList = false;
     bool launchLsp = false;
+    bool launchDap = false;
     bool checkOnly = false;
     bool unusedDetection = false;
     std::string_view logPatterns;
@@ -136,6 +141,7 @@ struct ParsedArgs
     std::string_view scriptFile;
     std::vector<std::string_view> scriptArgs;  ///< Arguments after script file ($1, $2, ...)
     std::optional<std::string> agentTracePath; ///< Agent trace file path (nullopt = disabled).
+    std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
 };
 
 ParsedArgs parseArguments(std::span<char const* const> args)
@@ -162,6 +168,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.launchLsp = true;
         }
+        else if (arg == "--dap")
+        {
+            result.launchDap = true;
+        }
         else if (arg == "--check")
         {
             result.checkOnly = true;
@@ -177,6 +187,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg.starts_with("--agent-trace="))
         {
             result.agentTracePath = std::string(arg.substr(14));
+        }
+        else if (arg.starts_with("--log-file="))
+        {
+            result.logFile = std::string(arg.substr(11));
         }
         else if (arg.starts_with("--log="))
         {
@@ -280,7 +294,7 @@ int main(int argc, char const* argv[])
     setupWindowsUtf8();
 #endif
 
-    endo::CrashHandler::initialize(Version.data());
+    endo::CrashHandler::initialize(std::string(Version).c_str());
 
     auto const args = std::span(argv, static_cast<size_t>(argc));
     auto const programName = args.empty() ? "endo"sv : std::string_view(args[0]);
@@ -362,6 +376,15 @@ int main(int argc, char const* argv[])
     // Handle --lsp mode (launch LSP server over stdio)
     if (parsed.launchLsp)
         return endo::lsp::LspServer {}.run();
+
+    // Handle --dap mode (launch DAP server over stdio)
+    if (parsed.launchDap)
+    {
+        endo::dap::DapServer server;
+        if (parsed.logFile.has_value())
+            server.setLogFile(*parsed.logFile);
+        return server.run();
+    }
 
     // Validate --check requires -c or script file
     if (parsed.checkOnly && parsed.command.empty() && parsed.scriptFile.empty())

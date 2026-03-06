@@ -227,8 +227,8 @@ std::vector<std::pair<Constant*, BasicBlock*>> MatchInstr::cases() const
 
     for (auto const i: std::views::iota(0uz, caseCount))
     {
-        auto* label = static_cast<Constant*>(operand(2 + 2 * i + 0));
-        auto* code = static_cast<BasicBlock*>(operand(2 + 2 * i + 1));
+        auto* label = static_cast<Constant*>(operand(2 + (2 * i) + 0));
+        auto* code = static_cast<BasicBlock*>(operand(2 + (2 * i) + 1));
 
         out.emplace_back(label, code);
     }
@@ -369,7 +369,7 @@ std::unique_ptr<Instr> RegExpGroupInstr::clone()
 
 void RegExpGroupInstr::accept(InstructionVisitor& v)
 {
-    return v.visit(*this);
+    v.visit(*this);
 }
 
 // }}}
@@ -619,7 +619,7 @@ void VCmpGEInstr::accept(InstructionVisitor& v)
 
 // {{{ FunctionCallInstr
 FunctionCallInstr::FunctionCallInstr(IRFunction* callee,
-                                     std::vector<Value*> args,
+                                     const std::vector<Value*>& args,
                                      const std::string& name,
                                      LiteralType returnType):
     Instr(returnType, args, name), _callee(callee)
@@ -666,7 +666,7 @@ void FunctionRetInstr::accept(InstructionVisitor& v)
 
 // }}}
 // {{{ TailCallInstr
-TailCallInstr::TailCallInstr(IRFunction* callee, std::vector<Value*> args, const std::string& name):
+TailCallInstr::TailCallInstr(IRFunction* callee, const std::vector<Value*>& args, const std::string& name):
     Instr(LiteralType::Void, args, name), _callee(callee)
 {
 }

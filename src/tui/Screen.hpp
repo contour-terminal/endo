@@ -318,7 +318,7 @@ class Screen
     // Overlay state
     struct OverlayEntry
     {
-        Component* component;
+        Component* component = nullptr;
         Point position;
     };
 

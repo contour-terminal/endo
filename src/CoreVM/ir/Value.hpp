@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <CoreVM/CoreTypes.hpp>
 #include <CoreVM/enums.hpp>
 #include <CoreVM/util.hpp>
 
@@ -112,7 +113,7 @@ class ConstantArray: public Constant
   private:
     std::vector<Constant*> _elements;
 
-    LiteralType makeArrayType(LiteralType elementType);
+    static LiteralType makeArrayType(LiteralType elementType);
 };
 
 class IRBuiltinFunction: public Constant
@@ -166,8 +167,5 @@ using ConstantString = ConstantValue<std::string, LiteralType::String>;
 using ConstantIP = ConstantValue<util::IPAddress, LiteralType::IPAddress>;
 using ConstantCidr = ConstantValue<util::Cidr, LiteralType::Cidr>;
 using ConstantRegExp = ConstantValue<util::RegExp, LiteralType::RegExp>;
-
-// Forward declaration for tos() used by ConstantValue::to_string()
-std::string tos(LiteralType type);
 
 } // namespace CoreVM

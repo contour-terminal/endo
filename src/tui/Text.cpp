@@ -139,7 +139,7 @@ void Text::render(TerminalOutput& output, int startRow, int startCol, int width)
         switch (_align)
         {
             case TextAlign::Left: col = startCol; break;
-            case TextAlign::Center: col = startCol + (width - lineWidth) / 2; break;
+            case TextAlign::Center: col = startCol + ((width - lineWidth) / 2); break;
             case TextAlign::Right: col = startCol + width - lineWidth; break;
         }
 

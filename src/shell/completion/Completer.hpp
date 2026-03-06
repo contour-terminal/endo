@@ -73,7 +73,7 @@ class Completer
     /// @brief Returns the analyzed context for the current input.
     /// @param input The input line.
     /// @param cursorPosition The cursor byte offset.
-    [[nodiscard]] CompletionContext analyzeContext(std::string_view input, size_t cursorPosition) const;
+    [[nodiscard]] static CompletionContext analyzeContext(std::string_view input, size_t cursorPosition);
 
     /// @brief Takes and clears any errors from the last scripted completion execution.
     /// @return Formatted error messages, or empty if no scripted completer ran or no errors.

@@ -266,7 +266,7 @@ class Instr: public Value
     friend class BasicBlock;
 
   private:
-    BasicBlock* _basicBlock;
+    BasicBlock* _basicBlock = nullptr;
     std::vector<Value*> _operands;
     SourceLocation _sourceLocation;
 };
@@ -344,6 +344,7 @@ class RegExpGroupInstr: public Instr
 class LoadInstr: public Instr
 {
   public:
+    // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     LoadInstr(Value* variable, const std::string& name): Instr(variable->type(), { variable }, name) {}
 
     [[nodiscard]] Value* variable() const { return operand(0); }
@@ -373,7 +374,7 @@ class FunctionCallInstr: public Instr
 {
   public:
     FunctionCallInstr(IRFunction* callee,
-                      std::vector<Value*> args,
+                      const std::vector<Value*>& args,
                       const std::string& name,
                       LiteralType returnType = LiteralType::Void);
 
@@ -406,7 +407,7 @@ class FunctionRetInstr: public Instr
 class TailCallInstr: public Instr
 {
   public:
-    TailCallInstr(IRFunction* callee, std::vector<Value*> args, const std::string& name);
+    TailCallInstr(IRFunction* callee, const std::vector<Value*>& args, const std::string& name);
 
     [[nodiscard]] IRFunction* callee() const { return _callee; }
 
@@ -881,7 +882,7 @@ class IsSameInstruction: public InstructionVisitor
 
   private:
     Instr* _other;
-    bool _result;
+    bool _result = false;
 
   protected:
     explicit IsSameInstruction(Instr* a);

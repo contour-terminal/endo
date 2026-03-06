@@ -13,3 +13,4 @@ add_library(endo-editor-protocol STATIC
 target_link_libraries(endo-editor-protocol PUBLIC endo nlohmann_json::nlohmann_json)
 target_include_directories(endo-editor-protocol PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 enable_sanitizers(endo-editor-protocol)
+enable_clang_tidy(endo-editor-protocol)

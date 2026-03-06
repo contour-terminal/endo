@@ -60,7 +60,7 @@ class PassManager
 class IRFunction: public Constant
 {
   public:
-    IRFunction(const std::string& name, IRProgram* parent);
+    IRFunction(const std::string& name, IRProgram* program);
     ~IRFunction() override;
 
     IRFunction(IRFunction&&) = delete;
@@ -72,7 +72,7 @@ class IRFunction: public Constant
 
     void setParent(IRProgram* prog) { _program = prog; }
 
-    void dump();
+    void dump() const;
     [[nodiscard]] std::string dumpToString() const;
 
     [[nodiscard]] bool empty() const noexcept { return _blocks.empty(); }
@@ -96,7 +96,7 @@ class IRFunction: public Constant
     template <typename TheFunctionPass, typename... Args>
     size_t transform(Args&&... args)
     {
-        return TheFunctionPass(std::forward(args)...).run(this);
+        return TheFunctionPass(std::forward<Args>(args)...).run(this);
     }
 
     void verify();
@@ -119,7 +119,7 @@ class IRProgram
     IRProgram();
     ~IRProgram();
 
-    void dump();
+    void dump() const;
     [[nodiscard]] std::string dumpToString() const;
 
     ConstantBoolean* getBoolean(bool literal) { return literal ? &_trueLiteral : &_falseLiteral; }
@@ -175,7 +175,7 @@ class IRProgram
         size_t count = 0;
         for (IRFunction* fn: functions())
         {
-            count += fn->transform<TheFunctionPass>(args...);
+            count += fn->transform<TheFunctionPass>(std::forward<Args>(args)...);
         }
         return count;
     }
@@ -185,7 +185,7 @@ class IRProgram
     {
         std::string name;
         std::vector<FieldInfo> fields;
-        uint16_t assignedId;
+        uint16_t assignedId = 0;
         uint16_t slotCount = 0;
     };
 
@@ -201,7 +201,7 @@ class IRProgram
     {
         std::string name;
         std::vector<VariantInfo> variants;
-        uint16_t assignedId;
+        uint16_t assignedId = 0;
     };
 
     void addCustomSumType(CustomSumType def) { _customSumTypes.push_back(std::move(def)); }
@@ -387,13 +387,17 @@ class IRBuilder
     Value* createS2F(Value* rhs, const std::string& name = "");
 
     // calls
-    Instr* createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name = "");
+    Instr* createCallFunction(IRBuiltinFunction* callee,
+                              const std::vector<Value*>& args,
+                              std::string name = "");
     FunctionCallInstr* createFunctionCall(IRFunction* callee,
-                                          std::vector<Value*> args,
+                                          const std::vector<Value*>& args,
                                           const std::string& name = "",
                                           LiteralType returnType = LiteralType::Void);
     FunctionRetInstr* createFunctionRet(Value* result, const std::string& name = "");
-    TailCallInstr* createTailCall(IRFunction* callee, std::vector<Value*> args, const std::string& name = "");
+    TailCallInstr* createTailCall(IRFunction* callee,
+                                  const std::vector<Value*>& args,
+                                  const std::string& name = "");
 
     // termination instructions
     Instr* createRet(Value* result);

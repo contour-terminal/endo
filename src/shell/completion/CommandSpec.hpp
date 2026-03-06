@@ -8,7 +8,7 @@ namespace endo
 {
 
 /// @brief What kind of value an option expects.
-enum class OptionValueKind
+enum class OptionValueKind // NOLINT(performance-enum-size)
 {
     None,         ///< Boolean flag, no value.
     String,       ///< Free-form string value.
@@ -18,7 +18,7 @@ enum class OptionValueKind
 };
 
 /// @brief What kind of value a positional argument expects.
-enum class ArgKind
+enum class ArgKind // NOLINT(performance-enum-size)
 {
     Any,          ///< No special completion (free text).
     Path,         ///< File/directory path (delegates to FileCompleter).

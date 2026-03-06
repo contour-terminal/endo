@@ -22,13 +22,13 @@ struct OutputFieldSchema
 /// Configuration for how to parse command output.
 struct ParserConfig
 {
-    enum class Type
+    enum class Type // NOLINT(performance-enum-size)
     {
         Json,   ///< JSON-based parsing (NDJSON lines or JSON array)
         Fields, ///< Delimited fields (e.g., NUL-separated, space-separated)
     };
 
-    enum class Format
+    enum class Format // NOLINT(performance-enum-size)
     {
         Lines, ///< One record per line (NDJSON or delimited)
         Array, ///< Single JSON array

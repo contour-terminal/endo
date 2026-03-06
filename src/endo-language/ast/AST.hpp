@@ -106,7 +106,7 @@ struct LiteralExpr final: Expr
 /// - Simple variables: $VAR
 /// - Braced variables: ${VAR}
 /// - Special variables: $?, $$, $!, $0-$9
-enum class VariableType
+enum class VariableType // NOLINT(performance-enum-size)
 {
     Named,        ///< Regular named variable: $VAR or ${VAR}
     ExitStatus,   ///< $? - Exit status of last command
@@ -150,7 +150,7 @@ struct TildeExpr final: Expr
 };
 
 /// Parameter expansion operations
-enum class ParamExpansionOp
+enum class ParamExpansionOp // NOLINT(performance-enum-size)
 {
     Length,            ///< ${#VAR} - string length
     DefaultValue,      ///< ${VAR:-default} - use default if unset or empty
@@ -240,7 +240,7 @@ struct FStringExpr final: Expr
 // ============================================================================
 
 /// Arithmetic operators for $((expr)) expansion
-enum class ArithOp
+enum class ArithOp // NOLINT(performance-enum-size)
 {
     Add,    // +
     Sub,    // -
@@ -336,7 +336,7 @@ struct OutputRedirect final: public Expr
 
     /// Constructor for fd duplication: `N>&M`
     OutputRedirect(std::unique_ptr<FileDescriptor> source, std::unique_ptr<FileDescriptor> target):
-        source(std::move(source)), target(std::move(target)), append(false)
+        source(std::move(source)), target(std::move(target))
     {
     }
 
@@ -350,7 +350,7 @@ struct OutputRedirect final: public Expr
 };
 
 /// Mode for process substitution.
-enum class ProcessSubstMode
+enum class ProcessSubstMode // NOLINT(performance-enum-size)
 {
     Read,  ///< <(command) - read from command output
     Write, ///< >(command) - write to command input
@@ -660,7 +660,7 @@ struct DataSourceFieldDef
 ///   curl api/users | from-json as { name: string; age: int } |> filter (_.age > 25)
 struct DataSourceExpr final: public Expr
 {
-    enum class Kind
+    enum class Kind // NOLINT(performance-enum-size)
     {
         OpenJson, ///< Read JSON from file
         OpenCsv,  ///< Read CSV from file
@@ -668,7 +668,7 @@ struct DataSourceExpr final: public Expr
         FromCsv,  ///< Parse CSV from piped input
     };
 
-    Kind kind;
+    Kind kind {};
     std::unique_ptr<Expr> filePath;        ///< For open-*: file path expression
     std::unique_ptr<Statement> pipeSource; ///< For from-*: shell commands piped in (may be nullptr for stdin)
 
@@ -1080,7 +1080,7 @@ struct MutAssignExpr final: public Expr
 };
 
 /// Binary operators for F# style expressions
-enum class BinaryOp
+enum class BinaryOp // NOLINT(performance-enum-size)
 {
     // Arithmetic
     Add, // +
@@ -1104,7 +1104,7 @@ enum class BinaryOp
 };
 
 /// Unary operators for F# style expressions
-enum class UnaryOp
+enum class UnaryOp // NOLINT(performance-enum-size)
 {
     Neg, // -x
     Not, // !x
@@ -1129,7 +1129,7 @@ struct BinaryExpr final: public Expr
 };
 
 /// Composition direction: forward (`>>`) or backward (`<<`).
-enum class CompositionOp
+enum class CompositionOp // NOLINT(performance-enum-size)
 {
     Forward,  ///< `f >> g` — apply f first, then g
     Backward, ///< `g << f` — apply f first, then g

@@ -394,7 +394,7 @@ void PersistentHistory::evictIfNeeded()
     {
         // Combine recency (index) and frequency for eviction scoring
         auto const age = static_cast<int64_t>(std::distance(_richEntries.begin(), it));
-        auto const score = static_cast<int64_t>(it->executionCount) * 1000 + age;
+        auto const score = (static_cast<int64_t>(it->executionCount) * 1000) + age;
         if (score < worstScore)
         {
             worstScore = score;

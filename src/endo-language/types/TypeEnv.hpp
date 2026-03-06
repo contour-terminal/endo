@@ -59,7 +59,7 @@ class TypeEnv: public std::enable_shared_from_this<TypeEnv>
     /// Generalize a type to a type scheme.
     /// Type variables that are free in the type but not in the environment
     /// become universally quantified.
-    TypeScheme generalize(TypePtr type) const;
+    TypeScheme generalize(TypePtr const& type) const;
 
     /// Instantiate a type scheme with fresh type variables.
     /// Creates a new monomorphic type by replacing all quantified

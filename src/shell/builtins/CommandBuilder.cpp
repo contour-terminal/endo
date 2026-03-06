@@ -517,7 +517,7 @@ void Shell::applyRedirects(SpawnConfig& config)
 
 std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::string const& program) const
 {
-    auto const programPath = std::filesystem::path(program);
+    auto programPath = std::filesystem::path(program);
 
     // Absolute path or explicitly relative path (contains a directory separator).
     if (programPath.is_absolute() || program.contains('/')

@@ -11,9 +11,9 @@ namespace tui
 
 void LogPanel::addLog(LogLevel level, std::string message)
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     _entries.push_back(LogEntry { .level = level, .message = std::move(message) });
-    if (static_cast<int>(_entries.size()) > MaxEntries)
+    if (static_cast<int>(_entries.size()) > maxEntries)
         _entries.pop_front();
 
     // Reset scroll to bottom when new entries arrive
@@ -22,7 +22,7 @@ void LogPanel::addLog(LogLevel level, std::string message)
 
 void LogPanel::toggle()
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     _expanded = !_expanded;
     if (_expanded)
         _scrollOffset = 0; // Reset scroll when expanding
@@ -30,29 +30,29 @@ void LogPanel::toggle()
 
 auto LogPanel::isExpanded() const noexcept -> bool
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     return _expanded;
 }
 
 auto LogPanel::entryCount() const noexcept -> std::size_t
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     return _entries.size();
 }
 
 auto LogPanel::totalHeight() const noexcept -> int
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     if (!_expanded)
         return 1; // Just the header row
 
-    auto const visibleCount = std::min(static_cast<int>(_entries.size()), MaxVisibleExpanded);
+    auto const visibleCount = std::min(static_cast<int>(_entries.size()), maxVisibleExpanded);
     return 1 + std::max(visibleCount, 1); // Header + at least 1 row (empty or entries)
 }
 
 void LogPanel::render(TerminalOutput& output, int startRow, int cols)
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     auto const entrySize = static_cast<int>(_entries.size());
 
     // Header row: separator line with toggle symbol
@@ -93,8 +93,8 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
         return;
 
     // Render visible entries (newest first, with scroll offset)
-    auto const visibleCount = std::min(entrySize, MaxVisibleExpanded);
-    auto const maxScrollable = std::max(0, entrySize - MaxVisibleExpanded);
+    auto const visibleCount = std::min(entrySize, maxVisibleExpanded);
+    auto const maxScrollable = std::max(0, entrySize - maxVisibleExpanded);
     auto const clampedOffset = std::clamp(_scrollOffset, 0, maxScrollable);
 
     // Entries are stored oldest-first. We show newest-first.
@@ -166,7 +166,7 @@ auto LogPanel::handleClick(int /*x*/, int y, int panelStartRow) -> bool
     // Click on the header row toggles the panel
     if (y == panelStartRow)
     {
-        auto const lock = std::lock_guard(_mutex);
+        auto const lock = std::scoped_lock(_mutex);
         _expanded = !_expanded;
         if (_expanded)
             _scrollOffset = 0;
@@ -177,14 +177,14 @@ auto LogPanel::handleClick(int /*x*/, int y, int panelStartRow) -> bool
 
 void LogPanel::scrollUp()
 {
-    auto const lock = std::lock_guard(_mutex);
-    auto const maxScrollable = std::max(0, static_cast<int>(_entries.size()) - MaxVisibleExpanded);
+    auto const lock = std::scoped_lock(_mutex);
+    auto const maxScrollable = std::max(0, static_cast<int>(_entries.size()) - maxVisibleExpanded);
     _scrollOffset = std::min(_scrollOffset + 1, maxScrollable);
 }
 
 void LogPanel::scrollDown()
 {
-    auto const lock = std::lock_guard(_mutex);
+    auto const lock = std::scoped_lock(_mutex);
     _scrollOffset = std::max(0, _scrollOffset - 1);
 }
 

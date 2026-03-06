@@ -787,8 +787,8 @@ CoreVM::TypedObject* makeDateTimeFromEpoch(CoreVM::Runner* runner, int64_t epoch
 #endif
 
     auto* dt = runner->allocObject(CoreVM::BuiltinTypeId::DateTime);
-    dt->setSlot(0, static_cast<uint64_t>(tm.tm_year + 1900)); // year
-    dt->setSlot(1, static_cast<uint64_t>(tm.tm_mon + 1));     // month (1-12)
+    dt->setSlot(0, static_cast<uint64_t>(tm.tm_year) + 1900); // year
+    dt->setSlot(1, static_cast<uint64_t>(tm.tm_mon) + 1);     // month (1-12)
     dt->setSlot(2, static_cast<uint64_t>(tm.tm_mday));        // day
     dt->setSlot(3, static_cast<uint64_t>(tm.tm_hour));        // hour
     dt->setSlot(4, static_cast<uint64_t>(tm.tm_min));         // minute
@@ -1167,7 +1167,7 @@ namespace
 
     struct JsonPathSegment
     {
-        enum class Kind
+        enum class Kind : uint8_t
         {
             Key,
             Array,
@@ -1260,7 +1260,7 @@ void jsonQuery(CoreVM::Params& args)
             walkJson(doc, segments, 0, results);
         }
     }
-    catch (...)
+    catch (...) // NOLINT(bugprone-empty-catch)
     {
         // On parse error or any exception: return empty list
     }

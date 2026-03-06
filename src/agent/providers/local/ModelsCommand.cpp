@@ -136,7 +136,7 @@ namespace
 
         // Render using MarkdownRenderer with compact table style.
         auto output = tui::TerminalOutput {};
-        (void) output.initialize();
+        (void) output.initialize(); // NOLINT(bugprone-unused-return-value)
         auto renderer = tui::MarkdownRenderer(output);
         renderer.setTableRenderStyle(tui::TableRenderStyle::Compact);
         renderer.setMaxWidth(output.columns());

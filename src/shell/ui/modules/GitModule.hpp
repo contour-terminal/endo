@@ -38,7 +38,7 @@ class GitModule final: public PromptModule
 
   private:
     /// @brief TTL for git info cache.
-    static constexpr auto CacheTtl = std::chrono::seconds(3);
+    static constexpr auto _cacheTtl = std::chrono::seconds(3); // NOLINT(readability-identifier-naming)
 
     /// @brief Refreshes the cache if the CWD changed or the TTL expired.
     /// @param cwd The current working directory.

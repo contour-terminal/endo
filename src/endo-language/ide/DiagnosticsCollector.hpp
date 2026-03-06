@@ -11,7 +11,7 @@ namespace endo
 {
 
 /// @brief Diagnostic severity levels (matching LSP specification).
-enum class DiagnosticSeverity : int
+enum class DiagnosticSeverity : int // NOLINT(performance-enum-size)
 {
     Error = 1,
     Warning = 2,

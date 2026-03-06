@@ -123,7 +123,7 @@ bool FileCompleter::canHandle(CompletionContextType type) const
            || type == CompletionContextType::Redirect;
 }
 
-std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
+std::filesystem::path FileCompleter::expandTilde(std::string_view path)
 {
     if (path.empty() || path[0] != '~')
         return std::filesystem::path(path);
@@ -220,7 +220,7 @@ bool FileCompleter::isHidden(std::string_view name)
 
 std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path const& dir,
                                                          std::string_view prefix,
-                                                         std::string_view pathPrefix) const
+                                                         std::string_view pathPrefix)
 {
     std::vector<CompletionItem> results;
     std::error_code ec;
@@ -273,7 +273,7 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         }
 
         int baseScore = isDir ? 80 : 50; // Directories get slightly higher priority
-        int score;
+        int score = 0;
         std::vector<size_t> matchPositions;
 
         if (isPrefixMatch)

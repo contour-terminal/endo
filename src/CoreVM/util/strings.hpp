@@ -35,7 +35,7 @@ inline bool endsWith(const std::string& str, const std::string& prefix)
 template <typename Container>
 std::string join(const Container& list,
                  const std::string& separator,
-                 std::string (std::remove_pointer<typename Container::value_type>::type::*mapfn)() const)
+                 std::string (std::remove_pointer_t<typename Container::value_type>::*mapfn)() const)
 {
     std::stringstream sstr;
     int i = 0;
@@ -45,7 +45,7 @@ std::string join(const Container& list,
         {
             sstr << separator;
         }
-        if constexpr (std::is_pointer<typename Container::value_type>::value)
+        if constexpr (std::is_pointer_v<typename Container::value_type>)
         {
             sstr << (item->*mapfn)();
         }
@@ -70,8 +70,7 @@ std::string join(const Container& list,
 template <typename Container>
 std::string join(const Container& list,
                  const std::string& separator,
-                 const std::string& (std::remove_pointer<typename Container::value_type>::type::*mapfn)()
-                     const)
+                 const std::string& (std::remove_pointer_t<typename Container::value_type>::*mapfn)() const)
 {
     std::stringstream sstr;
     int i = 0;
@@ -81,7 +80,7 @@ std::string join(const Container& list,
         {
             sstr << separator;
         }
-        if constexpr (std::is_pointer<typename Container::value_type>::value)
+        if constexpr (std::is_pointer_v<typename Container::value_type>)
         {
             sstr << (item->*mapfn)();
         }

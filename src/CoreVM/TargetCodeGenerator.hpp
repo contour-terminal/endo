@@ -57,7 +57,7 @@ class TargetCodeGenerator: public InstructionVisitor
     void emitBinary(Instr& instr, Opcode opcode);
     void emitUnary(Instr& instr, Opcode opcode);
 
-    Operand getConstantInt(Value* value);
+    static Operand getConstantInt(Value* value);
 
     size_t getInstructionPointer() const { return _code.size(); }
 

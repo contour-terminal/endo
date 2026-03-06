@@ -146,6 +146,7 @@ if(ENDO_TESTING)
     add_test(NAME test-endo-language COMMAND test-endo-language)
 
     enable_sanitizers(endo)
+    enable_clang_tidy(endo)
     enable_sanitizers(test-endo-language)
 endif()
 

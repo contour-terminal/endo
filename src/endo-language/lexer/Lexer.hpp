@@ -14,7 +14,7 @@
 namespace endo
 {
 
-enum class Token
+enum class Token // NOLINT(performance-enum-size)
 {
     Invalid,
 
@@ -141,7 +141,7 @@ enum class Token
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
 };
 
-enum class BuiltinFunction
+enum class BuiltinFunction // NOLINT(performance-enum-size)
 {
     Exit,
     Cd,
@@ -364,10 +364,13 @@ class Lexer
     }
 
     /// @brief Pushes back a token with its source location preserved.
-    void pushBackToken(Token token, std::string literal, SourceLocationRange location)
+    void pushBackToken(Token token,
+                       std::string literal,
+                       SourceLocationRange location) // NOLINT(performance-unnecessary-value-param)
     {
         _pushedBackTokens.push_back(_currentToken);
-        _currentToken = TokenInfo { .token = token, .literal = std::move(literal), .location = location };
+        _currentToken =
+            TokenInfo { .token = token, .literal = std::move(literal), .location = std::move(location) };
     }
 
     /// Enables or disables comment trivia collection.
@@ -548,7 +551,7 @@ struct std::formatter<endo::LineColumn>: std::formatter<std::string>
 template <>
 struct std::formatter<endo::SourceLocation>: std::formatter<std::string>
 {
-    auto format(const endo::SourceLocation location, format_context& ctx) const -> format_context::iterator
+    auto format(const endo::SourceLocation& location, format_context& ctx) const -> format_context::iterator
     {
         return formatter<std::string>::format(
             std::format("{}:{}:{}", location.name, location.line, location.column), ctx);
@@ -558,7 +561,7 @@ struct std::formatter<endo::SourceLocation>: std::formatter<std::string>
 template <>
 struct std::formatter<endo::SourceLocationRange>: std::formatter<std::string>
 {
-    auto format(const endo::SourceLocationRange range, format_context& ctx) const -> format_context::iterator
+    auto format(const endo::SourceLocationRange& range, format_context& ctx) const -> format_context::iterator
     {
         auto lc = [](endo::LineColumn const& v) {
             return std::to_string(v.line) + ":" + std::to_string(v.column);
@@ -585,7 +588,7 @@ struct std::formatter<endo::TokenInfo>
         return ctx.begin();
     }
 
-    auto format(endo::TokenInfo const& info, format_context& ctx) const -> format_context::iterator
+    static auto format(endo::TokenInfo const& info, format_context& ctx) -> format_context::iterator
     {
         auto lc = [](endo::LineColumn const& v) {
             return std::to_string(v.line) + ":" + std::to_string(v.column);

@@ -29,10 +29,10 @@ class Wakeup
     Wakeup& operator=(Wakeup&&) = delete;
 
     /// @brief Signals the wakeup, unblocking any thread waiting on it.
-    void signal();
+    void signal() const;
 
     /// @brief Resets the signaled state (called after draining).
-    void reset();
+    void reset() const;
 
     /// @brief Returns the platform-native handle for poll()/WaitForMultipleObjects().
     [[nodiscard]] auto nativeHandle() const noexcept -> NativeHandle;

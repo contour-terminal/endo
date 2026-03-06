@@ -111,7 +111,7 @@ class BasicBlock: public Value
     [[nodiscard]] std::vector<BasicBlock*> dominators();
     [[nodiscard]] std::vector<BasicBlock*> immediateDominators();
 
-    void dump();
+    void dump() const;
     [[nodiscard]] std::string dumpToString() const;
 
     void verify();

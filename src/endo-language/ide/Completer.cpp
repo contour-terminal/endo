@@ -19,7 +19,7 @@ namespace
     {
         if (prefix.empty())
             return true;
-        return candidateText.size() >= prefix.size() && candidateText.substr(0, prefix.size()) == prefix;
+        return candidateText.starts_with(prefix);
     }
 
     /// @brief Filters candidates by prefix match.
@@ -76,6 +76,7 @@ DocumentRecordInfo collectRecordInfo(std::string const& source)
         if (auto const* recordDef = dynamic_cast<ast::RecordTypeDefStmt const*>(stmt))
         {
             std::vector<RecordFieldInfo> fields;
+            fields.reserve(recordDef->fields.size());
             for (auto const& field: recordDef->fields)
                 fields.push_back(RecordFieldInfo { .name = field.name, .typeName = toString(field.type) });
             result.recordFields[recordDef->name] = std::move(fields);

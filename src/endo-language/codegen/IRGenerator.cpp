@@ -22,7 +22,7 @@
 
 // {{{ trace macros
 // clang-format off
-#if 0 // defined(TRACE_PARSER)
+#if defined(TRACE_PARSER)
     #define TRACE_SCOPE(message) ScopedLogger _logger { message }
     #define TRACE(message, ...) do { ScopedLogger::write(::std::format(message, __VA_ARGS__)); } while (0)
 #else
@@ -236,7 +236,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     // These are registered as FSharpFunction entries with body=nullptr and builtinHOF set,
     // which leverages existing partial application and pipeline infrastructure.
     {
-        auto registerHOF = [&](std::string name,
+        auto registerHOF = [&](std::string const& name,
                                std::vector<std::string> params,
                                std::string hofName,
                                ResultKind resultKind) {
@@ -1177,7 +1177,10 @@ CoreVM::Value* IRGenerator::createCallableObject(FSharpFunction const& func, std
             capStorage = func.capturedBindings.at(capName);
         auto* capValue = _builder.createLoad(capStorage, "cap." + capName + ".load");
         auto* slotIdx = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(1 + i)));
-        obj = _builder.createObjSetSlot(obj, slotIdx, capValue, funcName + ".callable.cap." + capName);
+        auto slotName = funcName;
+        slotName += ".callable.cap.";
+        slotName += capName;
+        obj = _builder.createObjSetSlot(obj, slotIdx, capValue, slotName);
     }
 
     annotateObjectTypeId(obj, callableTypeId);
@@ -3327,7 +3330,6 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     TRACE_SCOPE("generatePrintCall");
 
     // The print argument is never in tail position — save and clear.
-    auto const savedTailPos = _inTailPosition;
     _inTailPosition = false;
 
     // Evaluate the argument
@@ -3368,9 +3370,6 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
-    // Look up descriptor for arity validation (only for builtins not overridden by user functions)
-    auto const* desc = _sema.builtins().lookupCall(name);
-
     // --- IR instruction builtins (no native callback needed) ---
 
     if (name == "string_length")
@@ -4772,7 +4771,7 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
         innerName = ident->name;
     else
     {
-        innerFn->accept(*this);
+        innerFn->accept(*this); // NOLINT(clang-analyzer-core.CallAndMessage)
         if (!_result)
             return;
         if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
@@ -4788,7 +4787,7 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
         outerName = ident->name;
     else
     {
-        outerFn->accept(*this);
+        outerFn->accept(*this); // NOLINT(clang-analyzer-core.CallAndMessage)
         if (!_result)
             return;
         if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
@@ -7539,7 +7538,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             annotateListElementLiteralType(list, *commonType);
 
         // Replace variadic args with the built list
-        std::vector<CoreVM::Value*> finalArgs(args.begin(), args.begin() + fixedCount);
+        std::vector<CoreVM::Value*> finalArgs(args.begin(),
+                                              args.begin() + static_cast<ptrdiff_t>(fixedCount));
         finalArgs.push_back(list);
         args = std::move(finalArgs);
     }
@@ -7706,8 +7706,11 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
         slot.dispatchIndex = static_cast<int>(i);
         for (auto const& param: fn->parameters)
         {
-            auto* alloca =
-                createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual." + fnName + "." + param);
+            auto allocaName = std::string("mutual.");
+            allocaName += fnName;
+            allocaName += '.';
+            allocaName += param;
+            auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, allocaName);
             slot.paramAllocas.push_back(alloca);
         }
         ctx.functions.push_back(std::move(slot));
@@ -7729,6 +7732,7 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
 
     // Create body blocks for each function
     std::vector<CoreVM::BasicBlock*> bodyBlocks;
+    bodyBlocks.reserve(func->mutualGroup.size());
     for (auto const& fn: func->mutualGroup)
         bodyBlocks.push_back(_builder.createBlock("mutual.body." + fn));
 
@@ -9736,6 +9740,7 @@ void IRGenerator::visit(ast::LazyExpr const& node)
 
     // Compute deterministic capture ordering (sorted alphabetically)
     std::vector<std::string> captureOrder;
+    captureOrder.reserve(freeVars.size());
     for (auto const& [name, _]: freeVars)
         captureOrder.push_back(name);
     std::ranges::sort(captureOrder);
@@ -10399,6 +10404,7 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     if (_persistentState)
     {
         std::vector<RecordFieldInfo> fieldInfos;
+        fieldInfos.reserve(node.fields.size());
         for (auto const& field: node.fields)
             fieldInfos.push_back(RecordFieldInfo { .name = field.name, .typeName = toString(field.type) });
         _persistentState->recordTypeFields[node.name] = std::move(fieldInfos);
@@ -10426,6 +10432,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
     {
         // Try to resolve by field names
         std::vector<std::string> fieldNames;
+        fieldNames.reserve(node.fields.size());
         for (auto const& field: node.fields)
             fieldNames.push_back(field.name);
         typeInfo = _sema.types().resolveRecordByFields(fieldNames);

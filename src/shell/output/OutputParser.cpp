@@ -74,8 +74,9 @@ namespace
                         {
                             value = std::stoll(obj[key].get<std::string>());
                         }
-                        catch (...)
+                        catch (...) // NOLINT(bugprone-empty-catch)
                         {
+                            // Intentionally ignored: non-numeric string defaults to 0.
                         }
                     }
                 }
@@ -149,8 +150,9 @@ namespace
                     if (!value.empty())
                         numVal = std::stoll(value);
                 }
-                catch (...)
+                catch (...) // NOLINT(bugprone-empty-catch)
                 {
+                    // Intentionally ignored: non-numeric string defaults to 0.
                 }
                 record->setSlot(static_cast<uint8_t>(i), static_cast<uint64_t>(numVal));
             }
@@ -185,7 +187,7 @@ CoreVM::TypedObject* OutputParser::parseJson(CoreVM::Runner& runner,
                 }
             }
         }
-        catch (nlohmann::json::parse_error const&)
+        catch (nlohmann::json::parse_error const&) // NOLINT(bugprone-empty-catch)
         {
             // Return empty list on parse failure
         }
@@ -206,7 +208,7 @@ CoreVM::TypedObject* OutputParser::parseJson(CoreVM::Runner& runner,
                 if (obj.is_object())
                     records.push_back(createRecordFromJson(runner, obj, variant));
             }
-            catch (nlohmann::json::parse_error const&)
+            catch (nlohmann::json::parse_error const&) // NOLINT(bugprone-empty-catch)
             {
                 // Skip malformed lines
             }

@@ -361,8 +361,8 @@ class InputField: public Component
     int _lastClickColumn = -1;
     int _clickCount = 0; ///< 1=single, 2=double, 3=triple
 
-    static constexpr auto DoubleClickTimeout = std::chrono::milliseconds(400);
-    static constexpr int DoubleClickTolerance = 2; ///< Max distance in cells for multi-click
+    static constexpr auto doubleClickTimeout = std::chrono::milliseconds(400);
+    static constexpr int doubleClickTolerance = 2; ///< Max distance in cells for multi-click
 
     // Clipboard callback
     ClipboardCallback _clipboardCallback;
@@ -380,7 +380,7 @@ class InputField: public Component
 
     std::vector<UndoState> _undoStack;
     std::vector<UndoState> _redoStack;
-    static constexpr std::size_t MaxUndoHistory = 100;
+    static constexpr std::size_t maxUndoHistory = 100;
 
     // History
     std::vector<std::string> _history;
@@ -391,7 +391,7 @@ class InputField: public Component
     // Kill ring (Emacs-style)
     std::vector<std::string> _killRing;
     std::size_t _killRingIndex = 0;
-    static constexpr std::size_t MaxKillRing = 16;
+    static constexpr std::size_t maxKillRing = 16;
     bool _lastWasKill = false; ///< Whether the last action was a kill (for kill ring appending).
 
     /// @brief Dispatches a KeyEvent to the appropriate editing operation.

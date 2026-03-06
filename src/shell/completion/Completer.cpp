@@ -103,7 +103,7 @@ CompletionConfig const& Completer::config() const
     return _config;
 }
 
-CompletionContext Completer::analyzeContext(std::string_view input, size_t cursorPosition) const
+CompletionContext Completer::analyzeContext(std::string_view input, size_t cursorPosition)
 {
     return CompletionContextAnalyzer::analyze(input, cursorPosition);
 }

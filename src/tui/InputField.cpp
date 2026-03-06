@@ -1181,7 +1181,7 @@ void InputField::pushKillRing(std::string text)
     else
     {
         _killRing.push_back(std::move(text));
-        if (_killRing.size() > MaxKillRing)
+        if (_killRing.size() > maxKillRing)
             _killRing.erase(_killRing.begin());
     }
 }
@@ -1764,7 +1764,7 @@ void InputField::saveUndoState()
     _undoStack.push_back(UndoState { .buffer = _buffer, .cursor = _cursor });
 
     // Limit undo history size
-    if (_undoStack.size() > MaxUndoHistory)
+    if (_undoStack.size() > maxUndoHistory)
         _undoStack.erase(_undoStack.begin());
 }
 
@@ -1893,9 +1893,9 @@ auto InputField::detectClickCount(int line, int column) -> int
     auto const elapsed = now - _lastClickTime;
 
     // Check if this is a continuation of multi-click sequence
-    bool const withinTimeout = elapsed < DoubleClickTimeout;
+    bool const withinTimeout = elapsed < doubleClickTimeout;
     bool const nearLastClick =
-        std::abs(line - _lastClickLine) <= 0 && std::abs(column - _lastClickColumn) <= DoubleClickTolerance;
+        std::abs(line - _lastClickLine) <= 0 && std::abs(column - _lastClickColumn) <= doubleClickTolerance;
 
     if (withinTimeout && nearLastClick)
     {

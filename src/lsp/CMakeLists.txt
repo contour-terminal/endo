@@ -50,6 +50,7 @@ add_executable(test-endo-lsp
 target_link_libraries(test-endo-lsp endo-lsp Catch2::Catch2)
 add_test(NAME test-endo-lsp COMMAND test-endo-lsp)
 
-# Enable sanitizers for all targets
+# Enable sanitizers and clang-tidy for all targets
 enable_sanitizers(endo-lsp)
+enable_clang_tidy(endo-lsp)
 enable_sanitizers(test-endo-lsp)

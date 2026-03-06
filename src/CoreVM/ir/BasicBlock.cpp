@@ -173,11 +173,6 @@ void BasicBlock::merge_back(BasicBlock* bb)
 {
     assert(getTerminator() == nullptr);
 
-#if 0
-  for (const std::unique_ptr<Instr>& instr : bb->_code) {
-    push_back(instr->clone());
-  }
-#else
     for (std::unique_ptr<Instr>& instr: bb->_code)
     {
         instr->setParent(this);
@@ -201,7 +196,6 @@ void BasicBlock::merge_back(BasicBlock* bb)
         unlinkSuccessor(succ);
     }
     bb->getFunction()->erase(bb);
-#endif
 }
 
 void BasicBlock::moveAfter(const BasicBlock* otherBB)
@@ -219,7 +213,7 @@ bool BasicBlock::isAfter(const BasicBlock* otherBB) const
     return _function->isAfter(this, otherBB);
 }
 
-void BasicBlock::dump()
+void BasicBlock::dump() const
 {
     std::cerr << dumpToString();
 }

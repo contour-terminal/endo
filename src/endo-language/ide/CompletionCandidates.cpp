@@ -473,9 +473,13 @@ std::vector<CompletionCandidate> symbolCandidates(std::vector<SymbolDefinitionIn
     for (auto const& sym: symbols)
     {
         auto kind = sym.isFunction ? CompletionKind::Function : CompletionKind::Variable;
-        auto description = sym.isFunction  ? formatFunctionDescription(sym)
-                           : sym.isMutable ? std::string("mutable value")
-                                           : std::string("value");
+        std::string description;
+        if (sym.isFunction)
+            description = formatFunctionDescription(sym);
+        else if (sym.isMutable)
+            description = "mutable value";
+        else
+            description = "value";
 
         // Build detail from symbol info
         std::string detail;

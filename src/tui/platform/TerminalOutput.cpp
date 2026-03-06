@@ -479,9 +479,9 @@ void TerminalOutput::updateDimensions()
 void TerminalOutput::appendSgr(Style const& style)
 {
     // Compute effective underline style
-    auto const effectiveUnderline = style.underlineStyle != UnderlineStyle::None
-                                        ? style.underlineStyle
-                                        : (style.underline ? UnderlineStyle::Single : UnderlineStyle::None);
+    auto effectiveUnderline = style.underlineStyle;
+    if (effectiveUnderline == UnderlineStyle::None && style.underline)
+        effectiveUnderline = UnderlineStyle::Single;
     auto const isDefaultUlColor = std::holds_alternative<std::monostate>(style.underlineColor);
 
     // Check if style is default (no attributes set)

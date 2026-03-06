@@ -267,12 +267,14 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::builtinFetch(CoreVM::Params& context)
 {
     auto const& url = context.getString(1);
     executeFetch(context, url, {}, _interactive);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::builtinFetchWithHeaders(CoreVM::Params& context)
 {
     auto const& url = context.getString(1);

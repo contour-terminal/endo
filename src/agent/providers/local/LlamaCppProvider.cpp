@@ -179,6 +179,7 @@ auto LlamaCppProvider::generate(std::span<ChatMessage const> messages,
 
     // Remove divergent suffix from KV cache.
     if (commonPrefix < _cachedTokens.size())
+        // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
         llama_kv_self_seq_rm(_ctx, 0, static_cast<int32_t>(commonPrefix), -1);
 
     // Decode only the new tokens (after the common prefix).
@@ -221,8 +222,6 @@ auto LlamaCppProvider::generate(std::span<ChatMessage const> messages,
     auto const stopStrings = local::stopTokens(effectiveChatTemplate());
     auto const maxGen = _config.maxTokens;
     auto const* vocab = llama_model_get_vocab(model);
-    auto const eosToken = llama_vocab_eos(vocab);
-
     // Set up sampler chain.
     auto* smpl = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(_config.topK));

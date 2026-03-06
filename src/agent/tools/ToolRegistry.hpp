@@ -50,7 +50,7 @@ class ToolRegistry
     /// If the tool execution fails, returns a ToolResult with the error message.
     /// @param call The tool call to execute.
     /// @return The tool result (never throws).
-    [[nodiscard]] auto execute(ToolCall const& call) -> ToolResult;
+    [[nodiscard]] auto execute(ToolCall const& call) const -> ToolResult;
 
     /// @brief Returns the number of registered tools.
     [[nodiscard]] auto size() const noexcept -> size_t;

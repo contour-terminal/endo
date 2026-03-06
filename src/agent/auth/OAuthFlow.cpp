@@ -86,8 +86,14 @@ namespace
     auto sha256(std::string_view input) -> std::array<uint8_t, 32>
     {
         // Initial hash values (first 32 bits of fractional parts of square roots of first 8 primes).
-        uint32_t h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
-        uint32_t h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+        uint32_t h0 = 0x6a09e667;
+        uint32_t h1 = 0xbb67ae85;
+        uint32_t h2 = 0x3c6ef372;
+        uint32_t h3 = 0xa54ff53a;
+        uint32_t h4 = 0x510e527f;
+        uint32_t h5 = 0x9b05688c;
+        uint32_t h6 = 0x1f83d9ab;
+        uint32_t h7 = 0x5be0cd19;
 
         // Pre-processing: pad message to multiple of 512 bits (64 bytes).
         auto const msgLen = input.size();
@@ -113,7 +119,7 @@ namespace
             // Copy block into first 16 words (big-endian).
             for (auto const i: std::views::iota(0, 16))
             {
-                auto const base = offset + static_cast<size_t>(i) * 4;
+                auto const base = offset + (static_cast<size_t>(i) * 4);
                 w[i] = (static_cast<uint32_t>(padded[base]) << 24)
                        | (static_cast<uint32_t>(padded[base + 1]) << 16)
                        | (static_cast<uint32_t>(padded[base + 2]) << 8)
@@ -129,8 +135,14 @@ namespace
             }
 
             // Initialize working variables.
-            auto a = h0, b = h1, c = h2, d = h3;
-            auto e = h4, f = h5, g = h6, h = h7;
+            auto a = h0;
+            auto b = h1;
+            auto c = h2;
+            auto d = h3;
+            auto e = h4;
+            auto f = h5;
+            auto g = h6;
+            auto h = h7;
 
             // Compression.
             for (auto const i: std::views::iota(0, 64))
@@ -383,7 +395,7 @@ auto exchangeCode(http::HttpClient const& httpClient,
         return OAuthCredentials {
             .accessToken = accessToken,
             .refreshToken = refreshToken,
-            .expiresAt = currentTimeMs() + expiresIn * 1000,
+            .expiresAt = currentTimeMs() + (expiresIn * 1000),
             .authMode = (mode == OAuthMode::ClaudeAi) ? "claude_ai" : "console",
         };
     }
@@ -428,7 +440,7 @@ auto refreshOAuthToken(http::HttpClient const& httpClient, std::string_view refr
         return OAuthCredentials {
             .accessToken = newAccessToken,
             .refreshToken = newRefreshToken,
-            .expiresAt = currentTimeMs() + expiresIn * 1000,
+            .expiresAt = currentTimeMs() + (expiresIn * 1000),
         };
     }
     catch (nlohmann::json::exception const& e)
@@ -486,7 +498,7 @@ auto exchangeGoogleCode(http::HttpClient const& httpClient,
         return OAuthCredentials {
             .accessToken = accessToken,
             .refreshToken = refreshToken,
-            .expiresAt = currentTimeMs() + expiresIn * 1000,
+            .expiresAt = currentTimeMs() + (expiresIn * 1000),
             .authMode = "google_ai",
         };
     }
@@ -537,7 +549,7 @@ auto refreshGoogleOAuthToken(http::HttpClient const& httpClient, std::string_vie
         return OAuthCredentials {
             .accessToken = newAccessToken,
             .refreshToken = newRefreshToken,
-            .expiresAt = currentTimeMs() + expiresIn * 1000,
+            .expiresAt = currentTimeMs() + (expiresIn * 1000),
             .authMode = "google_ai",
         };
     }
@@ -570,7 +582,7 @@ auto loadOAuthStore(std::filesystem::path const& path) -> OAuthStore
         store.gemini = parseCredentials(root["gemini"]);
         store.copilot = parseCredentials(root["copilot"]);
     }
-    catch (YAML::Exception const&)
+    catch (YAML::Exception const&) // NOLINT(bugprone-empty-catch)
     {
         // Malformed file — return empty store.
     }

@@ -13,7 +13,7 @@ namespace endo
 ///
 /// Platform-level errors (fork, pipe, file I/O) are in endo::platform::PlatformError.
 /// This enum retains shell-specific errors and platform-error aliases for backward compatibility.
-enum class ShellError
+enum class ShellError // NOLINT(performance-enum-size)
 {
     // Process errors (aliases for backward compat — prefer PlatformError for new code)
     ForkFailed,

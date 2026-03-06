@@ -161,7 +161,10 @@ namespace
                 auto text = msg.textContent();
                 if (!systemMerged && !effective.empty())
                 {
-                    text = effective + "\n" + text;
+                    auto merged = effective;
+                    merged += "\n";
+                    merged += text;
+                    text = std::move(merged);
                     systemMerged = true;
                 }
                 result += std::format("<start_of_turn>user\n{}<end_of_turn>\n", text);

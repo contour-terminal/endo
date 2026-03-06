@@ -826,9 +826,9 @@ Value* IRBuilder::createS2N(Value* rhs, const std::string& name)
         {
             return get(stoi(value->get()));
         }
-        catch (...)
+        catch (...) // NOLINT(bugprone-empty-catch)
         {
-            // fall through to default behaviour
+            // Intentionally empty: fall through to default behaviour
         }
     }
 
@@ -875,9 +875,9 @@ Value* IRBuilder::createS2F(Value* rhs, const std::string& name)
         {
             return getFloat(std::stod(value->get()));
         }
-        catch (...)
+        catch (...) // NOLINT(bugprone-empty-catch)
         {
-            // fall through to default behaviour
+            // Intentionally empty: fall through to default behaviour
         }
     }
 
@@ -886,18 +886,20 @@ Value* IRBuilder::createS2F(Value* rhs, const std::string& name)
 
 // }}}
 // {{{ call creators
-Instr* IRBuilder::createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name)
+Instr* IRBuilder::createCallFunction(IRBuiltinFunction* callee,
+                                     const std::vector<Value*>& args,
+                                     std::string name)
 {
-    return insert<CallInstr>(callee, std::move(args), makeName(std::move(name)));
+    return insert<CallInstr>(callee, args, makeName(std::move(name)));
 }
 
 FunctionCallInstr* IRBuilder::createFunctionCall(IRFunction* callee,
-                                                 std::vector<Value*> args,
+                                                 const std::vector<Value*>& args,
                                                  const std::string& name,
                                                  LiteralType returnType)
 {
-    return static_cast<FunctionCallInstr*>(insert<FunctionCallInstr>(
-        callee, std::move(args), makeName(name.empty() ? "ucall" : name), returnType));
+    return static_cast<FunctionCallInstr*>(
+        insert<FunctionCallInstr>(callee, args, makeName(name.empty() ? "ucall" : name), returnType));
 }
 
 FunctionRetInstr* IRBuilder::createFunctionRet(Value* result, const std::string& name)
@@ -907,11 +909,11 @@ FunctionRetInstr* IRBuilder::createFunctionRet(Value* result, const std::string&
 }
 
 TailCallInstr* IRBuilder::createTailCall(IRFunction* callee,
-                                         std::vector<Value*> args,
+                                         const std::vector<Value*>& args,
                                          const std::string& name)
 {
     return static_cast<TailCallInstr*>(
-        insert<TailCallInstr>(callee, std::move(args), makeName(name.empty() ? "utcall" : name)));
+        insert<TailCallInstr>(callee, args, makeName(name.empty() ? "utcall" : name)));
 }
 
 // }}}

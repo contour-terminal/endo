@@ -155,9 +155,7 @@ SuffixTree<K, V>::SuffixTree(): _root()
 }
 
 template <typename K, typename V>
-SuffixTree<K, V>::~SuffixTree()
-{
-}
+SuffixTree<K, V>::~SuffixTree() = default;
 
 template <typename K, typename V>
 void SuffixTree<K, V>::insert(const Key& key, const Value& value)
@@ -248,9 +246,7 @@ PrefixTree<K, V>::PrefixTree(): _root()
 }
 
 template <typename K, typename V>
-PrefixTree<K, V>::~PrefixTree()
-{
-}
+PrefixTree<K, V>::~PrefixTree() = default;
 
 template <typename K, typename V>
 void PrefixTree<K, V>::insert(const Key& key, const Value& value)
@@ -309,7 +305,7 @@ bool PrefixTree<K, V>::lookup(const Key& key, Value* value) const
 class IPAddress
 {
   public:
-    enum class Family : int
+    enum class Family : int // NOLINT(performance-enum-size)
     {
         V4 = AF_INET,
         V6 = AF_INET6,
@@ -668,7 +664,7 @@ struct hash<::CoreVM::util::IPAddress>
         auto const len = v.size();
         size_t h = 0;
         for (size_t i = 0; i < len; ++i)
-            h = h * 131 + bytes[i];
+            h = (h * 131) + bytes[i];
         return h;
     }
 };

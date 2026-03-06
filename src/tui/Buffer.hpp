@@ -155,9 +155,10 @@ class Buffer
     std::vector<ImageRegion> _images;
 
     /// Converts (row, col) to a linear index.
-    [[nodiscard]] size_t index(int row, int col) const noexcept
+    [[nodiscard]] std::size_t index(int row, int col) const noexcept
     {
-        return static_cast<size_t>(row) * static_cast<size_t>(_cols) + static_cast<size_t>(col);
+        return (static_cast<std::size_t>(row) * static_cast<std::size_t>(_cols))
+               + static_cast<std::size_t>(col);
     }
 };
 

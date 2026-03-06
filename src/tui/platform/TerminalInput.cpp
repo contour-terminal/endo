@@ -72,11 +72,6 @@ namespace
     constexpr auto EnableFocusTracking = "\033[?1004h"sv;
     constexpr auto DisableFocusTracking = "\033[?1004l"sv;
 
-    /// Writes a string_view to the terminal (stdout).
-    void writeToTerminal(std::string_view data)
-    {
-        safeWrite(STDOUT_FILENO, data.data(), data.size());
-    }
 } // namespace
 
 TerminalInput::TerminalInput() = default;
@@ -244,27 +239,32 @@ void TerminalInput::disableRawMode()
     }
 }
 
+void TerminalInput::writeProtocol(std::string_view data) const
+{
+    safeWrite(_outFd, data.data(), data.size());
+}
+
 void TerminalInput::enableProtocols()
 {
-    writeToTerminal(EnableCsiU);
-    writeToTerminal(EnableSGRMouse);             // SGR format for extended coordinates
-    writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
-    writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
-    writeToTerminal(EnableBracketedPaste);
-    writeToTerminal(EnableColorSchemeNotify); // Subscribe to dark/light mode changes
-    writeToTerminal(QueryColorScheme);        // Query current color scheme
-    writeToTerminal(EnableFocusTracking);     // Focus in/out notifications
+    writeProtocol(EnableCsiU);
+    writeProtocol(EnableSGRMouse);             // SGR format for extended coordinates
+    writeProtocol(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
+    writeProtocol(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
+    writeProtocol(EnableBracketedPaste);
+    writeProtocol(EnableColorSchemeNotify); // Subscribe to dark/light mode changes
+    writeProtocol(QueryColorScheme);        // Query current color scheme
+    writeProtocol(EnableFocusTracking);     // Focus in/out notifications
 }
 
 void TerminalInput::disableProtocols()
 {
-    writeToTerminal(DisableFocusTracking); // Disable in reverse order
-    writeToTerminal(DisableColorSchemeNotify);
-    writeToTerminal(DisableBracketedPaste);
-    writeToTerminal(DisableAnyMotionTracking);
-    writeToTerminal(DisablePassiveMouseTracking);
-    writeToTerminal(DisableSGRMouse);
-    writeToTerminal(DisableCsiU);
+    writeProtocol(DisableFocusTracking); // Disable in reverse order
+    writeProtocol(DisableColorSchemeNotify);
+    writeProtocol(DisableBracketedPaste);
+    writeProtocol(DisableAnyMotionTracking);
+    writeProtocol(DisablePassiveMouseTracking);
+    writeProtocol(DisableSGRMouse);
+    writeProtocol(DisableCsiU);
 }
 
 } // namespace tui

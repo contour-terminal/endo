@@ -13,11 +13,11 @@
 #include "DocumentHighlightProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
+#include "InlayHintProvider.hpp"
 #include "LspServer.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
-#include "InlayHintProvider.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
 #include <nlohmann/json.hpp>
@@ -2559,6 +2559,70 @@ TEST_CASE("InlayHint.let-in expression shows hints", "[lsp][inlayhint]")
             foundXHint = true;
     }
     CHECK(foundXHint);
+}
+
+TEST_CASE("InlayHint.record_binding_shows_type", "[lsp][inlayhint]")
+{
+    auto hints =
+        hintsForSource("type Person = { name: string; age: int }\nlet p = { name = \"Alice\"; age = 30 }");
+    // Should have a hint for `p` showing `: Person`
+    bool foundPersonHint = false;
+    for (auto const& h: hints)
+    {
+        if (h.label == ": Person")
+            foundPersonHint = true;
+    }
+    CHECK(foundPersonHint);
+}
+
+TEST_CASE("InlayHint.return_type_position_not_on_param", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let f p = p + 1");
+    // Should have a param hint for `p` and a return type hint
+    auto paramHints = std::vector<InlayHint> {};
+    auto returnHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+    {
+        if (h.paddingLeft)
+            returnHints.push_back(h);
+        else
+            paramHints.push_back(h);
+    }
+    REQUIRE(!paramHints.empty());
+    REQUIRE(!returnHints.empty());
+    // Return type hint position must differ from param hint position
+    CHECK((returnHints[0].position.line != paramHints[0].position.line
+           || returnHints[0].position.character != paramHints[0].position.character));
+}
+
+TEST_CASE("InlayHint.multiple_functions_same_param_name", "[lsp][inlayhint]")
+{
+    auto hints = hintsForSource("let f p = p + 1\nlet g p = p + 2");
+    // Should have at least 2 param hints (one per function's `p`)
+    auto paramHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+    {
+        if (!h.paddingLeft && h.label == ": int")
+            paramHints.push_back(h);
+    }
+    REQUIRE(paramHints.size() >= 2);
+    // They should be at different positions (different functions)
+    CHECK((paramHints[0].position.line != paramHints[1].position.line
+           || paramHints[0].position.character != paramHints[1].position.character));
+}
+
+TEST_CASE("InlayHint.field_access_return_type", "[lsp][inlayhint]")
+{
+    // Use a function where the return type is inferred from comparison
+    auto hints = hintsForSource("let is_adult x = x >= 18");
+    // Should have a return type hint `: bool`
+    bool foundBoolReturn = false;
+    for (auto const& h: hints)
+    {
+        if (h.label == ": bool" && h.paddingLeft)
+            foundBoolReturn = true;
+    }
+    CHECK(foundBoolReturn);
 }
 
 TEST_CASE("E2E.inlayHint request returns array", "[lsp][e2e][inlayhint]")

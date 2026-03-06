@@ -987,7 +987,7 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     // Create blocks
     auto* condBlock = _builder.createBlock("forall.cond");
     auto* bodyBlock = _builder.createBlock("forall.body");
-    auto* trueBlock = _builder.createBlock("forall.true");
+    auto* emptyTrueBlock = _builder.createBlock("forall.true");
     auto* falseBlock = _builder.createBlock("forall.false");
     auto* endBlock = _builder.createBlock("forall.end");
 
@@ -998,7 +998,8 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     auto* srcLoad = _builder.createLoad(srcStorage, "forall.src.load");
     auto* srcTag = _builder.createObjGetTag(srcLoad, "forall.src.tag");
     auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "forall.is_cons");
-    _builder.createCondBr(isCons, bodyBlock, trueBlock);
+    // isCons=true → bodyBlock (process element), isCons=false → emptyTrueBlock (vacuous truth)
+    _builder.createCondBr(isCons, bodyBlock, emptyTrueBlock); // NOLINT(readability-suspicious-call-argument)
 
     // Body: extract head, apply predicate
     _builder.setInsertPoint(bodyBlock);
@@ -1024,7 +1025,7 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     _builder.createCondBr(toBool(predResult), condBlock, falseBlock);
 
     // True: all elements matched
-    _builder.setInsertPoint(trueBlock);
+    _builder.setInsertPoint(emptyTrueBlock);
     _builder.createStore(resultStorage, _builder.getBoolean(true));
     _builder.createBr(endBlock);
 

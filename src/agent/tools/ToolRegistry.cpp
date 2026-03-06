@@ -62,7 +62,7 @@ auto ToolRegistry::definitions(ToolFilter const& filter) const -> std::vector<To
     return result;
 }
 
-auto ToolRegistry::execute(ToolCall const& call) -> ToolResult
+auto ToolRegistry::execute(ToolCall const& call) const -> ToolResult
 {
     auto* tool = findTool(call.name);
     if (!tool)

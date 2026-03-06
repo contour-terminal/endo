@@ -1037,7 +1037,7 @@ std::vector<QueryResult> GitQueryProvider::query(std::string_view queryTag)
     return {};
 }
 
-std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool remoteOnly) const
+std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool remoteOnly)
 {
     auto results = std::vector<QueryResult> {};
     auto seen = std::set<std::string> {};
@@ -1081,7 +1081,7 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryTags() const
+std::vector<QueryResult> GitQueryProvider::queryTags()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git tag --list 2>NUL");
@@ -1095,7 +1095,7 @@ std::vector<QueryResult> GitQueryProvider::queryTags() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryRemotes() const
+std::vector<QueryResult> GitQueryProvider::queryRemotes()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git remote 2>NUL");
@@ -1109,7 +1109,7 @@ std::vector<QueryResult> GitQueryProvider::queryRemotes() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryStashes() const
+std::vector<QueryResult> GitQueryProvider::queryStashes()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git stash list --format=\"%gd: %s\" 2>NUL");
@@ -1135,7 +1135,7 @@ std::vector<QueryResult> GitQueryProvider::queryStashes() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryRecentCommits() const
+std::vector<QueryResult> GitQueryProvider::queryRecentCommits()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git log --oneline -20 2>NUL");
@@ -1156,7 +1156,7 @@ std::vector<QueryResult> GitQueryProvider::queryRecentCommits() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryAliases() const
+std::vector<QueryResult> GitQueryProvider::queryAliases()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git config --get-regexp \"^alias\\.\" 2>NUL");
@@ -1181,7 +1181,7 @@ std::vector<QueryResult> GitQueryProvider::queryAliases() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryStatusFiles() const
+std::vector<QueryResult> GitQueryProvider::queryStatusFiles()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git status --porcelain 2>NUL");
@@ -1218,7 +1218,7 @@ std::vector<QueryResult> GitQueryProvider::queryStatusFiles() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryTrackedFiles() const
+std::vector<QueryResult> GitQueryProvider::queryTrackedFiles()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git ls-files 2>NUL");
@@ -1232,7 +1232,7 @@ std::vector<QueryResult> GitQueryProvider::queryTrackedFiles() const
     return results;
 }
 
-std::vector<QueryResult> GitQueryProvider::queryConfigKeys() const
+std::vector<QueryResult> GitQueryProvider::queryConfigKeys()
 {
 #if defined(_WIN32)
     auto const lines = runCommand("git config --list --name-only 2>NUL");

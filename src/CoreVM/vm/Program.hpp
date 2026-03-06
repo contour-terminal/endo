@@ -25,6 +25,14 @@ class Runtime;
 class IRBuiltinFunction;
 class IRFunction;
 
+/// Debug information for a single variable (alloca) within a function.
+struct DebugVarInfo
+{
+    std::string name;
+    size_t allocaIndex = 0;
+    LiteralType type = LiteralType::Void;
+};
+
 namespace diagnostics
 {
     class Report;
@@ -64,7 +72,7 @@ struct MatchCaseDef
 
     MatchCaseDef() = default;
 
-    explicit MatchCaseDef(uint64_t l): label(l), pc(0) {}
+    explicit MatchCaseDef(uint64_t l): label(l) {}
 
     MatchCaseDef(uint64_t l, uint64_t p): label(l), pc(p) {}
 };
@@ -84,7 +92,7 @@ class Match
     explicit Match(MatchDef def);
     virtual ~Match() = default;
 
-    const MatchDef& def() const { return _def; }
+    [[nodiscard]] const MatchDef& def() const { return _def; }
 
     virtual uint64_t evaluate(const CoreString* condition, Runner* env) const = 0;
 
@@ -209,6 +217,21 @@ class ConstantPool
         return functionId < _functionParamCounts.size() ? _functionParamCounts[functionId] : 0;
     }
 
+    /// Stores debug variable information for a compiled function.
+    void setFunctionDebugVarInfo(size_t functionId, std::vector<DebugVarInfo> info)
+    {
+        if (_functionDebugVarInfo.size() <= functionId)
+            _functionDebugVarInfo.resize(functionId + 1);
+        _functionDebugVarInfo[functionId] = std::move(info);
+    }
+
+    /// Returns debug variable information for a compiled function.
+    [[nodiscard]] std::vector<DebugVarInfo> const& getFunctionDebugVarInfo(size_t functionId) const
+    {
+        static std::vector<DebugVarInfo> const empty;
+        return functionId < _functionDebugVarInfo.size() ? _functionDebugVarInfo[functionId] : empty;
+    }
+
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
 
     [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const
@@ -243,6 +266,8 @@ class ConstantPool
     std::vector<MatchDef> _matchDefs;
     std::vector<std::string> _nativeFunctionSignatures;
 
+    std::vector<std::vector<DebugVarInfo>> _functionDebugVarInfo;
+
     TypeRegistry _typeRegistry;
 };
 
@@ -273,7 +298,7 @@ class Program
     auto matches() { return util::unbox(_matches); }
 
     std::vector<std::string> functionNames() const;
-    int indexOf(const Function* function) const noexcept;
+    int indexOf(const Function* that) const noexcept;
     Function* findFunction(const std::string& name) const noexcept;
 
     bool link(Runtime* runtime, diagnostics::Report* report);
@@ -282,7 +307,7 @@ class Program
     [[nodiscard]] std::string dumpToString() const;
 
     using Code = ConstantPool::Code;
-    Function* createFunction(const std::string& name, const Code& instructions);
+    Function* createFunction(const std::string& name, const Code& code);
 
   private:
     void setup();
@@ -304,7 +329,7 @@ class Program
 class Function
 {
   public:
-    Function(Program* program, std::string name, std::vector<Instruction> instructions);
+    Function(Program* program, std::string name, std::vector<Instruction> code);
     Function() = default;
     Function(const Function&) = delete;
     Function(Function&&) noexcept = default;
@@ -341,6 +366,15 @@ class Function
 
     void setLocationTable(std::vector<std::pair<size_t, SourceLocation>> table);
     [[nodiscard]] SourceLocation const& locationOf(size_t offset) const;
+
+    /// Returns the raw location table for diagnostics and testing.
+    [[nodiscard]] std::vector<std::pair<size_t, SourceLocation>> const* locationTable() const noexcept
+    {
+        return _locationTable.get();
+    }
+
+    /// Dumps the location table to stdout for debugging.
+    void dumpLocationTable() const noexcept;
 
   private:
     Program* _program {};

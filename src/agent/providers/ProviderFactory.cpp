@@ -87,7 +87,7 @@ namespace
             if (!refreshed.has_value())
                 return std::unexpected(refreshed.error());
 
-            auto const newAccessToken = refreshed->accessToken;
+            auto newAccessToken = refreshed->accessToken;
             store.claude = std::move(*refreshed);
             (void) saveOAuthStore(store);
             return newAccessToken;
@@ -184,7 +184,7 @@ namespace
             if (!refreshed.has_value())
                 return std::unexpected(refreshed.error());
 
-            auto const newAccessToken = refreshed->accessToken;
+            auto newAccessToken = refreshed->accessToken;
             store.gemini = std::move(*refreshed);
             (void) saveOAuthStore(store);
             return newAccessToken;

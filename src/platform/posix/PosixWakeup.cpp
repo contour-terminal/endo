@@ -37,7 +37,7 @@ Wakeup::~Wakeup()
         ::close(_writeFd);
 }
 
-void Wakeup::signal()
+void Wakeup::signal() const
 {
     auto const byte = char { 1 };
     while (::write(_writeFd, &byte, 1) == -1)
@@ -48,7 +48,7 @@ void Wakeup::signal()
     }
 }
 
-void Wakeup::reset()
+void Wakeup::reset() const
 {
     auto buf = char {};
     // Drain all bytes from the read end.

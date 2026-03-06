@@ -105,7 +105,7 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
                 }
             }
         }
-        catch (...)
+        catch (...) // NOLINT(bugprone-empty-catch)
         {
             // Tokenization failed, ignore
         }

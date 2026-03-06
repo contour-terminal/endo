@@ -221,6 +221,7 @@ add_executable(test-endo-agent
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
 
-# Enable sanitizers
+# Enable sanitizers and clang-tidy
 enable_sanitizers(endo-agent)
+enable_clang_tidy(endo-agent)
 enable_sanitizers(test-endo-agent)

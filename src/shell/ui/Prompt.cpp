@@ -332,7 +332,7 @@ void Prompt::addHistory(std::string entry)
         _promptComponent->addHistory(std::move(entry));
 }
 
-int Prompt::inputFd() const noexcept
+int Prompt::inputFd() noexcept
 {
     return STDIN_FILENO;
 }

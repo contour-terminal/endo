@@ -90,7 +90,7 @@ class McpClient
     platform::MessageQueue<McpNotification> _notificationQueue;
 
     /// @brief Background I/O loop — reads from transport, classifies, and routes messages.
-    void ioLoop(std::stop_token stopToken);
+    void ioLoop(std::stop_token const& stopToken);
 
     [[nodiscard]] auto sendRequest(std::string_view method, nlohmann::json params = nullptr)
         -> McpResult<nlohmann::json>;

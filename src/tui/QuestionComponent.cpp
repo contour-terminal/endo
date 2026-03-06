@@ -68,7 +68,7 @@ void QuestionComponent::render(Canvas& canvas)
         auto const nl = remaining.find('\n');
         auto const line = remaining.substr(0, nl);
         canvas.putString(row, 0, "\xe2\x94\x82", barStyle); // │
-        canvas.putString(row, LeftBarWidth + BarPadding, line, questionStyle);
+        canvas.putString(row, leftBarWidth + barPadding, line, questionStyle);
         ++row;
         if (nl == std::string_view::npos)
             break;
@@ -82,9 +82,9 @@ void QuestionComponent::render(Canvas& canvas)
         canvas.putString(row, 1, "\xe2\x94\x80", barStyle); // ─
 
         auto const fieldArea = Rect {
-            .x = LeftBarWidth + BarPadding,
+            .x = leftBarWidth + barPadding,
             .y = row,
-            .width = width - LeftBarWidth - BarPadding,
+            .width = width - leftBarWidth - barPadding,
             .height = 1,
         };
         auto fieldCanvas = canvas.subcanvas(fieldArea);
@@ -105,11 +105,11 @@ void QuestionComponent::render(Canvas& canvas)
         }
 
         // Render list into its subcanvas region
-        auto const listStartRow = HeaderHeight + questionLineCount() + 1; // header + question lines + blank
+        auto const listStartRow = headerHeight + questionLineCount() + 1; // header + question lines + blank
         auto const listArea = Rect {
-            .x = LeftBarWidth + BarPadding,
+            .x = leftBarWidth + barPadding,
             .y = listStartRow,
-            .width = width - LeftBarWidth - BarPadding,
+            .width = width - leftBarWidth - barPadding,
             .height = listHeight,
         };
         auto listCanvas = canvas.subcanvas(listArea);
@@ -120,9 +120,9 @@ void QuestionComponent::render(Canvas& canvas)
         {
             canvas.putString(row, 0, "\xe2\x94\x82", barStyle); // │
             auto const inputArea = Rect {
-                .x = LeftBarWidth + BarPadding,
+                .x = leftBarWidth + barPadding,
                 .y = row,
-                .width = width - LeftBarWidth - BarPadding,
+                .width = width - leftBarWidth - barPadding,
                 .height = 1,
             };
             auto inputCanvas = canvas.subcanvas(inputArea);
@@ -134,7 +134,7 @@ void QuestionComponent::render(Canvas& canvas)
         canvas.putString(row, 0, "\xe2\x95\xb0", barStyle); // ╰
         canvas.putString(row, 1, "\xe2\x94\x80", barStyle); // ─
         canvas.putString(row,
-                         LeftBarWidth + BarPadding,
+                         leftBarWidth + barPadding,
                          "Space toggle \xe2\x94\x82 Enter confirm \xe2\x94\x82 Esc cancel",
                          hintStyle);
     }
@@ -156,11 +156,11 @@ void QuestionComponent::render(Canvas& canvas)
 
             // Render list
             auto const listStartRow =
-                HeaderHeight + questionLineCount() + 1; // header + question lines + blank
+                headerHeight + questionLineCount() + 1; // header + question lines + blank
             auto const listArea = Rect {
-                .x = LeftBarWidth + BarPadding,
+                .x = leftBarWidth + barPadding,
                 .y = listStartRow,
-                .width = width - LeftBarWidth - BarPadding,
+                .width = width - leftBarWidth - barPadding,
                 .height = listHeight,
             };
             auto listCanvas = canvas.subcanvas(listArea);
@@ -170,7 +170,7 @@ void QuestionComponent::render(Canvas& canvas)
             canvas.putString(row, 0, "\xe2\x95\xb0", barStyle); // ╰
             canvas.putString(row, 1, "\xe2\x94\x80", barStyle); // ─
             canvas.putString(
-                row, LeftBarWidth + BarPadding, "Enter select \xe2\x94\x82 Esc cancel", hintStyle);
+                row, leftBarWidth + barPadding, "Enter select \xe2\x94\x82 Esc cancel", hintStyle);
         }
         else
         {
@@ -178,9 +178,9 @@ void QuestionComponent::render(Canvas& canvas)
             canvas.putString(row, 0, "\xe2\x95\xb0", barStyle); // ╰
             canvas.putString(row, 1, "\xe2\x94\x80", barStyle); // ─
             auto const fieldArea = Rect {
-                .x = LeftBarWidth + BarPadding,
+                .x = leftBarWidth + barPadding,
                 .y = row,
-                .width = width - LeftBarWidth - BarPadding,
+                .width = width - leftBarWidth - barPadding,
                 .height = 1,
             };
             auto fieldCanvas = canvas.subcanvas(fieldArea);
@@ -205,7 +205,7 @@ CursorShape QuestionComponent::cursorShape() const
 Size QuestionComponent::preferredSize() const
 {
     auto const height =
-        HeaderHeight + questionLineCount() + contentHeight() + 1; // header + question + content + hint/bottom
+        headerHeight + questionLineCount() + contentHeight() + 1; // header + question + content + hint/bottom
     return { .width = 60, .height = height };
 }
 

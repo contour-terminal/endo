@@ -12,7 +12,7 @@ namespace endo
 {
 
 /// State of a background job
-enum class JobState
+enum class JobState // NOLINT(performance-enum-size)
 {
     Running,    ///< Job is currently running
     Stopped,    ///< Job was stopped (e.g., by SIGTSTP)

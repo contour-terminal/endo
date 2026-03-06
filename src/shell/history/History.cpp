@@ -127,7 +127,7 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(std::string
         if (!isPrefixMatch && !isFuzzyMatch)
             continue;
 
-        int score;
+        auto score = 0;
         std::vector<size_t> matchPositions;
 
         if (isPrefixMatch)

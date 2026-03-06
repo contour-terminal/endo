@@ -194,3 +194,66 @@ TEST_CASE("TypeInferencer.e2e.mixed_annotations", "[TypeInferencer][e2e]")
     // One param annotated, one inferred
     CHECK(executeSourceAndGetOutput("let add (x: int) y = x + y; print (add 3 4)") == "7");
 }
+
+// ============================================================================
+// Record and Union Type Tests
+// ============================================================================
+
+TEST_CASE("TypeInferencer.record_type_def", "[TypeInferencer]")
+{
+    auto result = inferTypes("type Person = { name: string; age: int }");
+    REQUIRE_FALSE(result.hasErrors());
+    // The type should be registered as a binding
+    // Type defs don't produce bindings in the result — they modify the env.
+    // But we can verify by using it in a let binding.
+}
+
+TEST_CASE("TypeInferencer.record_literal_type", "[TypeInferencer]")
+{
+    auto result =
+        inferTypes("type Person = { name: string; age: int }\nlet p = { name = \"Alice\"; age = 30 }");
+    REQUIRE_FALSE(result.hasErrors());
+    auto it = result.bindings.find("p");
+    REQUIRE(it != result.bindings.end());
+    CHECK(it->second->isRecord());
+    auto const* rec = it->second->asRecord();
+    REQUIRE(rec != nullptr);
+    CHECK(rec->name == "Person");
+    REQUIRE(rec->fields.size() == 2);
+    CHECK(rec->fields[0].name == "name");
+    CHECK(rec->fields[0].type->asPrimitive()->kind == PrimitiveType::Str);
+    CHECK(rec->fields[1].name == "age");
+    CHECK(rec->fields[1].type->asPrimitive()->kind == PrimitiveType::Int);
+}
+
+TEST_CASE("TypeInferencer.record_field_access", "[TypeInferencer]")
+{
+    // Field access on a record expression should resolve the field type
+    auto result = inferTypes("type Person = { name: string; age: int }\n"
+                             "let p = { name = \"Alice\"; age = 30 }\n"
+                             "let a = p.age");
+    REQUIRE_FALSE(result.hasErrors());
+    auto it = result.bindings.find("a");
+    REQUIRE(it != result.bindings.end());
+    CHECK(it->second->asPrimitive()->kind == PrimitiveType::Int);
+}
+
+TEST_CASE("TypeInferencer.record_update_type", "[TypeInferencer]")
+{
+    auto result = inferTypes("type Person = { name: string; age: int }\n"
+                             "let p = { name = \"Alice\"; age = 30 }\n"
+                             "let q = { p with age = 31 }");
+    REQUIRE_FALSE(result.hasErrors());
+    auto it = result.bindings.find("q");
+    REQUIRE(it != result.bindings.end());
+    CHECK(it->second->isRecord());
+    auto const* rec = it->second->asRecord();
+    REQUIRE(rec != nullptr);
+    CHECK(rec->name == "Person");
+}
+
+TEST_CASE("TypeInferencer.union_type_def_and_constructor", "[TypeInferencer]")
+{
+    auto result = inferTypes("type Shape = | Circle of float | Point");
+    REQUIRE_FALSE(result.hasErrors());
+}

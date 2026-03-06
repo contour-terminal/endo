@@ -1,0 +1,110 @@
+{
+  "Function binding": {
+    "prefix": "let",
+    "body": [
+      "let ${1:name} ${2:args} =",
+      "    ${0}"
+    ],
+    "description": "Define a function binding"
+  },
+  "Lambda": {
+    "prefix": "fun",
+    "body": [
+      "fun ${1:args} -> ${0}"
+    ],
+    "description": "Anonymous function (lambda)"
+  },
+  "Match expression": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value} with",
+      "| ${2:pattern} -> ${0}"
+    ],
+    "description": "Pattern match expression"
+  },
+  "If-then-else": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} then",
+      "    ${2}",
+      "else",
+      "    ${0}"
+    ],
+    "description": "Conditional expression"
+  },
+  "Record type": {
+    "prefix": "type record",
+    "body": [
+      "type ${1:Name} = {",
+      "    ${2:field}: ${3:Type}",
+      "}"
+    ],
+    "description": "Define a record type"
+  },
+  "Union type": {
+    "prefix": "type union",
+    "body": [
+      "type ${1:Name} =",
+      "    | ${2:Case1} of ${3:Type}",
+      "    | ${0}"
+    ],
+    "description": "Define a discriminated union type"
+  },
+  "For loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:collection} do",
+      "    ${0}"
+    ],
+    "description": "For-in loop"
+  },
+  "While loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} do",
+      "    ${0}"
+    ],
+    "description": "While loop"
+  },
+  "Mutable binding": {
+    "prefix": "let mut",
+    "body": [
+      "let mut ${1:name} = ${0}"
+    ],
+    "description": "Mutable variable binding"
+  },
+  "Let-in expression": {
+    "prefix": "letin",
+    "body": [
+      "let ${1:name} = ${2:value}",
+      "${0}"
+    ],
+    "description": "Let binding followed by expression"
+  },
+  "Pipe": {
+    "prefix": "pipe",
+    "body": [
+      "|> ${0}"
+    ],
+    "description": "Forward pipe operator"
+  },
+  "Sequence builder": {
+    "prefix": "seq",
+    "body": [
+      "seq {",
+      "    yield ${0}",
+      "}"
+    ],
+    "description": "Lazy sequence builder"
+  },
+  "Try-finally": {
+    "prefix": "try",
+    "body": [
+      "try",
+      "    ${1}",
+      "finally",
+      "    ${0}"
+    ],
+    "description": "Try-finally block"
+  }
+}
