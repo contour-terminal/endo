@@ -5,7 +5,7 @@
 # expect: false
 # expect:
 
-let path = "/tmp/endo_test_file_exists.txt"
+let path = $"{Path.temporary_directory}/endo_test_file_exists.txt"
 
 let _ = File.writeAll path "test"
 

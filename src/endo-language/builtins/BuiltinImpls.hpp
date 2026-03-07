@@ -338,6 +338,13 @@ void fileExists(CoreVM::Params& args);
 void fileDelete(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Path operations
+// ---------------------------------------------------------------------------
+
+/// path_temporary_directory() -> string: Returns the platform's temporary directory path.
+void pathTemporaryDirectory(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

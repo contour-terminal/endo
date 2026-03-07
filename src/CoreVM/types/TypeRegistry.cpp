@@ -283,6 +283,17 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(callableType));
 
+    // Path: Stateless module providing filesystem path utilities (no instance fields)
+    auto pathType = std::make_unique<TypeDescriptor>();
+    pathType->kind = TypeKind::Product;
+    pathType->id = BuiltinTypeId::Path;
+    pathType->name = "Path";
+    pathType->slotCount = 0;
+    pathType->moduleFunctions = {
+        { "temporary_directory", "Path.temporary_directory -> str" },
+    };
+    addType(std::move(pathType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

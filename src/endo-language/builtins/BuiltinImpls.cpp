@@ -28,6 +28,15 @@ namespace endo::builtins
 {
 
 // ---------------------------------------------------------------------------
+// Path operations
+// ---------------------------------------------------------------------------
+
+void pathTemporaryDirectory(CoreVM::Params& args)
+{
+    args.setResult(args.caller()->newString(std::filesystem::temp_directory_path().string()));
+}
+
+// ---------------------------------------------------------------------------
 // Value-to-string conversion
 // ---------------------------------------------------------------------------
 

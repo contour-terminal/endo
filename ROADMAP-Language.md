@@ -220,6 +220,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Standard library reference documentation with validated code examples (`docs/language/standard-library.md`)
 - [x] `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll` — file I/O operations
 - [x] `File.size`, `File.exists`, `File.delete` — file metadata and management
+- [x] `Path.temporary_directory` — cross-platform temporary directory path
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
 
 ## Shell Integration
@@ -413,7 +414,7 @@ Consult this section to determine what to work on next.
 - [x] File I/O: `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll`, `File.size`, `File.exists`, `File.delete`
 - [x] Lazy sequences: `seq { yield ...; yield! ... }` with `toList` conversion
 - [x] Scoped resource management: `let use` / `let manual` with type-registered dispose
-- [ ] Path: `Path.join`, `Path.extension`, `Path.basename`
+- [ ] Path: `Path.join`, `Path.extension`, `Path.basename`, ~~`Path.temporary_directory`~~
 
 ### Phase 8 — Module System
 - [ ] `import "path"`, `import "path" as alias`, `from "path" import (names)` parsing

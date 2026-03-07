@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.temporary_directory returns a non-empty string
+# expect-nonempty
+
+println Path.temporary_directory

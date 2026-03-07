@@ -10578,9 +10578,19 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
 {
     TRACE_SCOPE("visit(FieldAccessExpr)");
 
-    // Handle DateTime module-qualified access (DateTime.now, DateTime.fromEpoch)
+    // Handle module-qualified access (Path.xxx, DateTime.xxx, etc.)
     if (auto const* modIdent = dynamic_cast<ast::IdentifierExpr const*>(node.object.get()))
     {
+        if (modIdent->name == "Path")
+        {
+            if (node.fieldName == "temporary_directory")
+            {
+                tryGenerateNativeCall("path_temporary_directory", {});
+                return;
+            }
+            reportTypeError("Path has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
         if (modIdent->name == "DateTime")
         {
             if (node.fieldName == "now")
