@@ -47,6 +47,7 @@ struct SymbolReference
     std::string name;             ///< Symbol name
     SourceLocationRange location; ///< Location of the reference in source
     int definitionIndex = -1;     ///< Index into SymbolTable::definitions (-1 if unresolved)
+    bool isWrite = false;         ///< true for mutation assignments (LHS of `<-`)
 };
 
 /// Collected symbol information from a source file.
@@ -88,6 +89,7 @@ struct HighlightEntry
 {
     SourceLocationRange range;
     bool isDefinition = false; ///< true for definitions (Write kind), false for references (Read kind)
+    bool isWrite = false;      ///< true for mutation write references (LHS of `<-`)
 };
 
 /// Finds all highlights for the symbol at the given cursor position.

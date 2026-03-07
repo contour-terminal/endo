@@ -1380,6 +1380,42 @@ TEST_CASE("DocumentHighlight.no identifier at cursor returns empty", "[lsp][high
     CHECK(highlights.empty());
 }
 
+TEST_CASE("DocumentHighlight.mutable variable highlights mutation sites", "[lsp][highlight]")
+{
+    const auto* source = "let mut x = 0\nx <- x + 1";
+    // cursor on definition "x" (line 0, col 8)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 8 });
+    // Should find 3: definition + LHS mutation + RHS read
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write); // definition
+    CHECK(highlights[1].kind == DocumentHighlightKind::Write); // x <- (write)
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);  // x + 1 (read)
+}
+
+TEST_CASE("DocumentHighlight.mutable variable from reference highlights all", "[lsp][highlight]")
+{
+    const auto* source = "let mut x = 0\nx <- x + 1";
+    // cursor on RHS "x" in x + 1 (line 1, col 5)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 1, .character = 5 });
+    // Should find 3: definition + LHS mutation + RHS read
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write); // definition
+    CHECK(highlights[1].kind == DocumentHighlightKind::Write); // x <- (write)
+    CHECK(highlights[2].kind == DocumentHighlightKind::Read);  // x + 1 (read)
+}
+
+TEST_CASE("DocumentHighlight.mut assign in expression context marks write", "[lsp][highlight]")
+{
+    const auto* source = "let mut y = 0\nif true then y <- 5 else y <- 10";
+    // cursor on "y" definition (line 0, col 8)
+    auto highlights = computeDocumentHighlights(source, Position { .line = 0, .character = 8 });
+    // Should find 3: definition + two mutation writes
+    REQUIRE(highlights.size() == 3);
+    CHECK(highlights[0].kind == DocumentHighlightKind::Write); // definition
+    CHECK(highlights[1].kind == DocumentHighlightKind::Write); // y <- 5
+    CHECK(highlights[2].kind == DocumentHighlightKind::Write); // y <- 10
+}
+
 // =============================================================================
 // SignatureHelp tests
 // =============================================================================

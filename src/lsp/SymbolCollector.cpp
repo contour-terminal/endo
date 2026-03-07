@@ -74,7 +74,8 @@ namespace
         }
 
         /// Records a reference and emits a reference event.
-        void addReference(std::string const& name)
+        /// @param isWrite true for mutation assignments (LHS of `<-`)
+        void addReference(std::string const& name, bool isWrite = false)
         {
             auto const defIndex = resolveSymbol(name);
             auto const refIndex = static_cast<int>(table.references.size());
@@ -82,6 +83,7 @@ namespace
                 .name = name,
                 .location = {},
                 .definitionIndex = defIndex,
+                .isWrite = isWrite,
             });
             events.push_back(SymbolEvent {
                 .kind = SymbolEvent::Kind::Reference,
@@ -123,6 +125,11 @@ namespace
                 }
                 walkStatement(*forIn->body);
                 popScope();
+            }
+            else if (auto const* e = dynamic_cast<ast::MutAssignStmt const*>(&node))
+            {
+                addReference(e->name, /*isWrite=*/true);
+                walkExpr(*e->value);
             }
             else if (auto const* exprStmt = dynamic_cast<ast::ExprStmt const*>(&node))
             {
@@ -450,7 +457,7 @@ namespace
             }
             else if (auto const* e = dynamic_cast<ast::MutAssignExpr const*>(&expr))
             {
-                addReference(e->name);
+                addReference(e->name, /*isWrite=*/true);
                 walkExpr(*e->value);
             }
             else if (auto const* e = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
@@ -828,11 +835,11 @@ std::vector<HighlightEntry> findHighlights(std::string const& source, Position p
     auto const& def = table->definitions[static_cast<size_t>(targetDefIndex)];
     result.push_back(HighlightEntry { .range = def.location, .isDefinition = true });
 
-    // Add all references (Read kind)
+    // Add all references (Read or Write kind)
     for (auto const& ref: table->references)
     {
         if (ref.definitionIndex == targetDefIndex)
-            result.push_back(HighlightEntry { .range = ref.location, .isDefinition = false });
+            result.push_back(HighlightEntry { .range = ref.location, .isDefinition = false, .isWrite = ref.isWrite });
     }
 
     return result;
