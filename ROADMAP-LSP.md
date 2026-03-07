@@ -12,7 +12,7 @@ and communicates via JSON-RPC 2.0 over stdio.
 
 ## Tier 1 — Core (High Impact)
 
-Foundation for a useful editing experience. All features here are implemented; partial items note what is still missing.
+Foundation for a useful editing experience. All features here are implemented.
 
 ### Lifecycle & Transport
 
@@ -60,7 +60,7 @@ Foundation for a useful editing experience. All features here are implemented; p
 - [x] Trigger characters: `.`, `$`, ` `
 - [x] Context-aware: dot-access for records, module-qualified calls (`File.xxx`), shell command output types
 - [x] Shared engine via `endo::computeCompletions()`
-- [ ] `completionItem/resolve`: deferred documentation lookup for expensive items
+- [x] `completionItem/resolve`: deferred documentation lookup for builtins and keywords
 
 ### Rename
 
@@ -69,20 +69,20 @@ Foundation for a useful editing experience. All features here are implemented; p
 
 ### Document Symbols
 
-- [~] `textDocument/documentSymbol`: hierarchical outline (functions with parameter children, top-level let bindings, record types with field children, union types with variant children, property bindings, finer `SymbolKind` usage)
-  - Missing: nested symbols (let-in bindings inside function bodies)
+- [x] `textDocument/documentSymbol`: hierarchical outline (functions with parameter children, top-level let bindings, record types with field children, union types with variant children, property bindings, finer `SymbolKind` usage)
+- [x] Nested symbols (let-in bindings inside function bodies reported as children)
 
 ### Formatting
 
-- [~] `textDocument/formatting`: whole document formatting via `SourceFormatter::format()`
-  - Missing: `textDocument/rangeFormatting` (format selection only)
-  - Missing: `textDocument/onTypeFormatting` (auto-format on keystroke)
+- [x] `textDocument/formatting`: whole document formatting via `SourceFormatter::format()`
+- [x] `textDocument/rangeFormatting`: format selected range only (line-level granularity)
+- [x] `textDocument/onTypeFormatting`: auto-indent on newline after block openers (`=`, `->`, `then`, `do`, `with`), pipe alignment on `|`
 
 ### Semantic Tokens
 
-- [~] `textDocument/semanticTokens/full`: 9 token types (`keyword`, `function`, `variable`, `number`, `string`, `operator`, `enumMember`, `comment`, `type`), 2 modifiers (`declaration`, `modification`)
-  - Missing: `semanticTokens/full/delta` (incremental updates via `resultId` diffing)
-  - Missing: `semanticTokens/range` (partial document tokenization)
+- [x] `textDocument/semanticTokens/full`: 9 token types (`keyword`, `function`, `variable`, `number`, `string`, `operator`, `enumMember`, `comment`, `type`), 2 modifiers (`declaration`, `modification`)
+- [x] `textDocument/semanticTokens/full/delta`: incremental token updates via `resultId` diffing
+- [x] `textDocument/semanticTokens/range`: tokenize only the requested line range
 
 ---
 
@@ -97,7 +97,7 @@ High-value features that significantly improve the day-to-day editing experience
   - [x] Informational suggestions displayed as quickfix actions
   - [x] Diagnostic `data` field round-trips raw suggestions for code action generation
   - Reuse: `DiagnosticsCollector` already produces `suggestions` vectors per diagnostic
-- [ ] `codeAction/resolve`: deferred edit computation for expensive actions
+- [x] `codeAction/resolve`: returns action as-is (all actions are eagerly computed; infrastructure for future deferred actions)
 
 ### Document Highlight
 
@@ -130,7 +130,7 @@ High-value features that significantly improve the day-to-day editing experience
   - [x] Variable types from `let` bindings
   - [x] Pipeline intermediate types (`data |> map f |> filter g`) via `InferenceResult.exprTypes`
   - Reuse: type inference (Algorithm W) already runs as a pre-pass before IR generation
-- [ ] `inlayHint/resolve`: deferred tooltip/location for inlay hints
+- [x] `inlayHint/resolve`: populates tooltip with expanded type information
 
 ---
 
@@ -140,34 +140,28 @@ Features for navigating larger codebases and understanding code structure.
 
 ### Call Hierarchy
 
-- [ ] `textDocument/prepareCallHierarchy`: prepare call hierarchy data
-- [ ] `callHierarchy/incomingCalls`: who calls this function
-- [ ] `callHierarchy/outgoingCalls`: what does this function call
-  - Extend `SymbolCollector` to track call relationships (partially available via `ApplicationExpr` analysis)
+- [x] `textDocument/prepareCallHierarchy`: find function at cursor position
+- [x] `callHierarchy/incomingCalls`: who calls this function (grouped by caller)
+- [x] `callHierarchy/outgoingCalls`: what does this function call (grouped by callee)
+  - Uses `SymbolCollector` call relation tracking via `ApplicationExpr` analysis
 
 ### Workspace Symbol
 
-- [ ] `workspace/symbol`: search symbols across all open documents
-  - Aggregate `collectSymbols()` results across all documents in `DocumentStore`
+- [x] `workspace/symbol`: search symbols across all open documents
+  - Aggregates `collectSymbols()` results across all documents in `DocumentStore`
+  - Case-insensitive substring matching on symbol names
 
 ### Go to Type Definition
 
-- [ ] `textDocument/typeDefinition`: navigate from variable to its type definition
-  - From a variable bound to a record/union → jump to `type` definition
-  - Extend `SymbolCollector` to track type definitions and variable-type associations
+- [x] `textDocument/typeDefinition`: navigate from variable to its type definition
+  - From a variable with a type annotation matching a user-defined record/union → jumps to `type` definition
 
 ### Document Link
 
-- [ ] `textDocument/documentLink`: clickable links in source
+- [x] `textDocument/documentLink`: clickable links in source
   - `source "file"` shell commands
-  - `File.open "path"` string arguments
-  - Future: `import "path"` when module system is implemented
-- [ ] `documentLink/resolve`
-
-### Semantic Tokens Incremental
-
-- [ ] `textDocument/semanticTokens/full/delta`: incremental token updates via `resultId` diffing
-- [ ] `textDocument/semanticTokens/range`: tokenize only the requested line range
+  - `File.open "path"` / `open "path"` string arguments
+- [x] `documentLink/resolve`: resolves deferred targets from link data
 
 ---
 
@@ -175,41 +169,27 @@ Features for navigating larger codebases and understanding code structure.
 
 Features that make the experience feel premium.
 
-### On-Type Formatting
-
-- [ ] `textDocument/onTypeFormatting`: auto-format on keystroke
-  - Trigger on `\n`: auto-indent based on context (function body, match arm, block scope)
-  - Trigger on `|`: align match arms
-
-### Range Formatting
-
-- [ ] `textDocument/rangeFormatting`: format selected range only
-  - Extract range, format respecting surrounding indentation context
-
 ### Code Lens
 
-- [ ] `textDocument/codeLens`: inline annotations above functions
-  - "N references" count above function definitions
-  - "Run" action for top-level executable scripts
-- [ ] `codeLens/resolve`
-- [ ] `workspace/codeLens/refresh`
-
-### Inline Value
-
-- [ ] `textDocument/inlineValue`: show variable values during debugging
-  - Only meaningful with DAP integration (Phase 5.1 in main roadmap)
-- [ ] `workspace/inlineValue/refresh`
+- [x] `textDocument/codeLens`: inline annotations above function definitions
+  - Each function definition gets a code lens with deferred reference count
+- [x] `codeLens/resolve`: resolves reference count (e.g., "2 references", "0 references")
 
 ### Window Notifications
 
-- [ ] `window/showMessage`: server-to-client informational messages
-- [ ] `window/showMessageRequest`: messages with response options
-- [ ] `window/logMessage`: structured log output
+- [x] `window/showMessage`: server-to-client informational messages
+- [x] `window/logMessage`: structured log output
+- [ ] `window/showMessageRequest`: messages with response options (requires server-to-client request support)
 
 ### Work Done Progress
 
-- [ ] `window/workDoneProgress/create` + `$/progress`: progress reporting for long operations
-- [ ] `window/workDoneProgress/cancel`: cancel progress
+- [x] `window/workDoneProgress/create` + `$/progress`: RAII progress reporting for long operations
+- [x] `window/workDoneProgress/cancel`: client notification to cancel (accepted, no-op for now)
+
+### Inline Value
+
+- [x] `textDocument/inlineValue`: variable lookup entries for DAP integration (skeleton)
+  - Returns `InlineValueVariableLookup` entries for variable references in the requested range
 
 ---
 
@@ -235,10 +215,17 @@ Features included for completeness. Most have limited relevance to Endo.
 - [ ] `workspace/didChangeConfiguration`: react to settings changes
 - [ ] `workspace/executeCommand`: custom commands (run script, format all)
 - [ ] `workspace/applyEdit`: server-initiated workspace edits
+- [ ] `workspace/codeLens/refresh`: trigger code lens refresh from server
+- [ ] `workspace/inlineValue/refresh`: trigger inline value refresh from server
+- [ ] `workspace/semanticTokens/refresh`: trigger semantic tokens refresh from server
+- [ ] `workspace/inlayHint/refresh`: trigger inlay hint refresh from server
+- [ ] `workspace/diagnostic/refresh`: trigger diagnostic refresh from server
+- [ ] `workspace/foldingRange/refresh`: trigger folding range refresh from server
 - [ ] File operations: `willCreateFiles`, `didCreateFiles`, `willRenameFiles`, `didRenameFiles`, `willDeleteFiles`, `didDeleteFiles`
 
 ### Document Sync Enhancements
 
+- [ ] Incremental sync (`TextDocumentSyncKind=2`)
 - [ ] `textDocument/willSave`: pre-save notification
 - [ ] `textDocument/willSaveWaitUntil`: pre-save edits
 - [ ] `textDocument/didSave`: post-save notification
@@ -249,6 +236,17 @@ Features included for completeness. Most have limited relevance to Endo.
 - [ ] `$/setTrace` + `$/logTrace`: debug tracing
 - [ ] `client/registerCapability` + `client/unregisterCapability`: dynamic capability registration
 - [ ] Pull-model diagnostics (`textDocument/diagnostic`): client-driven diagnostic refresh
+- [ ] `window/showDocument`: open document in client editor
+- [ ] `window/showMessageRequest`: messages with response options
+
+### Potential Future Features
+
+- [ ] `textDocument/codeAction` refactoring kinds: `refactor.extract`, `refactor.inline`, `refactor.rewrite`
+- [ ] `textDocument/codeAction` source kinds: `source.organizeImports`, `source.fixAll`
+- [ ] Incremental document synchronization for large files
+- [ ] Multi-file rename across workspace
+- [ ] Cross-file go-to-definition (when module system is implemented)
+- [ ] Cross-file find-all-references (when module system is implemented)
 
 ---
 
@@ -264,16 +262,9 @@ Features included for completeness. Most have limited relevance to Endo.
 
 ## Implementation Priority
 
-Recommended order of work for maximum impact:
+All Tier 1-4 features are now implemented. Remaining work:
 
-1. ~~**Code Actions** (Tier 2) — highest ROI: diagnostic suggestions already exist, just need LSP wiring~~ (done)
-2. ~~**Document Highlight** (Tier 2) — very low cost, reuses `findReferences()`~~ (done)
-3. ~~**Folding Ranges** (Tier 2) — moderate cost, immediate usability improvement~~ (done)
-4. ~~**Document Symbol completeness** (Tier 1) — add type definitions, nested symbols, union variants~~ (done: types, variants, fields, properties; remaining: nested let-in)
-5. ~~**Inlay Hints** (Tier 2) — high value for functional language, requires type inference integration~~ (done: param types, return types, let-binding types, pipeline intermediate types)
-6. ~~**Selection Range** (Tier 2) — moderate cost, good structural editing support~~ (done)
-7. **Semantic Tokens Delta** (Tier 3) — performance optimization for large files
-8. **Range Formatting** (Tier 4) — moderate cost
-9. **Call Hierarchy** (Tier 3) — extends existing symbol infrastructure
-10. **Workspace Symbol** (Tier 3) — low cost aggregation of per-document symbols
-11. **VS Code Extension** — packaging, enables all the above for VS Code users
+1. **VS Code Extension** — packaging, enables all the above for VS Code users
+2. **Incremental document sync** — performance optimization for large files
+3. **Workspace features** — as multi-file support matures
+4. **Protocol infrastructure** — `$/cancelRequest`, dynamic registration, etc.
