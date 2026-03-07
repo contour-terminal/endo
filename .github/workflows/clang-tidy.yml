@@ -65,6 +65,7 @@ jobs:
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
             ':!src/crispy/*' ':!src/vtparser/*' \
+            ':!src/shell/platform/Windows*' \
           | python3 "$CLANG_TIDY_DIFF" \
               -p1 \
               -path build \

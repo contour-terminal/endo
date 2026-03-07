@@ -187,6 +187,11 @@ jobs:
       shell: bash
       run: ./scripts/get_contour_dirs.sh
 
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: '1e199d32ad53aab1defda61ce41c380302e3f95c'
+
     - name: Setup MSVC environment
       uses: ilammy/msvc-dev-cmd@v1
 

@@ -10,11 +10,13 @@ endif()
 
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
+set_target_properties(crispy-core PROPERTIES SYSTEM TRUE)
 add_subdirectory(endo-language)
 add_subdirectory(endo-test)
 
 if(NOT EMSCRIPTEN)
     add_subdirectory(vtparser)
+    set_target_properties(vtparser PROPERTIES SYSTEM TRUE)
     add_subdirectory(platform)
     add_subdirectory(tui)
     add_subdirectory(http)

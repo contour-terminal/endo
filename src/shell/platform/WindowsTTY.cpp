@@ -26,11 +26,10 @@ WindowsTTY::WindowsTTY()
     if (_hStdin == INVALID_HANDLE_VALUE || _hStdout == INVALID_HANDLE_VALUE)
         throw std::runtime_error("Failed to get console handles");
 
-    // Save original console modes
+    // Save original console modes (may fail if not a real console — that's OK)
     DWORD inputMode = 0;
-    if (!GetConsoleMode(_hStdin, &inputMode))
-        throw std::runtime_error("Failed to get console input mode");
-    _originalInputMode = inputMode;
+    if (GetConsoleMode(_hStdin, &inputMode))
+        _originalInputMode = inputMode;
 
     DWORD outputMode = 0;
     if (GetConsoleMode(_hStdout, &outputMode))
