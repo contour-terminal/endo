@@ -25,9 +25,10 @@ namespace
     {
         enum class Kind : std::uint8_t
         {
-            ParamType,      ///< `: <type>` after an untyped parameter name
-            ReturnType,     ///< `: <type>` after the last parameter (before `=`)
-            LetBindingType, ///< `: <type>` after a let-binding name (before `=`)
+            ParamType,                ///< `: <type>` after an untyped parameter name
+            ReturnType,               ///< `: <type>` after the last parameter (before `=`)
+            LetBindingType,           ///< `: <type>` after a let-binding name (before `=`)
+            PipelineIntermediateType, ///< `: <type>` after pipeline value (before `|>`)
         };
 
         Kind kind;
@@ -336,6 +337,22 @@ namespace
             {
                 walkExpr(*pipe->value);
                 walkExpr(*pipe->function);
+
+                // Pipeline intermediate type hint
+                auto const it = _inference.exprTypes.find(pipe->value.get());
+                if (it != _inference.exprTypes.end() && !containsTypeVar(it->second))
+                {
+                    if (pipe->value->location)
+                    {
+                        auto const& loc = *pipe->value->location;
+                        _events.push_back(HintEvent {
+                            .kind = HintEvent::Kind::PipelineIntermediateType,
+                            .name = {},
+                            .label = ": " + toHintString(it->second),
+                            .position = Position { .line = loc.end.line, .character = loc.end.column },
+                        });
+                    }
+                }
             }
             else if (auto const* bin = dynamic_cast<ast::BinaryExpr const*>(&expr))
             {

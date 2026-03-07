@@ -33,6 +33,12 @@ add_library(endo-lsp STATIC
     FormattingProvider.cpp
     InlayHintProvider.hpp
     InlayHintProvider.cpp
+    FoldingRangeProvider.hpp
+    FoldingRangeProvider.cpp
+    SelectionRangeProvider.hpp
+    SelectionRangeProvider.cpp
+    CodeActionProvider.hpp
+    CodeActionProvider.cpp
 
     # Server core
     LspServer.hpp

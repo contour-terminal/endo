@@ -3,6 +3,7 @@
 
 #include <editor-protocol/EditorTypes.hpp>
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -36,6 +37,7 @@ struct Diagnostic
     DiagnosticSeverity severity = DiagnosticSeverity::Error;
     std::string source;
     std::string message;
+    std::optional<nlohmann::json> data; ///< Optional structured data (e.g., raw suggestions for code actions)
 };
 
 inline void to_json(nlohmann::json& j, Diagnostic const& d)
@@ -46,6 +48,18 @@ inline void to_json(nlohmann::json& j, Diagnostic const& d)
         { "source", d.source },
         { "message", d.message },
     };
+    if (d.data.has_value())
+        j["data"] = *d.data;
+}
+
+inline void from_json(nlohmann::json const& j, Diagnostic& d)
+{
+    j.at("range").get_to(d.range);
+    d.severity = static_cast<DiagnosticSeverity>(j.at("severity").get<int>());
+    j.at("source").get_to(d.source);
+    j.at("message").get_to(d.message);
+    if (j.contains("data"))
+        d.data = j.at("data");
 }
 
 /// LSP MarkupContent for rich hover text.
@@ -320,6 +334,77 @@ inline void to_json(nlohmann::json& j, InlayHint const& h)
     };
     if (h.tooltip.has_value())
         j["tooltip"] = *h.tooltip;
+}
+
+/// LSP FoldingRange for collapsible regions.
+struct FoldingRange
+{
+    int startLine = 0;
+    int startCharacter = 0;
+    int endLine = 0;
+    int endCharacter = 0;
+    std::optional<std::string> kind; ///< "comment", "imports", or "region"
+};
+
+inline void to_json(nlohmann::json& j, FoldingRange const& r)
+{
+    j = nlohmann::json {
+        { "startLine", r.startLine },
+        { "startCharacter", r.startCharacter },
+        { "endLine", r.endLine },
+        { "endCharacter", r.endCharacter },
+    };
+    if (r.kind.has_value())
+        j["kind"] = *r.kind;
+}
+
+/// LSP SelectionRange for smart expand/shrink selection.
+struct SelectionRange
+{
+    Range range;
+    std::unique_ptr<SelectionRange> parent;
+};
+
+inline void to_json(nlohmann::json& j, SelectionRange const& s)
+{
+    j = nlohmann::json { { "range", s.range } };
+    if (s.parent)
+        j["parent"] = *s.parent;
+}
+
+/// LSP CodeActionContext (sent by client in codeAction request).
+struct CodeActionContext
+{
+    std::vector<Diagnostic> diagnostics;
+};
+
+inline void from_json(nlohmann::json const& j, CodeActionContext& c)
+{
+    j.at("diagnostics").get_to(c.diagnostics);
+}
+
+/// LSP CodeAction for quick fixes and refactorings.
+struct CodeAction
+{
+    std::string title;
+    std::string kind = "quickfix";       ///< CodeActionKind (e.g., "quickfix", "refactor")
+    std::optional<WorkspaceEdit> edit;   ///< Workspace edit to apply
+    std::vector<Diagnostic> diagnostics; ///< Associated diagnostics
+    bool isPreferred = false;            ///< Whether this is the preferred action
+};
+
+inline void to_json(nlohmann::json& j, CodeAction const& a)
+{
+    j = nlohmann::json {
+        { "title", a.title },
+        { "kind", a.kind },
+    };
+    if (a.edit.has_value())
+        j["edit"] = *a.edit;
+    if (!a.diagnostics.empty())
+        j["diagnostics"] = a.diagnostics;
+    if (a.isPreferred)
+        j["isPreferred"] = true;
 }
 
 } // namespace endo::lsp

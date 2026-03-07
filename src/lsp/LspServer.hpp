@@ -59,6 +59,9 @@ class LspServer
     [[nodiscard]] nlohmann::json handleCompletion(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleFormatting(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleInlayHint(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleFoldingRange(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleSelectionRange(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleCodeAction(nlohmann::json const& params);
 
     // Notifications
     void publishDiagnostics(std::string const& uri);

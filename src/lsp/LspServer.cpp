@@ -7,16 +7,19 @@
 #include <iostream>
 #include <string>
 
+#include "CodeActionProvider.hpp"
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentHighlightProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
+#include "FoldingRangeProvider.hpp"
 #include "FormattingProvider.hpp"
 #include "HoverProvider.hpp"
 #include "InlayHintProvider.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
+#include "SelectionRangeProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
 
@@ -139,6 +142,21 @@ void LspServer::dispatch(nlohmann::json const& message)
                 auto const params = message.value("params", nlohmann::json::object());
                 writeMessage(_output, makeResponse(id, handleInlayHint(params)));
             }
+            else if (method == "textDocument/foldingRange")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleFoldingRange(params)));
+            }
+            else if (method == "textDocument/selectionRange")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleSelectionRange(params)));
+            }
+            else if (method == "textDocument/codeAction")
+            {
+                auto const params = message.value("params", nlohmann::json::object());
+                writeMessage(_output, makeResponse(id, handleCodeAction(params)));
+            }
             else
             {
                 writeMessage(_output,
@@ -209,6 +227,12 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
                 } },
               { "documentFormattingProvider", true },
               { "inlayHintProvider", true },
+              { "foldingRangeProvider", true },
+              { "selectionRangeProvider", true },
+              { "codeActionProvider",
+                nlohmann::json {
+                    { "codeActionKinds", nlohmann::json::array({ "quickfix" }) },
+                } },
               { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",
                 nlohmann::json {
@@ -443,6 +467,54 @@ nlohmann::json LspServer::handleInlayHint(nlohmann::json const& params)
     auto result = nlohmann::json::array();
     for (auto const& hint: hints)
         result.push_back(hint);
+    return result;
+}
+
+nlohmann::json LspServer::handleFoldingRange(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto ranges = computeFoldingRanges(*source);
+
+    auto result = nlohmann::json::array();
+    for (auto const& r: ranges)
+        result.push_back(r);
+    return result;
+}
+
+nlohmann::json LspServer::handleSelectionRange(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto positions = params.at("positions").get<std::vector<Position>>();
+    auto ranges = computeSelectionRanges(*source, positions);
+
+    auto result = nlohmann::json::array();
+    for (auto const& r: ranges)
+        result.push_back(r);
+    return result;
+}
+
+nlohmann::json LspServer::handleCodeAction(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const range = params.at("range").get<Range>();
+    auto const context = params.at("context").get<CodeActionContext>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto actions = computeCodeActions(*source, textDoc.uri, range, context.diagnostics);
+
+    auto result = nlohmann::json::array();
+    for (auto const& action: actions)
+        result.push_back(action);
     return result;
 }
 

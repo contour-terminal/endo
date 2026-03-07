@@ -21,7 +21,7 @@ std::vector<Diagnostic> computeDiagnostics(std::string const& source,
         for (auto const& hint: msg.suggestions)
             fullMessage += "\nhint: " + hint;
 
-        diagnostics.push_back(Diagnostic {
+        auto diag = Diagnostic {
             .range =
                 Range {
                     .start =
@@ -31,7 +31,13 @@ std::vector<Diagnostic> computeDiagnostics(std::string const& source,
             .severity = static_cast<DiagnosticSeverity>(static_cast<int>(msg.severity)),
             .source = "endo",
             .message = fullMessage,
-        });
+        };
+
+        // Store raw suggestions in the data field for code action round-tripping
+        if (!msg.suggestions.empty())
+            diag.data = nlohmann::json(msg.suggestions);
+
+        diagnostics.push_back(std::move(diag));
     }
 
     return diagnostics;

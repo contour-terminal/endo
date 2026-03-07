@@ -7,16 +7,19 @@
 
 #include <sstream>
 
+#include "CodeActionProvider.hpp"
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentHighlightProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
+#include "FoldingRangeProvider.hpp"
 #include "HoverProvider.hpp"
 #include "InlayHintProvider.hpp"
 #include "LspServer.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
+#include "SelectionRangeProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
@@ -2669,4 +2672,409 @@ TEST_CASE("E2E.inlayHint request returns array", "[lsp][e2e][inlayhint]")
         }
     }
     CHECK(found);
+}
+
+// =============================================================================
+// Pipeline inlay hints tests
+// =============================================================================
+
+TEST_CASE("InlayHint.pipeline_intermediate_type", "[lsp][inlayhint][pipeline]")
+{
+    auto hints = hintsForSource("let f x = x + 1\n[1; 2; 3] |> List.length");
+    // Should have a hint after `[1; 2; 3]` showing `: list<int>`
+    bool foundListHint = false;
+    for (auto const& h: hints)
+    {
+        if (h.label.find("list") != std::string::npos && h.paddingLeft)
+            foundListHint = true;
+    }
+    CHECK(foundListHint);
+}
+
+TEST_CASE("InlayHint.chained_pipeline_types", "[lsp][inlayhint][pipeline]")
+{
+    auto hints = hintsForSource("[1; 2; 3] |> List.length |> fun x -> x + 1");
+    // Should have hints at each pipeline boundary
+    auto pipelineHints = std::vector<InlayHint> {};
+    for (auto const& h: hints)
+    {
+        if (h.paddingLeft && h.label.starts_with(": "))
+            pipelineHints.push_back(h);
+    }
+    // At least the first pipeline value should have a hint
+    CHECK(!pipelineHints.empty());
+}
+
+// =============================================================================
+// Folding range tests
+// =============================================================================
+
+TEST_CASE("FoldingRange.multi_line_function", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("let f x =\n  x + 1");
+    bool found = false;
+    for (auto const& r: ranges)
+    {
+        if (r.startLine == 0 && r.endLine == 1 && r.kind == "region")
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("FoldingRange.single_line_no_range", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("let x = 42");
+    // Single-line constructs should NOT produce folding ranges
+    bool foundRegion = false;
+    for (auto const& r: ranges)
+    {
+        if (r.kind == "region")
+            foundRegion = true;
+    }
+    CHECK_FALSE(foundRegion);
+}
+
+TEST_CASE("FoldingRange.match_expression", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("let r = match x with\n| 0 -> 1\n| _ -> 2");
+    bool found = false;
+    for (auto const& r: ranges)
+    {
+        if (r.kind == "region" && r.startLine <= 0 && r.endLine >= 2)
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("FoldingRange.nested_constructs", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("let f x =\n  match x with\n  | 0 -> 1\n  | _ -> 2");
+    // Should have at least 2 folding ranges: function and match
+    auto regionCount = 0;
+    for (auto const& r: ranges)
+    {
+        if (r.kind == "region")
+            ++regionCount;
+    }
+    CHECK(regionCount >= 2);
+}
+
+TEST_CASE("FoldingRange.empty_source", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("");
+    CHECK(ranges.empty());
+}
+
+TEST_CASE("FoldingRange.multi_line_comment", "[lsp][folding]")
+{
+    auto ranges = computeFoldingRanges("(* this is\na multi-line\ncomment *)");
+    bool found = false;
+    for (auto const& r: ranges)
+    {
+        if (r.kind == "comment" && r.startLine == 0 && r.endLine == 2)
+            found = true;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.foldingRange request returns array", "[lsp][e2e][folding]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x =\n  x + 1" },
+                               } },
+                         }),
+        sendRequest("textDocument/foldingRange",
+                    json { { "textDocument", json { { "uri", "file:///test.endo" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].is_array());
+            CHECK(!msg["result"].empty());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Selection range tests
+// =============================================================================
+
+TEST_CASE("SelectionRange.cursor_in_identifier", "[lsp][selection]")
+{
+    auto ranges = computeSelectionRanges("let x = 42", { Position { .line = 0, .character = 4 } });
+    REQUIRE(ranges.size() == 1);
+    // Should have at least one range (the identifier or enclosing statement)
+    CHECK(ranges[0].range.start.line == 0);
+}
+
+TEST_CASE("SelectionRange.nested_match", "[lsp][selection]")
+{
+    auto ranges = computeSelectionRanges("let r = match x with\n| 0 -> 1\n| _ -> 2",
+                                         { Position { .line = 1, .character = 7 } });
+    REQUIRE(ranges.size() == 1);
+    // Should have nested ranges (arm body -> match -> let binding)
+    auto* current = &ranges[0];
+    auto depth = 1;
+    while (current->parent)
+    {
+        current = current->parent.get();
+        ++depth;
+    }
+    CHECK(depth >= 2); // At least the innermost and one parent
+}
+
+TEST_CASE("SelectionRange.multiple_positions", "[lsp][selection]")
+{
+    auto ranges = computeSelectionRanges(
+        "let x = 42\nlet y = 99",
+        { Position { .line = 0, .character = 4 }, Position { .line = 1, .character = 4 } });
+    REQUIRE(ranges.size() == 2);
+}
+
+TEST_CASE("SelectionRange.cursor_at_start", "[lsp][selection]")
+{
+    auto ranges = computeSelectionRanges("let x = 42", { Position { .line = 0, .character = 0 } });
+    REQUIRE(ranges.size() == 1);
+    // Should have at least the document-level range
+    CHECK(ranges[0].range.start.line == 0);
+}
+
+TEST_CASE("E2E.selectionRange request returns array", "[lsp][e2e][selection]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/selectionRange",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "positions", json::array({ json { { "line", 0 }, { "character", 4 } } }) },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].is_array());
+            CHECK(!msg["result"].empty());
+            // Each entry should have a "range" field
+            CHECK(msg["result"][0].contains("range"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Code action tests
+// =============================================================================
+
+TEST_CASE("CodeAction.no_diagnostics_returns_empty", "[lsp][codeaction]")
+{
+    auto actions = computeCodeActions(
+        "let x = 42",
+        "file:///test.endo",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 10 } },
+        {});
+    CHECK(actions.empty());
+}
+
+TEST_CASE("CodeAction.diagnostic_without_data_returns_empty", "[lsp][codeaction]")
+{
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 5 } },
+        .severity = DiagnosticSeverity::Error,
+        .source = "endo",
+        .message = "some error",
+    };
+    auto actions = computeCodeActions(
+        "let x = 42",
+        "file:///test.endo",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 10 } },
+        { diag });
+    CHECK(actions.empty());
+}
+
+TEST_CASE("CodeAction.did_you_mean_suggestion", "[lsp][codeaction]")
+{
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 4 } },
+        .severity = DiagnosticSeverity::Error,
+        .source = "endo",
+        .message = "Unknown command: 'prit'",
+        .data = nlohmann::json::array({ "Did you mean 'print'?" }),
+    };
+    auto actions = computeCodeActions(
+        "prit hello",
+        "file:///test.endo",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 4 } },
+        { diag });
+    REQUIRE(!actions.empty());
+    CHECK(actions[0].title == "Did you mean 'print'?");
+    CHECK(actions[0].kind == "quickfix");
+    CHECK(actions[0].isPreferred);
+    REQUIRE(actions[0].edit.has_value());
+    auto const& changes = actions[0].edit->changes;
+    CHECK(changes.count("file:///test.endo") == 1);
+    CHECK(changes.at("file:///test.endo")[0].newText == "print");
+}
+
+TEST_CASE("CodeAction.informational_suggestion", "[lsp][codeaction]")
+{
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 5 } },
+        .severity = DiagnosticSeverity::Warning,
+        .source = "endo",
+        .message = "Some warning",
+        .data = nlohmann::json::array({ "Consider refactoring this code" }),
+    };
+    auto actions = computeCodeActions(
+        "some code",
+        "file:///test.endo",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 5 } },
+        { diag });
+    REQUIRE(!actions.empty());
+    CHECK(actions[0].title == "Consider refactoring this code");
+    // Informational suggestion should not have an edit
+    CHECK_FALSE(actions[0].edit.has_value());
+    CHECK_FALSE(actions[0].isPreferred);
+}
+
+TEST_CASE("CodeAction.diagnostic_outside_range_skipped", "[lsp][codeaction]")
+{
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 5, .character = 0 }, .end = { .line = 5, .character = 4 } },
+        .severity = DiagnosticSeverity::Error,
+        .source = "endo",
+        .message = "error",
+        .data = nlohmann::json::array({ "Did you mean 'print'?" }),
+    };
+    auto actions = computeCodeActions(
+        "let x = 42",
+        "file:///test.endo",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 10 } },
+        { diag });
+    CHECK(actions.empty());
+}
+
+TEST_CASE("E2E.codeAction request returns array", "[lsp][e2e][codeaction]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/codeAction",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 0 }, { "character", 10 } } },
+                          } },
+                        { "context", json { { "diagnostics", json::array() } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].is_array());
+            // Empty diagnostics -> empty result
+            CHECK(msg["result"].empty());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CodeAction.diagnostics_data_roundtrip", "[lsp][codeaction]")
+{
+    // Verify that a Diagnostic with data survives JSON serialization and deserialization
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 4 } },
+        .severity = DiagnosticSeverity::Error,
+        .source = "endo",
+        .message = "Unknown command: 'prnt'",
+        .data = nlohmann::json::array({ "Did you mean 'print'?", "Did you mean 'printf'?" }),
+    };
+
+    // Round-trip through JSON
+    auto j = nlohmann::json(diag);
+    auto parsed = j.get<Diagnostic>();
+
+    CHECK(parsed.range.start.line == 0);
+    CHECK(parsed.range.end.character == 4);
+    CHECK(parsed.severity == DiagnosticSeverity::Error);
+    CHECK(parsed.source == "endo");
+    CHECK(parsed.message == "Unknown command: 'prnt'");
+    REQUIRE(parsed.data.has_value());
+    REQUIRE(parsed.data->is_array());
+    CHECK(parsed.data->size() == 2);
+    CHECK((*parsed.data)[0] == "Did you mean 'print'?");
+    CHECK((*parsed.data)[1] == "Did you mean 'printf'?");
+}
+
+TEST_CASE("CodeAction.diagnostic_without_data_roundtrip", "[lsp][codeaction]")
+{
+    // Verify that a Diagnostic WITHOUT data also round-trips cleanly
+    auto diag = Diagnostic {
+        .range = Range { .start = { .line = 1, .character = 0 }, .end = { .line = 1, .character = 5 } },
+        .severity = DiagnosticSeverity::Warning,
+        .source = "endo",
+        .message = "Unused variable 'x'",
+    };
+
+    auto j = nlohmann::json(diag);
+    CHECK_FALSE(j.contains("data"));
+    auto parsed = j.get<Diagnostic>();
+    CHECK_FALSE(parsed.data.has_value());
+    CHECK(parsed.message == "Unused variable 'x'");
 }
