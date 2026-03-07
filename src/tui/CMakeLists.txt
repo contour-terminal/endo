@@ -95,3 +95,4 @@ add_executable(test-tui
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)
 enable_sanitizers(test-tui)
+enable_clang_tidy(test-tui)

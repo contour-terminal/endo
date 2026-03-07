@@ -175,10 +175,10 @@ TEST_CASE("AgentSession.preserves_history_across_calls", "[agent]")
     auto session = AgentSession(provider);
 
     provider.responseText = "First response";
-    (void) session.processMessage("First question", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("First question", nullptr);
 
     provider.responseText = "Second response";
-    (void) session.processMessage("Second question", nullptr);
+    [[maybe_unused]] auto _2 = session.processMessage("Second question", nullptr);
 
     CHECK(session.history().size() == 4);
     // Provider receives conversation history at time of generate() call
@@ -222,7 +222,7 @@ TEST_CASE("AgentSession.system_prompt", "[agent]")
     auto session = AgentSession(provider);
 
     session.setSystemPrompt("You are helpful.");
-    (void) session.processMessage("Hello", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Hello", nullptr);
 
     // System prompt should be first in history
     CHECK(session.history().messages()[0].role == Role::System);
@@ -237,7 +237,7 @@ TEST_CASE("AgentSession.reset_clears_history", "[agent]")
     provider.responseText = "Response";
     auto session = AgentSession(provider);
 
-    (void) session.processMessage("Hello", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Hello", nullptr);
     CHECK_FALSE(session.history().empty());
 
     session.reset();
@@ -368,7 +368,7 @@ TEST_CASE("AgentSession.tool_status_callback_fires", "[agent]")
 
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "mock_tool", .arguments = {} } };
 
-    (void) session.processMessage("Test", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Test", nullptr);
 
     REQUIRE(statusToolNames.size() == 1);
     CHECK(statusToolNames[0] == "mock_tool");
@@ -392,7 +392,7 @@ TEST_CASE("AgentSession.tool_result_under_limit_unchanged", "[agent]")
     session.setMaxToolResultSize(1000);
 
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "mock_tool", .arguments = {} } };
-    (void) session.processMessage("Test", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Test", nullptr);
 
     // The tool result in history should be unchanged
     auto const& toolResultMsg = session.history().messages()[2];
@@ -415,7 +415,7 @@ TEST_CASE("AgentSession.tool_result_over_limit_truncated", "[agent]")
     session.setMaxToolResultSize(1000);
 
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "large_tool", .arguments = {} } };
-    (void) session.processMessage("Test", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Test", nullptr);
 
     // The tool result in history should be truncated
     auto const& toolResultMsg = session.history().messages()[2];
@@ -440,7 +440,7 @@ TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
     session.setMaxToolResultSize(1000);
 
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "large_tool", .arguments = {} } };
-    (void) session.processMessage("Test", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Test", nullptr);
 
     auto const& toolResultMsg = session.history().messages()[2];
     auto const* result = std::get_if<ToolResultBlock>(toolResultMsg.content.data());
@@ -479,7 +479,7 @@ TEST_CASE("AgentSession.tracer_records_tool_calls", "[agent]")
         .arguments = nlohmann::json { { "key", "value" } },
     } };
 
-    (void) session.processMessage("Test trace", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Test trace", nullptr);
 
     // Read back trace file and find tool_call entries
     auto ifs = std::ifstream(tracePath);
@@ -518,7 +518,7 @@ TEST_CASE("AgentSession.tracer_records_user_message", "[agent]")
     REQUIRE(tracer.has_value());
     session.setTracer(&*tracer);
 
-    (void) session.processMessage("Hello agent", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Hello agent", nullptr);
 
     auto ifs = std::ifstream(tracePath);
     auto line = std::string {};
@@ -694,7 +694,7 @@ TEST_CASE("AgentSession.plan_mode_only_read_tools_sent", "[agent]")
     registry.registerTool(std::make_unique<MockWriteTool>());
     session.setToolRegistry(&registry);
 
-    (void) session.processMessageForPlan("Plan something", nullptr);
+    [[maybe_unused]] auto _ = session.processMessageForPlan("Plan something", nullptr);
 
     // Check that write_file was NOT in the tool definitions sent to the provider
     auto hasWriteFile = false;
@@ -812,7 +812,7 @@ TEST_CASE("AgentSession.reset_clears_usage", "[agent]")
     provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 200 };
 
     auto session = AgentSession(provider);
-    (void) session.processMessage("First", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("First", nullptr);
     CHECK(session.turnCount() == 1);
     CHECK(session.sessionUsage().inputTokens == 500);
 
@@ -915,13 +915,13 @@ TEST_CASE("AgentSession.last_turn_usage_resets_per_turn", "[agent]")
     auto session = AgentSession(provider);
 
     // First turn
-    (void) session.processMessage("First", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("First", nullptr);
     CHECK(session.lastTurnUsage().inputTokens == 300);
     CHECK(session.lastTurnUsage().outputTokens == 60);
 
     // Second turn with different usage
     provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 40 };
-    (void) session.processMessage("Second", nullptr);
+    [[maybe_unused]] auto _2 = session.processMessage("Second", nullptr);
 
     // lastTurnUsage should reflect only the second turn's values.
     CHECK(session.lastTurnUsage().inputTokens == 500);
@@ -949,7 +949,7 @@ TEST_CASE("AgentSession.reset_clears_last_turn_usage", "[agent]")
     provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 200 };
 
     auto session = AgentSession(provider);
-    (void) session.processMessage("Hello", nullptr);
+    [[maybe_unused]] auto _ = session.processMessage("Hello", nullptr);
     CHECK(session.lastTurnUsage().inputTokens == 500);
 
     session.reset();

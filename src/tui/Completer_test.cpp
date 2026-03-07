@@ -65,7 +65,7 @@ class TestProvider: public CompletionProvider
         return results;
     }
 
-    int priority() const override { return _priority; }
+    [[nodiscard]] int priority() const override { return _priority; }
 
   private:
     std::vector<CompletionItem> _items;
@@ -76,9 +76,12 @@ class TestProvider: public CompletionProvider
 /// @brief Helper to create items quickly.
 CompletionItem item(std::string text, int score = 0, std::string desc = "")
 {
-    return CompletionItem {
-        .text = std::move(text), .displayText = text, .description = std::move(desc), .score = score
-    };
+    CompletionItem result;
+    result.displayText = text;
+    result.text = std::move(text);
+    result.description = std::move(desc);
+    result.score = score;
+    return result;
 }
 
 } // namespace
@@ -189,6 +192,7 @@ TEST_CASE("Completer.max_suggestions")
     Completer completer;
 
     std::vector<CompletionItem> items;
+    items.reserve(100);
     for (int i = 0; i < 100; ++i)
         items.push_back(item("test" + std::to_string(i), 100 - i));
 

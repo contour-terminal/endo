@@ -138,7 +138,7 @@ TEST_CASE("ConversationCompactor.last_messages_preserved", "[agent]")
 
     // Last 2 messages should be preserved
     auto const msgs = history.messages();
-    auto const lastMsg = msgs[msgs.size() - 1];
+    auto const& lastMsg = msgs[msgs.size() - 1];
     CHECK(lastMsg.textContent() == "Assistant response 9");
 }
 

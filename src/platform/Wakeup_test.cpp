@@ -76,7 +76,7 @@ TEST_CASE("Wakeup.cross_thread_signal", "[platform][wakeup]")
     auto wakeup = Wakeup {};
     auto signaled = std::atomic<bool> { false };
 
-    auto worker = std::jthread([&](std::stop_token) {
+    auto worker = std::jthread([&](const std::stop_token&) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         wakeup.signal();
         signaled.store(true);

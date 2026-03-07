@@ -165,7 +165,7 @@ TEST_CASE("SubmitPlanTool.clear_resets_plan", "[agent][tools]")
           }) },
     };
 
-    (void) tool.execute(args);
+    [[maybe_unused]] auto _ = tool.execute(args);
     REQUIRE(tool.lastParsedPlan().has_value());
 
     tool.clearParsedPlan();

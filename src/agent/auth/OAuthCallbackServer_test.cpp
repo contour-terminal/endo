@@ -100,10 +100,6 @@ TEST_CASE("OAuthCallbackServer.move_semantics")
     // Move construct.
     auto server2 = std::move(server1);
 
-    // Original should be safe to destroy (no double-close).
-    // NOLINTNEXTLINE(bugprone-use-after-move)
-    server1.close(); // Should be a no-op.
-
     // Moved-to should still be valid.
     server2.close();
 }

@@ -81,7 +81,7 @@ struct TestParserRuntime
 
     /// Constructs a minimal program with custom product types registered.
     /// @param typeRegistrations Map of typeId → (name, slotCount) for types used by tests.
-    explicit TestParserRuntime(std::vector<std::tuple<uint16_t, std::string, uint8_t>> typeRegistrations = {})
+    explicit TestParserRuntime(std::vector<std::tuple<uint16_t, std::string, uint8_t>> const& typeRegistrations = {})
     {
         // Create a minimal program with a handler so we can create a Runner
         runtime.registerFunction("noop").returnType(CoreVM::LiteralType::Void).bind([](CoreVM::Params&) {});
@@ -112,7 +112,7 @@ struct TestParserRuntime
         compiledProgram->link(&runtime, &report);
     }
 
-    CoreVM::Runner createRunner()
+    [[nodiscard]] CoreVM::Runner createRunner() const
     {
         auto* fn = compiledProgram->findFunction("@test");
         CoreVM::Runner::Globals globals;

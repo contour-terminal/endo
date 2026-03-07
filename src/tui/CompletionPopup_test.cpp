@@ -520,7 +520,7 @@ TEST_CASE("CompletionPopup.detail_content_updates_on_selection_change")
     popup.selectNext(); // beta
     popup.selectNext(); // gamma (no detail)
 
-    auto size3 = popup.preferredSize();
+    static_cast<void>(popup.preferredSize());
 
     // After selecting item with no detail, width should shrink
     // (the detail panel is not shown)

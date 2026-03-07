@@ -254,7 +254,7 @@ TEST_CASE("agent.gemini.serialize_message_with_empty_text_block")
 
     // Even empty text blocks are serialized (Gemini API accepts them).
     CHECK(json["contents"].size() == 1);
-    CHECK(json["contents"][0]["parts"][0]["text"] == "");
+    CHECK(json["contents"][0]["parts"][0]["text"].get<std::string>().empty());
 }
 
 TEST_CASE("agent.gemini.serialize_mixed_content_message")

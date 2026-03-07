@@ -18,10 +18,11 @@ endo::CompletionContext makeContext(std::string fullInput,
                                     std::string command = "flatpak")
 {
     auto const cursor = fullInput.size();
+    auto const prefixStart = cursor - prefix.size();
     return endo::CompletionContext {
         .type = endo::CompletionContextType::Argument,
         .prefix = std::move(prefix),
-        .prefixStart = cursor - prefix.size(),
+        .prefixStart = prefixStart,
         .cursorPosition = cursor,
         .command = std::move(command),
         .fullInput = std::move(fullInput),

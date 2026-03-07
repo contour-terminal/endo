@@ -139,7 +139,7 @@ TEST_CASE("PlanExecutor.no_pending_steps_returns_error", "[agent]")
     auto executor = PlanExecutor(session, makePlan(1));
 
     // Complete the only step
-    (void) executor.executeNextStep(nullptr);
+    [[maybe_unused]] auto _ = executor.executeNextStep(nullptr);
     CHECK(executor.isComplete());
 
     // Trying to execute another step should fail
