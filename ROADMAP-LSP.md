@@ -92,11 +92,10 @@ High-value features that significantly improve the day-to-day editing experience
 
 ### Code Actions & Quick Fixes
 
-- [ ] `textDocument/codeAction`: quick fixes derived from diagnostic suggestions
-  - "Did you mean?" for misspelled function/variable names
-  - Wrap unwrapped Option/Result (diagnostic suggestions already exist in `DiagnosticsCollector`)
-  - Add missing `let` keyword, fix common syntax patterns
-  - Extract expression to let binding
+- [x] `textDocument/codeAction`: quick fixes derived from diagnostic suggestions
+  - [x] "Did you mean?" for misspelled function/variable names (auto-replaces with TextEdit)
+  - [x] Informational suggestions displayed as quickfix actions
+  - [x] Diagnostic `data` field round-trips raw suggestions for code action generation
   - Reuse: `DiagnosticsCollector` already produces `suggestions` vectors per diagnostic
 - [ ] `codeAction/resolve`: deferred edit computation for expensive actions
 
@@ -107,27 +106,29 @@ High-value features that significantly improve the day-to-day editing experience
 
 ### Folding Ranges
 
-- [ ] `textDocument/foldingRange`: collapsible regions
-  - Function bodies (multi-line `let f x = ...`)
-  - Match expressions (from `match` to last `|` arm)
-  - If-then-else blocks, for/while loop bodies
-  - Block scopes `{ ... }`, seq/list comprehension bodies
-  - Multi-line comments `(* ... *)`
-  - Implementation: AST walk over multi-line nodes
+- [x] `textDocument/foldingRange`: collapsible regions
+  - [x] Function bodies (multi-line `let f x = ...`)
+  - [x] Match expressions (from `match` to last `|` arm)
+  - [x] If-then-else blocks, for/while loop bodies
+  - [x] Block scopes `{ ... }`, seq/list comprehension bodies, record expressions
+  - [x] Multi-line comments `(* ... *)` as comment fold kind
+  - [x] Type definitions (record, union)
+  - Implementation: AST walk over multi-line nodes + lexer comment collection
 
 ### Selection Range
 
-- [ ] `textDocument/selectionRange`: smart expand/shrink selection
-  - Hierarchy: identifier → expression → statement → block → function body → top-level
-  - Implementation: AST walk finding all nodes containing cursor position
+- [x] `textDocument/selectionRange`: smart expand/shrink selection
+  - [x] Hierarchy: identifier → expression → statement → block → function body → top-level
+  - [x] Supports multiple cursor positions per request
+  - Implementation: AST walk finding all nodes containing cursor position, sorted by range size
 
 ### Inlay Hints
 
-- [~] `textDocument/inlayHint`: inline type annotations
+- [x] `textDocument/inlayHint`: inline type annotations
   - [x] Inferred parameter types for untyped function parameters (via Hindley-Milner type inference)
   - [x] Inferred return types for function definitions
   - [x] Variable types from `let` bindings
-  - [ ] Pipeline intermediate types (`data |> map f |> filter g`)
+  - [x] Pipeline intermediate types (`data |> map f |> filter g`) via `InferenceResult.exprTypes`
   - Reuse: type inference (Algorithm W) already runs as a pre-pass before IR generation
 - [ ] `inlayHint/resolve`: deferred tooltip/location for inlay hints
 
@@ -265,12 +266,12 @@ Features included for completeness. Most have limited relevance to Endo.
 
 Recommended order of work for maximum impact:
 
-1. **Code Actions** (Tier 2) — highest ROI: diagnostic suggestions already exist, just need LSP wiring
+1. ~~**Code Actions** (Tier 2) — highest ROI: diagnostic suggestions already exist, just need LSP wiring~~ (done)
 2. ~~**Document Highlight** (Tier 2) — very low cost, reuses `findReferences()`~~ (done)
-3. **Folding Ranges** (Tier 2) — moderate cost, immediate usability improvement
+3. ~~**Folding Ranges** (Tier 2) — moderate cost, immediate usability improvement~~ (done)
 4. ~~**Document Symbol completeness** (Tier 1) — add type definitions, nested symbols, union variants~~ (done: types, variants, fields, properties; remaining: nested let-in)
-5. ~~**Inlay Hints** (Tier 2) — high value for functional language, requires type inference integration~~ (done: param types, return types, let-binding types; remaining: pipeline intermediate types)
-6. **Selection Range** (Tier 2) — moderate cost, good structural editing support
+5. ~~**Inlay Hints** (Tier 2) — high value for functional language, requires type inference integration~~ (done: param types, return types, let-binding types, pipeline intermediate types)
+6. ~~**Selection Range** (Tier 2) — moderate cost, good structural editing support~~ (done)
 7. **Semantic Tokens Delta** (Tier 3) — performance optimization for large files
 8. **Range Formatting** (Tier 4) — moderate cost
 9. **Call Hierarchy** (Tier 3) — extends existing symbol infrastructure
