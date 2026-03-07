@@ -2,6 +2,7 @@
 #include "SignatureHelpProvider.hpp"
 
 #include <endo-language/ast/AST.hpp>
+#include <endo-language/builtins/StdlibDescriptors.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
@@ -148,6 +149,51 @@ namespace
         return nullptr;
     }
 
+    /// Converts a LiteralType to a human-readable type name string.
+    [[nodiscard]] std::string literalTypeName(CoreVM::LiteralType type)
+    {
+        using LT = CoreVM::LiteralType;
+        switch (type)
+        {
+            case LT::Void: return "unit";
+            case LT::Boolean: return "bool";
+            case LT::Number: return "int";
+            case LT::String: return "string";
+            case LT::IPAddress: return "ip";
+            case LT::Cidr: return "cidr";
+            case LT::RegExp: return "regex";
+            case LT::Object: return "object";
+            default: return "unknown";
+        }
+    }
+
+    /// Finds a stdlib descriptor by user-facing name that has parameters.
+    [[nodiscard]] StdlibDescriptor const* findStdlibDescriptor(std::string const& name)
+    {
+        for (auto const& desc: stdlibDescriptors())
+            if (desc.userFacingName == name && !desc.params.empty())
+                return &desc;
+        return nullptr;
+    }
+
+    /// Creates a synthetic SymbolDefinition from a StdlibDescriptor for signature help.
+    [[nodiscard]] SymbolDefinition makeSymbolDefFromStdlib(StdlibDescriptor const& desc)
+    {
+        auto def = SymbolDefinition {};
+        def.name = std::string(desc.userFacingName);
+        def.category = SymbolCategory::Function;
+        for (auto const& param: desc.params)
+        {
+            def.parameterNames.emplace_back(param.name);
+            def.parameterTypes.push_back(literalTypeName(param.type));
+        }
+        if (desc.returnType != CoreVM::LiteralType::Void)
+            def.returnType = literalTypeName(desc.returnType);
+        else
+            def.returnType = "unit";
+        return def;
+    }
+
     /// Builds a signature label string from a function definition.
     [[nodiscard]] std::string buildSignatureLabel(SymbolDefinition const& def)
     {
@@ -245,13 +291,28 @@ std::optional<SignatureHelp> computeSignatureHelp(std::string const& source, Pos
         int funcTokenIdx;
     };
 
+    // Synthetic definitions for stdlib builtins (pointer stability via vector + reserve)
+    std::vector<SymbolDefinition> syntheticDefs;
+    syntheticDefs.reserve(calls.size());
+
     std::optional<Match> bestMatch;
 
     for (auto const& call: calls)
     {
         auto const* funcDef = findFunctionDef(*table, call.functionName);
         if (!funcDef || funcDef->parameterNames.empty())
-            continue;
+        {
+            // Fall back to stdlib descriptors for builtins
+            if (auto const* desc = findStdlibDescriptor(call.functionName))
+            {
+                syntheticDefs.push_back(makeSymbolDefFromStdlib(*desc));
+                funcDef = &syntheticDefs.back();
+            }
+            else
+            {
+                continue;
+            }
+        }
 
         // Find function name tokens on the cursor's line
         for (auto i = 0; std::cmp_less(i, tokens.size()); ++i)

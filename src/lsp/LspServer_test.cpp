@@ -1467,6 +1467,28 @@ TEST_CASE("SignatureHelp.not in function call returns nullopt", "[lsp][signature
     CHECK_FALSE(sig.has_value());
 }
 
+TEST_CASE("SignatureHelp.stdlib builtin register_completer", "[lsp][signaturehelp]")
+{
+    const auto* source = "register_completer \"cmd\" func";
+    // cursor on first argument (col 19 = inside "cmd")
+    auto sig = computeSignatureHelp(source, Position { .line = 0, .character = 19 });
+    REQUIRE(sig.has_value());
+    REQUIRE(!sig->signatures.empty());
+    CHECK(sig->signatures[0].parameters.size() == 2);
+    CHECK(sig->activeParameter == 0);
+}
+
+TEST_CASE("SignatureHelp.stdlib builtin register_completer second arg", "[lsp][signaturehelp]")
+{
+    const auto* source = "register_completer \"cmd\" func";
+    // cursor on second argument (col 25 = on "func")
+    auto sig = computeSignatureHelp(source, Position { .line = 0, .character = 25 });
+    REQUIRE(sig.has_value());
+    REQUIRE(!sig->signatures.empty());
+    CHECK(sig->signatures[0].parameters.size() == 2);
+    CHECK(sig->activeParameter == 1);
+}
+
 // =============================================================================
 // E2E: Definition, References, SignatureHelp
 // =============================================================================
@@ -2876,7 +2898,7 @@ TEST_CASE("SelectionRange.nested_match", "[lsp][selection]")
                                          { Position { .line = 1, .character = 7 } });
     REQUIRE(ranges.size() == 1);
     // Should have nested ranges (arm body -> match -> let binding)
-    auto* current = &ranges[0];
+    auto* current = ranges.data();
     auto depth = 1;
     while (current->parent)
     {
@@ -3845,7 +3867,7 @@ TEST_CASE("CallHierarchy.prepare_on_non_function", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.incoming_calls", "[lsp][callhierarchy]")
 {
-    auto const source = "let f x = x\nlet g y = f y";
+    const auto *const source = "let f x = x\nlet g y = f y";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -3861,7 +3883,7 @@ TEST_CASE("CallHierarchy.incoming_calls", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.outgoing_calls", "[lsp][callhierarchy]")
 {
-    auto const source = "let f x = x\nlet g y = f y";
+    const auto *const source = "let f x = x\nlet g y = f y";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 1, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -3877,7 +3899,7 @@ TEST_CASE("CallHierarchy.outgoing_calls", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.no_callers", "[lsp][callhierarchy]")
 {
-    auto const source = "let f x = x";
+    const auto *const source = "let f x = x";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -4133,7 +4155,7 @@ TEST_CASE("CodeLens.no_functions", "[lsp][codelens]")
 
 TEST_CASE("CodeLens.resolve_reference_count", "[lsp][codelens]")
 {
-    auto const source = "let f x = x\nlet g y = f y\nlet h z = f z";
+    const auto *const source = "let f x = x\nlet g y = f y\nlet h z = f z";
     auto lenses = computeCodeLenses(source, "file:///test.endo");
 
     // Find the lens for f
@@ -4151,7 +4173,7 @@ TEST_CASE("CodeLens.resolve_reference_count", "[lsp][codelens]")
 
 TEST_CASE("CodeLens.resolve_zero_references", "[lsp][codelens]")
 {
-    auto const source = "let f x = x";
+    const auto *const source = "let f x = x";
     auto lenses = computeCodeLenses(source, "file:///test.endo");
     REQUIRE(!lenses.empty());
 

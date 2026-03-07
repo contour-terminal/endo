@@ -49,6 +49,7 @@ static constexpr ParamDescriptor formatNumberOneParams[] = { { .name="number", .
 static constexpr ParamDescriptor randRangeParams[] = { { .name="min", .type=LT::Number }, { .name="max", .type=LT::Number } };
 static constexpr ParamDescriptor fetchTwoParams[] = { { .name="url", .type=LT::String }, { .name="headers", .type=LT::Number } };
 static constexpr ParamDescriptor jsonQueryParams[] = { { .name="path", .type=LT::String }, { .name="json", .type=LT::String } };
+static constexpr ParamDescriptor registerCompleterParams[] = { { .name="command", .type=LT::String }, { .name="function_name", .type=LT::String } };
 
 // File I/O params
 static constexpr ParamDescriptor fileOpenParams[] = { { .name="path", .type=LT::String }, { .name="mode", .type=LT::String } };
@@ -267,6 +268,12 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="fetch", .vmName="fetch", .returnType=LT::Number, .params=urlStringParam, .sharedImpl=nullptr,
         .description="fetch url -> result<string, string>",
         .detail="**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
+    StdlibDescriptor { .userFacingName="register_completer", .vmName="", .returnType=LT::Void, .params=registerCompleterParams, .sharedImpl=nullptr,
+        .description="register_completer command function_name -> unit",
+        .detail="**register_completer** `command function_name -> unit`\n\n"
+                "Registers a custom tab-completion function for a shell command.\n\n"
+                "```endo\nlet complete_myapp args prefix =\n  [\"build\"; \"test\"; \"run\"]\n\n"
+                "register_completer \"myapp\" complete_myapp\n```" },
 
     // -----------------------------------------------------------------------
     // Internal-only entries (no user-facing name)
