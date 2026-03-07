@@ -122,7 +122,8 @@ TEST_CASE("Screen.inlineCursor_growShrinkCycle_noDrift")
     // Initial (1 row) -> Grow (8 rows) -> Shrink (1 row) -> Grow (8 rows)
     // Each transition should be self-consistent with no cumulative drift
 
-    int prevHeight = 0, prevCursor = 0;
+    int prevHeight = 0;
+    int prevCursor = 0;
 
     // Initial render
     auto m0 = calculateInlineCursorMovement(prevHeight, prevCursor, 1);

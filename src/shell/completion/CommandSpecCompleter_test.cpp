@@ -21,10 +21,11 @@ endo::CompletionContext makeGitContext(std::string fullInput,
                                        std::string command = "git")
 {
     auto const cursor = fullInput.size();
+    auto const prefixStart = cursor - prefix.size();
     return endo::CompletionContext {
         .type = endo::CompletionContextType::Argument,
         .prefix = std::move(prefix),
-        .prefixStart = cursor - prefix.size(),
+        .prefixStart = prefixStart,
         .cursorPosition = cursor,
         .command = std::move(command),
         .fullInput = std::move(fullInput),
@@ -37,10 +38,11 @@ endo::CompletionContext makeOptionContext(std::string fullInput,
                                           std::string command = "git")
 {
     auto const cursor = fullInput.size();
+    auto const prefixStart = cursor - prefix.size();
     return endo::CompletionContext {
         .type = endo::CompletionContextType::Option,
         .prefix = std::move(prefix),
-        .prefixStart = cursor - prefix.size(),
+        .prefixStart = prefixStart,
         .cursorPosition = cursor,
         .command = std::move(command),
         .fullInput = std::move(fullInput),

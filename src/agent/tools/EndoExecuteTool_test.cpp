@@ -108,7 +108,7 @@ TEST_CASE("EndoExecuteTool.captures_source_and_timeout", "[agent][tools]")
     });
 
     auto const args = nlohmann::json { { "source", "print 42" }, { "timeout_ms", 5000 } };
-    (void) tool.execute(args);
+    [[maybe_unused]] auto _ = tool.execute(args);
 
     CHECK(capturedSource == "print 42");
     CHECK(capturedTimeout == std::chrono::milliseconds(5000));

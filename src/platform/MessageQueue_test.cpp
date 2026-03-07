@@ -77,7 +77,7 @@ TEST_CASE("MessageQueue.shutdown_unblocks_pop", "[platform][messagequeue]")
     auto queue = MessageQueue<int> {};
     auto result = std::optional<int> { 42 }; // sentinel
 
-    auto worker = std::jthread([&](std::stop_token) { result = queue.pop(); });
+    auto worker = std::jthread([&](const std::stop_token&) { result = queue.pop(); });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     queue.shutdown();
@@ -98,7 +98,7 @@ TEST_CASE("MessageQueue.cross_thread_push_pop", "[platform][messagequeue]")
 {
     auto queue = MessageQueue<std::string> {};
 
-    auto producer = std::jthread([&](std::stop_token) {
+    auto producer = std::jthread([&](const std::stop_token&) {
         for (auto i = 0; i < 10; ++i)
             queue.push("msg-" + std::to_string(i));
     });

@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace endo::editor_protocol
 {
@@ -38,6 +39,10 @@ class DocumentStore
     /// @param uri Document URI
     /// @return Document version, or -1 if not found
     [[nodiscard]] int version(std::string const& uri) const;
+
+    /// Returns all URIs of currently open documents.
+    /// @return Vector of document URIs
+    [[nodiscard]] std::vector<std::string> uris() const;
 
   private:
     struct Document

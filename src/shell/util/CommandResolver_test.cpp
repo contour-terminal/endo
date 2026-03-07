@@ -30,7 +30,7 @@ struct TempDir
 
     /// @brief Creates a zero-byte file with the given name inside the temp directory.
     /// On POSIX, sets owner-execute permission.
-    std::filesystem::path createExecutable(std::string const& name) const
+    [[nodiscard]] std::filesystem::path createExecutable(std::string const& name) const
     {
         auto const filePath = path / name;
         std::ofstream { filePath }.flush();
@@ -42,7 +42,7 @@ struct TempDir
     }
 
     /// @brief Creates a zero-byte file without execute permission (POSIX only distinction).
-    std::filesystem::path createNonExecutable(std::string const& name) const
+    [[nodiscard]] std::filesystem::path createNonExecutable(std::string const& name) const
     {
         auto const filePath = path / name;
         std::ofstream { filePath }.flush();
@@ -56,9 +56,9 @@ TEST_CASE("CommandResolver.findInPath.bare_name_found")
 {
     TempDir dir;
 #if defined(_WIN32)
-    dir.createExecutable("testcmd.exe");
+    (void) dir.createExecutable("testcmd.exe");
 #else
-    dir.createExecutable("testcmd");
+    (void) dir.createExecutable("testcmd");
 #endif
 
     platform::TestEnvironmentProvider env;
@@ -102,13 +102,13 @@ TEST_CASE("CommandResolver.findInPath.skips_nonexistent_directory")
 {
     TempDir dir;
 #if defined(_WIN32)
-    dir.createExecutable("mycmd.exe");
+    (void) dir.createExecutable("mycmd.exe");
     auto const pathValue = std::string("C:\\no_such_dir_12345") + ";" + dir.path.string();
     platform::TestEnvironmentProvider env;
     env.set("PATH", pathValue);
     env.set("PATHEXT", ".exe");
 #else
-    dir.createExecutable("mycmd");
+    (void) dir.createExecutable("mycmd");
     auto const pathValue = std::string("/no_such_dir_12345") + ":" + dir.path.string();
     platform::TestEnvironmentProvider env;
     env.set("PATH", pathValue);
@@ -125,7 +125,7 @@ TEST_CASE("CommandResolver.findInPath.PATHEXT_resolution")
 {
     TempDir dir;
     // Create testapp.cmd — should be found when searching for "testapp"
-    dir.createExecutable("testapp.cmd");
+    (void) dir.createExecutable("testapp.cmd");
 
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());
@@ -143,7 +143,7 @@ TEST_CASE("CommandResolver.findInPath.skips_non_executable")
 {
     TempDir dir;
     // Create a file without execute permission — should not be found.
-    dir.createNonExecutable("noexec");
+    (void) dir.createNonExecutable("noexec");
 
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());

@@ -39,7 +39,7 @@ class TempHome
         return _path / ".config" / "endo" / "agent-memory";
     }
 
-    [[nodiscard]] auto readFile(std::filesystem::path const& filePath) const -> std::string
+    [[nodiscard]] static auto readFile(std::filesystem::path const& filePath) -> std::string
     {
         auto file = std::ifstream(filePath);
         auto ss = std::ostringstream {};

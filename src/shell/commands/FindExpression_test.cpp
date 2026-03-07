@@ -13,7 +13,7 @@ namespace
 {
 
 /// Creates a mock FindEntry for testing evaluators.
-FindEntry mockEntry(std::string path,
+FindEntry mockEntry(std::string const& path,
                     fs::file_type type = fs::file_type::regular,
                     uintmax_t size = 0,
                     int depth = 0)
@@ -169,7 +169,7 @@ TEST_CASE("find.parse.size_predicate", "[find]")
         auto const& [options, expr] = result.value();
         REQUIRE(expr);
         CHECK(expr->evaluate(mockEntry("exact.bin", fs::file_type::regular, 5ULL * 1024 * 1024)));
-        CHECK_FALSE(expr->evaluate(mockEntry("off.bin", fs::file_type::regular, 5ULL * 1024 * 1024 + 1)));
+        CHECK_FALSE(expr->evaluate(mockEntry("off.bin", fs::file_type::regular, (5ULL * 1024 * 1024) + 1)));
     }
 }
 

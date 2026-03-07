@@ -47,6 +47,15 @@ struct SymbolReference
     std::string name;             ///< Symbol name
     SourceLocationRange location; ///< Location of the reference in source
     int definitionIndex = -1;     ///< Index into SymbolTable::definitions (-1 if unresolved)
+    bool isWrite = false;         ///< true for mutation assignments (LHS of `<-`)
+};
+
+/// Represents a call relationship between two functions.
+struct CallRelation
+{
+    int callerDefIndex = -1;      ///< Index of the calling function in definitions
+    int calleeDefIndex = -1;      ///< Index of the called function in definitions
+    SourceLocationRange callSite; ///< Location of the call expression
 };
 
 /// Collected symbol information from a source file.
@@ -54,6 +63,7 @@ struct SymbolTable
 {
     std::vector<SymbolDefinition> definitions;
     std::vector<SymbolReference> references;
+    std::vector<CallRelation> callRelations;
 };
 
 /// Collects all symbols (definitions and references) from the given source.
@@ -88,6 +98,7 @@ struct HighlightEntry
 {
     SourceLocationRange range;
     bool isDefinition = false; ///< true for definitions (Write kind), false for references (Read kind)
+    bool isWrite = false;      ///< true for mutation write references (LHS of `<-`)
 };
 
 /// Finds all highlights for the symbol at the given cursor position.

@@ -52,7 +52,7 @@ TEST_CASE("agent.headless.toJson.failure")
     auto const json = toJson(result);
     CHECK(json["success"] == false);
     CHECK(json["error"] == "Provider error: rate limited");
-    CHECK(json["response"] == "");
+    CHECK(json["response"].get<std::string>().empty());
 }
 
 TEST_CASE("agent.headless.toJson.tool_calls")
@@ -102,7 +102,7 @@ TEST_CASE("agent.headless.toJson.default_values")
     auto result = HeadlessRunResult {};
     auto const json = toJson(result);
     CHECK(json["success"] == false);
-    CHECK(json["response"] == "");
+    CHECK(json["response"].get<std::string>().empty());
     CHECK(json["turn_count"] == 0);
     CHECK(json["tool_calls"].empty());
 }

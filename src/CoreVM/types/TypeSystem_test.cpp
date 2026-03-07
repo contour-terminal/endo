@@ -214,7 +214,7 @@ TEST_CASE("TypedObject.allocationSize")
     CHECK(TypedObject::allocationSize(&desc) == sizeof(TypedObject) + sizeof(SlotValue));
 
     desc.slotCount = 3;
-    CHECK(TypedObject::allocationSize(&desc) == sizeof(TypedObject) + 3 * sizeof(SlotValue));
+    CHECK(TypedObject::allocationSize(&desc) == sizeof(TypedObject) + (3 * sizeof(SlotValue)));
 }
 
 TEST_CASE("TypedObject.refCount_retain_release")

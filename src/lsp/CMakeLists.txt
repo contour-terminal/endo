@@ -33,6 +33,30 @@ add_library(endo-lsp STATIC
     FormattingProvider.cpp
     InlayHintProvider.hpp
     InlayHintProvider.cpp
+    FoldingRangeProvider.hpp
+    FoldingRangeProvider.cpp
+    SelectionRangeProvider.hpp
+    SelectionRangeProvider.cpp
+    CodeActionProvider.hpp
+    CodeActionProvider.cpp
+    RangeFormattingProvider.hpp
+    RangeFormattingProvider.cpp
+    OnTypeFormattingProvider.hpp
+    OnTypeFormattingProvider.cpp
+    WorkspaceSymbolProvider.hpp
+    WorkspaceSymbolProvider.cpp
+    CallHierarchyProvider.hpp
+    CallHierarchyProvider.cpp
+    TypeDefinitionProvider.hpp
+    TypeDefinitionProvider.cpp
+    DocumentLinkProvider.hpp
+    DocumentLinkProvider.cpp
+    CodeLensProvider.hpp
+    CodeLensProvider.cpp
+    ProgressReporter.hpp
+    ProgressReporter.cpp
+    InlineValueProvider.hpp
+    InlineValueProvider.cpp
 
     # Server core
     LspServer.hpp
@@ -54,3 +78,4 @@ add_test(NAME test-endo-lsp COMMAND test-endo-lsp)
 enable_sanitizers(endo-lsp)
 enable_clang_tidy(endo-lsp)
 enable_sanitizers(test-endo-lsp)
+enable_clang_tidy(test-endo-lsp)

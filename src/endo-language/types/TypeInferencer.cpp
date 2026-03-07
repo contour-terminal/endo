@@ -242,6 +242,9 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             return valResult;
         auto [valType, s1] = *valResult;
 
+        // Record the intermediate type of the pipeline value for inlay hints
+        _result.exprTypes[pipe->value.get()] = s1.apply(valType);
+
         auto funcResult = inferExpr(*pipe->function, env, s1);
         if (!funcResult)
             return funcResult;

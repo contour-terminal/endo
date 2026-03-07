@@ -744,7 +744,7 @@ TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
     TestShell shell;
     // Create a file with null bytes (binary content)
     shell("printf 'hello\\x00world' > /tmp/endo_test_binary_raw.dat");
-    auto output = shell("cat --raw /tmp/endo_test_binary_raw.dat").output();
+    static_cast<void>(shell("cat --raw /tmp/endo_test_binary_raw.dat").output());
     // With --raw, binary data should pass through (exit code 0)
     CHECK(shell.exitCode == 0);
     std::filesystem::remove("/tmp/endo_test_binary_raw.dat");

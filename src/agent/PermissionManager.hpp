@@ -46,10 +46,10 @@ enum class PermissionDecision : uint8_t
 /// Human-readable description of a permission prompt.
 struct PermissionPrompt
 {
-    std::string toolName;       ///< Name of the tool requesting permission.
-    ToolRisk riskLevel;         ///< Classified risk level.
-    std::string description;    ///< Human-readable: "Write to /foo/bar.cpp".
-    std::string commandPreview; ///< For shell/git: the actual command string.
+    std::string toolName;                      ///< Name of the tool requesting permission.
+    ToolRisk riskLevel = ToolRisk::ReadOnly;    ///< Classified risk level.
+    std::string description;                   ///< Human-readable: "Write to /foo/bar.cpp".
+    std::string commandPreview;                ///< For shell/git: the actual command string.
 };
 
 /// Callback invoked to prompt the user for permission.

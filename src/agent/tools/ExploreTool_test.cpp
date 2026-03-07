@@ -217,7 +217,7 @@ TEST_CASE("ExploreTool.inner_agent_has_only_read_tools", "[agent][explore]")
     auto tool = ExploreTool(provider, noopShellExec, ExploreConfig {});
     tool.setSystemPrompt("You are an explorer.");
 
-    (void) tool.execute(nlohmann::json { { "question", "test" } });
+    [[maybe_unused]] auto _ = tool.execute(nlohmann::json { { "question", "test" } });
 
     // Verify that only read-only tool definitions were sent to the provider
     auto const& defs = provider.lastToolDefs;
@@ -248,7 +248,7 @@ TEST_CASE("ExploreTool.scope_prepended_to_question", "[agent][explore]")
     auto tool = ExploreTool(provider, noopShellExec, ExploreConfig {});
     tool.setSystemPrompt("You are an explorer.");
 
-    (void) tool.execute(nlohmann::json { { "question", "What does it do?" }, { "scope", "src/agent/" } });
+    [[maybe_unused]] auto _ = tool.execute(nlohmann::json { { "question", "What does it do?" }, { "scope", "src/agent/" } });
 
     // The user message sent to the inner agent should contain both scope and question
     // We can verify the provider received a message (generateCallCount == 1)

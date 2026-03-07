@@ -16,7 +16,8 @@ std::vector<DocumentHighlight> computeDocumentHighlights(std::string const& sour
     {
         result.push_back(DocumentHighlight {
             .range = toRange(entry.range),
-            .kind = entry.isDefinition ? DocumentHighlightKind::Write : DocumentHighlightKind::Read,
+            .kind = (entry.isDefinition || entry.isWrite) ? DocumentHighlightKind::Write
+                                                        : DocumentHighlightKind::Read,
         });
     }
     return result;

@@ -9,7 +9,7 @@
 #if !defined(_WIN32)
     #include <sys/wait.h>
 
-    #include <signal.h>
+    #include <csignal>
     #include <unistd.h>
 #else
     #include <stdlib.h> // _putenv_s
@@ -87,13 +87,14 @@ TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
 
     // Set HOME and initialize — should create the directory tree.
     auto const* originalHome = std::getenv("HOME");
+    auto const savedHome = originalHome ? std::string(originalHome) : std::string();
     setenv("HOME", tmpDir.c_str(), 1);
 
     endo::CrashHandler::initialize("0.1.0-test");
 
     // Restore HOME.
-    if (originalHome)
-        setenv("HOME", originalHome, 1);
+    if (!savedHome.empty())
+        setenv("HOME", savedHome.c_str(), 1);
 
     auto const crashDir = tmpDir / ".local" / "state" / "endo" / "crash";
     CHECK(std::filesystem::exists(crashDir));

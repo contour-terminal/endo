@@ -148,6 +148,7 @@ if(ENDO_TESTING)
     enable_sanitizers(endo)
     enable_clang_tidy(endo)
     enable_sanitizers(test-endo-language)
+    enable_clang_tidy(test-endo-language)
 endif()
 
 # WASM playground target (Emscripten only)

@@ -107,7 +107,7 @@ TEST_CASE("ShellExecuteTool.captures_command_and_timeout", "[agent][tools]")
     });
 
     auto const args = nlohmann::json { { "command", "ls -la" }, { "timeout_ms", 5000 } };
-    (void) tool.execute(args);
+    [[maybe_unused]] auto _ = tool.execute(args);
 
     CHECK(capturedCommand == "ls -la");
     CHECK(capturedTimeout == std::chrono::milliseconds(5000));

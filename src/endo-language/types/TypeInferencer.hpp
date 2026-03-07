@@ -28,7 +28,9 @@ struct InferenceResult
 {
     std::unordered_map<std::string, InferredFunctionType> functions; ///< Function name → inferred types
     std::unordered_map<std::string, TypePtr> bindings;               ///< Let-binding name → inferred type
-    std::vector<std::string> errors;                                 ///< Type errors encountered
+    std::unordered_map<ast::Expr const*, TypePtr>
+        exprTypes;                   ///< Expression → inferred type (e.g., pipeline intermediates)
+    std::vector<std::string> errors; ///< Type errors encountered
 
     /// Check if inference succeeded without errors.
     [[nodiscard]] bool hasErrors() const noexcept { return !errors.empty(); }

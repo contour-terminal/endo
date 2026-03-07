@@ -125,22 +125,22 @@ TEST_CASE("OAuthFlow.isTokenExpired_detects_expiry")
 
     // Token that expired 10 minutes ago.
     auto expired = OAuthCredentials {};
-    expired.expiresAt = now - 10 * 60 * 1000;
+    expired.expiresAt = now - (10 * 60 * 1000);
     CHECK(isTokenExpired(expired));
 
     // Token that expires in 1 minute (within 5-minute buffer).
     auto almostExpired = OAuthCredentials {};
-    almostExpired.expiresAt = now + 1 * 60 * 1000;
+    almostExpired.expiresAt = now + (1 * 60 * 1000);
     CHECK(isTokenExpired(almostExpired));
 
     // Token that expires in 10 minutes (outside buffer).
     auto valid = OAuthCredentials {};
-    valid.expiresAt = now + 10 * 60 * 1000;
+    valid.expiresAt = now + (10 * 60 * 1000);
     CHECK_FALSE(isTokenExpired(valid));
 
     // Token that expires in exactly 5 minutes (boundary).
     auto boundary = OAuthCredentials {};
-    boundary.expiresAt = now + 5 * 60 * 1000;
+    boundary.expiresAt = now + (5 * 60 * 1000);
     CHECK(isTokenExpired(boundary));
 }
 
