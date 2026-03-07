@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
     paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml', 'src/**', 'CMakeLists.txt', 'CMakePresets.json', 'cmake/**']
+  pull_request:
+    branches: [master]
+    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml', 'src/**', 'CMakeLists.txt', 'CMakePresets.json', 'cmake/**']
   workflow_dispatch:
 
 permissions:
@@ -46,5 +49,8 @@ jobs:
         run: |
           pip install -r requirements-docs.txt
           pip install -e ./docs/pygments_endo
-      - name: Build and deploy documentation
+      - name: Build documentation
+        run: mkdocs build --clean --verbose
+      - name: Deploy documentation
+        if: github.ref == 'refs/heads/master'
         run: mkdocs gh-deploy --force --clean --verbose
