@@ -39,4 +39,13 @@ int DocumentStore::version(std::string const& uri) const
     return it->second.version;
 }
 
+std::vector<std::string> DocumentStore::uris() const
+{
+    std::vector<std::string> result;
+    result.reserve(_documents.size());
+    for (auto const& [uri, _]: _documents)
+        result.push_back(uri);
+    return result;
+}
+
 } // namespace endo::editor_protocol

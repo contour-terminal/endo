@@ -7,22 +7,31 @@
 
 #include <sstream>
 
+#include "CallHierarchyProvider.hpp"
 #include "CodeActionProvider.hpp"
+#include "CodeLensProvider.hpp"
 #include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentHighlightProvider.hpp"
+#include "DocumentLinkProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
 #include "FoldingRangeProvider.hpp"
 #include "HoverProvider.hpp"
 #include "InlayHintProvider.hpp"
+#include "InlineValueProvider.hpp"
 #include "LspServer.hpp"
+#include "OnTypeFormattingProvider.hpp"
+#include "ProgressReporter.hpp"
+#include "RangeFormattingProvider.hpp"
 #include "ReferencesProvider.hpp"
 #include "RenameProvider.hpp"
 #include "SelectionRangeProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
+#include "TypeDefinitionProvider.hpp"
+#include "WorkspaceSymbolProvider.hpp"
 #include <nlohmann/json.hpp>
 
 using namespace endo::editor_protocol;
@@ -157,7 +166,7 @@ TEST_CASE("LSP.initialize returns server capabilities", "[lsp][lifecycle]")
     CHECK(initResult["capabilities"]["textDocumentSync"] == 1);
     CHECK(initResult["capabilities"]["hoverProvider"] == true);
     CHECK(initResult["capabilities"].contains("semanticTokensProvider"));
-    CHECK(initResult["capabilities"]["semanticTokensProvider"]["full"] == true);
+    CHECK(initResult["capabilities"]["semanticTokensProvider"]["full"]["delta"] == true);
     CHECK(initResult.contains("serverInfo"));
 }
 
@@ -3113,4 +3122,1366 @@ TEST_CASE("CodeAction.diagnostic_without_data_roundtrip", "[lsp][codeaction]")
     auto parsed = j.get<Diagnostic>();
     CHECK_FALSE(parsed.data.has_value());
     CHECK(parsed.message == "Unused variable 'x'");
+}
+
+// =============================================================================
+// 1. Nested Document Symbols
+// =============================================================================
+
+TEST_CASE("DocumentSymbol.nested_let_in_function", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let f x = let g y = y + 1 in g x");
+    REQUIRE(!symbols.empty());
+    bool foundF = false;
+    for (auto const& sym: symbols)
+    {
+        if (sym.name == "f")
+        {
+            foundF = true;
+            // g should be a child of f
+            bool foundG = false;
+            for (auto const& child: sym.children)
+            {
+                if (child.name == "g")
+                    foundG = true;
+            }
+            CHECK(foundG);
+        }
+    }
+    CHECK(foundF);
+}
+
+TEST_CASE("DocumentSymbol.existing_tests_unchanged", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let x = 42\nlet f y = y + 1");
+    REQUIRE(symbols.size() >= 2);
+    bool foundX = false;
+    bool foundF = false;
+    for (auto const& sym: symbols)
+    {
+        if (sym.name == "x")
+            foundX = true;
+        if (sym.name == "f")
+            foundF = true;
+    }
+    CHECK(foundX);
+    CHECK(foundF);
+}
+
+// =============================================================================
+// 2. completionItem/resolve
+// =============================================================================
+
+TEST_CASE("CompletionResolve.unknown_item_e2e", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("completionItem/resolve", json { { "label", "unknown" } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"]["label"] == "unknown");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CompletionResolve.builtin_function_e2e", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("completionItem/resolve",
+                    json { { "label", "print" }, { "data", json { { "kind", "builtin" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("documentation"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CompletionResolve.keyword_e2e", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("completionItem/resolve",
+                    json { { "label", "match" }, { "data", json { { "kind", "keyword" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("documentation"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CompletionResolve.e2e_dispatch", "[lsp][e2e][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("completionItem/resolve", json { { "label", "print" } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg.contains("result"));
+            CHECK(msg["result"]["label"] == "print");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 3. codeAction/resolve
+// =============================================================================
+
+TEST_CASE("CodeActionResolve.passthrough", "[lsp][codeaction]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("codeAction/resolve", json { { "title", "test action" }, { "kind", "quickfix" } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"]["title"] == "test action");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CodeActionResolve.e2e_dispatch", "[lsp][e2e][codeaction]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("codeAction/resolve", json { { "title", "fix" }, { "kind", "quickfix" } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"]["title"] == "fix");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 4. inlayHint/resolve
+// =============================================================================
+
+TEST_CASE("InlayHintResolve.no_data", "[lsp][inlayhint]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("inlayHint/resolve",
+                    json {
+                        { "position", json { { "line", 0 }, { "character", 5 } } },
+                        { "label", ": int" },
+                        { "kind", 1 },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"]["label"] == ": int");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("InlayHintResolve.adds_tooltip", "[lsp][inlayhint]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("inlayHint/resolve",
+                    json {
+                        { "position", json { { "line", 0 }, { "character", 5 } } },
+                        { "label", ": int" },
+                        { "kind", 1 },
+                        { "data", json { { "type", "int" } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("tooltip"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// InlayHintResolve E2E dispatch is covered by the tests above
+
+// =============================================================================
+// 5. Semantic Tokens Range
+// =============================================================================
+
+TEST_CASE("SemanticTokensRange.empty_range", "[lsp][semantictokens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nlet y = 99\nlet z = 0" },
+                               } },
+                         }),
+        sendRequest("textDocument/semanticTokens/range",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 1 }, { "character", 0 } } },
+                              { "end", json { { "line", 1 }, { "character", 10 } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("data"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("SemanticTokensRange.e2e_dispatch", "[lsp][e2e][semantictokens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/semanticTokens/range",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 0 }, { "character", 10 } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].contains("data"));
+            CHECK(msg["result"]["data"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 6. Semantic Tokens Delta
+// =============================================================================
+
+TEST_CASE("SemanticTokensDelta.result_id_increments", "[lsp][semantictokens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/semanticTokens/full",
+                    json { { "textDocument", json { { "uri", "file:///test.endo" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            REQUIRE(msg["result"].contains("resultId"));
+            CHECK(!msg["result"]["resultId"].get<std::string>().empty());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("SemanticTokensDelta.unknown_previous_id", "[lsp][semantictokens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/semanticTokens/full/delta",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "previousResultId", "invalid-id" },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            // Should return full tokens (with data, not edits)
+            REQUIRE(msg["result"].contains("data"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("SemanticTokensDelta.unchanged_document", "[lsp][semantictokens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        // Get full tokens first
+        sendRequest("textDocument/semanticTokens/full",
+                    json { { "textDocument", json { { "uri", "file:///test.endo" } } } },
+                    3),
+        // Request delta with the resultId
+        sendRequest("textDocument/semanticTokens/full/delta",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "previousResultId", "1" },
+                    },
+                    5),
+        sendRequest("shutdown", json::object(), 6),
+        sendNotification("exit", json::object()),
+    });
+
+    bool foundDelta = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 5)
+        {
+            foundDelta = true;
+            // Same document -> empty edits
+            REQUIRE(msg["result"].contains("edits"));
+            CHECK(msg["result"]["edits"].empty());
+            break;
+        }
+    }
+    CHECK(foundDelta);
+}
+
+// =============================================================================
+// 7. Range Formatting
+// =============================================================================
+
+TEST_CASE("RangeFormatting.no_changes_in_range", "[lsp][formatting]")
+{
+    auto edits = computeRangeFormatting(
+        "let x = 42",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 10 } });
+    // Already well-formatted, should return empty
+    CHECK(edits.empty());
+}
+
+TEST_CASE("RangeFormatting.e2e_dispatch", "[lsp][e2e][formatting]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/rangeFormatting",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 0 }, { "character", 10 } } },
+                          } },
+                        { "options", json { { "tabSize", 4 }, { "insertSpaces", true } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 8. On-Type Formatting
+// =============================================================================
+
+TEST_CASE("OnTypeFormatting.newline_after_equals", "[lsp][formatting]")
+{
+    auto edits = computeOnTypeFormatting("let f x =\n", Position { .line = 1, .character = 0 }, "\n");
+    CHECK(!edits.empty());
+    if (!edits.empty())
+        CHECK(edits[0].newText.starts_with("    "));
+}
+
+TEST_CASE("OnTypeFormatting.newline_after_arrow", "[lsp][formatting]")
+{
+    auto edits = computeOnTypeFormatting("| x ->\n", Position { .line = 1, .character = 0 }, "\n");
+    CHECK(!edits.empty());
+}
+
+TEST_CASE("OnTypeFormatting.newline_normal_line", "[lsp][formatting]")
+{
+    auto edits = computeOnTypeFormatting("let x = 5\n", Position { .line = 1, .character = 0 }, "\n");
+    CHECK(edits.empty());
+}
+
+TEST_CASE("OnTypeFormatting.e2e_dispatch", "[lsp][e2e][formatting]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x =\n" },
+                               } },
+                         }),
+        sendRequest("textDocument/onTypeFormatting",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 1 }, { "character", 0 } } },
+                        { "ch", "\n" },
+                        { "options", json { { "tabSize", 4 }, { "insertSpaces", true } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 9. Workspace Symbol
+// =============================================================================
+
+TEST_CASE("WorkspaceSymbol.single_document", "[lsp][workspace]")
+{
+    DocumentStore store;
+    store.open("file:///test.endo", "let f x = x + 1\nlet g y = y * 2", 1);
+
+    auto symbols = computeWorkspaceSymbols(store, "");
+    CHECK(symbols.size() >= 2);
+}
+
+TEST_CASE("WorkspaceSymbol.multiple_documents", "[lsp][workspace]")
+{
+    DocumentStore store;
+    store.open("file:///a.endo", "let foo x = x", 1);
+    store.open("file:///b.endo", "let bar y = y", 1);
+
+    auto symbols = computeWorkspaceSymbols(store, "");
+    bool foundFoo = false;
+    bool foundBar = false;
+    for (auto const& sym: symbols)
+    {
+        if (sym.name == "foo")
+            foundFoo = true;
+        if (sym.name == "bar")
+            foundBar = true;
+    }
+    CHECK(foundFoo);
+    CHECK(foundBar);
+}
+
+TEST_CASE("WorkspaceSymbol.query_filter", "[lsp][workspace]")
+{
+    DocumentStore store;
+    store.open("file:///test.endo", "let foo x = x\nlet bar y = y\nlet foobar z = z", 1);
+
+    auto symbols = computeWorkspaceSymbols(store, "foo");
+    bool foundFoo = false;
+    bool foundFoobar = false;
+    bool foundBar = false;
+    for (auto const& sym: symbols)
+    {
+        if (sym.name == "foo")
+            foundFoo = true;
+        if (sym.name == "foobar")
+            foundFoobar = true;
+        if (sym.name == "bar")
+            foundBar = true;
+    }
+    CHECK(foundFoo);
+    CHECK(foundFoobar);
+    CHECK_FALSE(foundBar);
+}
+
+TEST_CASE("WorkspaceSymbol.case_insensitive", "[lsp][workspace]")
+{
+    DocumentStore store;
+    store.open("file:///test.endo", "let foo x = x", 1);
+
+    auto symbols = computeWorkspaceSymbols(store, "FOO");
+    CHECK(!symbols.empty());
+}
+
+TEST_CASE("WorkspaceSymbol.no_match", "[lsp][workspace]")
+{
+    DocumentStore store;
+    store.open("file:///test.endo", "let foo x = x", 1);
+
+    auto symbols = computeWorkspaceSymbols(store, "nonexistent");
+    CHECK(symbols.empty());
+}
+
+TEST_CASE("WorkspaceSymbol.e2e_dispatch", "[lsp][e2e][workspace]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x" },
+                               } },
+                         }),
+        sendRequest("workspace/symbol", json { { "query", "" } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 10. Call Hierarchy
+// =============================================================================
+
+TEST_CASE("CallHierarchy.prepare_on_function", "[lsp][callhierarchy]")
+{
+    auto items =
+        prepareCallHierarchy("let f x = x + 1", "file:///test.endo", Position { .line = 0, .character = 4 });
+    REQUIRE(!items.empty());
+    CHECK(items[0].name == "f");
+}
+
+TEST_CASE("CallHierarchy.prepare_on_non_function", "[lsp][callhierarchy]")
+{
+    auto items =
+        prepareCallHierarchy("let x = 42", "file:///test.endo", Position { .line = 0, .character = 4 });
+    CHECK(items.empty());
+}
+
+TEST_CASE("CallHierarchy.incoming_calls", "[lsp][callhierarchy]")
+{
+    auto const source = "let f x = x\nlet g y = f y";
+    auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
+    REQUIRE(!items.empty());
+
+    auto calls = computeIncomingCalls(source, "file:///test.endo", items[0]);
+    bool foundG = false;
+    for (auto const& call: calls)
+    {
+        if (call.from.name == "g")
+            foundG = true;
+    }
+    CHECK(foundG);
+}
+
+TEST_CASE("CallHierarchy.outgoing_calls", "[lsp][callhierarchy]")
+{
+    auto const source = "let f x = x\nlet g y = f y";
+    auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 1, .character = 4 });
+    REQUIRE(!items.empty());
+
+    auto calls = computeOutgoingCalls(source, "file:///test.endo", items[0]);
+    bool foundF = false;
+    for (auto const& call: calls)
+    {
+        if (call.to.name == "f")
+            foundF = true;
+    }
+    CHECK(foundF);
+}
+
+TEST_CASE("CallHierarchy.no_callers", "[lsp][callhierarchy]")
+{
+    auto const source = "let f x = x";
+    auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
+    REQUIRE(!items.empty());
+
+    auto calls = computeIncomingCalls(source, "file:///test.endo", items[0]);
+    CHECK(calls.empty());
+}
+
+TEST_CASE("CallHierarchy.e2e_prepare", "[lsp][e2e][callhierarchy]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x + 1" },
+                               } },
+                         }),
+        sendRequest("textDocument/prepareCallHierarchy",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CallHierarchy.e2e_incoming", "[lsp][e2e][callhierarchy]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x\nlet g y = f y" },
+                               } },
+                         }),
+        sendRequest("callHierarchy/incomingCalls",
+                    json {
+                        { "item",
+                          json {
+                              { "name", "f" },
+                              { "kind", 12 },
+                              { "uri", "file:///test.endo" },
+                              { "range",
+                                json { { "start", json { { "line", 0 }, { "character", 4 } } },
+                                       { "end", json { { "line", 0 }, { "character", 5 } } } } },
+                              { "selectionRange",
+                                json { { "start", json { { "line", 0 }, { "character", 4 } } },
+                                       { "end", json { { "line", 0 }, { "character", 5 } } } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 11. Go to Type Definition
+// =============================================================================
+
+TEST_CASE("TypeDefinition.no_type", "[lsp][typedefinition]")
+{
+    auto loc =
+        computeTypeDefinition("let x = 42", "file:///test.endo", Position { .line = 0, .character = 4 });
+    CHECK_FALSE(loc.has_value());
+}
+
+TEST_CASE("TypeDefinition.cursor_not_on_symbol", "[lsp][typedefinition]")
+{
+    auto loc =
+        computeTypeDefinition("let x = 42", "file:///test.endo", Position { .line = 0, .character = 7 });
+    CHECK_FALSE(loc.has_value());
+}
+
+TEST_CASE("TypeDefinition.e2e_dispatch", "[lsp][e2e][typedefinition]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/typeDefinition",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            // No type definition for a simple int variable
+            CHECK(msg["result"].is_null());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 12. Document Link
+// =============================================================================
+
+TEST_CASE("DocumentLink.no_string_literals", "[lsp][documentlink]")
+{
+    auto links = computeDocumentLinks("let x = 5", "file:///test.endo");
+    CHECK(links.empty());
+}
+
+TEST_CASE("DocumentLink.resolve", "[lsp][documentlink]")
+{
+    auto link = DocumentLink {
+        .range = Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 5 } },
+        .data = json { { "path", "file:///resolved.endo" } },
+    };
+    auto resolved = resolveDocumentLink(std::move(link));
+    CHECK(resolved.target == "file:///resolved.endo");
+}
+
+TEST_CASE("DocumentLink.e2e_dispatch", "[lsp][e2e][documentlink]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/documentLink",
+                    json { { "textDocument", json { { "uri", "file:///test.endo" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DocumentLink.e2e_resolve", "[lsp][e2e][documentlink]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("documentLink/resolve",
+                    json {
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 0 }, { "character", 5 } } },
+                          } },
+                        { "data", json { { "path", "file:///test.endo" } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg.contains("result"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 13. Code Lens
+// =============================================================================
+
+TEST_CASE("CodeLens.function_definitions", "[lsp][codelens]")
+{
+    auto lenses = computeCodeLenses("let f x = x\nlet g y = y", "file:///test.endo");
+    CHECK(lenses.size() == 2);
+}
+
+TEST_CASE("CodeLens.no_functions", "[lsp][codelens]")
+{
+    auto lenses = computeCodeLenses("let x = 5", "file:///test.endo");
+    CHECK(lenses.empty());
+}
+
+TEST_CASE("CodeLens.resolve_reference_count", "[lsp][codelens]")
+{
+    auto const source = "let f x = x\nlet g y = f y\nlet h z = f z";
+    auto lenses = computeCodeLenses(source, "file:///test.endo");
+
+    // Find the lens for f
+    for (auto& lens: lenses)
+    {
+        if (lens.data.has_value() && lens.data->at("name") == "f")
+        {
+            auto resolved = resolveCodeLens(source, std::move(lens));
+            REQUIRE(resolved.command.has_value());
+            CHECK(resolved.command->title == "2 references");
+            break;
+        }
+    }
+}
+
+TEST_CASE("CodeLens.resolve_zero_references", "[lsp][codelens]")
+{
+    auto const source = "let f x = x";
+    auto lenses = computeCodeLenses(source, "file:///test.endo");
+    REQUIRE(!lenses.empty());
+
+    auto resolved = resolveCodeLens(source, std::move(lenses[0]));
+    REQUIRE(resolved.command.has_value());
+    CHECK(resolved.command->title == "0 references");
+}
+
+TEST_CASE("CodeLens.e2e_dispatch", "[lsp][e2e][codelens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x" },
+                               } },
+                         }),
+        sendRequest(
+            "textDocument/codeLens", json { { "textDocument", json { { "uri", "file:///test.endo" } } } }, 3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            CHECK(!msg["result"].empty());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("CodeLens.e2e_resolve", "[lsp][e2e][codelens]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x" },
+                               } },
+                         }),
+        sendRequest("codeLens/resolve",
+                    json {
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 4 } } },
+                              { "end", json { { "line", 0 }, { "character", 5 } } },
+                          } },
+                        { "data", json { { "name", "f" }, { "uri", "file:///test.endo" } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg.contains("result"));
+            CHECK(msg["result"].contains("command"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// 14. Window Notifications
+// =============================================================================
+
+TEST_CASE("WindowNotification.show_message", "[lsp][window]")
+{
+    std::ostringstream oss;
+    {
+        std::istringstream iss;
+        LspServer server(iss, oss);
+        // Access private method via a session that triggers it
+    }
+    // Test via runSession that produces window notifications
+    auto const notification =
+        makeNotification("window/showMessage", json { { "type", 3 }, { "message", "hello" } });
+    CHECK(notification["method"] == "window/showMessage");
+    CHECK(notification["params"]["type"] == 3);
+    CHECK(notification["params"]["message"] == "hello");
+}
+
+TEST_CASE("WindowNotification.log_message", "[lsp][window]")
+{
+    auto const notification =
+        makeNotification("window/logMessage", json { { "type", 4 }, { "message", "log entry" } });
+    CHECK(notification["method"] == "window/logMessage");
+    CHECK(notification["params"]["type"] == 4);
+}
+
+TEST_CASE("WindowNotification.message_types", "[lsp][window]")
+{
+    CHECK(static_cast<int>(MessageType::Error) == 1);
+    CHECK(static_cast<int>(MessageType::Warning) == 2);
+    CHECK(static_cast<int>(MessageType::Info) == 3);
+    CHECK(static_cast<int>(MessageType::Log) == 4);
+    CHECK(static_cast<int>(MessageType::Debug) == 5);
+}
+
+// =============================================================================
+// 15. Work Done Progress
+// =============================================================================
+
+TEST_CASE("Progress.begin_end", "[lsp][progress]")
+{
+    std::ostringstream oss;
+    {
+        ProgressReporter reporter(oss, "token-1", "Test Progress");
+    } // destructor sends end
+
+    auto outputStr = oss.str();
+    std::istringstream iss(outputStr);
+    auto messages = readAllMessages(iss);
+
+    // Should have: create, begin, end
+    REQUIRE(messages.size() >= 2);
+
+    bool hasBegin = false;
+    bool hasEnd = false;
+    for (auto const& msg: messages)
+    {
+        if (msg.value("method", "") == "$/progress")
+        {
+            auto const& value = msg["params"]["value"];
+            if (value["kind"] == "begin")
+                hasBegin = true;
+            if (value["kind"] == "end")
+                hasEnd = true;
+        }
+    }
+    CHECK(hasBegin);
+    CHECK(hasEnd);
+}
+
+TEST_CASE("Progress.report", "[lsp][progress]")
+{
+    std::ostringstream oss;
+    {
+        ProgressReporter reporter(oss, "token-2", "Test Progress");
+        reporter.report("Working...");
+    }
+
+    auto outputStr = oss.str();
+    std::istringstream iss(outputStr);
+    auto messages = readAllMessages(iss);
+
+    bool hasReport = false;
+    for (auto const& msg: messages)
+    {
+        if (msg.value("method", "") == "$/progress")
+        {
+            auto const& value = msg["params"]["value"];
+            if (value["kind"] == "report")
+                hasReport = true;
+        }
+    }
+    CHECK(hasReport);
+}
+
+TEST_CASE("Progress.report_with_percentage", "[lsp][progress]")
+{
+    std::ostringstream oss;
+    {
+        ProgressReporter reporter(oss, "token-3", "Test Progress");
+        reporter.report("Half done", 50);
+    }
+
+    auto outputStr = oss.str();
+    std::istringstream iss(outputStr);
+    auto messages = readAllMessages(iss);
+
+    bool hasPercentage = false;
+    for (auto const& msg: messages)
+    {
+        if (msg.value("method", "") == "$/progress")
+        {
+            auto const& value = msg["params"]["value"];
+            if (value["kind"] == "report" && value.contains("percentage"))
+            {
+                CHECK(value["percentage"] == 50);
+                hasPercentage = true;
+            }
+        }
+    }
+    CHECK(hasPercentage);
+}
+
+TEST_CASE("Progress.cancel_dispatch", "[lsp][e2e][progress]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("window/workDoneProgress/cancel", json { { "token", "some-token" } }),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    // Should not crash — cancel notification is silently handled
+    REQUIRE(!responses.empty());
+}
+
+// =============================================================================
+// 16. Inline Value
+// =============================================================================
+
+TEST_CASE("InlineValue.returns_variable_lookups", "[lsp][inlinevalue]")
+{
+    auto values = computeInlineValues(
+        "let x = 42\nlet y = x + 1",
+        Range { .start = { .line = 0, .character = 0 }, .end = { .line = 1, .character = 15 } });
+    // Should find at least the reference to x in line 1
+    bool foundX = false;
+    for (auto const& val: values)
+    {
+        if (val.variableName == "x" && val.range.start.line == 1)
+            foundX = true;
+    }
+    CHECK(foundX);
+}
+
+TEST_CASE("InlineValue.empty_source", "[lsp][inlinevalue]")
+{
+    auto values = computeInlineValues(
+        "", Range { .start = { .line = 0, .character = 0 }, .end = { .line = 0, .character = 0 } });
+    CHECK(values.empty());
+}
+
+TEST_CASE("InlineValue.e2e_dispatch", "[lsp][e2e][inlinevalue]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/inlineValue",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "range",
+                          json {
+                              { "start", json { { "line", 0 }, { "character", 0 } } },
+                              { "end", json { { "line", 0 }, { "character", 10 } } },
+                          } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Capability Advertisement Tests
+// =============================================================================
+
+TEST_CASE("Capabilities.all_new_features", "[lsp][capabilities]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    REQUIRE(!responses.empty());
+    auto const& caps = responses[0]["result"]["capabilities"];
+
+    // Tier 1 & 2 - resolve providers
+    CHECK(caps["completionProvider"]["resolveProvider"] == true);
+    CHECK(caps["codeActionProvider"]["resolveProvider"] == true);
+    CHECK(caps["inlayHintProvider"]["resolveProvider"] == true);
+
+    // Formatting
+    CHECK(caps["documentRangeFormattingProvider"] == true);
+    CHECK(caps.contains("documentOnTypeFormattingProvider"));
+    CHECK(caps["documentOnTypeFormattingProvider"]["firstTriggerCharacter"] == "\n");
+
+    // Semantic tokens
+    CHECK(caps["semanticTokensProvider"]["full"]["delta"] == true);
+    CHECK(caps["semanticTokensProvider"]["range"] == true);
+
+    // Tier 3
+    CHECK(caps["workspaceSymbolProvider"] == true);
+    CHECK(caps["callHierarchyProvider"] == true);
+    CHECK(caps["typeDefinitionProvider"] == true);
+    CHECK(caps["documentLinkProvider"]["resolveProvider"] == true);
+
+    // Tier 4
+    CHECK(caps["codeLensProvider"]["resolveProvider"] == true);
+    CHECK(caps["inlineValueProvider"] == true);
 }

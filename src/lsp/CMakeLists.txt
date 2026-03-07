@@ -39,6 +39,24 @@ add_library(endo-lsp STATIC
     SelectionRangeProvider.cpp
     CodeActionProvider.hpp
     CodeActionProvider.cpp
+    RangeFormattingProvider.hpp
+    RangeFormattingProvider.cpp
+    OnTypeFormattingProvider.hpp
+    OnTypeFormattingProvider.cpp
+    WorkspaceSymbolProvider.hpp
+    WorkspaceSymbolProvider.cpp
+    CallHierarchyProvider.hpp
+    CallHierarchyProvider.cpp
+    TypeDefinitionProvider.hpp
+    TypeDefinitionProvider.cpp
+    DocumentLinkProvider.hpp
+    DocumentLinkProvider.cpp
+    CodeLensProvider.hpp
+    CodeLensProvider.cpp
+    ProgressReporter.hpp
+    ProgressReporter.cpp
+    InlineValueProvider.hpp
+    InlineValueProvider.cpp
 
     # Server core
     LspServer.hpp

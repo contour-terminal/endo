@@ -155,10 +155,12 @@ namespace
             }
             if (letStmt.returnType)
                 def.returnType = toString(*letStmt.returnType);
-            defineSymbol(letStmt.name, std::move(def));
+            auto const defIndex = defineSymbol(letStmt.name, std::move(def));
 
             // Walk value in a scope with parameters
             pushScope();
+            if (category == SymbolCategory::Function)
+                pushEnclosingFunction(defIndex);
             for (auto const& param: letStmt.parameters)
             {
                 defineSymbol(param.name,
@@ -170,6 +172,8 @@ namespace
             }
             if (letStmt.value)
                 walkExpr(*letStmt.value);
+            if (category == SymbolCategory::Function)
+                popEnclosingFunction();
             popScope();
 
             // Handle and-bindings
@@ -258,6 +262,20 @@ namespace
             }
             else if (auto const* e = dynamic_cast<ast::ApplicationExpr const*>(&expr))
             {
+                // Track call relations for call hierarchy
+                if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(e->function.get()))
+                {
+                    auto const calleeDefIndex = resolveSymbol(ident->name);
+                    auto const callerDefIndex = currentEnclosingFunction();
+                    if (calleeDefIndex >= 0)
+                    {
+                        table.callRelations.push_back(CallRelation {
+                            .callerDefIndex = callerDefIndex,
+                            .calleeDefIndex = calleeDefIndex,
+                            .callSite = {}, // Will be assigned by assignLocations
+                        });
+                    }
+                }
                 walkExpr(*e->function);
                 walkExpr(*e->argument);
             }
@@ -280,9 +298,14 @@ namespace
             else if (auto const* e = dynamic_cast<ast::LetInExpr const*>(&expr))
             {
                 pushScope();
+                auto const isFunc = e->isFunction();
                 auto def = SymbolDefinition {
                     .name = e->name,
-                    .category = e->isFunction() ? SymbolCategory::Function : SymbolCategory::Variable,
+                    .category = isFunc ? SymbolCategory::Function : SymbolCategory::Variable,
+                    .enclosingSymbol =
+                        currentEnclosingFunction() >= 0
+                            ? table.definitions[static_cast<size_t>(currentEnclosingFunction())].name
+                            : std::optional<std::string> {},
                 };
                 for (auto const& param: e->parameters)
                 {
@@ -292,9 +315,11 @@ namespace
                 }
                 if (e->returnType)
                     def.returnType = toString(*e->returnType);
-                defineSymbol(e->name, std::move(def));
+                auto const defIndex = defineSymbol(e->name, std::move(def));
 
                 pushScope();
+                if (isFunc)
+                    pushEnclosingFunction(defIndex);
                 for (auto const& param: e->parameters)
                 {
                     defineSymbol(param.name,
@@ -306,6 +331,8 @@ namespace
                 }
                 if (e->value)
                     walkExpr(*e->value);
+                if (isFunc)
+                    popEnclosingFunction();
                 popScope();
 
                 if (e->body)
@@ -532,8 +559,21 @@ namespace
             }
         }
 
+        /// Pushes the current function definition index for call tracking.
+        void pushEnclosingFunction(int defIndex) { _enclosingFunctionStack.push_back(defIndex); }
+
+        /// Pops the current enclosing function definition index.
+        void popEnclosingFunction() { _enclosingFunctionStack.pop_back(); }
+
+        /// Returns the current enclosing function index, or -1 if at top level.
+        [[nodiscard]] int currentEnclosingFunction() const
+        {
+            return _enclosingFunctionStack.empty() ? -1 : _enclosingFunctionStack.back();
+        }
+
       private:
         std::vector<std::unordered_map<std::string, int>> _scopes;
+        std::vector<int> _enclosingFunctionStack;
         int _nextScopeId = 0;
     };
 
@@ -667,6 +707,25 @@ std::optional<SymbolTable> collectSymbols(std::string const& source)
 
     auto tokens = tokenize(source);
     assignLocations(table, events, tokens);
+
+    // Assign call site locations: each call relation corresponds to a reference
+    // to the callee function. We match by callee definition index, consuming refs in order.
+    {
+        auto refIdx = size_t { 0 };
+        for (auto& rel: table.callRelations)
+        {
+            while (refIdx < table.references.size())
+            {
+                if (table.references[refIdx].definitionIndex == rel.calleeDefIndex)
+                {
+                    rel.callSite = table.references[refIdx].location;
+                    ++refIdx;
+                    break;
+                }
+                ++refIdx;
+            }
+        }
+    }
 
     return table;
 }
@@ -839,7 +898,8 @@ std::vector<HighlightEntry> findHighlights(std::string const& source, Position p
     for (auto const& ref: table->references)
     {
         if (ref.definitionIndex == targetDefIndex)
-            result.push_back(HighlightEntry { .range = ref.location, .isDefinition = false, .isWrite = ref.isWrite });
+            result.push_back(
+                HighlightEntry { .range = ref.location, .isDefinition = false, .isWrite = ref.isWrite });
     }
 
     return result;
