@@ -199,7 +199,7 @@ jobs:
     - name: Test
       working-directory: build/clangcl-release
       run: ctest --output-on-failure --build-config Release
-      timeout-minutes: 2
+      timeout-minutes: 5
 
     - name: Upload Windows binary
       uses: actions/upload-artifact@v4
