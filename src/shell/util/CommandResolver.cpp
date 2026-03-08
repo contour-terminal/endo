@@ -58,6 +58,12 @@ void CommandResolver::invalidateCache()
 
 std::string CommandResolver::findInPath(std::string_view command) const
 {
+    auto const matches = findAllInPath(command);
+    return matches.empty() ? std::string {} : matches.front();
+}
+
+std::vector<std::string> CommandResolver::findAllInPath(std::string_view command) const
+{
     auto const pathEnv = _env.get("PATH");
     if (!pathEnv)
         return {};
@@ -84,6 +90,8 @@ std::string CommandResolver::findInPath(std::string_view command) const
         extensions = { ".exe", ".cmd", ".bat", ".com" };
     }
 #endif
+
+    auto results = std::vector<std::string> {};
 
     for (auto const& pathStr: paths)
     {
@@ -114,7 +122,8 @@ std::string CommandResolver::findInPath(std::string_view command) const
                 continue;
             if (!std::filesystem::is_regular_file(cand, ec) && !std::filesystem::is_symlink(cand, ec))
                 continue;
-            return cand.string();
+            results.push_back(cand.string());
+            break; // At most one match per PATH directory
         }
 #else
         if (!std::filesystem::exists(candidate, ec))
@@ -134,11 +143,11 @@ std::string CommandResolver::findInPath(std::string_view command) const
                             || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
 
         if (isExecutable)
-            return candidate.string();
+            results.push_back(candidate.string());
 #endif
     }
 
-    return {};
+    return results;
 }
 
 void CommandResolver::refreshCacheIfNeeded() const
