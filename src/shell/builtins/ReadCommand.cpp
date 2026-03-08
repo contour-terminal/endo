@@ -314,6 +314,15 @@ void Shell::builtinRead(CoreVM::Params& context)
             continue;
         }
 
+        // Reject unknown options (arguments starting with '-')
+        if (arg.starts_with("-"))
+        {
+            error("read: {}: invalid option", arg);
+            _exitCode = 1;
+            context.setResult("");
+            return;
+        }
+
         // Not a flag, must be a variable name
         options.variableNames.emplace_back(arg);
         ++i;
