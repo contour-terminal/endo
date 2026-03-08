@@ -252,6 +252,10 @@ target_compile_definitions(test-endo-shell PRIVATE
 )
 
 add_test(NAME test-endo-shell COMMAND test-endo-shell)
+set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 120)
+if(WIN32)
+    set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 300)
+endif()
 
 # Documentation snippet validation test
 find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -268,7 +272,6 @@ if(Python3_FOUND)
         TIMEOUT 120
         LABELS "docs"
     )
-
 endif()
 
 # Installation

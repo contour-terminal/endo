@@ -29,8 +29,9 @@ by category. Each example is executable and verified by the documentation test s
 - [15.22 JSON](#1522-json) -- `Json.query`
 - [15.23 Lazy Evaluation](#1523-lazy-evaluation) -- `force`
 - [15.24 Lazy Sequences](#1524-lazy-sequences) -- `seq`, `yield`, `yield!`, `toList`
-- [15.25 File I/O](#1525-file-io) -- `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll`, `File.size`, `File.exists`, `File.delete`
-- [15.26 Resource Management](#1526-resource-management) -- `let use`, `let manual`
+- [15.25 Path](#1525-path) -- `Path.temporary_directory`
+- [15.26 File I/O](#1526-file-io) -- `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll`, `File.size`, `File.exists`, `File.delete`
+- [15.27 Resource Management](#1527-resource-management) -- `let use`, `let manual`
 
 ---
 
@@ -1554,7 +1555,22 @@ let s = seq { yield 1; yield 2; yield 3 }
 s |> toList |> println
 ```
 
-## 15.25 File I/O
+## 15.25 Path
+
+The `Path` module provides cross-platform filesystem path utilities.
+
+#### `Path.temporary_directory`
+
+**Signature:** `Path.temporary_directory -> str`
+
+Returns the platform's temporary directory path (e.g. `/tmp` on Linux, `C:\Users\...\AppData\Local\Temp` on Windows).
+
+```endo
+let tmp = Path.temporary_directory
+println tmp
+```
+
+## 15.26 File I/O
 
 The `File` module provides file operations. Functions that can fail return `result<T, str>`.
 
@@ -1616,7 +1632,7 @@ println (File.exists "/etc/hostname")
 
 Deletes a file.
 
-## 15.26 Resource Management
+## 15.27 Resource Management
 
 #### `let use`
 

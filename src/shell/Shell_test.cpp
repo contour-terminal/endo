@@ -45,6 +45,10 @@ struct TestShell
             env.set("PATH", path);
         if (auto const* home = std::getenv("HOME"))
             env.set("HOME", home);
+#if defined(_WIN32)
+        if (auto const* pathext = std::getenv("PATHEXT"))
+            env.set("PATHEXT", pathext);
+#endif
     }
 
     TestShell& operator()(std::string_view cmd)
@@ -442,9 +446,14 @@ TEST_CASE("shell.builtin.which_help_flag")
 TEST_CASE("shell.builtin.which_find_existing_program")
 {
     TestShell shell;
+#if defined(_WIN32)
+    auto output = shell("which cmd").output();
+    CHECK(output.find("cmd") != std::string::npos);
+#else
     // /bin/ls or /usr/bin/ls should exist on most systems
     auto output = shell("which ls").output();
     CHECK((output.find("/bin/ls") != std::string::npos || output.find("/usr/bin/ls") != std::string::npos));
+#endif
     CHECK(shell.exitCode == 0);
 }
 
@@ -458,18 +467,29 @@ TEST_CASE("shell.builtin.which_nonexistent_program")
 TEST_CASE("shell.builtin.which_multiple_programs")
 {
     TestShell shell;
+#if defined(_WIN32)
+    auto output = shell("which cmd where").output();
+    CHECK(output.find("cmd") != std::string::npos);
+    CHECK(output.find("where") != std::string::npos);
+#else
     auto output = shell("which ls cat").output();
     CHECK(output.find("ls") != std::string::npos);
     CHECK(output.find("cat") != std::string::npos);
+#endif
     CHECK(shell.exitCode == 0);
 }
 
 TEST_CASE("shell.builtin.which_mixed_existing_and_nonexistent")
 {
     TestShell shell;
+#if defined(_WIN32)
+    auto output = shell("which cmd nonexistent_xyz_123").output();
+    CHECK(output.find("cmd") != std::string::npos);
+#else
     // Should find ls but not the nonexistent one, return 1
     auto output = shell("which ls nonexistent_xyz_123").output();
     CHECK(output.find("ls") != std::string::npos);
+#endif
     CHECK(shell.exitCode == 1);
 }
 
@@ -483,9 +503,13 @@ TEST_CASE("shell.builtin.which_invalid_option")
 TEST_CASE("shell.builtin.which_read_alias_warning")
 {
     TestShell shell;
+#if defined(_WIN32)
+    shell("which -i cmd");
+#else
     // --read-alias should warn but continue
     shell("which -i ls");
-    // Should still find ls despite the warning
+#endif
+    // Should still find the program despite the warning
     CHECK(shell.exitCode == 0);
 }
 
@@ -729,6 +753,7 @@ TEST_CASE("shell.builtin.cat_raw_flag")
     std::filesystem::remove("/tmp/endo_test_cat_raw.ppm");
 }
 
+#if !defined(_WIN32)
 TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
 {
     TestShell shell;
@@ -736,7 +761,8 @@ TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
     shell("printf 'hello\\x00world' > /tmp/endo_test_binary.dat");
     shell("cat /tmp/endo_test_binary.dat");
     CHECK(shell.exitCode == 1);
-    std::filesystem::remove("/tmp/endo_test_binary.dat");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_binary.dat", ec);
 }
 
 TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
@@ -747,8 +773,10 @@ TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
     static_cast<void>(shell("cat --raw /tmp/endo_test_binary_raw.dat").output());
     // With --raw, binary data should pass through (exit code 0)
     CHECK(shell.exitCode == 0);
-    std::filesystem::remove("/tmp/endo_test_binary_raw.dat");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_binary_raw.dat", ec);
 }
+#endif
 
 // ============================================================================
 // Sleep Builtin
@@ -1857,7 +1885,7 @@ TEST_CASE("shell.variable.substitution_in_arguments")
 {
     TestShell shell;
     shell("set PATTERN ll");
-    CHECK(escape(shell("echo hello | grep $PATTERN").output()) == escape("hello\n"));
+    CHECK(escape(shell("echo hello | grep --color=never $PATTERN").output()) == escape("hello\n"));
 }
 
 TEST_CASE("shell.variable.multiple_substitutions")
@@ -2015,7 +2043,8 @@ TEST_CASE("shell.redirect.output_to_file")
     std::string content;
     std::getline(file, content);
     CHECK(content == "hello");
-    std::filesystem::remove("/tmp/endo_test_output.txt");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_output.txt", ec);
 }
 
 TEST_CASE("shell.redirect.output_append")
@@ -2033,20 +2062,22 @@ TEST_CASE("shell.redirect.output_append")
     std::getline(file, line2);
     CHECK(line1 == "line1");
     CHECK(line2 == "line2");
-    std::filesystem::remove("/tmp/endo_test_append.txt");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_append.txt", ec);
 }
 
 TEST_CASE("shell.redirect.input_from_file")
 {
     TestShell shell;
-    // Create test file
+    // Create test file (binary mode to avoid \r\n on Windows)
     {
-        std::ofstream file("/tmp/endo_test_input.txt");
+        std::ofstream file("/tmp/endo_test_input.txt", std::ios::binary);
         file << "test input content\n";
     }
     // Use cat to read from file via redirect
     CHECK(escape(shell("cat < /tmp/endo_test_input.txt").output()) == escape("test input content\n"));
-    std::filesystem::remove("/tmp/endo_test_input.txt");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_input.txt", ec);
 }
 
 // ============================================================================
@@ -2073,9 +2104,12 @@ TEST_CASE("shell.redirect.herestring_with_variable")
 TEST_CASE("shell.redirect.stderr_to_stdout")
 {
     TestShell shell;
-    // Run stat on nonexistent file - stderr should go to stdout via 2>&1
-    // Note: This test relies on stat outputting error to stderr
+    // Run a command that produces stderr output, redirected to stdout via 2>&1
+#if defined(_WIN32)
+    shell("where nonexistent_12345 2>&1");
+#else
     shell("stat /nonexistent_path_12345 2>&1");
+#endif
     // Should have some output (the error message)
     CHECK(!shell.output().empty());
 }
@@ -2083,14 +2117,21 @@ TEST_CASE("shell.redirect.stderr_to_stdout")
 TEST_CASE("shell.redirect.fd_to_file")
 {
     TestShell shell;
+    auto const tmpFile = std::filesystem::temp_directory_path() / "endo_test_stderr.txt";
+    auto const tmpFileStr = tmpFile.generic_string();
     // Redirect stderr (fd 2) to a file
-    shell("stat /nonexistent_path_12345 2> /tmp/endo_test_stderr.txt");
+#if defined(_WIN32)
+    shell(std::format("where nonexistent_12345 2> {}", tmpFileStr));
+#else
+    shell(std::format("stat /nonexistent_path_12345 2> {}", tmpFileStr));
+#endif
     // Verify the error was written to the file
-    std::ifstream file("/tmp/endo_test_stderr.txt");
+    std::ifstream file(tmpFile);
     std::string content;
     std::getline(file, content);
     CHECK(!content.empty()); // Should contain error message
-    std::filesystem::remove("/tmp/endo_test_stderr.txt");
+    std::error_code ec;
+    std::filesystem::remove(tmpFile, ec);
 }
 
 // ============================================================================
@@ -2100,9 +2141,9 @@ TEST_CASE("shell.redirect.fd_to_file")
 TEST_CASE("shell.redirect.multiple_redirects")
 {
     TestShell shell;
-    // Create input file
+    // Create input file (binary mode to avoid \r\n on Windows)
     {
-        std::ofstream file("/tmp/endo_test_multi_in.txt");
+        std::ofstream file("/tmp/endo_test_multi_in.txt", std::ios::binary);
         file << "input text\n";
     }
     // Redirect both input and output
@@ -2112,8 +2153,9 @@ TEST_CASE("shell.redirect.multiple_redirects")
     std::string content;
     std::getline(file, content);
     CHECK(content == "input text");
-    std::filesystem::remove("/tmp/endo_test_multi_in.txt");
-    std::filesystem::remove("/tmp/endo_test_multi_out.txt");
+    std::error_code ec;
+    std::filesystem::remove("/tmp/endo_test_multi_in.txt", ec);
+    std::filesystem::remove("/tmp/endo_test_multi_out.txt", ec);
 }
 
 // ============================================================================
@@ -2290,6 +2332,7 @@ TEST_CASE("shell.subst.in_pipeline")
 // Process Substitution
 // ============================================================================
 
+#if !defined(_WIN32)
 TEST_CASE("shell.subst.process_read_basic")
 {
     // Process substitution read mode: cat <(echo hello)
@@ -2306,6 +2349,7 @@ TEST_CASE("shell.subst.process_read_multiple_lines")
     CHECK(escape(shell("cat <(cat /tmp/endo_test_procsubst.txt)").output()) == escape("line1\nline2\n"));
     std::filesystem::remove("/tmp/endo_test_procsubst.txt");
 }
+#endif
 
 // ============================================================================
 // Tilde Expansion
@@ -2327,6 +2371,7 @@ TEST_CASE("shell.expand.tilde_in_path")
     CHECK(escape(shell("echo ~/Documents").output()) == escape("/home/testuser/Documents\n"));
 }
 
+#if !defined(_WIN32)
 TEST_CASE("shell.expand.tilde_user")
 {
     // ~root should expand to root's home directory
@@ -2337,6 +2382,7 @@ TEST_CASE("shell.expand.tilde_user")
     // Should either be /root or /var/root (macOS) - either way, not ~root
     CHECK(output.find("~root") == std::string::npos);
 }
+#endif
 
 TEST_CASE("shell.expand.tilde_nonexistent_user")
 {
@@ -2353,6 +2399,7 @@ TEST_CASE("shell.expand.tilde_multiple")
     CHECK(escape(shell("echo ~ ~").output()) == escape("/home/testuser /home/testuser\n"));
 }
 
+#if !defined(_WIN32)
 TEST_CASE("shell.expand.tilde_command")
 {
     // ~/bin/foo as a command: tilde in program position should be expanded
@@ -2375,6 +2422,7 @@ TEST_CASE("shell.expand.tilde_command_pipeline")
     CHECK(shell("~/../../bin/echo tilde_test | cat").exitCode == 0);
     CHECK(escape(shell.output()).find("tilde_test") != std::string::npos);
 }
+#endif
 
 // ============================================================================
 // Brace Expansion

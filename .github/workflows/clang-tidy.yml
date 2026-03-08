@@ -25,7 +25,7 @@ jobs:
         max-size: 256M
 
     - name: Get vendor libraries
-      run: ./scripts/get_contour_dirs.sh
+      run: python3 scripts/get_contour_dirs.py
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
@@ -65,6 +65,7 @@ jobs:
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
             ':!src/crispy/*' ':!src/vtparser/*' \
+            ':!src/shell/platform/Windows*' \
           | python3 "$CLANG_TIDY_DIFF" \
               -p1 \
               -path build \

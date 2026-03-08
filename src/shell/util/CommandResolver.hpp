@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
 
@@ -55,7 +56,7 @@ class CommandResolver
     /// @brief Returns the list of builtin command names.
     [[nodiscard]] static std::set<std::string> const& builtinNames();
 
-    /// @brief Searches $PATH for an executable matching @p command.
+    /// @brief Searches $PATH for the first executable matching @p command.
     ///
     /// On POSIX, also verifies execute permission bits.
     /// On Windows, reads PATHEXT and tries each extension.
@@ -63,6 +64,14 @@ class CommandResolver
     /// @param command  Bare command name (no path separators).
     /// @return Full path string if found, empty string if not found.
     [[nodiscard]] std::string findInPath(std::string_view command) const;
+
+    /// @brief Searches $PATH for all executables matching @p command.
+    ///
+    /// Same logic as findInPath() but collects every match across all PATH directories.
+    ///
+    /// @param command  Bare command name (no path separators).
+    /// @return Vector of full path strings for every match (may be empty).
+    [[nodiscard]] std::vector<std::string> findAllInPath(std::string_view command) const;
 
   private:
     EnvironmentProvider const& _env;

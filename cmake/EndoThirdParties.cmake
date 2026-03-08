@@ -65,6 +65,7 @@ if(NOT EMSCRIPTEN)
             VERSION 3.8.0
             GITHUB_REPOSITORY catchorg/Catch2
             EXCLUDE_FROM_ALL YES
+            SYSTEM YES
         )
         set(THIRDPARTY_BUILTIN_Catch2 "CPM (v3.8.0)")
     endif()
@@ -92,6 +93,7 @@ else()
         VERSION 4.1.0
         GITHUB_REPOSITORY microsoft/GSL
         EXCLUDE_FROM_ALL YES
+        SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_GSL "CPM (v4.1.0)")
 endif()
@@ -116,6 +118,7 @@ if(NOT EMSCRIPTEN)
                 "YAML_CPP_BUILD_CONTRIB OFF"
                 "BUILD_SHARED_LIBS OFF"
             EXCLUDE_FROM_ALL YES
+            SYSTEM YES
         )
         set(THIRDPARTY_BUILTIN_yaml_cpp "CPM (v0.9.0, static)")
     endif()
@@ -133,6 +136,7 @@ else()
         GITHUB_REPOSITORY contour-terminal/boxed-cpp
         GIT_TAG v1.4.3
         EXCLUDE_FROM_ALL YES
+        SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_boxed_cpp "CPM (v1.4.3)")
 endif()
@@ -158,6 +162,7 @@ else()
             "LIBUNICODE_EXAMPLES OFF"
             "BUILD_SHARED_LIBS OFF"
         EXCLUDE_FROM_ALL YES
+        SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_libunicode "CPM (v${LIBUNICODE_REQUIRED_VERSION}, static)")
 endif()
@@ -176,6 +181,7 @@ else()
         OPTIONS
             "JSON_BuildTests OFF"
         EXCLUDE_FROM_ALL YES
+        SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
 endif()
@@ -191,6 +197,7 @@ if(NOT EMSCRIPTEN)
             GITHUB_REPOSITORY Mbed-TLS/mbedtls
             GIT_TAG mbedtls-3.6.2
             EXCLUDE_FROM_ALL YES
+            SYSTEM YES
             OPTIONS
                 "ENABLE_TESTING OFF"
                 "ENABLE_PROGRAMS OFF"
@@ -238,6 +245,7 @@ if(NOT EMSCRIPTEN)
                 "CURL_ENABLE_EXPORT_TARGET OFF"
                 "HTTP_ONLY ON"
             EXCLUDE_FROM_ALL YES
+            SYSTEM YES
         )
         # Ensure mbedTLS static libraries are linked transitively through CURL
         if(TARGET libcurl_static)
@@ -258,6 +266,7 @@ if(NOT EMSCRIPTEN)
                     "BUILD_CURL_EXE OFF"
                     "BUILD_SHARED_LIBS OFF"
                 EXCLUDE_FROM_ALL YES
+                SYSTEM YES
             )
             set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1)")
         endif()
@@ -276,7 +285,7 @@ if(NOT EMSCRIPTEN)
     )
     if(stb_ADDED)
         add_library(stb_image INTERFACE)
-        target_include_directories(stb_image INTERFACE "${stb_SOURCE_DIR}")
+        target_include_directories(stb_image SYSTEM INTERFACE "${stb_SOURCE_DIR}")
     endif()
     set(THIRDPARTY_BUILTIN_stb "CPM (master)")
 endif()
@@ -304,6 +313,7 @@ if(NOT EMSCRIPTEN)
                 "BUILD_SHARED_LIBS OFF"
                 # GPU backends are auto-detected by llama.cpp's own CMake (CUDA, Vulkan, Metal)
             EXCLUDE_FROM_ALL YES
+            SYSTEM YES
         )
         if(llama_cpp_ADDED)
             set(THIRDPARTY_BUILTIN_llama_cpp "CPM (b5460)")
@@ -323,5 +333,6 @@ CPMAddPackage(
     GITHUB_REPOSITORY contour-terminal/reflection-cpp
     GIT_TAG v0.4.0
     EXCLUDE_FROM_ALL YES
+    SYSTEM YES
 )
 set(THIRDPARTY_BUILTIN_reflection_cpp "CPM (v0.4.0)")

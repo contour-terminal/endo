@@ -63,7 +63,12 @@ else()
 endif()
 
 target_include_directories(endo-platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(endo-platform PUBLIC crispy::core)
+if(NOT WIN32)
+    find_package(Threads REQUIRED)
+    target_link_libraries(endo-platform PUBLIC crispy::core Threads::Threads)
+else()
+    target_link_libraries(endo-platform PUBLIC crispy::core)
+endif()
 
 enable_sanitizers(endo-platform)
 enable_clang_tidy(endo-platform)

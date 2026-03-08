@@ -17,6 +17,8 @@
     #include <poll.h>
     #include <termios.h>
     #include <unistd.h>
+#else
+    #include <thread>
 #endif
 
 namespace endo
@@ -124,6 +126,24 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
             int const pollResult = poll(&pfd, 1, timeoutMs);
             if (pollResult <= 0)
                 break; // Timeout or error
+#else
+            // Windows: poll with PeekNamedPipe
+            {
+                auto const start = std::chrono::steady_clock::now();
+                bool dataAvailable = false;
+                while (std::chrono::steady_clock::now() - start < remaining)
+                {
+                    DWORD avail = 0;
+                    if (PeekNamedPipe(inputFd, nullptr, 0, nullptr, &avail, nullptr) && avail > 0)
+                    {
+                        dataAvailable = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+                if (!dataAvailable)
+                    break; // Timeout
+            }
 #endif
         }
 
@@ -292,6 +312,15 @@ void Shell::builtinRead(CoreVM::Params& context)
                 options.delimiter = delimStr[0];
             i += 2;
             continue;
+        }
+
+        // Reject unknown options (arguments starting with '-')
+        if (arg.starts_with("-"))
+        {
+            error("read: {}: invalid option", arg);
+            _exitCode = 1;
+            context.setResult("");
+            return;
         }
 
         // Not a flag, must be a variable name

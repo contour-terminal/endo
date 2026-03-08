@@ -1,0 +1,12 @@
+{
+    "name": "endo",
+    "version-string": "0.0.0",
+    "builtin-baseline": "1e199d32ad53aab1defda61ce41c380302e3f95c",
+    "dependencies": [
+        { "name": "curl", "platform": "windows" },
+        { "name": "nlohmann-json", "platform": "windows" },
+        { "name": "yaml-cpp", "platform": "windows" },
+        { "name": "ms-gsl", "platform": "windows" },
+        { "name": "catch2", "platform": "windows" }
+    ]
+}

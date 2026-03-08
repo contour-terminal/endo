@@ -362,6 +362,9 @@ static const std::array descriptors = {
         "Path syntax: `.key` accesses an object property, `[]` iterates array elements.\n"
         "Example: `Json.query \".presets[].name\" json_str`" },
 
+    // Path operations
+    StdlibDescriptor { .userFacingName="", .vmName="path_temporary_directory", .returnType=LT::String, .params={}, .sharedImpl=&builtins::pathTemporaryDirectory, .description="", .detail="" },
+
     // File I/O operations
     StdlibDescriptor { .userFacingName="", .vmName="file_open", .returnType=LT::Number, .params=fileOpenParams, .sharedImpl=&builtins::fileOpen, .description="", .detail="" },
     StdlibDescriptor { .userFacingName="", .vmName="file_close", .returnType=LT::Void, .params=fdNumberParam, .sharedImpl=&builtins::fileClose, .description="", .detail="" },

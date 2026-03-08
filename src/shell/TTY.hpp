@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <expected>
 #include <format>
@@ -168,7 +169,7 @@ class WindowsTestPTY final: public TTY
     std::string _output;
     std::thread _captureThread;
     mutable std::mutex _outputMutex;
-    bool _closed = false;
+    std::atomic<bool> _closed = false;
 
     // Terminal size (fixed for tests)
     TerminalSize _terminalSize { .rows = 25, .cols = 80 };
@@ -249,7 +250,7 @@ class TestPTY final: public TTY
     termios _baseTermios {};
     struct winsize _windowSize;
 
-    bool _closed = false;
+    std::atomic<bool> _closed = false;
 };
 #endif // !_WIN32
 

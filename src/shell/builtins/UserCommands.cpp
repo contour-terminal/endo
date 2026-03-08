@@ -5,8 +5,6 @@
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/TerminalOutput.hpp>
 
-#include <crispy/utils.h>
-
 #include <filesystem>
 #include <format>
 #include <print>
@@ -275,17 +273,8 @@ void Shell::builtinWhich(CoreVM::Params& context)
         error("which: --read-alias: aliases not yet implemented");
     }
 
-    // Get PATH
-    auto const pathEnv = _env.get("PATH");
-    if (!pathEnv.has_value())
-    {
-        error("which: PATH not set");
-        _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
-        return;
-    }
-
-    auto const paths = crispy::split(pathEnv.value(), ':');
+    // Use CommandResolver for PATH search (handles PATH separator and PATHEXT correctly)
+    auto const resolver = CommandResolver(_env);
     bool allFound = true;
 
     // Search for each program
@@ -293,8 +282,8 @@ void Shell::builtinWhich(CoreVM::Params& context)
     {
         bool found = false;
 
-        // If program contains '/', treat as path
-        if (program.contains('/'))
+        // If program contains a path separator, treat as path
+        if (program.contains('/') || program.contains('\\'))
         {
             if (std::filesystem::exists(program))
             {
@@ -304,23 +293,20 @@ void Shell::builtinWhich(CoreVM::Params& context)
         }
         else
         {
-            // Search PATH
-            for (auto const& pathStr: paths)
+            auto const matches = resolver.findAllInPath(program);
+            for (auto const& path: matches)
             {
-                auto const programPath = std::filesystem::path(pathStr) / program;
-                if (std::filesystem::exists(programPath))
-                {
-                    writeOutput(programPath.string() + "\n");
-                    found = true;
-                    if (!showAll)
-                        break; // Only show first match unless -a is specified
-                }
+                writeOutput(path + "\n");
+                found = true;
+                if (!showAll)
+                    break;
             }
         }
 
         if (!found)
         {
-            error("which: no {} in ({})", program, pathEnv.value());
+            auto const pathEnv = _env.get("PATH").value_or("");
+            error("which: no {} in ({})", program, pathEnv);
             allFound = false;
         }
     }

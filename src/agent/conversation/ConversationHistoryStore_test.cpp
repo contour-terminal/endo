@@ -12,11 +12,12 @@ using namespace endo::agent;
 
 namespace
 {
-/// Creates a unique temporary file path in /tmp for testing.
+/// Creates a unique temporary file path for testing.
 auto tempHistoryPath() -> std::filesystem::path
 {
     static int counter = 0;
-    return std::filesystem::path("/tmp/endo-test-history-" + std::to_string(counter++) + ".json");
+    return std::filesystem::temp_directory_path()
+           / ("endo-test-history-" + std::to_string(counter++) + ".json");
 }
 
 /// RAII guard that removes the file on destruction.

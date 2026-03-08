@@ -3,7 +3,7 @@
 # description: File.writeAll and File.readAll compile and dispatch correctly
 # mode: ir-only
 
-let path = "/tmp/endo_test_file_write_read.txt"
+let path = $"{Path.temporary_directory}/endo_test_file_write_read.txt"
 
 let _ = File.writeAll path "Hello, World!"
 

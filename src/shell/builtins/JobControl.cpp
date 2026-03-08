@@ -507,6 +507,33 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     }
 
     std::string const& program = cmdBuilderArgs().at(0);
+
+    // Try inline builtins first (they run synchronously on Windows since they are instant)
+    {
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+        NativeHandle const inputFd =
+            _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
+
+        if (auto const executed = tryExecuteInlineBuiltin(program, cmdBuilderArgs(), outputFd, inputFd))
+        {
+            _lastBackgroundPid = static_cast<ProcessId>(GetCurrentProcessId());
+
+            // Add to job table as completed
+            std::vector<ProcessId> pids;
+            pids.push_back(*_lastBackgroundPid);
+            int const jobId = jobTable.addJob(*_lastBackgroundPid, std::move(pids), command);
+            std::println("[{}] {}", jobId, *_lastBackgroundPid);
+
+            if (!_cmdBuilderStack.empty())
+                _cmdBuilderStack.pop_back();
+
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+    }
+
     auto const programPath = resolveProgram(program);
 
     if (!programPath.has_value())

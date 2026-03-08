@@ -48,9 +48,7 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
     - name: "Get library crispy & vtparser"
-      run: |
-        set -ex
-        ./scripts/get_contour_dirs.sh
+      run: python3 scripts/get_contour_dirs.py
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
@@ -112,6 +110,105 @@ jobs:
             scripts/check-doc-snippets.py \
             --endo-path "${{ steps.strings.outputs.build-output-dir }}/src/shell/endo"
       timeout-minutes: 2
+
+  static-build:
+    runs-on: ubuntu-latest
+    name: "Linux static x86_64"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc6-dev ninja-build
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 21
+
+    - name: "Get library crispy & vtparser"
+      run: python3 scripts/get_contour_dirs.py
+
+    - name: Configure CMake
+      run: >
+        cmake -B build/static
+        -DCMAKE_CXX_COMPILER=clang++-21
+        -DCMAKE_C_COMPILER=clang-21
+        -DCMAKE_BUILD_TYPE=Release
+        -DENABLE_STATIC_LINKING=ON
+        -GNinja
+        -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build build/static --config Release
+
+    - name: Verify static binary
+      run: |
+        set -e
+        echo "--- file output ---"
+        file build/static/src/shell/endo
+        echo "--- ldd output ---"
+        ldd build/static/src/shell/endo 2>&1 && echo "ERROR: binary is dynamically linked" && exit 1 || echo "OK: binary is statically linked"
+
+    - name: Test
+      working-directory: build/static
+      run: ctest --output-on-failure --build-config Release
+      timeout-minutes: 2
+
+    - name: Upload static binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-linux-x86_64-static
+        path: build/static/src/shell/endo
+        retention-days: 30
+
+  windows-clangcl:
+    runs-on: windows-latest
+    name: "Windows clang-cl Release"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: "Get library crispy & vtparser"
+      run: python scripts/get_contour_dirs.py
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: '1e199d32ad53aab1defda61ce41c380302e3f95c'
+
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Configure CMake
+      run: cmake --preset clangcl-release
+
+    - name: Build
+      run: cmake --build build/clangcl-release --config Release
+
+    - name: Test
+      working-directory: build/clangcl-release
+      run: ctest --output-on-failure --build-config Release
+      timeout-minutes: 5
+
+    - name: Upload Windows binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-windows-x86_64
+        path: build/clangcl-release/src/shell/endo.exe
+        retention-days: 30
 
   vscode-extension:
     runs-on: ubuntu-latest

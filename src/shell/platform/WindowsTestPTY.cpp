@@ -72,7 +72,10 @@ WindowsTestPTY::~WindowsTestPTY()
 
     // Close write end of output pipe to signal EOF to capture thread
     if (_writeOutputHandle != InvalidHandle)
+    {
         CloseHandle(_writeOutputHandle);
+        _writeOutputHandle = InvalidHandle;
+    }
 
     // Wait for capture thread to finish
     if (_captureThread.joinable())
@@ -185,8 +188,21 @@ void WindowsTestPTY::setSize(uint16_t rows, uint16_t cols)
 
 std::string_view WindowsTestPTY::output() const noexcept
 {
-    // Give the capture thread time to read remaining data from the pipe
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // Wait until the capture thread has drained all data from the pipe.
+    // After shell.execute() returns, all writes to the pipe are done.
+    // PeekNamedPipe reports 0 bytes once the capture thread has read everything.
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        DWORD bytesAvailable = 0;
+        if (!PeekNamedPipe(_readOutputHandle, nullptr, 0, nullptr, &bytesAvailable, nullptr))
+            break; // Pipe error (broken/closed)
+        if (bytesAvailable == 0)
+            break; // All data consumed by capture thread
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    // Small grace period for the capture thread to finish appending under mutex
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
     auto _ = std::scoped_lock { _outputMutex };
     return _output;
 }
@@ -198,17 +214,30 @@ void WindowsTestPTY::outputCaptureLoop()
 
     while (!_closed)
     {
+        DWORD bytesAvailable = 0;
+        if (!PeekNamedPipe(_readOutputHandle, nullptr, 0, nullptr, &bytesAvailable, nullptr))
+        {
+            if (_closed.load() || GetLastError() == ERROR_BROKEN_PIPE)
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue; // Retry on transient failures
+        }
+
+        if (bytesAvailable == 0)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
         DWORD bytesRead = 0;
-        BOOL const success = ReadFile(_readOutputHandle, buffer, bufferSize, &bytesRead, nullptr);
+        BOOL const success =
+            ReadFile(_readOutputHandle, buffer, std::min(bufferSize, bytesAvailable), &bytesRead, nullptr);
 
         if (!success || bytesRead == 0)
             break; // EOF or error
 
-        if (bytesRead > 0)
-        {
-            auto _ = std::lock_guard<std::mutex> { _outputMutex };
-            _output.append(buffer, bytesRead);
-        }
+        auto _ = std::lock_guard<std::mutex> { _outputMutex };
+        _output.append(buffer, bytesRead);
     }
 }
 

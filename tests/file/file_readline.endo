@@ -3,7 +3,7 @@
 # description: File.open and File.readLine dispatch correctly
 # mode: ir-only
 
-let path = "/tmp/endo_test_file_readline.txt"
+let path = $"{Path.temporary_directory}/endo_test_file_readline.txt"
 
 let _ = File.writeAll path "line1\nline2\n"
 

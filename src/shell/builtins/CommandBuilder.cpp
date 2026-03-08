@@ -65,28 +65,9 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
         NativeHandle const inputFd =
             _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
-        auto handled = true;
-        if (program == "echo")
-            _exitCode = executeInlineEcho(cmdBuilderArgs(), outputFd);
-        else if (program == "cat")
-            _exitCode = executeInlineCat(cmdBuilderArgs(), outputFd, inputFd);
-        else if (program == "sleep")
-            _exitCode = executeInlineSleep(cmdBuilderArgs(), outputFd);
-        else if (program == "rm")
-            _exitCode = executeInlineRm(cmdBuilderArgs(), outputFd);
-        else if (program == "mkdir")
-            _exitCode = executeInlineMkdir(cmdBuilderArgs(), outputFd);
-        else if (program == "cp")
-            _exitCode = executeInlineCp(cmdBuilderArgs(), outputFd);
-        else if (program == "mv")
-            _exitCode = executeInlineMv(cmdBuilderArgs(), outputFd);
-        else if (program == "find")
-            _exitCode = executeInlineFind(cmdBuilderArgs(), outputFd);
-        else
-            handled = false;
-
-        if (handled)
+        if (auto const exitCode = tryExecuteInlineBuiltin(program, cmdBuilderArgs(), outputFd, inputFd))
         {
+            _exitCode = *exitCode;
             if (!_cmdBuilderStack.empty())
                 _cmdBuilderStack.pop_back();
             context.setResult(CoreVM::CoreNumber(_exitCode));
@@ -161,34 +142,13 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
 
     // Handle inline builtins in pipeline (mirrors builtinCallProcessShellPiped)
+    if (auto const exitCode = tryExecuteInlineBuiltin(program, cmdBuilderArgs(), stdoutFd, stdinFd))
     {
-        auto handled = true;
-        if (program == "echo")
-            _exitCode = executeInlineEcho(cmdBuilderArgs(), stdoutFd);
-        else if (program == "cat")
-            _exitCode = executeInlineCat(cmdBuilderArgs(), stdoutFd, stdinFd);
-        else if (program == "sleep")
-            _exitCode = executeInlineSleep(cmdBuilderArgs(), stdoutFd);
-        else if (program == "rm")
-            _exitCode = executeInlineRm(cmdBuilderArgs(), stdoutFd);
-        else if (program == "mkdir")
-            _exitCode = executeInlineMkdir(cmdBuilderArgs(), stdoutFd);
-        else if (program == "cp")
-            _exitCode = executeInlineCp(cmdBuilderArgs(), stdoutFd);
-        else if (program == "mv")
-            _exitCode = executeInlineMv(cmdBuilderArgs(), stdoutFd);
-        else if (program == "find")
-            _exitCode = executeInlineFind(cmdBuilderArgs(), stdoutFd);
-        else
-            handled = false;
-
-        if (handled)
-        {
-            finalizePipelineBuiltin(lastInChain, cmdBuilderArgs(), program, context);
-            if (!_cmdBuilderStack.empty())
-                _cmdBuilderStack.pop_back();
-            return;
-        }
+        _exitCode = *exitCode;
+        finalizePipelineBuiltin(lastInChain, cmdBuilderArgs(), program, context);
+        if (!_cmdBuilderStack.empty())
+            _cmdBuilderStack.pop_back();
+        return;
     }
 
     auto const programPath = resolveProgram(program);

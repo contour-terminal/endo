@@ -381,6 +381,10 @@ std::expected<GrepOptions, std::string> parseGrepArgs(std::span<std::string cons
     if (opts.patterns.empty())
         return std::unexpected(std::string("grep: no pattern specified"));
 
+    // GNU grep: -r implies -H (always show filenames) unless -h was explicitly given
+    if (opts.recursive && opts.filenameMode == FilenameMode::Auto)
+        opts.filenameMode = FilenameMode::Always;
+
     return opts;
 }
 
