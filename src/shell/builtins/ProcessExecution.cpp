@@ -34,6 +34,34 @@ auto& debugLog()
 namespace endo
 {
 
+std::optional<int> Shell::tryExecuteInlineBuiltin(std::string_view program,
+                                                  CoreVM::CoreStringArray const& args,
+                                                  NativeHandle outputFd,
+                                                  NativeHandle inputFd)
+{
+    if (program == "echo")
+        return executeInlineEcho(args, outputFd);
+    if (program == "cat")
+        return executeInlineCat(args, outputFd, inputFd);
+    if (program == "sleep")
+        return executeInlineSleep(args, outputFd);
+    if (program == "rm")
+        return executeInlineRm(args, outputFd);
+    if (program == "mkdir")
+        return executeInlineMkdir(args, outputFd);
+    if (program == "cp")
+        return executeInlineCp(args, outputFd);
+    if (program == "mv")
+        return executeInlineMv(args, outputFd);
+    if (program == "find")
+        return executeInlineFind(args, outputFd);
+    if (program == "grep")
+        return executeInlineGrep(args, outputFd, inputFd);
+    if (program == "timeout")
+        return executeInlineTimeout(args, outputFd);
+    return std::nullopt;
+}
+
 void Shell::builtinCallProcess(CoreVM::Params& context)
 {
     CoreVM::CoreStringArray const& args = context.getStringArray(1);
@@ -46,72 +74,9 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
     // Handle inline builtins
-    if (program == "echo")
+    if (auto const exitCode = tryExecuteInlineBuiltin(program, args, outputFd, inputFd))
     {
-        _exitCode = executeInlineEcho(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "cat")
-    {
-        _exitCode = executeInlineCat(args, outputFd, inputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "sleep")
-    {
-        _exitCode = executeInlineSleep(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "rm")
-    {
-        _exitCode = executeInlineRm(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "mkdir")
-    {
-        _exitCode = executeInlineMkdir(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "cp")
-    {
-        _exitCode = executeInlineCp(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "mv")
-    {
-        _exitCode = executeInlineMv(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "find")
-    {
-        _exitCode = executeInlineFind(args, outputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "grep")
-    {
-        _exitCode = executeInlineGrep(args, outputFd, inputFd);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
-        return;
-    }
-
-    if (program == "timeout")
-    {
-        _exitCode = executeInlineTimeout(args, outputFd);
+        _exitCode = *exitCode;
         context.setResult(CoreVM::CoreNumber(_exitCode));
         return;
     }

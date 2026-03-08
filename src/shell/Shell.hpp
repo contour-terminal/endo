@@ -227,6 +227,18 @@ class Shell final: public SignalCallback
                                  CoreVM::Params& context);
 
     // --- Process execution (builtins/ProcessExecution.cpp) ---
+
+    /// @brief Tries to execute an inline builtin command synchronously.
+    /// @param program The command name (e.g. "echo", "sleep", "grep").
+    /// @param args The full argument list including program name at index 0.
+    /// @param outputFd File descriptor for stdout output.
+    /// @param inputFd File descriptor for stdin input.
+    /// @return Exit code if the command was an inline builtin, std::nullopt otherwise.
+    [[nodiscard]] std::optional<int> tryExecuteInlineBuiltin(std::string_view program,
+                                                             CoreVM::CoreStringArray const& args,
+                                                             NativeHandle outputFd,
+                                                             NativeHandle inputFd);
+
     void builtinCallProcess(CoreVM::Params& context);
     void builtinCallProcessShellPiped(CoreVM::Params& context);
 
