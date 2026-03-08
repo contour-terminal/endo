@@ -25,7 +25,7 @@ jobs:
         max-size: 256M
 
     - name: Get vendor libraries
-      run: ./scripts/get_contour_dirs.sh
+      run: python3 scripts/get_contour_dirs.py
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1

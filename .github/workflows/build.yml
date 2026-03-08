@@ -48,9 +48,7 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
     - name: "Get library crispy & vtparser"
-      run: |
-        set -ex
-        ./scripts/get_contour_dirs.sh
+      run: python3 scripts/get_contour_dirs.py
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
@@ -135,7 +133,7 @@ jobs:
         sudo ./llvm.sh 21
 
     - name: "Get library crispy & vtparser"
-      run: ./scripts/get_contour_dirs.sh
+      run: python3 scripts/get_contour_dirs.py
 
     - name: Configure CMake
       run: >
@@ -184,8 +182,7 @@ jobs:
       uses: seanmiddleditch/gha-setup-ninja@master
 
     - name: "Get library crispy & vtparser"
-      shell: bash
-      run: ./scripts/get_contour_dirs.sh
+      run: python scripts/get_contour_dirs.py
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
