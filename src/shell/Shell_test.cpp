@@ -1885,7 +1885,7 @@ TEST_CASE("shell.variable.substitution_in_arguments")
 {
     TestShell shell;
     shell("set PATTERN ll");
-    CHECK(escape(shell("echo hello | grep $PATTERN").output()) == escape("hello\n"));
+    CHECK(escape(shell("echo hello | grep --color=never $PATTERN").output()) == escape("hello\n"));
 }
 
 TEST_CASE("shell.variable.multiple_substitutions")
