@@ -1940,6 +1940,14 @@ TEST_CASE("E2E.unknown_command_produces_diagnostic", "[lsp][e2e][command-not-fou
 
 TEST_CASE("E2E.known_command_no_command_not_found_diagnostic", "[lsp][e2e][command-not-found]")
 {
+    // Use a command that exists as a real executable on both platforms.
+    // On Windows, 'date' is a cmd.exe internal, not a standalone .exe in PATH.
+#if defined(_WIN32)
+    auto const testCommand = std::string("where --help");
+#else
+    auto const testCommand = std::string("date --version");
+#endif
+
     auto responses = runSession({
         sendRequest("initialize", json::object()),
         sendNotification("initialized", json::object()),
@@ -1950,7 +1958,7 @@ TEST_CASE("E2E.known_command_no_command_not_found_diagnostic", "[lsp][e2e][comma
                                    { "uri", "file:///test.endo" },
                                    { "languageId", "endo" },
                                    { "version", 1 },
-                                   { "text", "date --version" },
+                                   { "text", testCommand },
                                } },
                          }),
         sendRequest("shutdown", json::object(), 2),
@@ -3867,7 +3875,7 @@ TEST_CASE("CallHierarchy.prepare_on_non_function", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.incoming_calls", "[lsp][callhierarchy]")
 {
-    const auto *const source = "let f x = x\nlet g y = f y";
+    const auto* const source = "let f x = x\nlet g y = f y";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -3883,7 +3891,7 @@ TEST_CASE("CallHierarchy.incoming_calls", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.outgoing_calls", "[lsp][callhierarchy]")
 {
-    const auto *const source = "let f x = x\nlet g y = f y";
+    const auto* const source = "let f x = x\nlet g y = f y";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 1, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -3899,7 +3907,7 @@ TEST_CASE("CallHierarchy.outgoing_calls", "[lsp][callhierarchy]")
 
 TEST_CASE("CallHierarchy.no_callers", "[lsp][callhierarchy]")
 {
-    const auto *const source = "let f x = x";
+    const auto* const source = "let f x = x";
     auto items = prepareCallHierarchy(source, "file:///test.endo", Position { .line = 0, .character = 4 });
     REQUIRE(!items.empty());
 
@@ -4155,7 +4163,7 @@ TEST_CASE("CodeLens.no_functions", "[lsp][codelens]")
 
 TEST_CASE("CodeLens.resolve_reference_count", "[lsp][codelens]")
 {
-    const auto *const source = "let f x = x\nlet g y = f y\nlet h z = f z";
+    const auto* const source = "let f x = x\nlet g y = f y\nlet h z = f z";
     auto lenses = computeCodeLenses(source, "file:///test.endo");
 
     // Find the lens for f
@@ -4173,7 +4181,7 @@ TEST_CASE("CodeLens.resolve_reference_count", "[lsp][codelens]")
 
 TEST_CASE("CodeLens.resolve_zero_references", "[lsp][codelens]")
 {
-    const auto *const source = "let f x = x";
+    const auto* const source = "let f x = x";
     auto lenses = computeCodeLenses(source, "file:///test.endo");
     REQUIRE(!lenses.empty());
 
