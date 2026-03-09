@@ -379,11 +379,28 @@ TEST_CASE("VtParser.Win32Input.digit_3", "[tui,vtparser]")
     CHECK(key->modifiers == Modifier::None);
 }
 
-TEST_CASE("VtParser.Win32Input.fewer_than_6_params_ignored", "[tui,vtparser]")
+TEST_CASE("VtParser.Win32Input.optional_params_with_defaults", "[tui,vtparser]")
 {
-    // Only 4 params — should be ignored
+    // 4 params: Vk=65(A), Sc=30, Uc=97('a'), Kd=1 — Cs defaults to 0, Rc defaults to 1
+    auto const key = parseKey("\033[65;30;97;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'a');
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.zero_params_ignored", "[tui,vtparser]")
+{
+    // Zero params (just the final byte) — empty, should be ignored
     auto parser = VtParser {};
-    auto const events = parser.feed("\033[65;30;97;1_");
+    auto const events = parser.feed("\033[_");
+    CHECK(events.empty());
+}
+
+TEST_CASE("VtParser.Win32Input.three_params_keyup_default", "[tui,vtparser]")
+{
+    // 3 params: Vk=65, Sc=30, Uc=97 — Kd defaults to 0 (key-up), filtered
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[65;30;97_");
     CHECK(events.empty());
 }
 
@@ -428,6 +445,73 @@ TEST_CASE("VtParser.Win32Input.altgr_suppresses_ctrl_alt", "[tui,vtparser]")
     auto const key = parseKey("\033[69;18;8364;1;9;1_");
     REQUIRE(key.has_value());
     CHECK(key->codepoint == U'\u20AC'); // Euro sign '€'
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.left_win_produces_super", "[tui,vtparser]")
+{
+    // VK_A=0x41, CS=LeftWin(0x0400) → Super modifier
+    auto const key = parseKey("\033[65;30;97;1;1024;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'a');
+    CHECK(hasModifier(key->modifiers, Modifier::Super));
+}
+
+TEST_CASE("VtParser.Win32Input.right_win_produces_super", "[tui,vtparser]")
+{
+    // VK_A=0x41, CS=RightWin(0x0200) → Super modifier
+    auto const key = parseKey("\033[65;30;97;1;512;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'a');
+    CHECK(hasModifier(key->modifiers, Modifier::Super));
+}
+
+TEST_CASE("VtParser.Win32Input.win_ctrl_combo", "[tui,vtparser]")
+{
+    // VK_A=0x41, CS=LeftWin(0x0400)|LeftCtrl(0x0008)=0x0408=1032
+    auto const key = parseKey("\033[65;30;97;1;1032;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'a');
+    CHECK(hasModifier(key->modifiers, Modifier::Super));
+    CHECK(hasModifier(key->modifiers, Modifier::Ctrl));
+}
+
+TEST_CASE("VtParser.Win32Input.altgr_with_extra_modifiers", "[tui,vtparser]")
+{
+    // AltGr(RightAlt|LeftCtrl) with LeftAlt also set: 0x01|0x08|0x02=0x0B=11
+    // Reference only checks RightAlt && LeftCtrl → still AltGr.
+    // VK_E=0x45, UC=U+20AC '€'
+    auto const key = parseKey("\033[69;18;8364;1;11;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'\u20AC');
+    // AltGr suppresses Alt+Ctrl, so no modifiers expected
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.numpad_5", "[tui,vtparser]")
+{
+    // VK_NUMPAD5=0x65=101, no modifiers
+    auto const key = parseKey("\033[101;76;53;1;0;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp5);
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.ctrl_numpad_0", "[tui,vtparser]")
+{
+    // VK_NUMPAD0=0x60=96, CS=LeftCtrl(0x08)
+    auto const key = parseKey("\033[96;82;48;1;8;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp0);
+    CHECK(key->modifiers == Modifier::Ctrl);
+}
+
+TEST_CASE("VtParser.Win32Input.numpad_multiply", "[tui,vtparser]")
+{
+    // VK_MULTIPLY=0x6A=106
+    auto const key = parseKey("\033[106;55;42;1;0;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::KpMultiply);
     CHECK(key->modifiers == Modifier::None);
 }
 

@@ -51,6 +51,22 @@ namespace
         constexpr auto F10 = 0x79;
         constexpr auto F11 = 0x7A;
         constexpr auto F12 = 0x7B;
+        constexpr auto Numpad0 = 0x60;
+        constexpr auto Numpad1 = 0x61;
+        constexpr auto Numpad2 = 0x62;
+        constexpr auto Numpad3 = 0x63;
+        constexpr auto Numpad4 = 0x64;
+        constexpr auto Numpad5 = 0x65;
+        constexpr auto Numpad6 = 0x66;
+        constexpr auto Numpad7 = 0x67;
+        constexpr auto Numpad8 = 0x68;
+        constexpr auto Numpad9 = 0x69;
+        constexpr auto Multiply = 0x6A;
+        constexpr auto Add = 0x6B;
+        constexpr auto Separator = 0x6C;
+        constexpr auto Subtract = 0x6D;
+        constexpr auto Decimal = 0x6E;
+        constexpr auto Divide = 0x6F;
         constexpr auto LShift = 0xA0;
         constexpr auto RMenu = 0xA5; // Right Alt — end of modifier VK range
     } // namespace vk
@@ -58,25 +74,42 @@ namespace
     // Win32 dwControlKeyState bit masks
     namespace cks
     {
-        constexpr auto RightAlt = 0x01;
-        constexpr auto LeftAlt = 0x02;
-        constexpr auto RightCtrl = 0x04;
-        constexpr auto LeftCtrl = 0x08;
-        constexpr auto Shift = 0x10;
-        constexpr auto NumLock = 0x20;
-        constexpr auto CapsLock = 0x80;
+        constexpr auto RightAlt = 0x0001;
+        constexpr auto LeftAlt = 0x0002;
+        constexpr auto RightCtrl = 0x0004;
+        constexpr auto LeftCtrl = 0x0008;
+        constexpr auto Shift = 0x0010;
+        constexpr auto NumLock = 0x0020;
+        [[maybe_unused]] constexpr auto ScrollLock = 0x0040;
+        constexpr auto CapsLock = 0x0080;
+        [[maybe_unused]] constexpr auto EnhancedKey = 0x0100;
+        constexpr auto RightWin = 0x0200; // Windows Terminal custom extension
+        constexpr auto LeftWin = 0x0400;  // Windows Terminal custom extension
     } // namespace cks
+
+    /// @brief Retrieves a parameter at the given index with a default fallback.
+    ///
+    /// Win32 input mode parameters are all optional with defaults (Vk=0, Sc=0, Uc=0,
+    /// Kd=0, Cs=0, Rc=1), matching the Windows Terminal reference implementation.
+    /// @param params The parsed parameter list.
+    /// @param index The parameter index.
+    /// @param defaultValue The value to return if index is out of range.
+    /// @return The parameter value at index, or defaultValue if absent.
+    constexpr auto paramAt(std::vector<int> const& params, std::size_t index, int defaultValue = 0) -> int
+    {
+        return index < params.size() ? params[index] : defaultValue;
+    }
 
     /// @brief Detects whether the AltGr key is active in a Win32 dwControlKeyState.
     ///
-    /// On European keyboards, AltGr sends RightAlt|LeftCtrl simultaneously without
-    /// LeftAlt or RightCtrl. This helper identifies that specific combination.
+    /// On European keyboards, AltGr sends RightAlt|LeftCtrl simultaneously. The Windows
+    /// Terminal reference only checks for RightAlt AND LeftCtrl being set, without excluding
+    /// other modifier bits.
     /// @param controlKeyState The dwControlKeyState field from a Win32 key event.
     /// @return True if the AltGr combination is detected.
     constexpr auto isAltGrKeyState(int controlKeyState) -> bool
     {
-        return (controlKeyState & cks::RightAlt) && (controlKeyState & cks::LeftCtrl)
-               && !(controlKeyState & cks::LeftAlt) && !(controlKeyState & cks::RightCtrl);
+        return (controlKeyState & cks::RightAlt) && (controlKeyState & cks::LeftCtrl);
     }
 
     /// @brief Decodes Win32 dwControlKeyState bits into a Modifier bitmask.
@@ -98,6 +131,8 @@ namespace
                 mods |= Modifier::Ctrl;
         }
 
+        if (controlKeyState & (cks::LeftWin | cks::RightWin))
+            mods |= Modifier::Super;
         if (controlKeyState & cks::CapsLock)
             mods |= Modifier::CapsLock;
         if (controlKeyState & cks::NumLock)
@@ -146,9 +181,25 @@ namespace
             case vk::F8:     return KeyCode::F8;
             case vk::F9:     return KeyCode::F9;
             case vk::F10:    return KeyCode::F10;
-            case vk::F11:    return KeyCode::F11;
-            case vk::F12:    return KeyCode::F12;
-            default:         return std::nullopt;
+            case vk::F11:      return KeyCode::F11;
+            case vk::F12:      return KeyCode::F12;
+            case vk::Numpad0:  return KeyCode::Kp0;
+            case vk::Numpad1:  return KeyCode::Kp1;
+            case vk::Numpad2:  return KeyCode::Kp2;
+            case vk::Numpad3:  return KeyCode::Kp3;
+            case vk::Numpad4:  return KeyCode::Kp4;
+            case vk::Numpad5:  return KeyCode::Kp5;
+            case vk::Numpad6:  return KeyCode::Kp6;
+            case vk::Numpad7:  return KeyCode::Kp7;
+            case vk::Numpad8:  return KeyCode::Kp8;
+            case vk::Numpad9:  return KeyCode::Kp9;
+            case vk::Multiply: return KeyCode::KpMultiply;
+            case vk::Add:      return KeyCode::KpAdd;
+            case vk::Separator:return KeyCode::KpSeparator;
+            case vk::Subtract: return KeyCode::KpSubtract;
+            case vk::Decimal:  return KeyCode::KpDecimal;
+            case vk::Divide:   return KeyCode::KpDivide;
+            default:           return std::nullopt;
                 // clang-format on
         }
     }
@@ -819,20 +870,22 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
     }
 
     // Win32 input mode: CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _
+    // All parameters are optional with defaults (Vk=0, Sc=0, Uc=0, Kd=0, Cs=0, Rc=1),
+    // matching the Windows Terminal reference implementation.
     if (finalByte == '_')
     {
         auto const params = parseCsiParams(_paramBuf);
-        if (params.size() < 6)
-            return; // Malformed — need all 6 fields
+        if (params.empty())
+            return; // Completely empty — nothing to process
 
-        auto const vkCode = params[0];
-        // auto const scanCode = params[1]; // unused
-        auto const unicodeChar = params[2];
-        auto const keyDown = params[3];
-        auto const controlKeyState = params[4];
-        // Repeat count is intentionally ignored. Windows Terminal sends each auto-repeat
+        auto const vkCode = paramAt(params, 0);
+        // auto const scanCode = paramAt(params, 1); // unused
+        auto const unicodeChar = paramAt(params, 2);
+        auto const keyDown = paramAt(params, 3);
+        auto const controlKeyState = paramAt(params, 4);
+        // Repeat count defaults to 1. Windows Terminal sends each auto-repeat
         // as a separate sequence with repeatCount=1, so this field is always 1 in practice.
-        // auto const repeatCount = params[5];
+        // auto const repeatCount = paramAt(params, 5, 1);
 
         // Skip key-up events
         if (keyDown == 0)
