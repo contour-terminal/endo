@@ -14,6 +14,126 @@ namespace tui
 namespace
 {
 
+    // ========================================================================
+    // Win32 Virtual Key Code constants (local definitions for cross-platform compilation)
+    // ========================================================================
+    namespace vk
+    {
+        constexpr auto Back = 0x08;
+        constexpr auto Tab = 0x09;
+        constexpr auto Return = 0x0D;
+        constexpr auto Shift = 0x10;
+        constexpr auto Control = 0x11;
+        constexpr auto Menu = 0x12; // Alt key
+        constexpr auto Escape = 0x1B;
+        constexpr auto Space = 0x20;
+        constexpr auto Prior = 0x21; // Page Up
+        constexpr auto Next = 0x22;  // Page Down
+        constexpr auto End = 0x23;
+        constexpr auto Home = 0x24;
+        constexpr auto Left = 0x25;
+        constexpr auto Up = 0x26;
+        constexpr auto Right = 0x27;
+        constexpr auto Down = 0x28;
+        constexpr auto Insert = 0x2D;
+        constexpr auto Delete = 0x2E;
+        constexpr auto LWin = 0x5B;
+        constexpr auto RWin = 0x5C;
+        constexpr auto F1 = 0x70;
+        constexpr auto F2 = 0x71;
+        constexpr auto F3 = 0x72;
+        constexpr auto F4 = 0x73;
+        constexpr auto F5 = 0x74;
+        constexpr auto F6 = 0x75;
+        constexpr auto F7 = 0x76;
+        constexpr auto F8 = 0x77;
+        constexpr auto F9 = 0x78;
+        constexpr auto F10 = 0x79;
+        constexpr auto F11 = 0x7A;
+        constexpr auto F12 = 0x7B;
+        constexpr auto LShift = 0xA0;
+        constexpr auto RMenu = 0xA5; // Right Alt — end of modifier VK range
+    } // namespace vk
+
+    // Win32 dwControlKeyState bit masks
+    namespace cks
+    {
+        constexpr auto RightAlt = 0x01;
+        constexpr auto LeftAlt = 0x02;
+        constexpr auto LeftCtrl = 0x08;
+        constexpr auto RightCtrl = 0x04;
+        constexpr auto Shift = 0x10;
+        constexpr auto NumLock = 0x20;
+        constexpr auto CapsLock = 0x80;
+    } // namespace cks
+
+    /// @brief Decodes Win32 dwControlKeyState bits into a Modifier bitmask.
+    /// @param controlKeyState The dwControlKeyState field from a Win32 key event.
+    /// @return The corresponding Modifier bitmask.
+    constexpr auto decodeWin32Modifiers(int controlKeyState) -> Modifier
+    {
+        auto mods = Modifier::None;
+        if (controlKeyState & cks::Shift)
+            mods |= Modifier::Shift;
+        if (controlKeyState & (cks::LeftAlt | cks::RightAlt))
+            mods |= Modifier::Alt;
+        if (controlKeyState & (cks::LeftCtrl | cks::RightCtrl))
+            mods |= Modifier::Ctrl;
+        if (controlKeyState & cks::CapsLock)
+            mods |= Modifier::CapsLock;
+        if (controlKeyState & cks::NumLock)
+            mods |= Modifier::NumLock;
+        return mods;
+    }
+
+    /// @brief Checks whether a Win32 virtual key code is a modifier-only key (Shift, Ctrl, Alt, Win).
+    /// @param vkCode The virtual key code.
+    /// @return True if the key is a bare modifier press.
+    constexpr auto isWin32ModifierOnlyVk(int vkCode) -> bool
+    {
+        return vkCode == vk::Shift || vkCode == vk::Control || vkCode == vk::Menu || vkCode == vk::LWin
+               || vkCode == vk::RWin || (vkCode >= vk::LShift && vkCode <= vk::RMenu);
+    }
+
+    /// @brief Maps a Win32 virtual key code to a KeyCode for special (non-printable) keys.
+    /// @param vkCode The virtual key code.
+    /// @return The corresponding KeyCode, or nullopt for printable/unrecognized keys.
+    constexpr auto mapWin32VkToKeyCode(int vkCode) -> std::optional<KeyCode>
+    {
+        switch (vkCode)
+        {
+                // clang-format off
+            case vk::Back:   return KeyCode::Backspace;
+            case vk::Tab:    return KeyCode::Tab;
+            case vk::Return: return KeyCode::Enter;
+            case vk::Escape: return KeyCode::Escape;
+            case vk::Prior:  return KeyCode::PageUp;
+            case vk::Next:   return KeyCode::PageDown;
+            case vk::End:    return KeyCode::End;
+            case vk::Home:   return KeyCode::Home;
+            case vk::Left:   return KeyCode::Left;
+            case vk::Up:     return KeyCode::Up;
+            case vk::Right:  return KeyCode::Right;
+            case vk::Down:   return KeyCode::Down;
+            case vk::Insert: return KeyCode::Insert;
+            case vk::Delete: return KeyCode::Delete;
+            case vk::F1:     return KeyCode::F1;
+            case vk::F2:     return KeyCode::F2;
+            case vk::F3:     return KeyCode::F3;
+            case vk::F4:     return KeyCode::F4;
+            case vk::F5:     return KeyCode::F5;
+            case vk::F6:     return KeyCode::F6;
+            case vk::F7:     return KeyCode::F7;
+            case vk::F8:     return KeyCode::F8;
+            case vk::F9:     return KeyCode::F9;
+            case vk::F10:    return KeyCode::F10;
+            case vk::F11:    return KeyCode::F11;
+            case vk::F12:    return KeyCode::F12;
+            default:         return std::nullopt;
+                // clang-format on
+        }
+    }
+
     /// @brief Parses semicolon-separated integer parameters from a CSI parameter string.
     ///
     /// Colons within a parameter field are treated as subparameter separators per the
@@ -677,6 +797,77 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             events.emplace_back(DecModeReport { .mode = params[0], .status = params[1] });
             return;
         }
+    }
+
+    // Win32 input mode: CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _
+    if (finalByte == '_')
+    {
+        auto const params = parseCsiParams(_paramBuf);
+        if (params.size() < 6)
+            return; // Malformed — need all 6 fields
+
+        auto const vkCode = params[0];
+        // auto const scanCode = params[1]; // unused
+        auto const unicodeChar = params[2];
+        auto const keyDown = params[3];
+        auto const controlKeyState = params[4];
+        // auto const repeatCount = params[5]; // unused
+
+        // Skip key-up events
+        if (keyDown == 0)
+            return;
+
+        // Skip modifier-only key presses
+        if (isWin32ModifierOnlyVk(vkCode))
+            return;
+
+        auto const mods = decodeWin32Modifiers(controlKeyState);
+
+        // Try special key mapping (Backspace, Enter, arrows, F-keys, etc.)
+        if (auto const mapped = mapWin32VkToKeyCode(vkCode))
+        {
+            events.emplace_back(KeyEvent { .key = *mapped, .modifiers = mods });
+            return;
+        }
+
+        // VK_SPACE: always emit U+0020 (UC may be 0 with Ctrl held)
+        if (vkCode == vk::Space)
+        {
+            constexpr auto cp = U' ';
+            events.emplace_back(
+                KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+            return;
+        }
+
+        // VK A-Z (0x41-0x5A): emit lowercase letter, Shift reflected in modifiers
+        if (vkCode >= 0x41 && vkCode <= 0x5A)
+        {
+            auto const cp = static_cast<char32_t>(static_cast<unsigned>(vkCode) - 0x41u + U'a');
+            events.emplace_back(
+                KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+            return;
+        }
+
+        // VK 0-9 (0x30-0x39): emit digit codepoint
+        if (vkCode >= 0x30 && vkCode <= 0x39)
+        {
+            auto const cp = static_cast<char32_t>(vkCode);
+            events.emplace_back(
+                KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+            return;
+        }
+
+        // Fall back to Unicode character for remaining printable keys
+        if (unicodeChar >= 32)
+        {
+            auto const cp = static_cast<char32_t>(unicodeChar);
+            events.emplace_back(
+                KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+            return;
+        }
+
+        // Silently ignore anything else
+        return;
     }
 
     // Standard CSI sequences (cursor keys, function keys, etc.)

@@ -61,4 +61,10 @@ constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv; ///< Disable passi
 constexpr auto EnableFocusTracking = "\033[?1004h"sv;  ///< Enable focus in/out notifications.
 constexpr auto DisableFocusTracking = "\033[?1004l"sv; ///< Disable focus in/out notifications.
 
+// Win32 input mode (DEC private mode 9001) — Windows Terminal extension.
+// Sends raw Win32 key events as CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _ sequences,
+// preserving full modifier fidelity that is lost in standard VT translation.
+constexpr auto EnableWin32InputMode = "\033[?9001h"sv;  ///< Enable win32-input-mode.
+constexpr auto DisableWin32InputMode = "\033[?9001l"sv; ///< Disable win32-input-mode.
+
 } // namespace tui::protocols

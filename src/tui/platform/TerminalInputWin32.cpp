@@ -246,6 +246,7 @@ void TerminalInput::writeProtocol(std::string_view data) const
 
 void TerminalInput::enableProtocols()
 {
+    writeProtocol(protocols::EnableWin32InputMode);
     writeProtocol(protocols::EnableCsiU);
     writeProtocol(protocols::EnableSGRMouse);
     writeProtocol(protocols::EnablePassiveMouseTracking);
@@ -263,6 +264,7 @@ void TerminalInput::disableProtocols()
     writeProtocol(protocols::DisablePassiveMouseTracking);
     writeProtocol(protocols::DisableSGRMouse);
     writeProtocol(protocols::DisableCsiU);
+    writeProtocol(protocols::DisableWin32InputMode);
 }
 
 } // namespace tui
