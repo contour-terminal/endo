@@ -36,6 +36,8 @@ target_sources(CoreVM PRIVATE
     vm/Instruction.cpp
     vm/Match.cpp
     vm/Program.cpp
+    vm/GarbageCollector.cpp
+    vm/ObjectPool.cpp
     vm/Runner.cpp
     vm/Runtime.cpp
     types/TypeRegistry.cpp
@@ -71,6 +73,8 @@ if(ENDO_TESTING)
         test_main.cpp
         TargetCodeGenerator_test.cpp
         types/TypeSystem_test.cpp
+        vm/ObjectPool_test.cpp
+        vm/GarbageCollector_test.cpp
     )
     target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
     add_test(NAME test-corevm COMMAND test-corevm)

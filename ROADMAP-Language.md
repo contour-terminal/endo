@@ -31,6 +31,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Lazy evaluation: `lazy expr` defers computation, `force` evaluates and caches
 - [x] Lazy sequences: `seq { yield 1; yield 2; yield! rest }` with `toList`, `take`, `each`
 - [x] Scoped resource management: `let use fd = File.open "f" "r"` auto-disposes at scope exit
+- [ ] Ref cells: `ref expr`, dereference `!expr`, mutation `expr <- expr`
 
 ## Types
 
@@ -49,6 +50,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Records: `type Person = { name: str; age: int }`
 - [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
 - [ ] Generic types
+- [ ] Ref cells: `ref<T>` (mutable reference cell)
 
 ### Type Annotations
 - [x] Variable annotations: `let count: int = 42`
@@ -439,3 +441,23 @@ Consult this section to determine what to work on next.
 - [x] Indirect tail calls (`IUTCALL`): tail-position optimization for indirect function calls via `IndirectTailCallInstr` IR instruction and `IUTCALL` VM opcode
 - [x] Runtime partial application: Callable with arity tracking — under-application produces a new Callable with merged captures instead of crashing
 - [x] Builtin HOF indirect dispatch: `map`/`filter`/`fold`/`reduce`/`each` use `IUCALL` for Callable parameters via `applyHOFFunction` helper, with return type casting for correct boolean dispatch
+
+### Phase 12 — Memory Model (RC Polish + Cycle-Collecting GC)
+- [x] Object pool optimization: slab allocator (`ObjectPool`) replacing O(n) `freeObject`/`isKnownObject` with O(1) operations via size-class slabs and intrusive free lists
+- [x] Recursive object release: `releaseAndFree()` uses iterative worklist and `SlotTraceInfo` to release child object pointers when parent's refcount hits 0
+- [x] String lifecycle: O(1) lookup via `std::unordered_set<CoreString const*> _knownStrings`
+- [x] Mark-and-sweep cycle collector: `GarbageCollector` with root enumeration from stack/globals/call frames, mark phase using `visitChildObjects`, sweep phase with marked-child refcount adjustment
+- [x] Write barrier infrastructure: `writeBarrier()` tracks mutation suspects in `_gcSuspects` set (activated by future ref cells)
+- [x] GC integration: allocation-count trigger via `RuntimeConfig::gcThreshold`, gated by `!_gcSuspects.empty()` (no overhead until Phase 13 ref cells)
+- [x] `SlotTraceInfo` on `TypeDescriptor`: precomputed fixed/dynamic object slot info for all builtin types; auto-computed for user-defined types at registration
+- [x] `retainObject` upgraded from `memory_order_relaxed` to `memory_order_acq_rel` for future thread safety
+
+### Phase 13 — Ref Cells (Mutable References)
+- [ ] `ref<T>` type: `BuiltinTypeId::Ref`, product type with 1 mutable slot
+- [ ] `ref expr` constructor syntax (`RefExpr` AST node)
+- [ ] `!expr` dereference syntax (`RefDerefExpr`, disambiguated from boolean NOT via type inference)
+- [ ] `expr <- expr` mutation syntax (reuses existing `MutAssignExpr` and `<-` token)
+- [ ] Write barrier on `<-` for GC cycle detection
+- [ ] Type inference for `ref<T>` propagation
+- [ ] Pattern matching restriction: ref cells cannot be destructured (match on `!r` instead)
+- [ ] REPL persistence of ref cells across prompts

@@ -7,6 +7,7 @@
 #include <CoreVM/types/TypedObject.hpp>
 #include <CoreVM/util.hpp>
 #include <CoreVM/util/assert.hpp>
+#include <CoreVM/vm/ObjectPool.hpp>
 
 #include <cstdint>
 #include <expected>
@@ -16,6 +17,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace CoreVM
@@ -196,6 +198,22 @@ class Runner
     /// Provides mutable access to the stack for variable mutation.
     Stack& mutableStack() noexcept { return _stack; }
 
+    /// Write barrier: tracks objects whose slots were mutated (potential cycle roots).
+    /// No-op when GC is disabled. Called by mutation opcodes (future ref cells).
+    void writeBarrier(TypedObject* obj) noexcept;
+
+    /// Enumerate root objects from stack, globals, and call frames.
+    [[nodiscard]] std::vector<TypedObject*> enumerateRoots() const;
+
+    /// Perform a full GC cycle (mark-and-sweep + string sweep).
+    void performGC();
+
+    /// Returns the object pool (for testing/inspection).
+    [[nodiscard]] ObjectPool const& objectPool() const noexcept { return _objectPool; }
+
+    /// Returns the GC suspects set (for testing/inspection).
+    [[nodiscard]] std::unordered_set<TypedObject*> const& gcSuspects() const noexcept { return _gcSuspects; }
+
   private:
     void consume(Opcode op);
 
@@ -221,7 +239,9 @@ class Runner
 
     TypedObject* getObject(int si) const { return reinterpret_cast<TypedObject*>(_stack[si]); }
 
-    void freeObject(TypedObject* obj);
+    /// Recursively release child objects and deallocate. Called when refcount hits 0.
+    void releaseAndFree(TypedObject* obj);
+
     const TypeRegistry& typeRegistry() const;
 
     void push(Value value) { _stack.push(value); }
@@ -262,9 +282,10 @@ class Runner
     Globals& _globals;
 
     std::list<std::string> _stringGarbage;
+    std::unordered_set<CoreString const*> _knownStrings; ///< O(1) string pointer validation.
 
-    std::vector<std::unique_ptr<uint8_t[]>> _objectPool;
-    size_t _objectAllocCount = 0;
+    ObjectPool _objectPool;                              ///< Slab-allocated object pool.
+    std::unordered_set<TypedObject*> _gcSuspects;        ///< Objects with mutated slots (write barrier).
 
     size_t _fp = 0;
 

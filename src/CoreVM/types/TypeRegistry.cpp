@@ -29,6 +29,12 @@ void TypeRegistry::registerBuiltins()
         { "bind", "Option.bind f opt -> option" },
         { "defaultValue", "Option.defaultValue d opt -> value" },
     };
+    // SlotTraceInfo: None has no slots; Some's slot 0 is dynamic (check type tag in slot 1)
+    optionType->traceInfo.variantFixedSlots = { {}, {} };
+    optionType->traceInfo.variantDynamicSlots = {
+        {},                                                      // None: no payload
+        { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 1, .tagPosition = 0 } }, // Some
+    };
     addType(std::move(optionType));
 
     // Result<T,E>: Error (tag=0, 1 payload slot) | Ok (tag=1, 1 payload slot)
@@ -40,6 +46,12 @@ void TypeRegistry::registerBuiltins()
     resultType->variants = {
         { "Error", 1 }, // tag 0: error payload
         { "Ok", 1 },    // tag 1: success payload
+    };
+    // SlotTraceInfo: Error/Ok slot 0 is dynamic (check type tag in slot 1)
+    resultType->traceInfo.variantFixedSlots = { {}, {} };
+    resultType->traceInfo.variantDynamicSlots = {
+        { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 1, .tagPosition = 0 } }, // Error
+        { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 1, .tagPosition = 0 } }, // Ok
     };
     addType(std::move(resultType));
 
@@ -53,6 +65,11 @@ void TypeRegistry::registerBuiltins()
         { "", 1 }, // slot 1
     };
     tuple2Type->slotCount = 3; // 2 element slots + 1 packed type tag slot
+    // SlotTraceInfo: slots 0,1 are dynamic (check packed type tag in slot 2)
+    tuple2Type->traceInfo.dynamicSlots = {
+        SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 2, .tagPosition = 0 },
+        SlotTraceInfo::DynamicSlot { .slotIndex = 1, .typeTagSlot = 2, .tagPosition = 1 },
+    };
     addType(std::move(tuple2Type));
 
     // Tuple3: 3-element product type
@@ -66,6 +83,12 @@ void TypeRegistry::registerBuiltins()
         { "", 2 }, // slot 2
     };
     tuple3Type->slotCount = 4; // 3 element slots + 1 packed type tag slot
+    // SlotTraceInfo: slots 0,1,2 are dynamic (check packed type tag in slot 3)
+    tuple3Type->traceInfo.dynamicSlots = {
+        SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 3, .tagPosition = 0 },
+        SlotTraceInfo::DynamicSlot { .slotIndex = 1, .typeTagSlot = 3, .tagPosition = 1 },
+        SlotTraceInfo::DynamicSlot { .slotIndex = 2, .typeTagSlot = 3, .tagPosition = 2 },
+    };
     addType(std::move(tuple3Type));
 
     // List: Nil (tag=0, 0 payload slots) | Cons (tag=1, 2 slots: head + tail)
@@ -77,6 +100,12 @@ void TypeRegistry::registerBuiltins()
     listType->variants = {
         { "Nil", 0 },  // tag 0: empty list
         { "Cons", 2 }, // tag 1: head (slot 0) + tail (slot 1)
+    };
+    // SlotTraceInfo: Cons slot 1 (tail) is always an object; slot 0 (head) is dynamic
+    listType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Nil={}, Cons={slot 1}
+    listType->traceInfo.variantDynamicSlots = {
+        {},                                                                                     // Nil
+        { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 2, .tagPosition = 0 } }, // Cons head
     };
     addType(std::move(listType));
 
@@ -92,6 +121,8 @@ void TypeRegistry::registerBuiltins()
         { "mem", 4, LiteralType::Object },  { "command", 5, LiteralType::String },
     };
     processInfoType->producingCommand = "ps";
+    // SlotTraceInfo: slot 4 (mem) is Object (Size)
+    processInfoType->traceInfo.fixedObjectSlots = { 4 };
     addType(std::move(processInfoType));
 
     // DateTime: Product type with 7 fields for date/time representation
@@ -126,6 +157,8 @@ void TypeRegistry::registerBuiltins()
         { "isDir", 4, LiteralType::Boolean },
     };
     fileInfoType->producingCommand = "ls";
+    // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects
+    fileInfoType->traceInfo.fixedObjectSlots = { 1, 2, 3 };
     addType(std::move(fileInfoType));
 
     // JobInfo: Product type with 4 fields for background job information
@@ -244,6 +277,9 @@ void TypeRegistry::registerBuiltins()
         { "Empty", 0 }, // tag 0: empty sequence
         { "Cons", 2 },  // tag 1: head (slot 0) + lazy tail (slot 1)
     };
+    // SlotTraceInfo: Cons slot 1 (lazy tail) is always an object
+    seqType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Empty={}, Cons={slot 1}
+    seqType->traceInfo.variantDynamicSlots = { {}, {} };   // head type unknown at trace level
     addType(std::move(seqType));
 
     // FileHandle: Product type with 1 field for the handle index
@@ -298,6 +334,31 @@ void TypeRegistry::registerBuiltins()
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }
 
+/// Computes traceInfo for a product type from its FieldInfo vector.
+static void computeProductTraceInfo(TypeDescriptor& type)
+{
+    for (size_t i = 0; i < type.fields.size(); ++i)
+    {
+        if (type.fields[i].type == LiteralType::Object)
+            type.traceInfo.fixedObjectSlots.push_back(static_cast<uint8_t>(i));
+    }
+}
+
+/// Computes traceInfo for a sum type from its VariantInfo vector.
+static void computeSumTraceInfo(TypeDescriptor& type)
+{
+    type.traceInfo.variantFixedSlots.resize(type.variants.size());
+    type.traceInfo.variantDynamicSlots.resize(type.variants.size());
+    for (size_t v = 0; v < type.variants.size(); ++v)
+    {
+        for (size_t f = 0; f < type.variants[v].fields.size(); ++f)
+        {
+            if (type.variants[v].fields[f].type == LiteralType::Object)
+                type.traceInfo.variantFixedSlots[v].push_back(static_cast<uint8_t>(f));
+        }
+    }
+}
+
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)
 {
     auto type = std::make_unique<TypeDescriptor>();
@@ -312,6 +373,8 @@ TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<Vari
     {
         type->slotCount = std::max(type->slotCount, static_cast<uint16_t>(variant.payloadSlots));
     }
+
+    computeSumTraceInfo(*type);
 
     return addType(std::move(type));
 }
@@ -333,6 +396,8 @@ TypeDescriptor* TypeRegistry::registerProductType(std::string name, std::vector<
         type->fields[i].offset = static_cast<uint8_t>(i);
     }
 
+    computeProductTraceInfo(*type);
+
     return addType(std::move(type));
 }
 
@@ -345,6 +410,10 @@ TypeDescriptor* TypeRegistry::registerProductType(std::unique_ptr<TypeDescriptor
     // Preserve slotCount if already set (e.g., named tuples need extra slots for type tags)
     if (type->slotCount == 0)
         type->slotCount = static_cast<uint16_t>(type->fields.size());
+
+    // Compute traceInfo if not already populated
+    if (type->traceInfo.fixedObjectSlots.empty() && type->traceInfo.dynamicSlots.empty())
+        computeProductTraceInfo(*type);
 
     // Update _nextId to stay ahead of the assigned ID
     if (type->id >= _nextId)
@@ -362,6 +431,10 @@ TypeDescriptor* TypeRegistry::registerSumType(std::unique_ptr<TypeDescriptor> ty
     for (auto const& v: type->variants)
         maxSlots = std::max(maxSlots, static_cast<uint16_t>(v.payloadSlots));
     type->slotCount = maxSlots;
+
+    // Compute traceInfo if not already populated
+    if (type->traceInfo.variantFixedSlots.empty() && type->traceInfo.variantDynamicSlots.empty())
+        computeSumTraceInfo(*type);
 
     // Update _nextId to stay ahead of the assigned ID
     if (type->id >= _nextId)

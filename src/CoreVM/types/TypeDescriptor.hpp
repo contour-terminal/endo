@@ -51,6 +51,33 @@ struct VariantInfo
     std::vector<FieldInfo> fields; ///< Named fields (empty if positional or unit variant)
 };
 
+/// Precomputed slot tracing info for GC and recursive release.
+///
+/// Describes which slots of a TypedObject hold child object pointers that
+/// must be traced during garbage collection or released during recursive deallocation.
+struct SlotTraceInfo
+{
+    /// Product types: slot indices that always hold object pointers.
+    std::vector<uint8_t> fixedObjectSlots;
+
+    /// Sum types: per-variant (indexed by tag) fixed object slot indices.
+    std::vector<std::vector<uint8_t>> variantFixedSlots;
+
+    /// A slot whose contained type depends on a runtime type-tag slot.
+    struct DynamicSlot
+    {
+        uint8_t slotIndex;   ///< The slot that might hold an object pointer.
+        uint8_t typeTagSlot; ///< The slot containing the LiteralType tag.
+        uint8_t tagPosition; ///< Position for packed type tags (tuples), 0 for simple.
+    };
+
+    /// Product types: dynamic slots.
+    std::vector<DynamicSlot> dynamicSlots;
+
+    /// Sum types: per-variant dynamic slots.
+    std::vector<std::vector<DynamicSlot>> variantDynamicSlots;
+};
+
 /// Describes a composite type's structure.
 ///
 /// TypeDescriptors are registered once and shared by all instances of that type.
@@ -90,6 +117,13 @@ struct TypeDescriptor
     /// Custom formatter for human-readable display. When nullptr, generic
     /// Product/Sum formatting based on TypeKind is used.
     TypeFormatFn formatFn = nullptr;
+
+    /// Precomputed tracing info for GC mark/sweep and recursive release.
+    SlotTraceInfo traceInfo;
+
+    /// Whether instances of this type have mutable slots (e.g., ref cells).
+    /// Used by the write barrier to decide whether to track mutation suspects.
+    bool hasMutableSlots = false;
 
     /// Returns the variant info for a given tag, or nullptr if invalid.
     [[nodiscard]] const VariantInfo* getVariant(uint8_t tag) const

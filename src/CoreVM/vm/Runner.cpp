@@ -4,6 +4,7 @@
 #include <CoreVM/util.hpp>
 #include <CoreVM/util/assert.hpp>
 #include <CoreVM/util/strings.hpp>
+#include <CoreVM/vm/GarbageCollector.hpp>
 
 #include <bit>
 #include <cinttypes>
@@ -217,13 +218,17 @@ void Runner::consume(Opcode opcode)
 CoreString* Runner::newString(std::string value)
 {
     _stringGarbage.emplace_back(std::move(value));
-    return &_stringGarbage.back();
+    auto* ptr = &_stringGarbage.back();
+    _knownStrings.insert(ptr);
+    return ptr;
 }
 
 CoreString* Runner::catString(const CoreString& a, const CoreString& b)
 {
     _stringGarbage.emplace_back(a + b);
-    return &_stringGarbage.back();
+    auto* ptr = &_stringGarbage.back();
+    _knownStrings.insert(ptr);
+    return ptr;
 }
 
 const TypeRegistry& Runner::typeRegistry() const
@@ -233,35 +238,21 @@ const TypeRegistry& Runner::typeRegistry() const
 
 TypedObject* Runner::allocObject(uint16_t typeId)
 {
-    const TypeDescriptor* type = typeRegistry().get(typeId);
+    auto const* type = typeRegistry().get(typeId);
     if (!type)
     {
-        // Invalid type ID - this is a programming error
         COREVM_ASSERT(false, "Invalid type ID in OALLOC");
         return nullptr;
     }
 
-    // Allocate memory for the object
-    size_t allocSize = TypedObject::allocationSize(type);
-    auto storage = std::make_unique<uint8_t[]>(allocSize);
-
-    // Initialize the object
-    auto* obj = reinterpret_cast<TypedObject*>(storage.get());
-    obj->type = type;
-    obj->refCount.store(1, std::memory_order_relaxed);
-    obj->tag = 0;
-
-    // Zero-initialize slots
-    for (auto const i: std::views::iota(uint16_t { 0 }, type->slotCount))
+    // Trigger GC if suspects exist and allocation threshold reached.
+    if (_config.gcEnabled && !_gcSuspects.empty()
+        && _objectPool.totalAllocations() > 0 && _objectPool.totalAllocations() % _config.gcThreshold == 0)
     {
-        obj->setSlot(i, 0);
+        performGC();
     }
 
-    // Track the allocation
-    _objectPool.push_back(std::move(storage));
-    ++_objectAllocCount;
-
-    return obj;
+    return _objectPool.allocate(type);
 }
 
 TypedObject* Runner::createPartialCallable(TypedObject* callable, std::vector<Value> const& partialArgs)
@@ -367,13 +358,7 @@ bool Runner::isKnownObject(uint64_t rawValue) const noexcept
     if (rawValue == 0)
         return false;
 
-    auto* ptr = reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(rawValue));
-    for (auto const& storage: _objectPool)
-    {
-        if (reinterpret_cast<TypedObject*>(storage.get()) == ptr)
-            return true;
-    }
-    return false;
+    return _objectPool.owns(reinterpret_cast<void const*>(static_cast<uintptr_t>(rawValue)));
 }
 
 bool Runner::isKnownString(uint64_t rawValue) const noexcept
@@ -382,30 +367,77 @@ bool Runner::isKnownString(uint64_t rawValue) const noexcept
         return false;
 
     auto const* ptr = reinterpret_cast<CoreString const*>(static_cast<uintptr_t>(rawValue));
-    for (auto const& str: _stringGarbage)
-    {
-        if (&str == ptr)
-            return true;
-    }
-    return false;
+    return _knownStrings.contains(ptr);
 }
 
-void Runner::freeObject(TypedObject* obj)
+void Runner::releaseAndFree(TypedObject* obj)
 {
     if (!obj)
         return;
 
-    // Find and remove from the object pool
-    // Note: This is O(n) but we expect few objects in practice.
-    // For better performance, we could use a free list or arena allocator.
-    for (auto it = _objectPool.begin(); it != _objectPool.end(); ++it)
+    // Iterative worklist to avoid C++ stack overflow on deep structures (e.g., long lists).
+    std::vector<TypedObject*> worklist;
+    worklist.push_back(obj);
+
+    while (!worklist.empty())
     {
-        if (reinterpret_cast<TypedObject*>(it->get()) == obj)
-        {
-            _objectPool.erase(it);
-            return;
-        }
+        auto* current = worklist.back();
+        worklist.pop_back();
+
+        // Release child object pointers; push children whose RC hits 0 onto worklist.
+        visitChildObjects(
+            *current,
+            [this](void const* ptr) { return _objectPool.owns(ptr); },
+            [this, &worklist](TypedObject* child) {
+                if (releaseObject(child))
+                    worklist.push_back(child);
+            });
+
+        _objectPool.deallocate(current);
     }
+}
+
+void Runner::writeBarrier(TypedObject* obj) noexcept
+{
+    if (_config.gcEnabled && obj)
+        _gcSuspects.insert(obj);
+}
+
+std::vector<TypedObject*> Runner::enumerateRoots() const
+{
+    std::vector<TypedObject*> roots;
+
+    // Stack values that are object pointers.
+    for (size_t i = 0; i < _stack.size(); ++i)
+    {
+        auto const val = _stack[i];
+        if (_objectPool.owns(reinterpret_cast<void const*>(static_cast<uintptr_t>(val))))
+            roots.push_back(reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(val)));
+    }
+
+    // Global values that are object pointers.
+    for (auto const val: _globals)
+    {
+        if (_objectPool.owns(reinterpret_cast<void const*>(static_cast<uintptr_t>(val))))
+            roots.push_back(reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(val)));
+    }
+
+    // Call stack lazy objects.
+    for (auto const& frame: _callStack)
+    {
+        if (frame.lazyObj)
+            roots.push_back(frame.lazyObj);
+    }
+
+    return roots;
+}
+
+void Runner::performGC()
+{
+    auto roots = enumerateRoots();
+    GarbageCollector gc(_objectPool);
+    gc.collect(roots);
+    _gcSuspects.clear();
 }
 
 bool Runner::run()
@@ -1268,7 +1300,7 @@ Runner::RunResult Runner::loopWithResult()
         }
         if (releaseObject(obj))
         {
-            freeObject(obj);
+            releaseAndFree(obj);
         }
         next;
     }
@@ -1643,7 +1675,7 @@ Runner::RunResult Runner::loopWithResult()
                 lazyObj->setSlot(1, retVal);
                 lazyObj->tag = 1; // Mark as forced/evaluated
                 if (releaseObject(lazyObj))
-                    freeObject(lazyObj);
+                    releaseAndFree(lazyObj);
             }
 
             // Pop callee's entire frame (including args and locals)
@@ -1913,7 +1945,7 @@ Runner::RunResult Runner::loopWithResult()
             if (_callStack.size() >= maxCallDepth)
             {
                 if (releaseObject(lazy))
-                    freeObject(lazy);
+                    releaseAndFree(lazy);
                 _ip = get_pc();
                 return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
             }
