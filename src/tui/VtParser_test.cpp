@@ -411,6 +411,26 @@ TEST_CASE("VtParser.Win32Input.capslock_numlock_modifiers", "[tui,vtparser]")
     CHECK(hasModifier(key->modifiers, Modifier::NumLock));
 }
 
+TEST_CASE("VtParser.Win32Input.shift_a", "[tui,vtparser]")
+{
+    // VK_A=0x41, UC='A'=65, CS=SHIFT(0x10) → key='a', Shift
+    auto const key = parseKey("\033[65;30;65;1;16;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'a');
+    CHECK(key->modifiers == Modifier::Shift);
+}
+
+TEST_CASE("VtParser.Win32Input.altgr_suppresses_ctrl_alt", "[tui,vtparser]")
+{
+    // AltGr sends RightAlt(0x01)|LeftCtrl(0x08)=0x09. Should produce no Alt/Ctrl modifiers.
+    // VK_E=0x45, UC=U+20AC (Euro sign is > 0xFF, but for CSI params we use the decimal value)
+    // Simplified: just test that CS=0x09 produces no modifiers
+    auto const key = parseKey("\033[69;18;8364;1;9;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'e');
+    CHECK(key->modifiers == Modifier::None);
+}
+
 // ============================================================================
 // DECRQM (DEC Request Mode) response tests
 // ============================================================================

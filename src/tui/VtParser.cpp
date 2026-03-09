@@ -60,8 +60,8 @@ namespace
     {
         constexpr auto RightAlt = 0x01;
         constexpr auto LeftAlt = 0x02;
-        constexpr auto LeftCtrl = 0x08;
         constexpr auto RightCtrl = 0x04;
+        constexpr auto LeftCtrl = 0x08;
         constexpr auto Shift = 0x10;
         constexpr auto NumLock = 0x20;
         constexpr auto CapsLock = 0x80;
@@ -75,10 +75,20 @@ namespace
         auto mods = Modifier::None;
         if (controlKeyState & cks::Shift)
             mods |= Modifier::Shift;
-        if (controlKeyState & (cks::LeftAlt | cks::RightAlt))
-            mods |= Modifier::Alt;
-        if (controlKeyState & (cks::LeftCtrl | cks::RightCtrl))
-            mods |= Modifier::Ctrl;
+
+        // AltGr on European keyboards sends RightAlt|LeftCtrl simultaneously.
+        // Detect this combination and suppress both Alt and Ctrl so that AltGr-typed
+        // characters carry no spurious modifier flags.
+        auto const isAltGr = (controlKeyState & cks::RightAlt) && (controlKeyState & cks::LeftCtrl)
+                             && !(controlKeyState & cks::LeftAlt) && !(controlKeyState & cks::RightCtrl);
+        if (!isAltGr)
+        {
+            if (controlKeyState & (cks::LeftAlt | cks::RightAlt))
+                mods |= Modifier::Alt;
+            if (controlKeyState & (cks::LeftCtrl | cks::RightCtrl))
+                mods |= Modifier::Ctrl;
+        }
+
         if (controlKeyState & cks::CapsLock)
             mods |= Modifier::CapsLock;
         if (controlKeyState & cks::NumLock)
@@ -811,7 +821,9 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         auto const unicodeChar = params[2];
         auto const keyDown = params[3];
         auto const controlKeyState = params[4];
-        // auto const repeatCount = params[5]; // unused
+        // Repeat count is intentionally ignored. Windows Terminal sends each auto-repeat
+        // as a separate sequence with repeatCount=1, so this field is always 1 in practice.
+        // auto const repeatCount = params[5];
 
         // Skip key-up events
         if (keyDown == 0)
@@ -848,7 +860,9 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             return;
         }
 
-        // VK 0-9 (0x30-0x39): emit digit codepoint
+        // VK 0-9 (0x30-0x39): emit base digit codepoint, Shift reflected in modifiers.
+        // This mirrors the letter key handling above. The consumer interprets Shift+digit
+        // according to the active keyboard layout (e.g. Shift+1 → '!' on US layout).
         if (vkCode >= 0x30 && vkCode <= 0x39)
         {
             auto const cp = static_cast<char32_t>(vkCode);
