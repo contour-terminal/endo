@@ -67,6 +67,18 @@ namespace
         constexpr auto CapsLock = 0x80;
     } // namespace cks
 
+    /// @brief Detects whether the AltGr key is active in a Win32 dwControlKeyState.
+    ///
+    /// On European keyboards, AltGr sends RightAlt|LeftCtrl simultaneously without
+    /// LeftAlt or RightCtrl. This helper identifies that specific combination.
+    /// @param controlKeyState The dwControlKeyState field from a Win32 key event.
+    /// @return True if the AltGr combination is detected.
+    constexpr auto isAltGrKeyState(int controlKeyState) -> bool
+    {
+        return (controlKeyState & cks::RightAlt) && (controlKeyState & cks::LeftCtrl)
+               && !(controlKeyState & cks::LeftAlt) && !(controlKeyState & cks::RightCtrl);
+    }
+
     /// @brief Decodes Win32 dwControlKeyState bits into a Modifier bitmask.
     /// @param controlKeyState The dwControlKeyState field from a Win32 key event.
     /// @return The corresponding Modifier bitmask.
@@ -77,11 +89,8 @@ namespace
             mods |= Modifier::Shift;
 
         // AltGr on European keyboards sends RightAlt|LeftCtrl simultaneously.
-        // Detect this combination and suppress both Alt and Ctrl so that AltGr-typed
-        // characters carry no spurious modifier flags.
-        auto const isAltGr = (controlKeyState & cks::RightAlt) && (controlKeyState & cks::LeftCtrl)
-                             && !(controlKeyState & cks::LeftAlt) && !(controlKeyState & cks::RightCtrl);
-        if (!isAltGr)
+        // Suppress both Alt and Ctrl so that AltGr-typed characters carry no spurious modifier flags.
+        if (!isAltGrKeyState(controlKeyState))
         {
             if (controlKeyState & (cks::LeftAlt | cks::RightAlt))
                 mods |= Modifier::Alt;
@@ -834,6 +843,7 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             return;
 
         auto const mods = decodeWin32Modifiers(controlKeyState);
+        auto const isAltGr = isAltGrKeyState(controlKeyState);
 
         // Try special key mapping (Backspace, Enter, arrows, F-keys, etc.)
         if (auto const mapped = mapWin32VkToKeyCode(vkCode))
@@ -851,9 +861,18 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             return;
         }
 
-        // VK A-Z (0x41-0x5A): emit lowercase letter, Shift reflected in modifiers
+        // VK A-Z (0x41-0x5A): emit lowercase letter, Shift reflected in modifiers.
+        // When AltGr is active, prefer the unicodeChar field which contains the composed
+        // character (e.g., AltGr+E → U+20AC '€' on German keyboards).
         if (vkCode >= 0x41 && vkCode <= 0x5A)
         {
+            if (isAltGr && unicodeChar >= 32)
+            {
+                auto const cp = static_cast<char32_t>(unicodeChar);
+                events.emplace_back(
+                    KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+                return;
+            }
             auto const cp = static_cast<char32_t>(static_cast<unsigned>(vkCode) - 0x41u + U'a');
             events.emplace_back(
                 KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
@@ -863,8 +882,16 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         // VK 0-9 (0x30-0x39): emit base digit codepoint, Shift reflected in modifiers.
         // This mirrors the letter key handling above. The consumer interprets Shift+digit
         // according to the active keyboard layout (e.g. Shift+1 → '!' on US layout).
+        // When AltGr is active, prefer unicodeChar for composed characters.
         if (vkCode >= 0x30 && vkCode <= 0x39)
         {
+            if (isAltGr && unicodeChar >= 32)
+            {
+                auto const cp = static_cast<char32_t>(unicodeChar);
+                events.emplace_back(
+                    KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+                return;
+            }
             auto const cp = static_cast<char32_t>(vkCode);
             events.emplace_back(
                 KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });

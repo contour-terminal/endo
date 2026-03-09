@@ -423,11 +423,11 @@ TEST_CASE("VtParser.Win32Input.shift_a", "[tui,vtparser]")
 TEST_CASE("VtParser.Win32Input.altgr_suppresses_ctrl_alt", "[tui,vtparser]")
 {
     // AltGr sends RightAlt(0x01)|LeftCtrl(0x08)=0x09. Should produce no Alt/Ctrl modifiers.
-    // VK_E=0x45, UC=U+20AC (Euro sign is > 0xFF, but for CSI params we use the decimal value)
-    // Simplified: just test that CS=0x09 produces no modifiers
+    // VK_E=0x45, UC=U+20AC '€' (8364 decimal) — AltGr+E on German keyboard.
+    // The handler should emit the composed Unicode character from unicodeChar, not the base letter.
     auto const key = parseKey("\033[69;18;8364;1;9;1_");
     REQUIRE(key.has_value());
-    CHECK(key->codepoint == U'e');
+    CHECK(key->codepoint == U'\u20AC'); // Euro sign '€'
     CHECK(key->modifiers == Modifier::None);
 }
 
