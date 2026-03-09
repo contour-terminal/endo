@@ -20,18 +20,19 @@ Compound values — lists, tuples, options, results, records, and discriminated 
 
 - A **type descriptor** pointer (identifies the type, slot count, variant info)
 - A **reference count** (for deterministic lifetime management)
-- A **GC mark** flag (for cycle collection)
+- A **variant tag** (for sum types like Option, Result)
 - **Slots** (an array of 64-bit values holding fields/elements)
 
 ```
-┌──────────────────────────────┐
-│ TypedObject                  │
-├──────────────────────────────┤
-│ type: TypeDescriptor*        │
-│ refCount: uint32_t           │
-│ gcMark: GCMark               │
-│ slots[0..N]: uint64_t        │
-└──────────────────────────────┘
+┌──────────────────────────────────┐
+│ TypedObject                      │
+├──────────────────────────────────┤
+│ type: TypeDescriptor*    (8 B)   │
+│ refCount: atomic<uint32> (4 B)   │
+│ tag: uint8_t             (1 B)   │
+│ padding: uint8_t[3]      (3 B)   │
+│ slots[0..N]: uint64_t    (8 B ea)│
+└──────────────────────────────────┘
 ```
 
 Objects are allocated via `Runner::allocObject()` and tracked in the runner's object pool.
@@ -54,11 +55,11 @@ let y = [1; 2; 3]     // ORETAIN on the List object
 // scope exit: ORELEASE y, then ORELEASE x (LIFO order)
 ```
 
-### Current Limitations
+### Implementation Details
 
-- **Child release**: When an object is freed, its child pointers in slots are not recursively released (children may leak). This is tracked for improvement in Phase 12.
+- **Recursive child release**: When an object's reference count reaches zero, `releaseAndFree()` uses an iterative worklist to recursively release all child object pointers before freeing the parent.
+- **Object pool**: `ObjectPool` provides O(1) allocation and deallocation via size-class slabs with intrusive free lists, replacing the previous linear-scan approach.
 - **String arena**: Strings are allocated in an arena that is freed in bulk when the runner is destroyed, rather than individually reference-counted.
-- **Free list**: `freeObject` uses a linear scan — O(n) in the number of live objects. An object pool with O(1) free is planned.
 
 ## Scoped Resource Management
 
@@ -82,10 +83,10 @@ The `let manual` escape hatch opts out of automatic disposal for cases where the
 
 Strings (`CoreString`) are currently allocated in an arena managed by the runner. All strings created during execution persist until the runner is destroyed. This is simple and avoids use-after-free, but means string memory is not reclaimed during long-running sessions.
 
-**Planned improvements:**
+**Current and planned improvements:**
 
-- O(1) string deduplication via `std::unordered_set`
-- Per-string reference counting or integration with the GC
+- O(1) string pointer validation via `std::unordered_set` (implemented)
+- Per-string reference counting or integration with the GC (planned)
 
 ## Cycle Collection
 
@@ -106,7 +107,7 @@ Without a cycle collector, the objects in a cycle would never reach a reference 
 
 ### Mark-and-Sweep Design
 
-Endo's planned cycle collector uses a **mark-and-sweep** algorithm:
+Endo's cycle collector uses a **mark-and-sweep** algorithm:
 
 1. **Root enumeration**: Walk the VM stack and global variables, identifying all directly reachable objects.
 2. **Mark phase**: Starting from roots, traverse object slots iteratively (worklist-based, no C++ recursion) and mark each reachable object.
@@ -118,7 +119,7 @@ The collector is triggered by allocation count thresholds, configurable via `Run
 |--------------------|------------------------------------------|---------|
 | `gcEnabled`        | Whether the cycle collector is active    | `true`  |
 | `gcThreshold`      | Allocation count before triggering GC    | 10000   |
-| `gcMemoryThreshold` | Byte threshold before triggering GC     | 0 (off) |
+| `gcMemoryThreshold` | Byte threshold before triggering GC     | 10 MB   |
 
 Since Endo is immutable by default, cycles can **only** arise through `ref<T>` mutation. The collector is a safety net, not the primary memory management strategy.
 
@@ -149,11 +150,11 @@ Ref cells are the **only** source of mutability for heap objects. This design ke
 
 ## Summary
 
-| Aspect              | Current                        | Planned                           |
-|---------------------|--------------------------------|-----------------------------------|
-| Stack values        | Zero-cost, no allocation       | —                                 |
-| Heap objects         | Scope-based RC (ORETAIN/ORELEASE) | + object pool, recursive release |
-| Strings             | Arena (bulk free)              | Dedup + per-string RC             |
-| Cycle collection    | Not needed (immutable data)    | Mark-and-sweep for `ref<T>` cycles |
-| Resource cleanup    | `let use` with dispose callbacks | —                                |
-| Mutable references  | Not available                  | `ref<T>` with write barriers      |
+| Aspect              | Current                                          | Planned                           |
+|---------------------|--------------------------------------------------|-----------------------------------|
+| Stack values        | Zero-cost, no allocation                         | —                                 |
+| Heap objects        | Scope-based RC + object pool + recursive release | —                                 |
+| Strings             | Arena (bulk free) + O(1) pointer validation      | Per-string RC                     |
+| Cycle collection    | Mark-and-sweep (triggered when suspects exist)   | —                                 |
+| Resource cleanup    | `let use` with dispose callbacks                 | —                                 |
+| Mutable references  | Not available                                    | `ref<T>` with write barriers      |
