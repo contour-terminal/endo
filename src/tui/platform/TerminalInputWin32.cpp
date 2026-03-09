@@ -246,6 +246,7 @@ void TerminalInput::writeProtocol(std::string_view data) const
 
 void TerminalInput::enableProtocols()
 {
+    writeProtocol(protocols::EnableWin32InputMode);
     writeProtocol(protocols::EnableCsiU);
     writeProtocol(protocols::EnableSGRMouse);
     writeProtocol(protocols::EnablePassiveMouseTracking);
@@ -262,6 +263,7 @@ void TerminalInput::disableProtocols()
     writeProtocol(protocols::DisableAnyMotionTracking);
     writeProtocol(protocols::DisablePassiveMouseTracking);
     writeProtocol(protocols::DisableSGRMouse);
+    writeProtocol(protocols::DisableWin32InputMode);
     writeProtocol(protocols::DisableCsiU);
 }
 
