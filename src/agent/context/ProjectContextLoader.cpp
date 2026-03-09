@@ -7,6 +7,7 @@
 
 #include <agent/context/ProjectContextLoader.hpp>
 #include <agent/context/ProjectFileTree.hpp>
+#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -28,10 +29,7 @@ namespace
     /// Returns the user's home directory path.
     [[nodiscard]] auto homeDirectory() -> std::filesystem::path
     {
-        auto const* home = std::getenv("HOME");
-        if (!home)
-            return {};
-        return std::filesystem::path(home);
+        return platform::homeDirectory().value_or(std::filesystem::path {});
     }
 
     /// Loads all .md files from a directory, each wrapped with a filename header.

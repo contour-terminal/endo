@@ -21,16 +21,20 @@ class TempHome
     TempHome(): _path(std::filesystem::temp_directory_path() / "endo_test_save_memory")
     {
         std::filesystem::create_directories(_path);
-        auto const* home = std::getenv("HOME");
-        if (home)
-            _previousHome = home;
+        _previousHome = saveEnv("HOME");
+        _previousXdg = saveEnv("XDG_CONFIG_HOME");
+        _previousAppdata = saveEnv("APPDATA");
         endo::testing::setTestEnv("HOME", _path.string().c_str());
+        // Clear XDG_CONFIG_HOME and APPDATA so that configHome() falls through to HOME/.config.
+        endo::testing::unsetTestEnv("XDG_CONFIG_HOME");
+        endo::testing::unsetTestEnv("APPDATA");
     }
 
     ~TempHome()
     {
-        if (!_previousHome.empty())
-            endo::testing::setTestEnv("HOME", _previousHome.c_str());
+        restoreEnv("HOME", _previousHome);
+        restoreEnv("XDG_CONFIG_HOME", _previousXdg);
+        restoreEnv("APPDATA", _previousAppdata);
         std::filesystem::remove_all(_path);
     }
 
@@ -48,8 +52,26 @@ class TempHome
     }
 
   private:
+    /// @brief Save the current value of an environment variable (empty string if unset).
+    static auto saveEnv(char const* name) -> std::string
+    {
+        auto const* val = std::getenv(name);
+        return val ? std::string(val) : std::string {};
+    }
+
+    /// @brief Restore an environment variable to its previous value, or unset it if it was unset.
+    static void restoreEnv(char const* name, std::string const& prev)
+    {
+        if (!prev.empty())
+            endo::testing::setTestEnv(name, prev.c_str());
+        else
+            endo::testing::unsetTestEnv(name);
+    }
+
     std::filesystem::path _path;
     std::string _previousHome;
+    std::string _previousXdg;
+    std::string _previousAppdata;
 };
 
 } // namespace

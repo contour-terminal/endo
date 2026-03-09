@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <platform/InstallPaths.hpp>
+#include <platform/PathUtils.hpp>
 
 #if defined(__APPLE__)
     #include <mach-o/dyld.h>
@@ -36,7 +37,7 @@ auto executablePath() -> std::optional<std::filesystem::path>
     auto const len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
     if (len == 0 || len >= MAX_PATH)
         return std::nullopt;
-    return std::filesystem::path(std::wstring_view(buf, len));
+    return std::filesystem::path(normalizePath(std::filesystem::path(std::wstring_view(buf, len))));
 #else
     return std::nullopt;
 #endif

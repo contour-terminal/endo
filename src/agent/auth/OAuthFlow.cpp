@@ -19,6 +19,7 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
+#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -561,10 +562,9 @@ auto refreshGoogleOAuthToken(http::HttpClient const& httpClient, std::string_vie
 
 auto oauthStorePath() -> std::filesystem::path
 {
-    auto const* home = std::getenv("HOME");
-    if (!home)
-        return {};
-    return std::filesystem::path(home) / ".config" / "endo" / "agent-oauth.yaml";
+    if (auto const configDir = platform::configHome())
+        return *configDir / "endo" / "agent-oauth.yaml";
+    return {};
 }
 
 auto loadOAuthStore(std::filesystem::path const& path) -> OAuthStore

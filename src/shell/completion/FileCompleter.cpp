@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include <platform/PathUtils.hpp>
+
 #if !defined(_WIN32)
     #include <pwd.h>
     #include <unistd.h>
@@ -103,7 +105,7 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
             }
             else
             {
-                pathPrefix = dir.string();
+                pathPrefix = platform::normalizePath(dir);
                 if (!pathPrefix.empty() && pathPrefix.back() != '/')
                     pathPrefix += '/';
             }

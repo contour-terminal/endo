@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include <agent/tools/SaveMemoryTool.hpp>
+#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -45,10 +46,9 @@ auto SaveMemoryTool::definition() const -> ToolDefinition
 
 auto SaveMemoryTool::memoryDirectory() -> std::filesystem::path
 {
-    auto const* home = std::getenv("HOME");
-    if (!home)
-        return {};
-    return std::filesystem::path(home) / ".config" / "endo" / "agent-memory";
+    if (auto const configDir = platform::configHome())
+        return *configDir / "endo" / "agent-memory";
+    return {};
 }
 
 auto SaveMemoryTool::execute(nlohmann::json const& arguments) -> std::expected<ToolResult, ToolError>

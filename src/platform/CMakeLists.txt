@@ -14,6 +14,7 @@ add_library(endo-platform STATIC
     Pipe.cpp
     EnvironmentProvider.hpp
     UserPaths.hpp
+    PathUtils.hpp
     ProcessProvider.hpp
     FileInfoProvider.hpp
     SignalHandler.hpp
@@ -82,6 +83,7 @@ add_executable(test-endo-platform
     EnvironmentProvider_test.cpp
     Wakeup_test.cpp
     MessageQueue_test.cpp
+    WindowsPlatform_test.cpp
 )
 
 target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)

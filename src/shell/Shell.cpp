@@ -90,10 +90,12 @@
 #include <agent/ui/ToolStatusComponent.hpp>
 #include <nlohmann/json.hpp>
 #include <platform/InstallPaths.hpp>
+#include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
+#include <platform/UserPaths.hpp>
 #if defined(_WIN32)
     #include <platform/windows/WindowsEnvironmentProvider.hpp>
 #else
@@ -623,9 +625,9 @@ void Shell::loadInitScript()
     agentConfig = agent::loadAgentConfig();
 
     // Auto-execute init.endo if it exists.
-    if (auto const* home = std::getenv("HOME"))
+    if (auto const configDir = platform::configHome())
     {
-        auto const initPath = std::filesystem::path(home) / ".config" / "endo" / "init.endo";
+        auto const initPath = *configDir / "endo" / "init.endo";
         if (std::filesystem::exists(initPath))
         {
             try
@@ -697,8 +699,8 @@ void Shell::loadCompleters()
     };
 
     // User overrides first
-    if (auto const* home = std::getenv("HOME"))
-        loadDir(std::filesystem::path(home) / ".config" / "endo" / "completers");
+    if (auto const configDir = platform::configHome())
+        loadDir(*configDir / "endo" / "completers");
 
     // Installed location (relative to executable)
     if (auto const dir = endo::platform::resolveDataDir("completers"); !dir.empty())
@@ -1797,11 +1799,15 @@ namespace
 
         // Tilde-contract the project path for display
         auto projectPath = cwd.string();
-        if (auto const* home = std::getenv("HOME"); home && projectPath.starts_with(home))
+        if (auto const home = platform::homeDirectory())
         {
-            auto contracted = "~" + projectPath.substr(std::strlen(home));
-            if (contracted.size() == 1 || contracted[1] == '/')
-                projectPath = std::move(contracted);
+            auto const homeStr = home->string();
+            if (projectPath.starts_with(homeStr))
+            {
+                auto contracted = "~" + projectPath.substr(homeStr.size());
+                if (contracted.size() == 1 || contracted[1] == '/' || contracted[1] == '\\')
+                    projectPath = std::move(contracted);
+            }
         }
 
         // Build the explore sub-agent system prompt (shares project context, uses exploration-focused
@@ -2038,10 +2044,111 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
 #else
-    auto shellExecCb = [](std::string const& /*command*/,
-                          std::chrono::milliseconds /*timeout*/) -> agent::ShellExecResult {
-        return agent::ShellExecResult { .output = "Shell execution not supported on Windows",
-                                        .exitCode = -1 };
+    auto shellExecCb = [](std::string const& command,
+                          std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+        // Create pipe for capturing stdout/stderr
+        SECURITY_ATTRIBUTES sa {};
+        sa.nLength = sizeof(sa);
+        sa.bInheritHandle = TRUE;
+
+        HANDLE readPipe = nullptr;
+        HANDLE writePipe = nullptr;
+        if (!CreatePipe(&readPipe, &writePipe, &sa, 0))
+            return agent::ShellExecResult { .output = "Failed to create pipe", .exitCode = -1 };
+
+        // Prevent the read end from being inherited
+        SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+        STARTUPINFOA si {};
+        si.cb = sizeof(si);
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdOutput = writePipe;
+        si.hStdError = writePipe;
+        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+        PROCESS_INFORMATION pi {};
+        auto const cmdLine = std::string("cmd.exe /c ") + command;
+
+        if (!CreateProcessA(nullptr,
+                            const_cast<char*>(cmdLine.c_str()),
+                            nullptr,
+                            nullptr,
+                            TRUE,
+                            CREATE_NO_WINDOW,
+                            nullptr,
+                            nullptr,
+                            &si,
+                            &pi))
+        {
+            CloseHandle(readPipe);
+            CloseHandle(writePipe);
+            return agent::ShellExecResult { .output = "Failed to create process", .exitCode = -1 };
+        }
+
+        CloseHandle(writePipe);
+
+        // Read output with timeout
+        auto output = std::string {};
+        auto buffer = std::array<char, 4096> {};
+        auto const deadline = std::chrono::steady_clock::now() + timeout;
+        auto timedOut = false;
+
+        for (;;)
+        {
+            auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+            {
+                timedOut = true;
+                break;
+            }
+
+            DWORD bytesAvailable = 0;
+            if (!PeekNamedPipe(readPipe, nullptr, 0, nullptr, &bytesAvailable, nullptr))
+                break;
+
+            if (bytesAvailable == 0)
+            {
+                // Check if the process has exited
+                if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
+                {
+                    // Process done — drain any remaining bytes
+                    DWORD bytesRead = 0;
+                    while (
+                        ReadFile(
+                            readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr)
+                        && bytesRead > 0)
+                        output.append(buffer.data(), bytesRead);
+                    break;
+                }
+                Sleep(10);
+                continue;
+            }
+
+            DWORD bytesRead = 0;
+            if (!ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr)
+                || bytesRead == 0)
+                break;
+            output.append(buffer.data(), bytesRead);
+        }
+        CloseHandle(readPipe);
+
+        if (timedOut)
+        {
+            TerminateProcess(pi.hProcess, 1);
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            return agent::ShellExecResult { .output = std::move(output), .exitCode = -1, .timedOut = true };
+        }
+
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        DWORD exitCode = 0;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+
+        return agent::ShellExecResult { .output = std::move(output), .exitCode = static_cast<int>(exitCode) };
     };
 
     auto endoExecCb = [this](std::string const& source,
@@ -2700,10 +2807,111 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
 #else
-    auto shellExecCb = [](std::string const& /*command*/,
-                          std::chrono::milliseconds /*timeout*/) -> agent::ShellExecResult {
-        return agent::ShellExecResult { .output = "Shell execution not supported on Windows",
-                                        .exitCode = -1 };
+    auto shellExecCb = [](std::string const& command,
+                          std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+        // Create pipe for capturing stdout/stderr
+        SECURITY_ATTRIBUTES sa {};
+        sa.nLength = sizeof(sa);
+        sa.bInheritHandle = TRUE;
+
+        HANDLE readPipe = nullptr;
+        HANDLE writePipe = nullptr;
+        if (!CreatePipe(&readPipe, &writePipe, &sa, 0))
+            return agent::ShellExecResult { .output = "Failed to create pipe", .exitCode = -1 };
+
+        // Prevent the read end from being inherited
+        SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+        STARTUPINFOA si {};
+        si.cb = sizeof(si);
+        si.dwFlags = STARTF_USESTDHANDLES;
+        si.hStdOutput = writePipe;
+        si.hStdError = writePipe;
+        si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+        PROCESS_INFORMATION pi {};
+        auto const cmdLine = std::string("cmd.exe /c ") + command;
+
+        if (!CreateProcessA(nullptr,
+                            const_cast<char*>(cmdLine.c_str()),
+                            nullptr,
+                            nullptr,
+                            TRUE,
+                            CREATE_NO_WINDOW,
+                            nullptr,
+                            nullptr,
+                            &si,
+                            &pi))
+        {
+            CloseHandle(readPipe);
+            CloseHandle(writePipe);
+            return agent::ShellExecResult { .output = "Failed to create process", .exitCode = -1 };
+        }
+
+        CloseHandle(writePipe);
+
+        // Read output with timeout
+        auto output = std::string {};
+        auto buffer = std::array<char, 4096> {};
+        auto const deadline = std::chrono::steady_clock::now() + timeout;
+        auto timedOut = false;
+
+        for (;;)
+        {
+            auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+            {
+                timedOut = true;
+                break;
+            }
+
+            DWORD bytesAvailable = 0;
+            if (!PeekNamedPipe(readPipe, nullptr, 0, nullptr, &bytesAvailable, nullptr))
+                break;
+
+            if (bytesAvailable == 0)
+            {
+                // Check if the process has exited
+                if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
+                {
+                    // Process done — drain any remaining bytes
+                    DWORD bytesRead = 0;
+                    while (
+                        ReadFile(
+                            readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr)
+                        && bytesRead > 0)
+                        output.append(buffer.data(), bytesRead);
+                    break;
+                }
+                Sleep(10);
+                continue;
+            }
+
+            DWORD bytesRead = 0;
+            if (!ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr)
+                || bytesRead == 0)
+                break;
+            output.append(buffer.data(), bytesRead);
+        }
+        CloseHandle(readPipe);
+
+        if (timedOut)
+        {
+            TerminateProcess(pi.hProcess, 1);
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            return agent::ShellExecResult { .output = std::move(output), .exitCode = -1, .timedOut = true };
+        }
+
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        DWORD exitCode = 0;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+
+        return agent::ShellExecResult { .output = std::move(output), .exitCode = static_cast<int>(exitCode) };
     };
 
     auto endoExecCb = [this](std::string const& source,

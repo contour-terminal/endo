@@ -7,6 +7,7 @@
 
 #include <agent/tracing/AgentTracer.hpp>
 #include <nlohmann/json.hpp>
+#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -212,10 +213,13 @@ auto resolveTraceLogDirectory() -> std::filesystem::path
     }
 
     // Fallback: global state directory.
-    auto const* home = std::getenv("HOME");
-    if (home)
-        return std::filesystem::path(home) / ".local" / "state" / "endo" / "trace-logs";
+    if (auto const home = platform::homeDirectory())
+        return *home / ".local" / "state" / "endo" / "trace-logs";
 
+#if defined(_WIN32)
+    if (auto const* temp = std::getenv("TEMP"))
+        return std::filesystem::path(temp) / "endo" / "trace-logs";
+#endif
     return std::filesystem::path("/tmp") / "endo" / "trace-logs";
 }
 

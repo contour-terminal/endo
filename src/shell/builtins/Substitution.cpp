@@ -128,7 +128,8 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
 
     context.setResult(CoreVM::CoreNumber(1));
 #else
-    error("Process substitution not implemented on Windows");
+    error(
+        "Process substitution is not supported on Windows. Consider using temporary files or pipes instead.");
     context.setResult(CoreVM::CoreNumber(-1));
 #endif
 }

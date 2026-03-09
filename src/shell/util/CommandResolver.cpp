@@ -8,6 +8,7 @@
 #include <filesystem>
 
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -87,7 +88,7 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
     }
     else
     {
-        extensions = { ".exe", ".cmd", ".bat", ".com" };
+        extensions = { ".exe", ".cmd", ".bat", ".com", ".ps1" };
     }
 #endif
 
@@ -122,7 +123,7 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
                 continue;
             if (!std::filesystem::is_regular_file(cand, ec) && !std::filesystem::is_symlink(cand, ec))
                 continue;
-            results.push_back(cand.string());
+            results.push_back(platform::normalizePath(cand));
             break; // At most one match per PATH directory
         }
 #else
