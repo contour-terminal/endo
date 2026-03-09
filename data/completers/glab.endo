@@ -1,0 +1,84 @@
+let glab_complete args prefix =
+    let commands = [
+        "alias"; "api"; "auth"; "check-update"; "ci"; "completion"; "config"; "help"; "incident";
+        "issue"; "label"; "mr"; "release"; "repo"; "schedule"; "snippet"; "ssh-key"; "user";
+        "variable"; "version"
+    ]
+    let global_options = ["--help"; "--version"; "-R"; "--repo"]
+    let mr_subcommands = [
+        "approve"; "checkout"; "close"; "create"; "delete"; "diff"; "for"; "issues"; "list";
+        "merge"; "note"; "rebase"; "reopen"; "revoke"; "subscribe"; "todo"; "unsubscribe";
+        "update"; "view"
+    ]
+    let issue_subcommands = [
+        "board"; "close"; "create"; "delete"; "list"; "note"; "reopen"; "subscribe"; "unsubscribe";
+        "update"; "view"
+    ]
+    let ci_subcommands = [
+        "artifact"; "delete"; "get"; "lint"; "list"; "retry"; "run"; "status"; "trace"; "trigger";
+        "view"
+    ]
+    let repo_subcommands = [
+        "archive"; "clone"; "contributors"; "create"; "delete"; "fork"; "list"; "mirror"; "search";
+        "transfer"; "unarchive"; "view"
+    ]
+    let release_subcommands = ["create"; "delete"; "download"; "list"; "upload"; "view"]
+    let auth_subcommands = ["login"; "logout"; "status"]
+    let config_subcommands = ["get"; "set"]
+    let alias_subcommands = ["delete"; "list"; "set"]
+    let snippet_subcommands = ["create"; "delete"; "list"; "view"]
+    let variable_subcommands = ["delete"; "export"; "get"; "list"; "set"; "update"]
+    let schedule_subcommands = ["create"; "delete"; "list"; "run"]
+    let incident_subcommands = ["list"]
+    let mr_create_options = [
+        "--title"; "--description"; "--source-branch"; "--target-branch"; "--label"; "--assignee";
+        "--reviewer"; "--milestone"; "--draft"; "--squash-before-merge"; "--remove-source-branch";
+        "--web"; "--fill"
+    ]
+    let mr_list_options = [
+        "--state"; "--label"; "--assignee"; "--author"; "--source-branch"; "--target-branch";
+        "--milestone"; "--draft"; "--per-page"; "--page"
+    ]
+    let issue_create_options = [
+        "--title"; "--description"; "--label"; "--assignee"; "--milestone"; "--confidential";
+        "--web"; "--weight"
+    ]
+    let issue_list_options = [
+        "--state"; "--label"; "--assignee"; "--author"; "--milestone"; "--confidential";
+        "--per-page"; "--page"
+    ]
+    let resolve_alias cmd =
+        match cmd with
+        | "pipe" -> "ci"
+        | "pipeline" -> "ci"
+        | "project" -> "repo"
+        | _ -> cmd
+    let resolved =
+        match args with
+        | cmd :: rest -> (resolve_alias cmd) :: rest
+        | _ -> args
+    match resolved with
+    | [] when startsWith "-" prefix -> global_options
+    | [] -> commands
+    | ["mr"] when startsWith "-" prefix -> global_options
+    | ["mr"] -> mr_subcommands
+    | ["mr"; "create"] when startsWith "-" prefix -> mr_create_options
+    | ["mr"; "list"] when startsWith "-" prefix -> mr_list_options
+    | ["issue"] when startsWith "-" prefix -> global_options
+    | ["issue"] -> issue_subcommands
+    | ["issue"; "create"] when startsWith "-" prefix -> issue_create_options
+    | ["issue"; "list"] when startsWith "-" prefix -> issue_list_options
+    | ["ci"] -> ci_subcommands
+    | ["repo"] -> repo_subcommands
+    | ["release"] -> release_subcommands
+    | ["auth"] -> auth_subcommands
+    | ["config"] -> config_subcommands
+    | ["alias"] -> alias_subcommands
+    | ["snippet"] -> snippet_subcommands
+    | ["variable"] -> variable_subcommands
+    | ["schedule"] -> schedule_subcommands
+    | ["incident"] -> incident_subcommands
+    | _ when startsWith "-" prefix -> global_options
+    | _ -> []
+
+register_completer "glab" glab_complete
