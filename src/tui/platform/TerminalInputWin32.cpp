@@ -263,8 +263,8 @@ void TerminalInput::disableProtocols()
     writeProtocol(protocols::DisableAnyMotionTracking);
     writeProtocol(protocols::DisablePassiveMouseTracking);
     writeProtocol(protocols::DisableSGRMouse);
-    writeProtocol(protocols::DisableCsiU);
     writeProtocol(protocols::DisableWin32InputMode);
+    writeProtocol(protocols::DisableCsiU);
 }
 
 } // namespace tui

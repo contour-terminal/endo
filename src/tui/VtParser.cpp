@@ -39,18 +39,6 @@ namespace
         constexpr auto Delete = 0x2E;
         constexpr auto LWin = 0x5B;
         constexpr auto RWin = 0x5C;
-        constexpr auto F1 = 0x70;
-        constexpr auto F2 = 0x71;
-        constexpr auto F3 = 0x72;
-        constexpr auto F4 = 0x73;
-        constexpr auto F5 = 0x74;
-        constexpr auto F6 = 0x75;
-        constexpr auto F7 = 0x76;
-        constexpr auto F8 = 0x77;
-        constexpr auto F9 = 0x78;
-        constexpr auto F10 = 0x79;
-        constexpr auto F11 = 0x7A;
-        constexpr auto F12 = 0x7B;
         constexpr auto Numpad0 = 0x60;
         constexpr auto Numpad1 = 0x61;
         constexpr auto Numpad2 = 0x62;
@@ -67,6 +55,18 @@ namespace
         constexpr auto Subtract = 0x6D;
         constexpr auto Decimal = 0x6E;
         constexpr auto Divide = 0x6F;
+        constexpr auto F1 = 0x70;
+        constexpr auto F2 = 0x71;
+        constexpr auto F3 = 0x72;
+        constexpr auto F4 = 0x73;
+        constexpr auto F5 = 0x74;
+        constexpr auto F6 = 0x75;
+        constexpr auto F7 = 0x76;
+        constexpr auto F8 = 0x77;
+        constexpr auto F9 = 0x78;
+        constexpr auto F10 = 0x79;
+        constexpr auto F11 = 0x7A;
+        constexpr auto F12 = 0x7B;
         constexpr auto LShift = 0xA0;
         constexpr auto RMenu = 0xA5; // Right Alt — end of modifier VK range
     } // namespace vk
@@ -180,9 +180,10 @@ namespace
             case vk::F7:     return KeyCode::F7;
             case vk::F8:     return KeyCode::F8;
             case vk::F9:     return KeyCode::F9;
-            case vk::F10:    return KeyCode::F10;
+            case vk::F10:      return KeyCode::F10;
             case vk::F11:      return KeyCode::F11;
             case vk::F12:      return KeyCode::F12;
+            //
             case vk::Numpad0:  return KeyCode::Kp0;
             case vk::Numpad1:  return KeyCode::Kp1;
             case vk::Numpad2:  return KeyCode::Kp2;
@@ -195,7 +196,7 @@ namespace
             case vk::Numpad9:  return KeyCode::Kp9;
             case vk::Multiply: return KeyCode::KpMultiply;
             case vk::Add:      return KeyCode::KpAdd;
-            case vk::Separator:return KeyCode::KpSeparator;
+            case vk::Separator: return KeyCode::KpSeparator;
             case vk::Subtract: return KeyCode::KpSubtract;
             case vk::Decimal:  return KeyCode::KpDecimal;
             case vk::Divide:   return KeyCode::KpDivide;

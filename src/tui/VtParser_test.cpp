@@ -515,6 +515,43 @@ TEST_CASE("VtParser.Win32Input.numpad_multiply", "[tui,vtparser]")
     CHECK(key->modifiers == Modifier::None);
 }
 
+TEST_CASE("VtParser.Win32Input.altgr_digit_composed", "[tui,vtparser]")
+{
+    // AltGr+2 on German keyboard: VK '2'=0x32=50, UC=U+00B2 '²'=178,
+    // CS=RightAlt(0x01)|LeftCtrl(0x08)=0x09 (AltGr)
+    auto const key = parseKey("\033[50;3;178;1;9;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'\u00B2'); // superscript 2 '²'
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.unicode_fallback_semicolon", "[tui,vtparser]")
+{
+    // VK_OEM_1=0xBA=186 (';:' key on US layout), UC=';'=59, no modifiers.
+    // Not A-Z, not 0-9, not a special key — falls through to unicodeChar >= 32 path.
+    auto const key = parseKey("\033[186;39;59;1;0;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U';');
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.space_no_modifiers", "[tui,vtparser]")
+{
+    // VK_SPACE=0x20, UC=' '=32, no modifiers
+    auto const key = parseKey("\033[32;57;32;1;0;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U' ');
+    CHECK(key->modifiers == Modifier::None);
+}
+
+TEST_CASE("VtParser.Win32Input.single_param_vk_zero", "[tui,vtparser]")
+{
+    // Single param Vk=0 — Kd defaults to 0 (key-up), should be filtered
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[0_");
+    CHECK(events.empty());
+}
+
 // ============================================================================
 // DECRQM (DEC Request Mode) response tests
 // ============================================================================
