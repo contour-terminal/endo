@@ -343,7 +343,7 @@ src/
   - [x] Scope-based reference counting (ORELEASE on scope exit)
   - [x] Source location infrastructure for runtime error reporting (sparse location tables, `RuntimeError`, `runWithResult()`)
   - [x] Runtime checks: division by zero, invalid type ID, null object dereference, slot bounds
-  - [ ] Mark-and-sweep GC for cycle collection — Deferred
+  - [x] Memory model: slab-allocated ObjectPool (O(1) alloc/dealloc/owns), recursive release via SlotTraceInfo, mark-and-sweep GC, write barrier, O(1) string lookup
 
 - [x] Complete `?` operator runtime implementation (unwrap or propagate)
   - [x] IRGenerator emits tag check and early return for `?` operator

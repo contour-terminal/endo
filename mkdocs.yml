@@ -82,6 +82,7 @@ nav:
     - Interoperability: language/interoperability.md
     - Standard Library: language/standard-library.md
     - Implementation Notes: language/implementation-notes.md
+    - Memory Model: language/memory-model.md
     - Grammar: language/grammar.md
   - Examples:
     - Overview: examples/index.md

@@ -99,7 +99,9 @@ inline void retainObject(TypedObject* obj) noexcept
 {
     if (obj)
     {
-        obj->refCount.fetch_add(1, std::memory_order_relaxed);
+        // THREAD-SAFETY: acq_rel ensures visibility of prior writes before sharing.
+        // Same performance as relaxed on x86; correct for future multi-thread use.
+        obj->refCount.fetch_add(1, std::memory_order_acq_rel);
     }
 }
 
@@ -132,5 +134,58 @@ enum class GCMark : uint8_t
     Unmarked = 0,
     Marked = 1,
 };
+
+/// Visits all child object pointers in a TypedObject using its SlotTraceInfo.
+///
+/// @param obj The object whose children to visit.
+/// @param isObject Predicate to validate a raw pointer as a live object (e.g., pool.owns()).
+/// @param onChild Callback invoked for each valid child object pointer.
+template <typename PointerValidator, typename Callback>
+void visitChildObjects(TypedObject const& obj, PointerValidator const& isObject, Callback const& onChild)
+{
+    auto const& trace = obj.type->traceInfo;
+
+    auto tryVisit = [&](uint8_t slotIdx) {
+        auto const rawValue = obj.getSlot(slotIdx);
+        if (rawValue != 0)
+        {
+            auto* child = reinterpret_cast<TypedObject*>(rawValue);
+            if (isObject(static_cast<void const*>(child)))
+                onChild(child);
+        }
+    };
+
+    if (obj.isSumType())
+    {
+        auto const tag = obj.tag;
+        if (tag < trace.variantFixedSlots.size())
+            for (auto idx: trace.variantFixedSlots[tag])
+                tryVisit(idx);
+
+        if (tag < trace.variantDynamicSlots.size())
+        {
+            for (auto const& ds: trace.variantDynamicSlots[tag])
+            {
+                auto const typeTag = obj.getSlot(ds.typeTagSlot);
+                auto const elemType = unpackTypeTag(typeTag, ds.tagPosition);
+                if (elemType == LiteralType::Object || elemType == LiteralType::Void)
+                    tryVisit(ds.slotIndex);
+            }
+        }
+    }
+    else
+    {
+        for (auto idx: trace.fixedObjectSlots)
+            tryVisit(idx);
+
+        for (auto const& ds: trace.dynamicSlots)
+        {
+            auto const typeTag = obj.getSlot(ds.typeTagSlot);
+            auto const elemType = unpackTypeTag(typeTag, ds.tagPosition);
+            if (elemType == LiteralType::Object || elemType == LiteralType::Void)
+                tryVisit(ds.slotIndex);
+        }
+    }
+}
 
 } // namespace CoreVM
