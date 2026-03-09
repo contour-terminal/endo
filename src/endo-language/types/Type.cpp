@@ -327,14 +327,14 @@ std::string toString(Type const& type)
 {
     if (const auto* tv = type.asTypeVar())
     {
-        // Use lowercase letters for type variables: a, b, c, ...
-        // For ids >= 26, use a1, b1, etc.
+        // Use lowercase letters with tick prefix for type variables: 'a, 'b, 'c, ...
+        // For ids >= 26, use 'a1, 'b1, etc.
         auto letter = static_cast<char>('a' + static_cast<int>(tv->id % 26));
         uint32_t suffix = tv->id / 26;
         if (suffix == 0)
-            return std::string(1, letter);
+            return std::format("'{}", letter);
         else
-            return std::format("{}{}", letter, suffix);
+            return std::format("'{}{}", letter, suffix);
     }
     else if (const auto* prim = type.asPrimitive())
     {
@@ -417,6 +417,101 @@ std::string toString(TypePtr const& type)
     if (!type)
         return "null";
     return toString(*type);
+}
+
+std::string toString(Type const& type, TypeVarNameMap const& nameMap)
+{
+    if (const auto* tv = type.asTypeVar())
+    {
+        if (auto it = nameMap.find(tv->id); it != nameMap.end())
+            return "'" + it->second;
+        // Fall back to computed name
+        auto letter = static_cast<char>('a' + static_cast<int>(tv->id % 26));
+        uint32_t suffix = tv->id / 26;
+        if (suffix == 0)
+            return std::format("'{}", letter);
+        else
+            return std::format("'{}{}", letter, suffix);
+    }
+    else if (const auto* prim = type.asPrimitive())
+        return toString(prim->kind);
+    else if (const auto* fn = type.asFunction())
+    {
+        auto paramStr = toString(*fn->paramType, nameMap);
+        if (fn->paramType->isFunction())
+            paramStr = "(" + paramStr + ")";
+        return paramStr + " -> " + toString(*fn->returnType, nameMap);
+    }
+    else if (const auto* lst = type.asList())
+    {
+        auto inner = toString(*lst->elementType, nameMap);
+        return "list<" + inner + (inner.back() == '>' ? " >" : ">");
+    }
+    else if (const auto* tup = type.asTuple())
+    {
+        std::ostringstream oss;
+        oss << "(";
+        for (size_t i = 0; i < tup->elementTypes.size(); ++i)
+        {
+            if (i > 0)
+                oss << ", ";
+            oss << toString(*tup->elementTypes[i], nameMap);
+        }
+        oss << ")";
+        return oss.str();
+    }
+    else if (const auto* opt = type.asOption())
+    {
+        auto inner = toString(*opt->innerType, nameMap);
+        return "option<" + inner + (inner.back() == '>' ? " >" : ">");
+    }
+    else if (const auto* res = type.asResult())
+    {
+        auto errStr = toString(*res->errorType, nameMap);
+        return "result<" + toString(*res->okType, nameMap) + ", " + errStr
+               + (errStr.back() == '>' ? " >" : ">");
+    }
+    else if (const auto* rec = type.asRecord())
+    {
+        std::ostringstream oss;
+        if (!rec->name.empty())
+            oss << rec->name << " ";
+        oss << "{ ";
+        for (size_t i = 0; i < rec->fields.size(); ++i)
+        {
+            if (i > 0)
+                oss << "; ";
+            oss << rec->fields[i].name << ": " << toString(*rec->fields[i].type, nameMap);
+        }
+        oss << " }";
+        return oss.str();
+    }
+    else if (const auto* un = type.asUnion())
+    {
+        std::ostringstream oss;
+        oss << un->name;
+        bool first = true;
+        for (auto const& c: un->cases)
+        {
+            if (!first)
+                oss << " |";
+            else
+                oss << " =";
+            first = false;
+            oss << " " << c.name;
+            if (c.payloadType)
+                oss << " of " << toString(**c.payloadType, nameMap);
+        }
+        return oss.str();
+    }
+    return "?";
+}
+
+std::string toString(TypePtr const& type, TypeVarNameMap const& nameMap)
+{
+    if (!type)
+        return "null";
+    return toString(*type, nameMap);
 }
 
 std::string toString(TypeScheme const& scheme)

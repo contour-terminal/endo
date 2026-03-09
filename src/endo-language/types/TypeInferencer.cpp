@@ -1567,7 +1567,17 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
         for (auto const& field: recDef->fields)
             fields.push_back(RecordField { .name = field.name, .type = field.type });
         auto recType = types::record(recDef->name, std::move(fields));
-        env->bindMono(recDef->name, recType);
+
+        if (!recDef->typeParams.empty())
+        {
+            // Generic record: generalize the type to get a polymorphic scheme
+            auto scheme = env->generalize(recType);
+            env->bind(recDef->name, scheme);
+        }
+        else
+        {
+            env->bindMono(recDef->name, recType);
+        }
         return subst;
     }
 
@@ -1584,24 +1594,54 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 payloadType = types::tuple(variant.payloadTypes);
             cases.push_back(UnionCase { .name = variant.name, .payloadType = payloadType });
         }
-        auto unionType = types::unionType(unionDef->name, std::move(cases));
-        env->bindMono(unionDef->name, unionType);
+        auto uType = types::unionType(unionDef->name, std::move(cases));
 
-        // Bind each constructor as a function (payload -> unionType) or as the type directly
-        for (auto const& variant: unionDef->variants)
+        if (!unionDef->typeParams.empty())
         {
-            if (variant.payloadTypes.empty())
+            // Generic union: generalize the type and bind polymorphically
+            auto scheme = env->generalize(uType);
+            env->bind(unionDef->name, scheme);
+
+            // Bind each constructor polymorphically
+            for (auto const& variant: unionDef->variants)
             {
-                env->bindMono(variant.name, unionType);
+                if (variant.payloadTypes.empty())
+                {
+                    env->bind(variant.name, env->generalize(uType));
+                }
+                else if (variant.payloadTypes.size() == 1)
+                {
+                    auto ctorType = types::function(variant.payloadTypes[0], uType);
+                    env->bind(variant.name, env->generalize(ctorType));
+                }
+                else
+                {
+                    auto tupleParam = types::tuple(variant.payloadTypes);
+                    auto ctorType = types::function(tupleParam, uType);
+                    env->bind(variant.name, env->generalize(ctorType));
+                }
             }
-            else if (variant.payloadTypes.size() == 1)
+        }
+        else
+        {
+            env->bindMono(unionDef->name, uType);
+
+            // Bind each constructor as a function (payload -> unionType) or as the type directly
+            for (auto const& variant: unionDef->variants)
             {
-                env->bindMono(variant.name, types::function(variant.payloadTypes[0], unionType));
-            }
-            else
-            {
-                auto tupleParam = types::tuple(variant.payloadTypes);
-                env->bindMono(variant.name, types::function(tupleParam, unionType));
+                if (variant.payloadTypes.empty())
+                {
+                    env->bindMono(variant.name, uType);
+                }
+                else if (variant.payloadTypes.size() == 1)
+                {
+                    env->bindMono(variant.name, types::function(variant.payloadTypes[0], uType));
+                }
+                else
+                {
+                    auto tupleParam = types::tuple(variant.payloadTypes);
+                    env->bindMono(variant.name, types::function(tupleParam, uType));
+                }
             }
         }
         return subst;

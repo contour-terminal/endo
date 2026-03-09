@@ -246,6 +246,24 @@ class Parser
     /// Maps constructor names to their payload slot count.
     std::unordered_map<std::string, uint8_t> _constructorPayloadSlots;
 
+    /// Metadata for a generic type definition (type name → param names + skeleton type).
+    struct GenericTypeDef
+    {
+        std::vector<std::string> typeParams; ///< Type parameter names (e.g., {"a", "b"})
+        bool isUnion = false;                ///< Whether this is a union or record type
+    };
+
+    /// Maps generic type names to their definitions (for type application in parseBaseType).
+    std::unordered_map<std::string, GenericTypeDef> _genericTypeDefinitions;
+
+    /// Active type parameter scope during type definition parsing.
+    /// Maps type parameter names (e.g., "a") to TypeVarIds.
+    std::unordered_map<std::string, TypeVarId> _typeParamScope;
+
+    /// Counter for allocating unique TypeVarIds during type definition parsing.
+    /// Uses high base to avoid collisions with type inferencer IDs (which start at 0).
+    TypeVarId _nextParserTypeVarId = 10000;
+
     int _placeholderCount = 0;            ///< Number of `_` placeholders in current scope
     bool _placeholderScopeActive = false; ///< Suppresses postfix wrapping inside parens
     bool _autoDisplay = false;            ///< When true, bare expressions get displayResult=true (REPL mode)

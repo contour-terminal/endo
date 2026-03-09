@@ -1105,14 +1105,31 @@ void ASTPrinter::visit(BlockExpr const& node)
 
 void ASTPrinter::visit(RecordTypeDefStmt const& node)
 {
-    _result += std::format("type {} = {{ ", node.name);
+    _result += std::format("type {}", node.name);
+    if (!node.typeParams.empty())
+    {
+        _result += "<";
+        for (size_t i = 0; i < node.typeParams.size(); ++i)
+        {
+            if (i > 0)
+                _result += ", ";
+            _result += "'" + node.typeParams[i];
+        }
+        _result += ">";
+    }
+    // Build TypeVarId → name map for printing field types with original param names
+    endo::TypeVarNameMap nameMap;
+    for (size_t i = 0; i < node.typeParamIds.size(); ++i)
+        nameMap[node.typeParamIds[i]] = node.typeParams[i];
+
+    _result += " = { ";
     for (size_t i = 0; i < node.fields.size(); ++i)
     {
         if (i > 0)
             _result += "; ";
         _result += node.fields[i].name;
         _result += ": ";
-        _result += endo::toString(node.fields[i].type);
+        _result += endo::toString(node.fields[i].type, nameMap);
     }
     _result += " }";
 }
@@ -1163,7 +1180,24 @@ void ASTPrinter::visit(OptionalChainExpr const& node)
 
 void ASTPrinter::visit(UnionTypeDefStmt const& node)
 {
-    _result += std::format("type {} =", node.name);
+    _result += std::format("type {}", node.name);
+    if (!node.typeParams.empty())
+    {
+        _result += "<";
+        for (size_t i = 0; i < node.typeParams.size(); ++i)
+        {
+            if (i > 0)
+                _result += ", ";
+            _result += "'" + node.typeParams[i];
+        }
+        _result += ">";
+    }
+    // Build TypeVarId → name map for printing payload types with original param names
+    endo::TypeVarNameMap nameMap;
+    for (size_t i = 0; i < node.typeParamIds.size(); ++i)
+        nameMap[node.typeParamIds[i]] = node.typeParams[i];
+
+    _result += " =";
     for (auto const& variant: node.variants)
     {
         _result += " | ";
@@ -1175,7 +1209,7 @@ void ASTPrinter::visit(UnionTypeDefStmt const& node)
             {
                 if (i > 0)
                     _result += " * ";
-                _result += endo::toString(variant.payloadTypes[i]);
+                _result += endo::toString(variant.payloadTypes[i], nameMap);
             }
         }
     }

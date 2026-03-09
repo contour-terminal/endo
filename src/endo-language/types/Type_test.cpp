@@ -177,11 +177,11 @@ TEST_CASE("Type.toString.primitives")
 
 TEST_CASE("Type.toString.type_variable")
 {
-    CHECK(toString(types::typeVar(0)) == "a");
-    CHECK(toString(types::typeVar(1)) == "b");
-    CHECK(toString(types::typeVar(25)) == "z");
-    CHECK(toString(types::typeVar(26)) == "a1");
-    CHECK(toString(types::typeVar(27)) == "b1");
+    CHECK(toString(types::typeVar(0)) == "'a");
+    CHECK(toString(types::typeVar(1)) == "'b");
+    CHECK(toString(types::typeVar(25)) == "'z");
+    CHECK(toString(types::typeVar(26)) == "'a1");
+    CHECK(toString(types::typeVar(27)) == "'b1");
 }
 
 TEST_CASE("Type.toString.function")
@@ -262,7 +262,7 @@ TEST_CASE("TypeScheme.toString")
     auto fnType = types::function(types::typeVar(a), types::typeVar(b));
     auto scheme = types::scheme({ a, b }, fnType);
 
-    CHECK(toString(scheme) == "forall a b. a -> b");
+    CHECK(toString(scheme) == "forall a b. 'a -> 'b");
 }
 
 // ============================================================================

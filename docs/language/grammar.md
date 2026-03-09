@@ -31,7 +31,9 @@ let_binding     = pattern [ type_annotation ] "=" expression
                 ;
 
 type_definition = "type" identifier [ type_params ] "=" type_body ;
-type_params     = "<" identifier { "," identifier } ">" ;
+type_params     = "<" type_var { "," type_var } ">" ;
+type_var        = "'" lowercase_ident ;
+lowercase_ident = lowercase_letter { lowercase_letter | digit | "_" } ;
 type_body       = record_type | union_type | type ;
 
 record_type     = "{" field_def { ";" field_def } [ ";" ] "}" ;

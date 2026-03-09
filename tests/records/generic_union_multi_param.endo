@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-parameter generic union type
+# expect: 42
+
+type Either<'a, 'b> =
+    | Left of 'a
+    | Right of 'b
+
+let e = Left 42
+match e with
+| Left x -> print x
+| Right _ -> print 0

@@ -1711,10 +1711,16 @@ struct RecordFieldDef
 /// Defines a named record type with typed fields.
 struct RecordTypeDefStmt final: public Statement
 {
-    std::string name;                   ///< Type name (e.g., "Person")
-    std::vector<RecordFieldDef> fields; ///< Field definitions
+    std::string name;                    ///< Type name (e.g., "Person")
+    std::vector<std::string> typeParams; ///< Type parameters (e.g., {"a", "b"} for Pair<'a, 'b>)
+    std::vector<TypeVarId> typeParamIds; ///< Corresponding TypeVarIds (parallel to typeParams)
+    std::vector<RecordFieldDef> fields;  ///< Field definitions
 
-    RecordTypeDefStmt(std::string n, std::vector<RecordFieldDef> f): name(std::move(n)), fields(std::move(f))
+    RecordTypeDefStmt(std::string n,
+                      std::vector<RecordFieldDef> f,
+                      std::vector<std::string> tp = {},
+                      std::vector<TypeVarId> tpIds = {}):
+        name(std::move(n)), typeParams(std::move(tp)), typeParamIds(std::move(tpIds)), fields(std::move(f))
     {
     }
 
@@ -1745,10 +1751,15 @@ struct UnionVariantDef
 struct UnionTypeDefStmt final: public Statement
 {
     std::string name;                      ///< Type name (e.g., "Shape")
+    std::vector<std::string> typeParams;   ///< Type parameters (e.g., {"a"} for Tree<'a>)
+    std::vector<TypeVarId> typeParamIds;   ///< Corresponding TypeVarIds (parallel to typeParams)
     std::vector<UnionVariantDef> variants; ///< Variant definitions
 
-    UnionTypeDefStmt(std::string n, std::vector<UnionVariantDef> v):
-        name(std::move(n)), variants(std::move(v))
+    UnionTypeDefStmt(std::string n,
+                     std::vector<UnionVariantDef> v,
+                     std::vector<std::string> tp = {},
+                     std::vector<TypeVarId> tpIds = {}):
+        name(std::move(n)), typeParams(std::move(tp)), typeParamIds(std::move(tpIds)), variants(std::move(v))
     {
     }
 

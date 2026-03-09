@@ -51,6 +51,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
 - [ ] Generic types
 - [ ] Ref cells: `ref<T>` (mutable reference cell)
+- [x] Generic types
 
 ### Type Annotations
 - [x] Variable annotations: `let count: int = 42`
@@ -423,10 +424,10 @@ Consult this section to determine what to work on next.
 - [ ] Module loading: parse imported file, link IR, namespace scoping
 - [ ] Module-qualified access: `List.map`, `String.split`
 
-### Phase 9 — Generic Types
-- [ ] Type variable introduction in annotations (`'a` syntax)
-- [ ] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
-- [ ] Monomorphization or type erasure at codegen time
+### Phase 9 — Generic Types ✅
+- [x] Type variable introduction in annotations (`'a` syntax)
+- [x] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
+- [x] Type erasure at codegen time (all instantiations share single runtime type ID)
 
 ### Phase 10 — Planned Language Enhancements ✅
 - [x] Placeholder lambdas: `_ > 10` desugaring to `fun x -> x > 10` (concise pipelines like `filter (_ > 10)`)

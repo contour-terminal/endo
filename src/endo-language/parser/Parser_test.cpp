@@ -2171,6 +2171,36 @@ TEST_CASE("Parser.FSharp.block_expr_still_works")
 }
 
 // =============================================================================
+// Generic Type Definitions
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.generic_union_type_definition")
+{
+    CHECK(parseAndPrintAST("type Box<'a> =\n    | Wrap of 'a\n    | Empty")
+          == "type Box<'a> = | Wrap of 'a | Empty");
+}
+
+TEST_CASE("Parser.FSharp.generic_union_multi_param")
+{
+    CHECK(parseAndPrintAST("type Either<'a, 'b> =\n    | Left of 'a\n    | Right of 'b")
+          == "type Either<'a, 'b> = | Left of 'a | Right of 'b");
+}
+
+TEST_CASE("Parser.FSharp.generic_record_type_definition")
+{
+    CHECK(parseAndPrintAST("type Pair<'a, 'b> = { first: 'a; second: 'b }")
+          == "type Pair<'a, 'b> = { first: 'a; second: 'b }");
+}
+
+TEST_CASE("Parser.FSharp.generic_union_self_referencing")
+{
+    // Self-referencing generic type (binary tree)
+    auto result = parseAndPrintAST("type Tree<'a> =\n    | Leaf of 'a\n    | Node of Tree<'a> * Tree<'a>");
+    CHECK(result.find("type Tree<'a>") != std::string::npos);
+    CHECK(result.find("Leaf of 'a") != std::string::npos);
+}
+
+// =============================================================================
 // Placeholder Lambda Sugar Tests (`_`)
 // =============================================================================
 
@@ -2483,4 +2513,68 @@ TEST_CASE("Parser.Property.print_property_via_pipeline", "[parser][property]")
 {
     // Verify property value can flow through a pipeline.
     CHECK(executesSuccessfully("shell_prompt_duration_threshold |> print"));
+}
+
+// =============================================================================
+// Generic Type Definitions — End-to-End Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.generic_union_ir_generation", "[parser][generic]")
+{
+    CHECK(generatesIRSuccessfully("type Box<'a> =\n    | Wrap of 'a\n    | Empty\n"
+                                  "let b = Wrap 42"));
+}
+
+TEST_CASE("Parser.FSharp.generic_union_different_instantiations_ir", "[parser][generic]")
+{
+    CHECK(generatesIRSuccessfully("type Box<'a> =\n    | Wrap of 'a\n    | Empty\n"
+                                  "let b1 = Wrap 42\n"
+                                  "let b2 = Wrap \"hello\""));
+}
+
+TEST_CASE("Parser.FSharp.generic_union_match_int", "[parser][generic]")
+{
+    CHECK(executeSourceAndGetOutput("type Box<'a> =\n    | Wrap of 'a\n    | Empty\n"
+                                    "let b = Wrap 42\n"
+                                    "match b with\n"
+                                    "| Wrap x -> print x\n"
+                                    "| Empty -> print 0")
+          == "42");
+}
+
+TEST_CASE("Parser.FSharp.generic_union_match_different_int", "[parser][generic]")
+{
+    // Same generic union used with a different int value
+    CHECK(executeSourceAndGetOutput("type Box<'a> =\n    | Wrap of 'a\n    | Empty\n"
+                                    "let b = Wrap 99\n"
+                                    "match b with\n"
+                                    "| Wrap x -> print x\n"
+                                    "| Empty -> print 0")
+          == "99");
+}
+
+TEST_CASE("Parser.FSharp.generic_union_unit_constructor_match", "[parser][generic]")
+{
+    CHECK(executeSourceAndGetOutput("type Box<'a> =\n    | Wrap of 'a\n    | Empty\n"
+                                    "let b = Empty\n"
+                                    "match b with\n"
+                                    "| Wrap _ -> print \"wrapped\"\n"
+                                    "| Empty -> print \"empty\"")
+          == "empty");
+}
+
+TEST_CASE("Parser.FSharp.generic_multi_param_union", "[parser][generic]")
+{
+    CHECK(executeSourceAndGetOutput("type Either<'a, 'b> =\n    | Left of 'a\n    | Right of 'b\n"
+                                    "let e = Left 42\n"
+                                    "match e with\n"
+                                    "| Left x -> print x\n"
+                                    "| Right _ -> print 0")
+          == "42");
+}
+
+TEST_CASE("Parser.FSharp.generic_record_ir_generation", "[parser][generic]")
+{
+    CHECK(generatesIRSuccessfully("type Pair<'a, 'b> = { first: 'a; second: 'b }\n"
+                                  "let p = { first = 1; second = \"hello\" }"));
 }

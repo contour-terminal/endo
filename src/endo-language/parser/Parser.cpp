@@ -3169,6 +3169,24 @@ TypePtr Parser::parseBaseType()
         return first;
     }
 
+    // Type variable: 'a, 'b, etc. (inside generic type definitions)
+    if (_lexer.currentToken() == Token::TypeVar)
+    {
+        auto const& varName = _lexer.currentLiteral();
+        auto it = _typeParamScope.find(varName);
+        if (it == _typeParamScope.end())
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Declare the type variable in the type definition header" },
+                                               currentContextSnippet(),
+                                               "Type variable '{}' not in scope",
+                                               varName);
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume type var
+        return types::typeVar(it->second);
+    }
+
     if (_lexer.currentToken() != Token::Identifier)
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -3307,6 +3325,80 @@ TypePtr Parser::parseBaseType()
         }
         _lexer.nextToken(); // consume '>'
         return types::result(std::move(okType), std::move(errType));
+    }
+
+    // User-defined generic type application (e.g., Tree<int>, Pair<int, str>)
+    if (auto it = _genericTypeDefinitions.find(typeName); it != _genericTypeDefinitions.end())
+    {
+        _lexer.nextToken(); // consume type name
+
+        if (_lexer.currentToken() != Token::Less)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { std::format("Add type parameter: '{}<...>'", typeName) },
+                                               currentContextSnippet(),
+                                               "Expected '<' after generic type name '{}', got '{}'",
+                                               typeName,
+                                               _lexer.currentTokenText());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '<'
+
+        std::vector<TypePtr> typeArgs;
+        auto arg = parseType();
+        if (!arg)
+            return nullptr;
+        typeArgs.push_back(std::move(arg));
+
+        while (_lexer.currentToken() == Token::Comma)
+        {
+            _lexer.nextToken(); // consume ','
+            arg = parseType();
+            if (!arg)
+                return nullptr;
+            typeArgs.push_back(std::move(arg));
+        }
+
+        if (_lexer.currentToken() != Token::Greater)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '>' to close type parameters" },
+                                               currentContextSnippet(),
+                                               "Expected '>' after type arguments for '{}', got '{}'",
+                                               typeName,
+                                               _lexer.currentTokenText());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '>'
+
+        auto const& def = it->second;
+        if (typeArgs.size() != def.typeParams.size())
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { std::format("Provide {} type argument(s)", def.typeParams.size()) },
+                currentContextSnippet(),
+                "Type '{}' expects {} type parameter(s), got {}",
+                typeName,
+                def.typeParams.size(),
+                typeArgs.size());
+            return nullptr;
+        }
+
+        // Build the type with type variables resolved to the provided type arguments.
+        // For now, we return the union/record type with the original name (type erasure).
+        // The actual instantiated type is handled by the type inferencer.
+        if (def.isUnion)
+            return types::unionType(typeName, {}); // placeholder; type inferencer resolves
+        else
+            return types::record(typeName, {}); // placeholder; type inferencer resolves
+    }
+
+    // Non-generic user-defined record type (e.g., Person)
+    if (_knownRecordTypes.contains(typeName))
+    {
+        _lexer.nextToken(); // consume type name
+        return types::record(typeName, {});
     }
 
     _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -4921,8 +5013,74 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
     auto typeName = _lexer.currentLiteral();
     _lexer.nextToken(); // consume type name
 
+    // Parse optional type parameters: <'a, 'b, ...>
+    std::vector<std::string> typeParams;
+    std::vector<TypeVarId> typeParamIds;
+    if (_lexer.currentToken() == Token::Less)
+    {
+        _lexer.enterFSharpExpr(); // ensure TypeVar tokens are recognized
+        _lexer.nextToken();       // consume '<'
+
+        if (_lexer.currentToken() != Token::TypeVar)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add at least one type parameter, e.g., <'a>" },
+                                               currentContextSnippet(),
+                                               "Expected type parameter after '<', got '{}'",
+                                               _lexer.currentTokenText());
+            return nullptr;
+        }
+
+        while (_lexer.currentToken() == Token::TypeVar)
+        {
+            auto paramName = _lexer.currentLiteral();
+
+            // Check for duplicate type parameters
+            if (_typeParamScope.contains(paramName))
+            {
+                _lexer.leaveFSharpExpr();
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Use a different type parameter name" },
+                                                   currentContextSnippet(),
+                                                   "Duplicate type parameter '{}' in type '{}'",
+                                                   paramName,
+                                                   typeName);
+                return nullptr;
+            }
+
+            auto const id = _nextParserTypeVarId++;
+            _typeParamScope[paramName] = id;
+            typeParamIds.push_back(id);
+            typeParams.push_back(std::move(paramName));
+            _lexer.nextToken(); // consume type var name
+
+            if (_lexer.currentToken() == Token::Comma)
+                _lexer.nextToken(); // consume ','
+        }
+
+        if (_lexer.currentToken() != Token::Greater)
+        {
+            _typeParamScope.clear();
+            _lexer.leaveFSharpExpr();
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '>' to close type parameters" },
+                                               currentContextSnippet(),
+                                               "Expected '>' after type parameters, got '{}'",
+                                               _lexer.currentTokenText());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '>'
+        _lexer.leaveFSharpExpr();
+    }
+
+    // Register generic type definition before parsing body (enables self-referencing like Tree<'a>)
+    if (!typeParams.empty())
+        _genericTypeDefinitions[typeName] = GenericTypeDef { .typeParams = typeParams };
+
     if (_lexer.currentToken() != Token::Equal)
     {
+        _typeParamScope.clear();
         _report.syntaxErrorWithSuggestions(currentLocation(),
                                            { "Add '=' after type name" },
                                            currentContextSnippet(),
@@ -5063,7 +5221,11 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
         }
 
         _lexer.leaveFSharpExpr();
-        return std::make_unique<ast::UnionTypeDefStmt>(std::move(typeName), std::move(variants));
+        if (!typeParams.empty())
+            _genericTypeDefinitions[typeName].isUnion = true;
+        _typeParamScope.clear();
+        return std::make_unique<ast::UnionTypeDefStmt>(
+            std::move(typeName), std::move(variants), std::move(typeParams), std::move(typeParamIds));
     }
 
     // Record type path: starts with '{'
@@ -5145,7 +5307,9 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
         fieldNames.push_back(f.name);
     _knownRecordTypes[typeName] = std::move(fieldNames);
 
-    return std::make_unique<ast::RecordTypeDefStmt>(std::move(typeName), std::move(fields));
+    _typeParamScope.clear();
+    return std::make_unique<ast::RecordTypeDefStmt>(
+        std::move(typeName), std::move(fields), std::move(typeParams), std::move(typeParamIds));
 }
 
 std::vector<ast::DataSourceFieldDef> Parser::parseDataSourceFieldDefs()

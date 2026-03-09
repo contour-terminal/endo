@@ -262,10 +262,17 @@ namespace types
 
 } // namespace types
 
+/// Map from TypeVarId to display name (e.g., for parser-assigned type variables).
+using TypeVarNameMap = std::unordered_map<TypeVarId, std::string>;
+
 // Pretty-printing
 std::string toString(Type const& type);
 std::string toString(TypePtr const& type);
 std::string toString(PrimitiveType prim);
 std::string toString(TypeScheme const& scheme);
+
+/// Pretty-print a type, using the given name overrides for type variables.
+std::string toString(Type const& type, TypeVarNameMap const& nameMap);
+std::string toString(TypePtr const& type, TypeVarNameMap const& nameMap);
 
 } // namespace endo
