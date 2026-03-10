@@ -789,6 +789,10 @@ class IRGenerator final: public ast::Visitor
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
 
+    /// Names of functions defined inside compiled function bodies (inner functions).
+    /// These are registered in _fsharpFunctions for body codegen but must NOT be persisted.
+    std::unordered_set<std::string> _innerFunctionNames;
+
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;
 

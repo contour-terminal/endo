@@ -406,6 +406,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             if (!func.builtinHOF.empty())
                 continue;
 
+            // Skip inner functions defined inside compiled function bodies
+            if (generator._innerFunctionNames.contains(name))
+                continue;
+
             FSharpPersistentState::PersistedFunction persisted;
             persisted.parameters = func.parameters;
             persisted.parameterTypes = func.parameterTypes;
@@ -5389,17 +5393,15 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& [capName, capVal]: func.capturedBindings)
                 _sema.scopes().markUsed(capName);
 
-            // Only register and compile at the top level (not inside compiled function bodies)
-            if (!_compilingFunction)
-            {
-                registerFSharpFunction(node.name, std::move(func));
+            registerFSharpFunction(node.name, std::move(func));
+            if (_compilingFunction)
+                _innerFunctionNames.insert(node.name);
 
-                // Compile functions as separate IRFunctions (with captures as extra params).
-                // For recursive functions, compiledFunction is set before body codegen so that
-                // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
-                if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
-                    compileFunctionBody(node.name, *registered);
-            }
+            // Compile functions as separate IRFunctions (with captures as extra params).
+            // For recursive functions, compiledFunction is set before body codegen so that
+            // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
+            if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+                compileFunctionBody(node.name, *registered);
         }
 
         // Register 'and' bindings (mutual recursion partners)
@@ -5425,8 +5427,9 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& [capName, capVal]: func.capturedBindings)
                 _sema.scopes().markUsed(capName);
 
-            if (!_compilingFunction)
-                registerFSharpFunction(ab.name, std::move(func));
+            registerFSharpFunction(ab.name, std::move(func));
+            if (_compilingFunction)
+                _innerFunctionNames.insert(ab.name);
         }
 
         // Compile mutual recursion 'and' bindings as functions (after ALL are registered)

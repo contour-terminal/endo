@@ -1377,14 +1377,16 @@ TEST_CASE("Completer.scripts.glab_executes", "[completer][scripts]")
 
 TEST_CASE("Completer.scripts.repl_persistence_no_leak", "[completer][scripts]")
 {
-    // Simulate REPL: define a function with inner bindings that reference params.
-    // Inner `let resolved = match args with ...` must NOT be persisted as a top-level
-    // binding, or the second prompt will fail with "Undefined F# identifier: args".
+    // Simulate REPL: define a function with inner bindings and inner function definitions
+    // that reference params. Neither inner `let resolved = ...` value bindings NOR inner
+    // function definitions (like `helper`) must be persisted as top-level entries,
+    // or the second prompt will fail with "Undefined F# identifier: args".
     auto result = executeSession({
         R"(
             let my_func args prefix =
+                let helper cmd = match cmd with | "x" -> "y" | c -> c
                 let resolved = match args with
-                    | cmd :: rest -> rest
+                    | cmd :: rest -> helper cmd :: rest
                     | _ -> args
                 resolved
         )",
