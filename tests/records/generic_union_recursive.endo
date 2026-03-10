@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Recursive generic union type (binary tree) with TypeApp
+# expect: 42
+
+type Tree<'a> =
+    | Leaf of 'a
+    | Node of Tree<'a> * Tree<'a>
+
+let t = Leaf 42
+
+match t with
+| Leaf x -> print x
+| _ -> print 0

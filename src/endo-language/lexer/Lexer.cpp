@@ -302,7 +302,34 @@ Token Lexer::nextToken()
             _inDoubleQuote = true;
             _fragmentBuffer.clear();
             return consumeCharAndConfirmToken(Token::DblQuoteStart);
-        case '\'': return consumeSingleQuotedString();
+        case '\'':
+            // In F# mode, 'a is a type variable (e.g., type Box<'a> = ...)
+            // But 'a' is a single-quoted string — distinguish by checking for closing quote
+            if (_fsharpDepth > 0 && _source->peekChar() >= 'a' && _source->peekChar() <= 'z')
+            {
+                nextChar(); // consume the '\''
+                // Speculatively read identifier chars [a-z0-9_]
+                std::string speculative;
+                while (!eof()
+                       && ((_currentChar >= 'a' && _currentChar <= 'z')
+                           || (_currentChar >= '0' && _currentChar <= '9') || _currentChar == '_'))
+                {
+                    speculative += static_cast<char>(_currentChar);
+                    nextChar();
+                }
+                // If the next char is a closing quote, this is a string literal, not a type var
+                if (_currentChar == '\'')
+                {
+                    // It's a single-quoted string like 'abc' — consume closing quote and return String
+                    _nextToken.literal = std::move(speculative);
+                    nextChar(); // consume closing '\''
+                    return confirmToken(Token::String);
+                }
+                // No closing quote — it's a type variable like 'a
+                _nextToken.literal = std::move(speculative);
+                return confirmToken(Token::TypeVar);
+            }
+            return consumeSingleQuotedString();
         // F# mode operators - only tokenized separately when in F# expression context
         case '+':
             if (_fsharpDepth > 0)

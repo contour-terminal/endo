@@ -154,7 +154,55 @@ type JsonValue =
 # type result<T, E> = Ok of T | Error of E
 ```
 
-### 3.6 Dot Property Access
+### 3.6 Generic Types
+
+User-defined record and union types can be parameterized with type variables, enabling reusable data structures.
+
+Type parameters are declared with the `'name` syntax in angle brackets after the type name:
+
+<!-- endo-no-check -->
+```endo
+# Generic union type
+type Box<'a> =
+    | Wrap of 'a
+    | Empty
+
+let b1 = Wrap 42       # Box<int>
+let b2 = Wrap "hello"  # Box<str>
+
+match b1 with
+| Wrap x -> print x    # 42
+| Empty -> print "empty"
+
+# Multi-parameter generic union
+type Either<'a, 'b> =
+    | Left of 'a
+    | Right of 'b
+
+let e = Left 42
+match e with
+| Left x -> print x
+| Right _ -> print "other"
+
+# Generic record type
+type Pair<'a, 'b> = { first: 'a; second: 'b }
+
+let p = { first = 1; second = "hello" }
+print p.first    # 1
+
+# Recursive generic type (binary tree)
+type Tree<'a> =
+    | Leaf of 'a
+    | Node of Tree<'a> * Tree<'a>
+
+let t = Node (Leaf 1, Node (Leaf 2, Leaf 3))
+```
+
+**Type erasure**: All instantiations of a generic type share a single runtime type ID. Type parameters exist only at the type-checking level and are erased before code generation. This matches how built-in types like `option<T>` and `result<T, E>` work.
+
+**Type inference**: Constructor usage infers type parameters automatically — no explicit type application needed at call sites.
+
+### 3.7 Dot Property Access
 
 Built-in types expose convenient dot properties for common queries.
 
@@ -190,7 +238,7 @@ let s = "hello"
 print s.length                        # 5
 ```
 
-### 3.7 Built-in Record Types
+### 3.8 Built-in Record Types
 
 Endo provides several built-in record types for shell data. These are returned by
 built-in commands and support dot access, pattern matching, and pipeline operations.

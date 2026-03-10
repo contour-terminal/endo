@@ -568,6 +568,8 @@ std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr con
         return CoreVM::LiteralType::Object;
     if (type->isRecord() || type->isUnion())
         return CoreVM::LiteralType::Object;
+    if (type->isTypeApp())
+        return CoreVM::LiteralType::Object;
     return std::nullopt;
 }
 
@@ -10376,8 +10378,13 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes;
     for (size_t i = 0; i < node.fields.size(); ++i)
     {
-        auto vmType = CoreVM::LiteralType::Number; // default for non-primitive or unknown types
-        if (auto const* prim = std::get_if<PrimitiveTypeNode>(&node.fields[i].type->node))
+        auto vmType = CoreVM::LiteralType::Number; // default for non-primitive, type vars, or unknown types
+        if (node.fields[i].type->isTypeVar() || node.fields[i].type->isTypeApp())
+        {
+            // Type erasure: type variables and type applications map to Number (the catch-all erased type)
+            vmType = CoreVM::LiteralType::Number;
+        }
+        else if (auto const* prim = std::get_if<PrimitiveTypeNode>(&node.fields[i].type->node))
         {
             switch (prim->kind)
             {
@@ -10396,6 +10403,7 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     RecordTypeInfo info;
     info.typeId = typeId;
     info.name = node.name;
+    info.typeParams = node.typeParams;
     info.fields = fields;
     info.fieldTypes = std::move(fieldTypes);
     _sema.types().registerRecord(node.name, std::move(info));
@@ -11060,9 +11068,24 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
         {
             if (!variant.fieldNames[j].empty())
             {
-                fields.push_back({ variant.fieldNames[j],
-                                   static_cast<uint8_t>(j),
-                                   CoreVM::LiteralType::Number }); // TODO: derive from payloadTypes
+                // Derive VM type from payload type annotation, with type erasure for type variables
+                auto vmType = CoreVM::LiteralType::Number;
+                if (j < variant.payloadTypes.size() && variant.payloadTypes[j]
+                    && !variant.payloadTypes[j]->isTypeVar() && !variant.payloadTypes[j]->isTypeApp())
+                {
+                    if (auto const* prim = std::get_if<PrimitiveTypeNode>(&variant.payloadTypes[j]->node))
+                    {
+                        switch (prim->kind)
+                        {
+                            case PrimitiveType::Int: vmType = CoreVM::LiteralType::Number; break;
+                            case PrimitiveType::Float: vmType = CoreVM::LiteralType::Float; break;
+                            case PrimitiveType::Str: vmType = CoreVM::LiteralType::String; break;
+                            case PrimitiveType::Bool: vmType = CoreVM::LiteralType::Boolean; break;
+                            case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
+                        }
+                    }
+                }
+                fields.push_back({ variant.fieldNames[j], static_cast<uint8_t>(j), vmType });
                 fieldLookup[variant.fieldNames[j]] = { static_cast<int>(i), static_cast<uint8_t>(j) };
             }
         }
@@ -11084,6 +11107,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
     UnionTypeInfo info;
     info.typeId = typeId;
     info.name = node.name;
+    info.typeParams = node.typeParams;
     info.variants = variants;
     info.fieldLookup = std::move(fieldLookup);
     _sema.types().registerUnion(node.name, std::move(info));

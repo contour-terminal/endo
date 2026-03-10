@@ -177,11 +177,11 @@ TEST_CASE("Type.toString.primitives")
 
 TEST_CASE("Type.toString.type_variable")
 {
-    CHECK(toString(types::typeVar(0)) == "a");
-    CHECK(toString(types::typeVar(1)) == "b");
-    CHECK(toString(types::typeVar(25)) == "z");
-    CHECK(toString(types::typeVar(26)) == "a1");
-    CHECK(toString(types::typeVar(27)) == "b1");
+    CHECK(toString(types::typeVar(0)) == "'a");
+    CHECK(toString(types::typeVar(1)) == "'b");
+    CHECK(toString(types::typeVar(25)) == "'z");
+    CHECK(toString(types::typeVar(26)) == "'a1");
+    CHECK(toString(types::typeVar(27)) == "'b1");
 }
 
 TEST_CASE("Type.toString.function")
@@ -262,7 +262,7 @@ TEST_CASE("TypeScheme.toString")
     auto fnType = types::function(types::typeVar(a), types::typeVar(b));
     auto scheme = types::scheme({ a, b }, fnType);
 
-    CHECK(toString(scheme) == "forall a b. a -> b");
+    CHECK(toString(scheme) == "forall a b. 'a -> 'b");
 }
 
 // ============================================================================
@@ -650,4 +650,88 @@ TEST_CASE("TypeRegistry.builtins")
     auto msgField = errorType->fieldType("message");
     REQUIRE(msgField.has_value());
     CHECK(**msgField == *types::strType());
+}
+
+// ============================================================================
+// TypeApp Tests
+// ============================================================================
+
+TEST_CASE("TypeApp.creation_and_predicates")
+{
+    auto t = types::typeApp("Tree", { types::intType() });
+    CHECK(t->isTypeApp());
+    CHECK_FALSE(t->isUnion());
+    CHECK_FALSE(t->isRecord());
+
+    auto const* app = t->asTypeApp();
+    REQUIRE(app != nullptr);
+    CHECK(app->name == "Tree");
+    REQUIRE(app->args.size() == 1);
+    CHECK(*app->args[0] == *types::intType());
+}
+
+TEST_CASE("TypeApp.toString_single_arg")
+{
+    auto t = types::typeApp("Tree", { types::intType() });
+    CHECK(toString(t) == "Tree<int>");
+}
+
+TEST_CASE("TypeApp.toString_multi_arg")
+{
+    auto t = types::typeApp("Pair", { types::intType(), types::strType() });
+    CHECK(toString(t) == "Pair<int, string>");
+}
+
+TEST_CASE("TypeApp.toString_nested_spacing")
+{
+    auto inner = types::typeApp("Tree", { types::intType() });
+    auto outer = types::typeApp("Tree", { inner });
+    CHECK(toString(outer) == "Tree<Tree<int> >");
+}
+
+TEST_CASE("TypeApp.equality")
+{
+    auto t1 = types::typeApp("Tree", { types::intType() });
+    auto t2 = types::typeApp("Tree", { types::intType() });
+    auto t3 = types::typeApp("Tree", { types::strType() });
+    auto t4 = types::typeApp("Box", { types::intType() });
+
+    CHECK(*t1 == *t2);
+    CHECK_FALSE(*t1 == *t3);
+    CHECK_FALSE(*t1 == *t4);
+}
+
+TEST_CASE("TypeApp.unify_same_name_resolves_args")
+{
+    auto a = types::typeVar(100);
+    auto t1 = types::typeApp("T", { a });
+    auto t2 = types::typeApp("T", { types::intType() });
+    auto result = unify(t1, t2);
+    REQUIRE(result.has_value());
+    auto resolved = result->apply(a);
+    CHECK(*resolved == *types::intType());
+}
+
+TEST_CASE("TypeApp.unify_different_args_fails")
+{
+    auto t1 = types::typeApp("T", { types::intType() });
+    auto t2 = types::typeApp("T", { types::strType() });
+    auto result = unify(t1, t2);
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("TypeApp.unify_different_names_fails")
+{
+    auto t1 = types::typeApp("T", { types::intType() });
+    auto t2 = types::typeApp("U", { types::intType() });
+    auto result = unify(t1, t2);
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("TypeApp.occursIn_detects_var_in_args")
+{
+    auto a = types::typeVar(42);
+    auto t = types::typeApp("T", { a });
+    CHECK(occursIn(42, t));
+    CHECK_FALSE(occursIn(99, t));
 }

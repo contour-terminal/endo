@@ -13,9 +13,10 @@ namespace endo
 /// Metadata for a registered record (product) type definition.
 struct RecordTypeInfo
 {
-    uint16_t typeId = 0;                                             ///< Assigned type ID
-    std::string name;                                                ///< Type name
-    std::vector<CoreVM::FieldInfo> fields;                           ///< Field definitions (name + offset)
+    uint16_t typeId = 0;                   ///< Assigned type ID
+    std::string name;                      ///< Type name
+    std::vector<std::string> typeParams;   ///< Type parameters (empty for monomorphic)
+    std::vector<CoreVM::FieldInfo> fields; ///< Field definitions (name + offset)
     std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes; ///< Field name -> VM literal type
     std::unordered_map<std::string, uint16_t>
         fieldObjectTypeIds; ///< Object-typed field -> nested record type ID
@@ -26,6 +27,7 @@ struct UnionTypeInfo
 {
     uint16_t typeId = 0;                       ///< Assigned type ID
     std::string name;                          ///< Type name (e.g., "Shape")
+    std::vector<std::string> typeParams;       ///< Type parameters (empty for monomorphic)
     std::vector<CoreVM::VariantInfo> variants; ///< Variant definitions
 
     /// Maps field name to (variant_tag, slot_offset) for field access on union values.

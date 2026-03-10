@@ -257,3 +257,29 @@ TEST_CASE("TypeInferencer.union_type_def_and_constructor", "[TypeInferencer]")
     auto result = inferTypes("type Shape = | Circle of float | Point");
     REQUIRE_FALSE(result.hasErrors());
 }
+
+TEST_CASE("TypeInferencer.generic_union_type_def", "[TypeInferencer][generic]")
+{
+    auto result = inferTypes("type Box<'a> = | Wrap of 'a | Empty");
+    REQUIRE_FALSE(result.hasErrors());
+}
+
+TEST_CASE("TypeInferencer.generic_union_constructor_infers_type", "[TypeInferencer][generic]")
+{
+    auto result = inferTypes("type Box<'a> = | Wrap of 'a | Empty\nlet b = Wrap 42");
+    REQUIRE_FALSE(result.hasErrors());
+}
+
+TEST_CASE("TypeInferencer.generic_union_different_instantiations", "[TypeInferencer][generic]")
+{
+    auto result =
+        inferTypes("type Box<'a> = | Wrap of 'a | Empty\nlet b1 = Wrap 42\nlet b2 = Wrap \"hello\"");
+    REQUIRE_FALSE(result.hasErrors());
+}
+
+TEST_CASE("TypeInferencer.generic_union_recursive", "[TypeInferencer][generic]")
+{
+    auto result =
+        inferTypes("type Tree<'a> = | Leaf of 'a | Node of Tree<'a> * Tree<'a>\nlet t = Node (Leaf 1, Leaf 2)");
+    REQUIRE_FALSE(result.hasErrors());
+}

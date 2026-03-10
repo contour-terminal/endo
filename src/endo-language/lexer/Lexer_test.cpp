@@ -1691,3 +1691,88 @@ TEST_CASE("Lexer.preceding_space.literal_adjacent_to_dollar")
     CHECK(lexer.currentLiteral() == "HOME");
     CHECK_FALSE(lexer.hasPrecedingSpace());
 }
+
+// ============================================================================
+// TypeVar token tests
+// ============================================================================
+
+TEST_CASE("Lexer.TypeVar.simple_in_fsharp_mode")
+{
+    // Use 'let' prefix so the first token is consumed in shell mode, then enter F# mode
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let 'a"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::TypeVar);
+    CHECK(lexer.currentLiteral() == "a");
+}
+
+TEST_CASE("Lexer.TypeVar.multi_char_name")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let 'abc"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::TypeVar);
+    CHECK(lexer.currentLiteral() == "abc");
+}
+
+TEST_CASE("Lexer.TypeVar.with_digits_and_underscores")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let 'a1_x"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::TypeVar);
+    CHECK(lexer.currentLiteral() == "a1_x");
+}
+
+TEST_CASE("Lexer.TypeVar.uppercase_is_string")
+{
+    // 'A' should be a string, not a type var (type vars start with lowercase)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let 'A'"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::String);
+    CHECK(lexer.currentLiteral() == "A");
+}
+
+TEST_CASE("Lexer.TypeVar.in_shell_mode_is_string")
+{
+    // In shell mode, 'a' is always a single-quoted string
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("'abc'"));
+    CHECK(lexer.currentToken() == endo::Token::String);
+    CHECK(lexer.currentLiteral() == "abc");
+}
+
+TEST_CASE("Lexer.TypeVar.quoted_string_in_fsharp_mode")
+{
+    // 'abc' (with closing quote) in F# mode is still a string
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let 'abc'"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::String);
+    CHECK(lexer.currentLiteral() == "abc");
+}
+
+TEST_CASE("Lexer.TypeVar.in_type_parameter_context")
+{
+    // Simulate: type <'a, 'b> — use 'type' to enter F# context naturally
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("type <'a, 'b>"));
+    CHECK(lexer.currentToken() == endo::Token::Type);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Less);
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::TypeVar);
+    CHECK(lexer.currentLiteral() == "a");
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Comma);
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::TypeVar);
+    CHECK(lexer.currentLiteral() == "b");
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Greater);
+}

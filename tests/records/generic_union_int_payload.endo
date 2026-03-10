@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Generic union with integer payload
+# expect: 99
+
+type Box<'a> =
+    | Wrap of 'a
+    | Empty
+
+let b = Wrap 99
+
+match b with
+| Wrap x -> print x
+| Empty -> print 0
