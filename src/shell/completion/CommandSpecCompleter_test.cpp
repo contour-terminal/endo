@@ -69,6 +69,8 @@ class MockQueryProvider: public endo::CommandQueryProvider
                      { "develop", "local branch" },
                      { "origin/develop", "remote branch" },
                      { "feature/test", "remote branch" } };
+        if (queryTag == "local-branches")
+            return { { "main", "local branch" }, { "develop", "local branch" } };
         if (queryTag == "remotes")
             return { { "origin", "remote" }, { "upstream", "remote" } };
         if (queryTag == "tags")
@@ -687,7 +689,7 @@ TEST_CASE("CommandSpecCompleter.alias_br_completes_branch_options")
     CHECK(hasCompletion(results, "--remotes"));
 }
 
-TEST_CASE("CommandSpecCompleter.alias_br_delete_completes_branches")
+TEST_CASE("CommandSpecCompleter.alias_br_delete_completes_only_local_branches")
 {
     auto completer = createMockGitCompleter();
     auto ctx = makeGitContext("git br -d ");
@@ -696,6 +698,48 @@ TEST_CASE("CommandSpecCompleter.alias_br_delete_completes_branches")
     CHECK_FALSE(results.empty());
     CHECK(hasCompletion(results, "main"));
     CHECK(hasCompletion(results, "develop"));
+    // Remote branches should NOT appear for delete operations
+    CHECK_FALSE(hasCompletion(results, "origin/develop"));
+    CHECK_FALSE(hasCompletion(results, "feature/test"));
+}
+
+TEST_CASE("CommandSpecCompleter.branch_delete_long_flag_completes_only_local_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git branch --delete ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+    CHECK_FALSE(hasCompletion(results, "origin/develop"));
+    CHECK_FALSE(hasCompletion(results, "feature/test"));
+}
+
+TEST_CASE("CommandSpecCompleter.branch_force_delete_completes_only_local_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git branch -D ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+    CHECK_FALSE(hasCompletion(results, "origin/develop"));
+    CHECK_FALSE(hasCompletion(results, "feature/test"));
+}
+
+TEST_CASE("CommandSpecCompleter.branch_without_delete_completes_all_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git branch ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+    CHECK(hasCompletion(results, "origin/develop"));
+    CHECK(hasCompletion(results, "feature/test"));
 }
 
 TEST_CASE("CommandSpecCompleter.alias_co_completes_branches")

@@ -263,7 +263,17 @@ std::vector<CompletionItem> CommandSpecCompleter::completeArgument(RegisteredCom
         case ArgKind::DynamicQuery: {
             if (!cmd.cache || argDef->queryTag.empty())
                 return {};
-            auto const results = cmd.cache->query(argDef->queryTag);
+            // Check if any seen option overrides the default query tag
+            auto effectiveTag = std::string_view { argDef->queryTag };
+            for (auto const& [opt, tag]: argDef->optionQueryOverrides)
+            {
+                if (std::ranges::find(state.seenOptions, opt) != state.seenOptions.end())
+                {
+                    effectiveTag = tag;
+                    break;
+                }
+            }
+            auto const results = cmd.cache->query(effectiveTag);
             return queryToCompletions(results, prefix, 80);
         }
         case ArgKind::Subcommand: {

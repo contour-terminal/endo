@@ -820,6 +820,26 @@ void Shell::emitCurrentWorkingDirectory()
     _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname.data(), encoded));
 }
 
+void Shell::emitWindowTitle(std::string_view title)
+{
+    if (!_interactive || !_tty.isTerminal())
+        return;
+
+    // Sanitize: strip C0, DEL, and C1 control characters
+    // to prevent escape injection in the OSC payload.
+    auto sanitized = std::string {};
+    sanitized.reserve(title.size());
+    for (auto const ch: title)
+    {
+        auto const uch = static_cast<unsigned char>(ch);
+        if (uch < 0x20 || uch == 0x7F || (uch >= 0x80 && uch <= 0x9F))
+            continue;
+        sanitized += ch;
+    }
+
+    _tty.writeToStdout(std::format("\033]2;{}\033\\", sanitized));
+}
+
 void Shell::loadInitScript()
 {
     // Load API keys from agent.yml (init.endo overrides all other settings).
@@ -1094,6 +1114,7 @@ int Shell::run()
         {
             auto ctx = PromptContext {};
             ctx.cwd = std::filesystem::current_path().string();
+            emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
     #if defined(_WIN32)
@@ -1176,6 +1197,7 @@ int Shell::run()
 
             {
                 auto const _ = Prompt::ScopedSuspend(prompt);
+                emitWindowTitle(lineBuffer);
                 emitCommandStart();
                 auto const cmdStart = std::chrono::steady_clock::now();
                 _exitCode = execute(lineBuffer);
@@ -1228,6 +1250,7 @@ int Shell::run()
         {
             auto ctx = PromptContext {};
             ctx.cwd = std::filesystem::current_path().string();
+            emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
             else if (auto const* userProfile = std::getenv("USERPROFILE"))
@@ -1281,6 +1304,7 @@ int Shell::run()
 
         {
             auto const _ = Prompt::ScopedSuspend(prompt);
+            emitWindowTitle(lineBuffer);
             emitCommandStart();
             auto const cmdStart = std::chrono::steady_clock::now();
             _exitCode = execute(lineBuffer);

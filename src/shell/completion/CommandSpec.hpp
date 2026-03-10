@@ -44,6 +44,10 @@ struct ArgDef
     std::string description;     ///< Human-readable help text.
     std::string queryTag;        ///< When kind == DynamicQuery, identifies the query.
     bool repeatable = false;     ///< If true, repeats for all subsequent positions.
+
+    /// When a seen option matches, override queryTag with the alternative.
+    /// E.g., {"-d", "local-branches"} uses "local-branches" instead of "branches" when -d is present.
+    std::vector<std::pair<std::string, std::string>> optionQueryOverrides;
 };
 
 /// @brief Complete definition of a subcommand.

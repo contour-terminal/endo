@@ -406,6 +406,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             if (!func.builtinHOF.empty())
                 continue;
 
+            // Skip inner functions defined inside compiled function bodies
+            if (generator._innerFunctionNames.contains(name))
+                continue;
+
             FSharpPersistentState::PersistedFunction persisted;
             persisted.parameters = func.parameters;
             persisted.parameterTypes = func.parameterTypes;
@@ -5390,6 +5394,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(node.name, std::move(func));
+            if (_functionBodyDepth > 0)
+                _innerFunctionNames.insert(node.name);
 
             // Compile functions as separate IRFunctions (with captures as extra params).
             // For recursive functions, compiledFunction is set before body codegen so that
@@ -5422,10 +5428,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(ab.name, std::move(func));
+            if (_functionBodyDepth > 0)
+                _innerFunctionNames.insert(ab.name);
         }
 
         // Compile mutual recursion 'and' bindings as functions (after ALL are registered)
-        if (isMutual)
+        if (isMutual && !_compilingFunction)
         {
             for (auto const& ab: node.andBindings)
             {
@@ -5585,13 +5593,17 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 break;
             }
     }
-    _newValueBindings.push_back({ node.name,
-                                  node.value.get(),
-                                  node.isMutable,
-                                  isObjectExpr,
-                                  storageType,
-                                  node.isExported,
-                                  objectTypeName });
+    // Only persist top-level bindings (not bindings inside function bodies)
+    if (_functionBodyDepth == 0)
+    {
+        _newValueBindings.push_back({ node.name,
+                                      node.value.get(),
+                                      node.isMutable,
+                                      isObjectExpr,
+                                      storageType,
+                                      node.isExported,
+                                      objectTypeName });
+    }
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;
@@ -7042,7 +7054,9 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
 
     // Inline the function body
+    ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
+    --_functionBodyDepth;
 
     if (func->returnKind != ReturnKind::Plain)
     {
@@ -8076,7 +8090,9 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     }
 
     // Inline the function body
+    ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
+    --_functionBodyDepth;
 
     // Validate return type annotation if present
     if (bodyResult && func->returnType)
@@ -8212,6 +8228,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     auto* savedCompilingFunction = _compilingFunction;
     _inTailPosition = true;
     _compilingFunction = irFunction;
+    ++_functionBodyDepth;
 
     // Codegen the function body
     auto* bodyResult = codegen(func.body);
@@ -8219,6 +8236,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     // Restore tail position and compiling function
     _inTailPosition = savedTailPosition;
     _compilingFunction = savedCompilingFunction;
+    --_functionBodyDepth;
 
     // Validate return type annotation if present
     if (bodyResult && func.returnType)

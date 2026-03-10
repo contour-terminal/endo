@@ -786,8 +786,16 @@ class IRGenerator final: public ast::Visitor
     /// Used to detect that we're inside a function body compilation (not the main function).
     CoreVM::IRFunction* _compilingFunction = nullptr;
 
+    /// Depth counter for function body codegen (both compiled and AST-inlined).
+    /// When > 0, inner bindings must not be persisted to REPL state.
+    int _functionBodyDepth = 0;
+
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
+
+    /// Names of functions defined inside compiled function bodies (inner functions).
+    /// These are registered in _fsharpFunctions for body codegen but must NOT be persisted.
+    std::unordered_set<std::string> _innerFunctionNames;
 
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;

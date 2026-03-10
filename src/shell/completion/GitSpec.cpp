@@ -111,7 +111,12 @@ namespace
                 { .longName = "--no-merged", .description = "List unmerged branches" },
             },
             .positionalArgs = {
-                { .kind = ArgKind::DynamicQuery, .description = "Branch name", .queryTag = "branches" },
+                { .kind = ArgKind::DynamicQuery,
+                  .description = "Branch name",
+                  .queryTag = "branches",
+                  .optionQueryOverrides = { { "-d", "local-branches" },
+                                            { "--delete", "local-branches" },
+                                            { "-D", "local-branches" } } },
             },
         };
     }
