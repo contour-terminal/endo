@@ -709,6 +709,8 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
 
+    _dirConfigManager = std::make_unique<DirectoryConfigManager>(*this, _env);
+
     // Register dark/light mode auto-switching via terminal color scheme detection
     prompt.terminal().onColorSchemeChanged([](tui::ColorScheme scheme) {
         auto& mgr = tui::ThemeManager::instance();
@@ -873,6 +875,33 @@ void Shell::loadInitScript()
             }
         }
     }
+}
+
+int Shell::executeConfigScript(std::string const& content, std::string_view sourceName)
+{
+    auto const savedInteractive = _interactive;
+    auto const savedUnusedDetection = _unusedValueDetection;
+    _interactive = false;
+    _unusedValueDetection = false;
+    int result = 0;
+    try
+    {
+        result = execute(content, sourceName);
+    }
+    catch (std::exception const& e)
+    {
+        std::println(std::cerr, "endo: warning: error executing {}: {}", sourceName, e.what());
+        result = 1;
+    }
+    _interactive = savedInteractive;
+    _unusedValueDetection = savedUnusedDetection;
+    return result;
+}
+
+void Shell::onDirectoryChanged()
+{
+    if (_dirConfigManager)
+        _dirConfigManager->onDirectoryChanged(_env.currentDirectory());
 }
 
 void Shell::loadCompleters()
@@ -1051,6 +1080,7 @@ int Shell::run()
 
     loadInitScript();
     loadCompleters();
+    onDirectoryChanged();
 
     // Set up command palette registry for shell mode
     auto shellCommandRegistry = tui::CommandRegistry {};

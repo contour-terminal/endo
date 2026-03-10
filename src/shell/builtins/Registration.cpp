@@ -52,6 +52,7 @@ void Shell::registerBuiltinFunctions()
     registerAgentConfigBuiltins();
     registerMcpBuiltins();
     registerCompleterBuiltins();
+    registerDirectoryConfigBuiltins();
 }
 
 void Shell::registerEnvironmentBuiltins()

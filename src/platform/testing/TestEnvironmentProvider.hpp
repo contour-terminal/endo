@@ -68,7 +68,10 @@ class TestEnvironmentProvider final: public EnvironmentProvider
 
     /// Adds a path that changeDirectory will accept.
     /// If no valid paths have been added, all paths are accepted.
-    void addValidPath(std::string const& path) { _validPaths.insert(path); }
+    void addValidPath(std::string const& path)
+    {
+        _validPaths.insert(std::filesystem::path(path).lexically_normal().generic_string());
+    }
 
   private:
     std::map<std::string, std::string> _values;
