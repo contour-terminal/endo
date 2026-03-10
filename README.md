@@ -13,7 +13,7 @@
 
 ---
 
-[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Documentation](https://contour-terminal.github.io/endo/) · [Installation](#installation) · [Contributing](#contributing)
+[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Documentation](https://endo-lang.org/) · [Installation](#installation) · [Contributing](#contributing)
 
 </div>
 

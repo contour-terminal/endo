@@ -51,4 +51,4 @@ Full language support and integrated debugging for the [Endo](https://github.com
 
 ## Documentation
 
-See the [full documentation](https://contour-terminal.github.io/endo/) for the Endo language and debugging guides.
+See the [full documentation](https://endo-lang.org/) for the Endo language and debugging guides.

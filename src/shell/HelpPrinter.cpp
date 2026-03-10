@@ -27,23 +27,32 @@ namespace
 {
 
 constexpr std::string_view Version = "0.1.0";
-constexpr std::string_view DocsUrl = "https://contour-terminal.github.io/endo/";
+constexpr std::string_view DocsUrl = "https://endo-lang.org/";
 constexpr std::string_view GitHubUrl = "https://github.com/contour-terminal/endo";
 
 constexpr std::string_view Reset = "\033[m";
+
+/// @brief Checks whether stdout is connected to a real terminal.
+[[nodiscard]] bool isTerminal()
+{
+    return isatty(STDOUT_FD);
+}
 
 /// @brief Checks whether stdout supports ANSI color output.
 [[nodiscard]] bool shouldUseColor()
 {
     auto const* noColor = std::getenv("NO_COLOR");
-    return isatty(STDOUT_FD) && (noColor == nullptr || noColor[0] == '\0');
+    return isTerminal() && (noColor == nullptr || noColor[0] == '\0');
 }
 
 /// @brief Helper to build styled help output with optional ANSI colors.
 class HelpBuilder
 {
   public:
-    explicit HelpBuilder(bool useColor): _useColor(useColor), _theme(tui::darkTheme()) {}
+    explicit HelpBuilder(bool useColor, bool useHyperlinks):
+        _useColor(useColor), _useHyperlinks(useHyperlinks), _theme(tui::darkTheme())
+    {
+    }
 
     /// @brief Appends a bold, colored section header with a blank line before it.
     void header(std::string_view text)
@@ -173,25 +182,36 @@ class HelpBuilder
         _out += '\n';
     }
 
-    /// @brief Appends a clickable hyperlink (OSC 8) with label, or plain URL when color is off.
+    /// @brief Appends a clickable hyperlink (OSC 8) with label, or plain URL when not on a terminal.
     void link(std::string_view label, std::string_view url)
     {
         _out += "  ";
+
+        // OSC 8 hyperlink open (terminal-only, independent of color)
+        if (_useHyperlinks)
+            _out += std::format("\033]8;;{}\033\\", url);
+
         if (_useColor)
         {
-            auto style = tui::Style { .fg = _theme.colors.info, .underline = true };
-            // OSC 8 hyperlink: \033]8;;URL\033\\LABEL\033]8;;\033\\
-            _out += std::format("\033]8;;{}\033\\", url);
-            _out += endo::sgrSequence(style);
+            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.info, .underline = true });
             _out += label;
             _out += Reset;
-            _out += "\033]8;;\033\\";
         }
         else
         {
             _out += label;
         }
+
+        // OSC 8 hyperlink close
+        if (_useHyperlinks)
+            _out += "\033]8;;\033\\";
+
         _out += "  ";
+
+        // Show the URL text as well (hyperlinked when on a terminal)
+        if (_useHyperlinks)
+            _out += std::format("\033]8;;{}\033\\", url);
+
         if (_useColor)
         {
             _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.textMuted });
@@ -202,6 +222,10 @@ class HelpBuilder
         {
             _out += url;
         }
+
+        if (_useHyperlinks)
+            _out += "\033]8;;\033\\";
+
         _out += '\n';
     }
 
@@ -228,6 +252,7 @@ class HelpBuilder
     }
 
     bool _useColor;
+    bool _useHyperlinks;
     tui::Theme _theme;
     std::string _out;
 };
@@ -240,7 +265,8 @@ namespace endo
 void printHelp()
 {
     auto const useColor = shouldUseColor();
-    auto h = HelpBuilder(useColor);
+    auto const useHyperlinks = isTerminal();
+    auto h = HelpBuilder(useColor, useHyperlinks);
 
     // Title
     {
