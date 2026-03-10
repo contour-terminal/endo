@@ -26,6 +26,7 @@ let claude_complete args prefix =
     | ["--output-format"] | [_; "--output-format"] -> output_formats
     | ["--input-format"] | [_; "--input-format"] -> input_formats
     | ["--effort"] | [_; "--effort"] -> effort_levels
+    | [_] when startsWith "-" prefix -> options
     | ["mcp"] -> mcp_subcommands
     | ["auth"] -> auth_subcommands
     | ["plugin"] -> plugin_subcommands

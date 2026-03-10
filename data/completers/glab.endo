@@ -68,6 +68,7 @@ let glab_complete args prefix =
     | ["issue"] -> issue_subcommands
     | ["issue"; "create"] when startsWith "-" prefix -> issue_create_options
     | ["issue"; "list"] when startsWith "-" prefix -> issue_list_options
+    | [_] when startsWith "-" prefix -> global_options
     | ["ci"] -> ci_subcommands
     | ["repo"] -> repo_subcommands
     | ["release"] -> release_subcommands

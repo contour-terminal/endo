@@ -1114,6 +1114,70 @@ TEST_CASE("Completer.glab.project_alias_resolves", "[completer][glab]")
 }
 
 // =============================================================================
+// Subcommand option completion tests — verify --<TAB> after subcommands works
+// =============================================================================
+
+TEST_CASE("Completer.claude.mcp_option_completion", "[completer][claude]")
+{
+    // `claude mcp --<TAB>` should return options, not mcp_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let claude_complete args prefix =
+            let subcommands = ["mcp"; "auth"; "doctor"]
+            let options = ["--help"; "--model"; "--resume"]
+            let mcp_subcommands = ["add"; "list"; "get"; "remove"]
+            match args with
+            | [] when startsWith "-" prefix -> options
+            | [] -> subcommands
+            | [_] when startsWith "-" prefix -> options
+            | ["mcp"] -> mcp_subcommands
+            | _ when startsWith "-" prefix -> options
+            | _ -> []
+
+        claude_complete ["mcp"] "--" |> each println
+    )") == "--help\n--model\n--resume\n");
+}
+
+TEST_CASE("Completer.gh.repo_option_completion", "[completer][gh]")
+{
+    // `gh repo --<TAB>` should return global_options, not repo_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let gh_complete args prefix =
+            let commands = ["auth"; "issue"; "pr"; "repo"]
+            let global_options = ["--help"; "--version"]
+            let repo_subcommands = ["clone"; "create"; "list"]
+            match args with
+            | [] when startsWith "-" prefix -> global_options
+            | [] -> commands
+            | [_] when startsWith "-" prefix -> global_options
+            | ["repo"] -> repo_subcommands
+            | _ when startsWith "-" prefix -> global_options
+            | _ -> []
+
+        gh_complete ["repo"] "--" |> each println
+    )") == "--help\n--version\n");
+}
+
+TEST_CASE("Completer.glab.ci_option_completion", "[completer][glab]")
+{
+    // `glab ci --<TAB>` should return global_options, not ci_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let glab_complete args prefix =
+            let commands = ["ci"; "mr"; "issue"; "repo"]
+            let global_options = ["--help"; "--version"]
+            let ci_subcommands = ["lint"; "list"; "run"]
+            match args with
+            | [] when startsWith "-" prefix -> global_options
+            | [] -> commands
+            | [_] when startsWith "-" prefix -> global_options
+            | ["ci"] -> ci_subcommands
+            | _ when startsWith "-" prefix -> global_options
+            | _ -> []
+
+        glab_complete ["ci"] "--" |> each println
+    )") == "--help\n--version\n");
+}
+
+// =============================================================================
 // BlockExpr scope cleanup regression tests (heap-use-after-free fix)
 // =============================================================================
 
@@ -1201,6 +1265,7 @@ TEST_CASE("Completer.scripts.cmake_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "cmake.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1210,6 +1275,7 @@ TEST_CASE("Completer.scripts.ctest_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "ctest.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1219,6 +1285,7 @@ TEST_CASE("Completer.scripts.ssh_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "ssh.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1228,6 +1295,7 @@ TEST_CASE("Completer.scripts.scp_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "scp.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1237,6 +1305,7 @@ TEST_CASE("Completer.scripts.flatpak_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "flatpak.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1246,6 +1315,7 @@ TEST_CASE("Completer.scripts.claude_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "claude.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1255,6 +1325,7 @@ TEST_CASE("Completer.scripts.gh_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "gh.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -1264,6 +1335,7 @@ TEST_CASE("Completer.scripts.glab_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "glab.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
