@@ -372,6 +372,7 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromKey(KeyCode::Backspace, M::Ctrl), A::DeleteWordBackward);
     bindings.bind(K::fromKey(KeyCode::Backspace, M::Alt), A::DeleteWordBackward);
     bindings.bind(K::fromChar('w', M::Ctrl), A::DeleteWordBackward);
+    bindings.bind(K::fromKey(KeyCode::Delete, M::Ctrl), A::DeleteWord);
     bindings.bind(K::fromChar('d', M::Alt), A::DeleteWord);
     bindings.bind(K::fromChar('k', M::Ctrl), A::KillToEnd);
     bindings.bind(K::fromChar('u', M::Ctrl), A::KillToStart);
