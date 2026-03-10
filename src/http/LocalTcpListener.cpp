@@ -56,6 +56,9 @@ LocalTcpListener& LocalTcpListener::operator=(LocalTcpListener&& other) noexcept
 
 auto LocalTcpListener::start() -> std::expected<uint16_t, std::string>
 {
+    // Close any previously open listener to prevent socket leaks on repeated calls.
+    close();
+
 #if defined(_WIN32)
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -149,11 +152,18 @@ auto LocalTcpListener::serveOnce(std::chrono::seconds timeout, std::string_view 
 
     // Drain the incoming HTTP request.
     auto buffer = std::array<char, 4096> {};
-    recv(*clientFd, buffer.data(), buffer.size() - 1, 0);
+    auto const bytesRead = recv(*clientFd, buffer.data(), buffer.size() - 1, 0);
+    if (bytesRead <= 0)
+    {
+        closeSocket(*clientFd);
+        return std::unexpected(std::string("Failed to read from client"));
+    }
 
     // Send the canned response.
-    send(*clientFd, response.data(), response.size(), 0);
+    auto const bytesSent = send(*clientFd, response.data(), response.size(), 0);
     closeSocket(*clientFd);
+    if (bytesSent < 0)
+        return std::unexpected(std::string("Failed to send response"));
 
     return {};
 }

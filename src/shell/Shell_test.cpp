@@ -3733,6 +3733,9 @@ TEST_CASE("shell.fsharp.fetch.unsupported_protocol")
 TEST_CASE("shell.fsharp.fetch.http_success")
 {
     // Local server returns 200 — fetch should return Ok(filename).
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_fetch_test";
+    std::filesystem::create_directories(tempDir);
+
     auto listener = endo::http::LocalTcpListener {};
     auto const port = listener.start();
     REQUIRE(port.has_value());
@@ -3743,6 +3746,9 @@ TEST_CASE("shell.fsharp.fetch.http_success")
                                "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
     });
 
+    auto const prevDir = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
     TestShell shell;
     shell(std::format(
         R"(match fetch "http://127.0.0.1:{}/test.txt" with | Ok b -> print "ok" | Error e -> print "error")",
@@ -3750,7 +3756,9 @@ TEST_CASE("shell.fsharp.fetch.http_success")
     serverThread.join();
 
     CHECK(escape(shell.output()) == escape("ok"));
-    std::filesystem::remove("test.txt");
+
+    std::filesystem::current_path(prevDir);
+    std::filesystem::remove_all(tempDir);
 }
 
 TEST_CASE("shell.fsharp.fetch.http_error")

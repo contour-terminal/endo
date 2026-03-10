@@ -12,6 +12,7 @@ if(_need_fetch)
     message(STATUS "Fetching crispy/vtparser via get_contour_dirs.py ...")
     execute_process(
         COMMAND "${_Python3}" "${CMAKE_SOURCE_DIR}/scripts/get_contour_dirs.py"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         RESULT_VARIABLE _fetch_result
     )
     if(NOT _fetch_result EQUAL 0)
