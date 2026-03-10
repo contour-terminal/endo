@@ -95,6 +95,14 @@ TypePtr Substitution::apply(TypePtr const& type) const
         }
         return types::unionType(un->name, std::move(newCases));
     }
+    else if (auto* app = type->asTypeApp())
+    {
+        std::vector<TypePtr> newArgs;
+        newArgs.reserve(app->args.size());
+        for (auto const& arg: app->args)
+            newArgs.push_back(apply(arg));
+        return types::typeApp(app->name, std::move(newArgs));
+    }
 
     // Primitives are unchanged
     return type;
@@ -258,6 +266,13 @@ bool occursIn(TypeVarId varId, TypePtr const& type)
                 return true;
         return false;
     }
+    else if (auto* app = type->asTypeApp())
+    {
+        for (auto const& arg: app->args)
+            if (occursIn(varId, arg))
+                return true;
+        return false;
+    }
 
     return false;
 }
@@ -305,6 +320,11 @@ std::vector<TypeVarId> collectTypeVars(TypePtr const& type)
             for (auto const& c: un->cases)
                 if (c.payloadType)
                     collect(*c.payloadType);
+        }
+        else if (auto* app = t->asTypeApp())
+        {
+            for (auto const& arg: app->args)
+                collect(arg);
         }
     };
 
@@ -436,6 +456,41 @@ UnifyResult unify(TypePtr const& t1, TypePtr const& t2)
         return std::unexpected(TypeError::mismatch(t1, t2));
     }
 
+    // Both are type applications
+    if (auto* app1 = t1->asTypeApp())
+    {
+        if (auto* app2 = t2->asTypeApp())
+        {
+            if (app1->name != app2->name)
+                return std::unexpected(TypeError::mismatch(t1, t2));
+
+            if (app1->args.size() != app2->args.size())
+                return std::unexpected(TypeError::arityMismatch(app1->args.size(), app2->args.size()));
+
+            Substitution result;
+            for (size_t i = 0; i < app1->args.size(); ++i)
+            {
+                auto argResult = unify(result.apply(app1->args[i]), result.apply(app2->args[i]));
+                if (!argResult)
+                    return argResult;
+                result = argResult->compose(result);
+            }
+            return result;
+        }
+        // TypeApp vs UnionType/RecordType: nominal match by name
+        if (auto* un2 = t2->asUnion())
+        {
+            if (app1->name == un2->name)
+                return Substitution {};
+        }
+        if (auto* rec2 = t2->asRecord())
+        {
+            if (app1->name == rec2->name)
+                return Substitution {};
+        }
+        return std::unexpected(TypeError::mismatch(t1, t2));
+    }
+
     // Both are records
     if (auto* rec1 = t1->asRecord())
     {
@@ -462,6 +517,12 @@ UnifyResult unify(TypePtr const& t1, TypePtr const& t2)
                 result = fieldResult->compose(result);
             }
             return result;
+        }
+        // RecordType vs TypeApp: nominal match by name
+        if (auto* app2 = t2->asTypeApp())
+        {
+            if (rec1->name == app2->name)
+                return Substitution {};
         }
         return std::unexpected(TypeError::mismatch(t1, t2));
     }
@@ -496,6 +557,12 @@ UnifyResult unify(TypePtr const& t1, TypePtr const& t2)
                 }
             }
             return result;
+        }
+        // UnionType vs TypeApp: nominal match by name
+        if (auto* app2 = t2->asTypeApp())
+        {
+            if (un1->name == app2->name)
+                return Substitution {};
         }
         return std::unexpected(TypeError::mismatch(t1, t2));
     }

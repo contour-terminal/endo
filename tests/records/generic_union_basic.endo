@@ -8,6 +8,7 @@ type Box<'a> =
     | Empty
 
 let b = Wrap 42
+
 match b with
 | Wrap x -> print x
 | Empty -> print 0

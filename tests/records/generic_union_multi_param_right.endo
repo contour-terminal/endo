@@ -8,6 +8,7 @@ type Either<'a, 'b> =
     | Right of 'b
 
 let e = Right 99
+
 match e with
 | Left _ -> print 0
 | Right x -> print x

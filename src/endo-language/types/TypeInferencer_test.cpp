@@ -276,3 +276,10 @@ TEST_CASE("TypeInferencer.generic_union_different_instantiations", "[TypeInferen
         inferTypes("type Box<'a> = | Wrap of 'a | Empty\nlet b1 = Wrap 42\nlet b2 = Wrap \"hello\"");
     REQUIRE_FALSE(result.hasErrors());
 }
+
+TEST_CASE("TypeInferencer.generic_union_recursive", "[TypeInferencer][generic]")
+{
+    auto result =
+        inferTypes("type Tree<'a> = | Leaf of 'a | Node of Tree<'a> * Tree<'a>\nlet t = Node (Leaf 1, Leaf 2)");
+    REQUIRE_FALSE(result.hasErrors());
+}

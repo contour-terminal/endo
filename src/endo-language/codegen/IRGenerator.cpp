@@ -568,6 +568,8 @@ std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr con
         return CoreVM::LiteralType::Object;
     if (type->isRecord() || type->isUnion())
         return CoreVM::LiteralType::Object;
+    if (type->isTypeApp())
+        return CoreVM::LiteralType::Object;
     return std::nullopt;
 }
 
@@ -10377,9 +10379,9 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     for (size_t i = 0; i < node.fields.size(); ++i)
     {
         auto vmType = CoreVM::LiteralType::Number; // default for non-primitive, type vars, or unknown types
-        if (node.fields[i].type->isTypeVar())
+        if (node.fields[i].type->isTypeVar() || node.fields[i].type->isTypeApp())
         {
-            // Type erasure: type variables map to Number (the catch-all erased type)
+            // Type erasure: type variables and type applications map to Number (the catch-all erased type)
             vmType = CoreVM::LiteralType::Number;
         }
         else if (auto const* prim = std::get_if<PrimitiveTypeNode>(&node.fields[i].type->node))
@@ -11069,7 +11071,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
                 // Derive VM type from payload type annotation, with type erasure for type variables
                 auto vmType = CoreVM::LiteralType::Number;
                 if (j < variant.payloadTypes.size() && variant.payloadTypes[j]
-                    && !variant.payloadTypes[j]->isTypeVar())
+                    && !variant.payloadTypes[j]->isTypeVar() && !variant.payloadTypes[j]->isTypeApp())
                 {
                     if (auto const* prim = std::get_if<PrimitiveTypeNode>(&variant.payloadTypes[j]->node))
                     {

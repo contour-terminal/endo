@@ -2250,14 +2250,29 @@ void SourceFormatter::visit(ast::FStringExpr const& node)
 void SourceFormatter::visit(ast::RecordTypeDefStmt const& node)
 {
     emitLeadingComments(node);
-    emit(std::format("type {} = {{ ", node.name));
+    emit(std::format("type {}", node.name));
+    if (!node.typeParams.empty())
+    {
+        emit("<");
+        for (auto const i: std::views::iota(0uz, node.typeParams.size()))
+        {
+            if (i > 0)
+                emit(", ");
+            emit("'" + node.typeParams[i]);
+        }
+        emit(">");
+    }
+    endo::TypeVarNameMap nameMap;
+    for (auto const i: std::views::iota(0uz, node.typeParamIds.size()))
+        nameMap[node.typeParamIds[i]] = node.typeParams[i];
+    emit(" = { ");
     for (auto const i: std::views::iota(0uz, node.fields.size()))
     {
         if (i > 0)
             emit("; ");
         emit(node.fields[i].name);
         emit(": ");
-        emit(endo::toString(node.fields[i].type));
+        emit(endo::toString(node.fields[i].type, nameMap));
     }
     emit(" }");
     emitTrailingComment(node);
@@ -2351,7 +2366,22 @@ void SourceFormatter::visit(ast::OptionalChainExpr const& node)
 void SourceFormatter::visit(ast::UnionTypeDefStmt const& node)
 {
     emitLeadingComments(node);
-    emit(std::format("type {} =", node.name));
+    emit(std::format("type {}", node.name));
+    if (!node.typeParams.empty())
+    {
+        emit("<");
+        for (auto const i: std::views::iota(0uz, node.typeParams.size()))
+        {
+            if (i > 0)
+                emit(", ");
+            emit("'" + node.typeParams[i]);
+        }
+        emit(">");
+    }
+    endo::TypeVarNameMap nameMap;
+    for (auto const i: std::views::iota(0uz, node.typeParamIds.size()))
+        nameMap[node.typeParamIds[i]] = node.typeParams[i];
+    emit(" =");
     indent();
     for (auto const& variant: node.variants)
     {
@@ -2370,7 +2400,7 @@ void SourceFormatter::visit(ast::UnionTypeDefStmt const& node)
                     emit(variant.fieldNames[i]);
                     emit(": ");
                 }
-                emit(endo::toString(variant.payloadTypes[i]));
+                emit(endo::toString(variant.payloadTypes[i], nameMap));
             }
         }
     }

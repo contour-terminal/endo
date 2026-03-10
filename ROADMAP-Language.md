@@ -428,6 +428,7 @@ Consult this section to determine what to work on next.
 - [x] Type variable introduction in annotations (`'a` syntax)
 - [x] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
 - [x] Type erasure at codegen time (all instantiations share single runtime type ID)
+- [x] `TypeApp` nominal type references: recursive generic types preserve type arguments instead of empty placeholders, enabling correct type variable linkage and annotation precision
 
 ### Phase 10 — Planned Language Enhancements ✅
 - [x] Placeholder lambdas: `_ > 10` desugaring to `fun x -> x > 10` (concise pipelines like `filter (_ > 10)`)

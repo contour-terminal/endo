@@ -104,6 +104,18 @@ std::optional<UnionCase const*> UnionType::findCase(std::string const& caseName)
     return std::nullopt;
 }
 
+bool TypeApp::operator==(TypeApp const& other) const
+{
+    if (name != other.name || args.size() != other.args.size())
+        return false;
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        if (*args[i] != *other.args[i])
+            return false;
+    }
+    return true;
+}
+
 bool TypeScheme::operator==(TypeScheme const& other) const
 {
     if (quantifiedVars.size() != other.quantifiedVars.size())
@@ -177,6 +189,14 @@ TypePtr TypeScheme::instantiate(std::function<TypeVarId()> const& freshVarGen) c
                     newCases.push_back({ c.name, std::nullopt });
             }
             return types::unionType(un->name, std::move(newCases));
+        }
+        else if (auto* app = t->asTypeApp())
+        {
+            std::vector<TypePtr> newArgs;
+            newArgs.reserve(app->args.size());
+            for (auto const& arg: app->args)
+                newArgs.push_back(substitute(arg));
+            return types::typeApp(app->name, std::move(newArgs));
         }
         // Primitive types don't contain type variables
         return t;
@@ -296,6 +316,12 @@ namespace types
             Type { UnionType { .name = std::move(name), .cases = std::move(cases) } });
     }
 
+    TypePtr typeApp(std::string name, std::vector<TypePtr> args)
+    {
+        return std::make_shared<Type>(
+            Type { TypeApp { .name = std::move(name), .args = std::move(args) } });
+    }
+
     TypeScheme scheme(std::vector<TypeVarId> quantified, TypePtr type)
     {
         return TypeScheme { .quantifiedVars = std::move(quantified), .type = std::move(type) };
@@ -409,6 +435,23 @@ std::string toString(Type const& type)
         }
         return oss.str();
     }
+    else if (const auto* app = type.asTypeApp())
+    {
+        std::ostringstream oss;
+        oss << app->name << "<";
+        for (size_t i = 0; i < app->args.size(); ++i)
+        {
+            if (i > 0)
+                oss << ", ";
+            oss << toString(*app->args[i]);
+        }
+        auto result = oss.str();
+        if (!result.empty() && result.back() == '>')
+            result += " >";
+        else
+            result += ">";
+        return result;
+    }
     return "?";
 }
 
@@ -503,6 +546,23 @@ std::string toString(Type const& type, TypeVarNameMap const& nameMap)
                 oss << " of " << toString(**c.payloadType, nameMap);
         }
         return oss.str();
+    }
+    else if (const auto* app = type.asTypeApp())
+    {
+        std::ostringstream oss;
+        oss << app->name << "<";
+        for (size_t i = 0; i < app->args.size(); ++i)
+        {
+            if (i > 0)
+                oss << ", ";
+            oss << toString(*app->args[i], nameMap);
+        }
+        auto result = oss.str();
+        if (!result.empty() && result.back() == '>')
+            result += " >";
+        else
+            result += ">";
+        return result;
     }
     return "?";
 }

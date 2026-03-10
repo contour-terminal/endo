@@ -8,6 +8,7 @@ type Box<'a> =
     | Empty
 
 let b = Empty
+
 match b with
 | Wrap _ -> print "wrapped"
 | Empty -> print "empty"

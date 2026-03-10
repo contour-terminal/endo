@@ -119,6 +119,11 @@ void TypeEnv::collectFreeVars(TypePtr const& type, std::vector<TypeVarId>& vars)
                 collectFreeVars(*c.payloadType, vars);
         }
     }
+    else if (auto* app = type->asTypeApp())
+    {
+        for (auto const& arg: app->args)
+            collectFreeVars(arg, vars);
+    }
     // Primitives have no free type variables
 }
 

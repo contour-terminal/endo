@@ -130,6 +130,16 @@ struct UnionType
     [[nodiscard]] std::optional<UnionCase const*> findCase(std::string const& caseName) const;
 };
 
+/// Type application: a named generic type applied to concrete type arguments.
+/// E.g., Tree<int>, Pair<string, bool>. Avoids infinite recursion for recursive generics.
+struct TypeApp
+{
+    std::string name;
+    std::vector<TypePtr> args;
+
+    bool operator==(TypeApp const& other) const;
+};
+
 // Type scheme for let-polymorphism: forall a b c. T
 // Represents a polymorphic type with quantified type variables
 struct TypeScheme
@@ -154,7 +164,8 @@ struct Type
                  OptionType,
                  ResultType,
                  RecordType,
-                 UnionType>
+                 UnionType,
+                 TypeApp>
         node;
 
     bool operator==(Type const& other) const { return node == other.node; }
@@ -178,6 +189,8 @@ struct Type
 
     [[nodiscard]] bool isUnion() const { return std::holds_alternative<UnionType>(node); }
 
+    [[nodiscard]] bool isTypeApp() const { return std::holds_alternative<TypeApp>(node); }
+
     // Accessors (return nullptr if wrong type)
     [[nodiscard]] TypeVar const* asTypeVar() const { return std::get_if<TypeVar>(&node); }
 
@@ -200,6 +213,8 @@ struct Type
 
     [[nodiscard]] UnionType const* asUnion() const { return std::get_if<UnionType>(&node); }
 
+    [[nodiscard]] TypeApp const* asTypeApp() const { return std::get_if<TypeApp>(&node); }
+
     // Mutable accessors
     TypeVar* asTypeVar() { return std::get_if<TypeVar>(&node); }
 
@@ -216,6 +231,8 @@ struct Type
     RecordType* asRecord() { return std::get_if<RecordType>(&node); }
 
     UnionType* asUnion() { return std::get_if<UnionType>(&node); }
+
+    TypeApp* asTypeApp() { return std::get_if<TypeApp>(&node); }
 };
 
 // Factory functions for creating types
@@ -255,6 +272,9 @@ namespace types
 
     // Union type
     TypePtr unionType(std::string name, std::vector<UnionCase> cases);
+
+    // Type application (named generic type with arguments)
+    TypePtr typeApp(std::string name, std::vector<TypePtr> args);
 
     // Type scheme (for polymorphism)
     TypeScheme scheme(std::vector<TypeVarId> quantified, TypePtr type);

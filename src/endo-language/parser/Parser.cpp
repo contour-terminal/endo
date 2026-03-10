@@ -3197,7 +3197,7 @@ TypePtr Parser::parseBaseType()
         return nullptr;
     }
 
-    auto const& typeName = _lexer.currentLiteral();
+    auto const typeName = _lexer.currentLiteral();
 
     // Primitive types
     if (typeName == "int")
@@ -3385,13 +3385,10 @@ TypePtr Parser::parseBaseType()
             return nullptr;
         }
 
-        // Build the type with type variables resolved to the provided type arguments.
-        // For now, we return the union/record type with the original name (type erasure).
-        // The actual instantiated type is handled by the type inferencer.
-        if (def.isUnion)
-            return types::unionType(typeName, {}); // placeholder; type inferencer resolves
-        else
-            return types::record(typeName, {}); // placeholder; type inferencer resolves
+        // Return a nominal type application preserving the type arguments.
+        // This avoids infinite recursion for recursive generics and preserves
+        // type variable relationships for generalize/instantiate.
+        return types::typeApp(typeName, std::move(typeArgs));
     }
 
     // Non-generic user-defined record type (e.g., Person)
