@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <thread>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -22,6 +23,7 @@ using crispy::escape;
 #include <platform/NativeFileSystem.hpp>
 
 #include <endo-language/ide/CompletionContext.hpp>
+#include <http/LocalTcpListener.hpp>
 
 #include "Shell.hpp"
 #include "TTY.hpp"
@@ -3719,21 +3721,59 @@ TEST_CASE("shell.partial_line_indicator.silent_on_failure")
 // Fetch Builtin Tests
 // ============================================================================
 
-TEST_CASE("shell.fsharp.fetch.invalid_url")
+TEST_CASE("shell.fsharp.fetch.unsupported_protocol")
 {
-    // fetch with an invalid URL should return Error result
+    // Unsupported URL scheme — curl rejects synchronously, no network access.
     TestShell shell;
-    shell(R"(match fetch "not-a-valid-url" with | Ok b -> print "ok" | Error e -> print "error")");
+    shell(R"(match fetch "badscheme://test" with | Ok b -> print "ok" | Error e -> print "error")");
     CHECK(escape(shell.output()) == escape("error"));
 }
 
-TEST_CASE("shell.fsharp.fetch.connection_refused")
+#if !defined(_WIN32)
+TEST_CASE("shell.fsharp.fetch.http_success")
 {
-    // fetch to a port with no listener should return Error result
+    // Local server returns 200 — fetch should return Ok(filename).
+    auto listener = endo::http::LocalTcpListener {};
+    auto const port = listener.start();
+    REQUIRE(port.has_value());
+
+    auto serverThread = std::thread([&]() {
+        [[maybe_unused]] auto const _ =
+            listener.serveOnce(std::chrono::seconds(5),
+                               "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
+    });
+
     TestShell shell;
-    shell(R"(match fetch "http://localhost:1" with | Ok b -> print "ok" | Error e -> print "error")");
+    shell(std::format(
+        R"(match fetch "http://127.0.0.1:{}/test.txt" with | Ok b -> print "ok" | Error e -> print "error")",
+        *port));
+    serverThread.join();
+
+    CHECK(escape(shell.output()) == escape("ok"));
+    std::filesystem::remove("test.txt");
+}
+
+TEST_CASE("shell.fsharp.fetch.http_error")
+{
+    // Local server returns 404 — fetch should return Error.
+    auto listener = endo::http::LocalTcpListener {};
+    auto const port = listener.start();
+    REQUIRE(port.has_value());
+
+    auto serverThread = std::thread([&]() {
+        [[maybe_unused]] auto const _ =
+            listener.serveOnce(std::chrono::seconds(5),
+                               "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    });
+
+    TestShell shell;
+    shell(std::format(
+        R"(match fetch "http://127.0.0.1:{}" with | Ok b -> print "ok" | Error e -> print "error")", *port));
+    serverThread.join();
+
     CHECK(escape(shell.output()) == escape("error"));
 }
+#endif
 
 // ============================================================================
 // Invalid command exit code
