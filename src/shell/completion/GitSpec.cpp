@@ -1321,12 +1321,36 @@ std::vector<QueryResult> GitQueryProvider::queryWorktrees()
     auto results = std::vector<QueryResult> {};
     auto path = std::string {};
     auto branch = std::string {};
+    auto isBare = false;
+
+    auto const flushEntry = [&] {
+        if (path.empty())
+            return;
+        // Use the worktree directory name (basename) as the completion text.
+        // Git resolves worktree names via .git/worktrees/<name>/, so the
+        // basename is sufficient for commands like `git worktree remove`.
+        // Skip the bare/main worktree entry — it cannot be removed/locked/etc.
+        if (!isBare)
+        {
+            auto name = std::string {};
+            if (auto const pos = path.rfind('/'); pos != std::string::npos)
+                name = path.substr(pos + 1);
+            else
+                name = path;
+            auto desc = branch.empty() ? "worktree" : "worktree [" + branch + "]";
+            results.push_back(QueryResult { .text = std::move(name), .description = std::move(desc) });
+        }
+        path.clear();
+        branch.clear();
+        isBare = false;
+    };
+
     for (auto const& line: lines)
     {
         if (line.starts_with("worktree "))
         {
+            flushEntry();
             path = line.substr(9);
-            branch.clear();
         }
         else if (line.starts_with("branch "))
         {
@@ -1336,20 +1360,17 @@ std::vector<QueryResult> GitQueryProvider::queryWorktrees()
             else
                 branch = line.substr(7);
         }
-        else if (line.empty() && !path.empty())
+        else if (line == "bare")
         {
-            results.push_back(
-                QueryResult { .text = std::move(path),
-                              .description = branch.empty() ? "worktree" : "worktree [" + branch + "]" });
-            path.clear();
-            branch.clear();
+            isBare = true;
+        }
+        else if (line.empty())
+        {
+            flushEntry();
         }
     }
     // Flush last entry (porcelain output may not end with a blank line).
-    if (!path.empty())
-        results.push_back(
-            QueryResult { .text = std::move(path),
-                          .description = branch.empty() ? "worktree" : "worktree [" + branch + "]" });
+    flushEntry();
     return results;
 }
 

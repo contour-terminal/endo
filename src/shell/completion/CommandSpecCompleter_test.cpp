@@ -88,9 +88,8 @@ class MockQueryProvider: public endo::CommandQueryProvider
         if (queryTag == "tracked-files")
             return { { "src/main.cpp", "tracked file" }, { "CMakeLists.txt", "tracked file" } };
         if (queryTag == "worktrees")
-            return { { "/home/user/project", "worktree [main]" },
-                     { "/tmp/wt-feature", "worktree [feature]" },
-                     { "/tmp/wt-bugfix", "worktree [bugfix]" } };
+            return { { "wt-feature", "worktree [feature]" },
+                     { "wt-bugfix", "worktree [bugfix]" } };
         return {};
     }
 };
@@ -792,9 +791,8 @@ TEST_CASE("CommandSpecCompleter.worktree_remove_completion")
     auto results = completer.complete(ctx);
 
     CHECK_FALSE(results.empty());
-    CHECK(hasCompletion(results, "/home/user/project"));
-    CHECK(hasCompletion(results, "/tmp/wt-feature"));
-    CHECK(hasCompletion(results, "/tmp/wt-bugfix"));
+    CHECK(hasCompletion(results, "wt-feature"));
+    CHECK(hasCompletion(results, "wt-bugfix"));
 }
 
 TEST_CASE("CommandSpecCompleter.worktree_remove_options")
@@ -814,8 +812,8 @@ TEST_CASE("CommandSpecCompleter.worktree_lock_completion")
     auto results = completer.complete(ctx);
 
     CHECK_FALSE(results.empty());
-    CHECK(hasCompletion(results, "/home/user/project"));
-    CHECK(hasCompletion(results, "/tmp/wt-feature"));
+    CHECK(hasCompletion(results, "wt-feature"));
+    CHECK(hasCompletion(results, "wt-bugfix"));
 }
 
 TEST_CASE("CommandSpecCompleter.worktree_unlock_completion")
@@ -825,7 +823,7 @@ TEST_CASE("CommandSpecCompleter.worktree_unlock_completion")
     auto results = completer.complete(ctx);
 
     CHECK_FALSE(results.empty());
-    CHECK(hasCompletion(results, "/tmp/wt-bugfix"));
+    CHECK(hasCompletion(results, "wt-bugfix"));
 }
 
 TEST_CASE("CommandSpecCompleter.worktree_move_completion")
@@ -834,10 +832,9 @@ TEST_CASE("CommandSpecCompleter.worktree_move_completion")
     auto ctx = makeGitContext("git worktree move ");
     auto results = completer.complete(ctx);
 
-    // First positional arg: worktree path
+    // First positional arg: worktree name
     CHECK_FALSE(results.empty());
-    CHECK(hasCompletion(results, "/home/user/project"));
-    CHECK(hasCompletion(results, "/tmp/wt-feature"));
+    CHECK(hasCompletion(results, "wt-feature"));
 }
 
 TEST_CASE("CommandSpecCompleter.worktree_list_options")
