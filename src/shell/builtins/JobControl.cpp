@@ -5,7 +5,6 @@
 #include <endo-language/LogCategories.hpp>
 
 #include <format>
-#include <print>
 
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
@@ -50,7 +49,7 @@ void Shell::builtinJobs(CoreVM::Params& context)
             case JobState::Terminated: stateStr = std::format("Terminated ({})", job->signal); break;
         }
 
-        std::println("[{}]{} {}\t{}", job->id, marker, stateStr, job->command);
+        _tty.writeToStdout(std::format("[{}]{} {}\t{}\n", job->id, marker, stateStr, job->command));
     }
 
     _exitCode = 0;
@@ -87,7 +86,7 @@ void Shell::builtinFg(CoreVM::Params& context)
     }
 
     // Print the command being resumed
-    std::println("{}", job->command);
+    _tty.writeToStdout(std::format("{}\n", job->command));
 
     // Give the job's process group control of the terminal
     auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), job->pgid);
@@ -171,7 +170,7 @@ void Shell::builtinFg(CoreVM::Params& context)
     }
 
     // Print the command being resumed
-    std::println("{}", job->command);
+    _tty.writeToStdout(std::format("{}\n", job->command));
 
     // If the job was stopped (suspended threads), resume it
     if (job->state == JobState::Stopped)
@@ -238,7 +237,7 @@ void Shell::builtinBg(CoreVM::Params& context)
     }
 
     // Print the command being resumed
-    std::println("[{}]+ {} &", job->id, job->command);
+    _tty.writeToStdout(std::format("[{}]+ {} &\n", job->id, job->command));
 
     // Send SIGCONT to the process group
     auto const sigResult = _processManager.sendSignal(-static_cast<int>(job->pgid), SIGCONT);
@@ -289,7 +288,7 @@ void Shell::builtinBg(CoreVM::Params& context)
     }
 
     // Print the command being resumed
-    std::println("[{}]+ {} &", job->id, job->command);
+    _tty.writeToStdout(std::format("[{}]+ {} &\n", job->id, job->command));
 
     // Resume suspended process threads
     for (ProcessId const pid: job->pids)
@@ -486,7 +485,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     int const jobId = jobTable.addJob(pid, std::move(pids), command);
 
     // Print job info
-    std::println("[{}] {}", jobId, pid);
+    _tty.writeToStdout(std::format("[{}] {}\n", jobId, pid));
 
     if (!_cmdBuilderStack.empty())
         _cmdBuilderStack.pop_back();
@@ -523,7 +522,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
             std::vector<ProcessId> pids;
             pids.push_back(*_lastBackgroundPid);
             int const jobId = jobTable.addJob(*_lastBackgroundPid, std::move(pids), command);
-            std::println("[{}] {}", jobId, *_lastBackgroundPid);
+            _tty.writeToStdout(std::format("[{}] {}\n", jobId, *_lastBackgroundPid));
 
             if (!_cmdBuilderStack.empty())
                 _cmdBuilderStack.pop_back();
@@ -575,7 +574,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     int const jobId = jobTable.addJob(pid, std::move(pids), command);
 
     // Print job info
-    std::println("[{}] {}", jobId, pid);
+    _tty.writeToStdout(std::format("[{}] {}\n", jobId, pid));
 
     if (!_cmdBuilderStack.empty())
         _cmdBuilderStack.pop_back();

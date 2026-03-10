@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/DirectoryConfig.hpp>
 #include <shell/Shell.hpp>
+#include <shell/TTY.hpp>
 
 #include <filesystem>
 #include <format>
-#include <print>
 #include <string>
 
 #include <platform/Types.hpp>
@@ -79,8 +79,8 @@ int Shell::executeInlineDirConfig(CoreVM::CoreStringArray const& args, NativeHan
         return 0;
     }
 
-    std::println(
-        std::cerr, "dirconfig: unknown subcommand '{}' (use: allow, deny, list, revoke, reload)", subcmd);
+    _tty.writeToStderr(
+        std::format("dirconfig: unknown subcommand '{}' (use: allow, deny, list, revoke, reload)\n", subcmd));
     return 1;
 }
 

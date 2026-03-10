@@ -32,23 +32,31 @@ namespace
     }
 } // namespace
 
-void OutputDefinitionRegistry::loadFromDirectory(std::filesystem::path const& dir)
+void OutputDefinitionRegistry::loadFromDirectory(std::filesystem::path const& dir, FileSystem const& fs)
 {
-    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir))
+    if (!fs.exists(dir) || !fs.isDirectory(dir))
         return;
 
-    for (auto const& entry: std::filesystem::directory_iterator(dir))
+    auto const entries = fs.listDirectory(dir);
+    if (!entries)
+        return;
+
+    for (auto const& entry: *entries)
     {
-        if (entry.is_regular_file() && entry.path().string().ends_with(".endo-output.yml"))
-            loadFromFile(entry.path());
+        if (entry.isRegularFile && entry.path.string().ends_with(".endo-output.yml"))
+            loadFromFile(entry.path, fs);
     }
 }
 
-bool OutputDefinitionRegistry::loadFromFile(std::filesystem::path const& path)
+bool OutputDefinitionRegistry::loadFromFile(std::filesystem::path const& path, FileSystem const& fs)
 {
     try
     {
-        auto const root = YAML::LoadFile(path.string());
+        auto const content = fs.readFile(path);
+        if (!content)
+            return false;
+
+        auto const root = YAML::Load(*content);
         if (!root["command"])
             return false;
 

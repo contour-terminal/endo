@@ -151,6 +151,20 @@ void WindowsTTY::writeToStdout(std::string_view str) const
     WriteFile(_hStdout, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
 }
 
+void WindowsTTY::writeToStderr(std::string_view str) const
+{
+    auto const hStderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD written = 0;
+    WriteFile(hStderr, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
+}
+
+bool WindowsTTY::isStderrTerminal() const noexcept
+{
+    auto const hStderr = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD mode = 0;
+    return GetConsoleMode(hStderr, &mode) != 0;
+}
+
 void WindowsTTY::writeToStdin(std::string_view str) const
 {
     // Inject characters as INPUT_RECORDs into the console input buffer

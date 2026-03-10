@@ -25,6 +25,7 @@
 #include <agent/AgentConfig.hpp>
 #include <agent/context/ProjectContextLoader.hpp>
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/FileSystem.hpp>
 #include <platform/Wakeup.hpp>
 
 namespace endo::agent
@@ -76,9 +77,13 @@ class Shell final: public SignalCallback
     ~Shell() override;
 
     Shell(TTY& tty, EnvironmentProvider& env);
+    Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs);
 
     [[nodiscard]] EnvironmentProvider& environment() noexcept;
     [[nodiscard]] EnvironmentProvider const& environment() const noexcept;
+
+    [[nodiscard]] FileSystem& fs() noexcept { return _fs; }
+    [[nodiscard]] FileSystem const& fs() const noexcept { return _fs; }
 
     void setOptimize(bool optimize);
 
@@ -162,8 +167,13 @@ class Shell final: public SignalCallback
 
     Prompt prompt;
     std::vector<ProcessGroup> processGroups;
-    JobTable jobTable;                    ///< Table of background jobs
-    PersistentHistory history;            ///< Command history for completion (persisted to disk)
+    JobTable jobTable; ///< Table of background jobs
+
+  private:
+    FileSystem& _fs; ///< Filesystem interface (declared before history for init order)
+
+  public:
+    PersistentHistory history { _fs };   ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
 
     /// Agent configuration loaded from agent.yml (API keys) and overridden by init.endo builtins.
@@ -399,7 +409,9 @@ class Shell final: public SignalCallback
     template <typename... Args>
     void error(std::format_string<Args...> const& message, Args&&... args)
     {
-        std::println(std::cerr, "{}", std::format(message, std::forward<Args>(args)...));
+        auto text = std::format(message, std::forward<Args>(args)...);
+        text += '\n';
+        _tty.writeToStderr(text);
     }
 
     // --- Agent mode ---

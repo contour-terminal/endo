@@ -1,30 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/DirectoryConfig.hpp>
 #include <shell/Shell.hpp>
+#include <shell/TTY.hpp>
 
 #include <algorithm>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <functional>
-#include <iostream>
-#include <print>
 #include <ranges>
 #include <set>
 #include <string>
 
 #include <nlohmann/json.hpp>
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/FileSystem.hpp>
 
 namespace endo
 {
 
 namespace fs = std::filesystem;
 
-DiagnosticSink stderrDiagnosticSink()
+DiagnosticSink stderrDiagnosticSink(TTY const& tty)
 {
-    return [](std::string const& message) {
-        std::println(std::cerr, "{}", message);
+    return [&tty](std::string const& message) {
+        tty.writeToStderr(std::format("{}\n", message));
     };
 }
 
@@ -32,8 +31,10 @@ DiagnosticSink stderrDiagnosticSink()
 // DirectoryConfigTrustStore
 // ============================================================================
 
-DirectoryConfigTrustStore::DirectoryConfigTrustStore(EnvironmentProvider& env, DiagnosticSink diag):
-    _env(env), _diag(std::move(diag))
+DirectoryConfigTrustStore::DirectoryConfigTrustStore(FileSystem const& fs,
+                                                     EnvironmentProvider& env,
+                                                     DiagnosticSink diag):
+    _fs(fs), _env(env), _diag(std::move(diag))
 {
 }
 
@@ -48,13 +49,19 @@ fs::path DirectoryConfigTrustStore::trustFilePath() const
 void DirectoryConfigTrustStore::load()
 {
     auto const path = trustFilePath();
-    if (path.empty() || !fs::exists(path))
+    if (path.empty() || !_fs.exists(path))
         return;
+
+    auto const content = _fs.readFile(path);
+    if (!content)
+    {
+        _diag(std::format("endo: warning: failed to load {}: {}", path.string(), content.error()));
+        return;
+    }
 
     try
     {
-        auto ifs = std::ifstream(path);
-        auto const json = nlohmann::json::parse(ifs);
+        auto const json = nlohmann::json::parse(*content);
         for (auto const& [key, value]: json.items())
         {
             _entries[key] = TrustEntry {
@@ -75,32 +82,31 @@ void DirectoryConfigTrustStore::save() const
     if (path.empty())
         return;
 
-    try
+    if (auto const dirResult = _fs.createDirectories(path.parent_path()); !dirResult)
     {
-        fs::create_directories(path.parent_path());
-
-        auto json = nlohmann::json::object();
-        for (auto const& [key, entry]: _entries)
-        {
-            json[key] = nlohmann::json {
-                { "hash", entry.contentHash },
-                { "allowed", entry.allowed },
-            };
-        }
-
-        auto ofs = std::ofstream(path);
-        ofs << json.dump(2) << '\n';
+        _diag(std::format(
+            "endo: warning: failed to create directory {}: {}", path.parent_path().string(), dirResult.error()));
+        return;
     }
-    catch (std::exception const& e)
+
+    auto json = nlohmann::json::object();
+    for (auto const& [key, entry]: _entries)
     {
-        _diag(std::format("endo: warning: failed to save {}: {}", path.string(), e.what()));
+        json[key] = nlohmann::json {
+            { "hash", entry.contentHash },
+            { "allowed", entry.allowed },
+        };
     }
+
+    auto const fileContent = json.dump(2) + '\n';
+    if (auto const writeResult = _fs.writeFile(path, fileContent); !writeResult)
+        _diag(std::format("endo: warning: failed to save {}: {}", path.string(), writeResult.error()));
 }
 
 std::optional<bool> DirectoryConfigTrustStore::checkTrust(fs::path const& configPath,
                                                           std::string const& contentHash) const
 {
-    auto const canonical = fs::weakly_canonical(configPath).string();
+    auto const canonical = _fs.weaklyCanonical(configPath).string();
     auto const it = _entries.find(canonical);
     if (it == _entries.end())
         return std::nullopt;
@@ -116,7 +122,7 @@ void DirectoryConfigTrustStore::setTrust(fs::path const& configPath,
                                          std::string const& contentHash,
                                          bool allowed)
 {
-    auto const canonical = fs::weakly_canonical(configPath).string();
+    auto const canonical = _fs.weaklyCanonical(configPath).string();
     _entries[canonical] = TrustEntry {
         .contentHash = contentHash,
         .allowed = allowed,
@@ -126,7 +132,7 @@ void DirectoryConfigTrustStore::setTrust(fs::path const& configPath,
 
 void DirectoryConfigTrustStore::revokeTrust(fs::path const& configPath)
 {
-    auto const canonical = fs::weakly_canonical(configPath).string();
+    auto const canonical = _fs.weaklyCanonical(configPath).string();
     _entries.erase(canonical);
     save();
 }
@@ -135,8 +141,11 @@ void DirectoryConfigTrustStore::revokeTrust(fs::path const& configPath)
 // DirectoryConfigManager
 // ============================================================================
 
-DirectoryConfigManager::DirectoryConfigManager(Shell& shell, EnvironmentProvider& env, DiagnosticSink diag):
-    _shell(shell), _env(env), _trustStore(env, diag), _diag(std::move(diag))
+DirectoryConfigManager::DirectoryConfigManager(Shell& shell,
+                                               FileSystem const& fs,
+                                               EnvironmentProvider& env,
+                                               DiagnosticSink diag):
+    _shell(shell), _fs(fs), _env(env), _trustStore(fs, env, diag), _diag(std::move(diag))
 {
     _trustStore.load();
 }
@@ -154,9 +163,9 @@ std::string DirectoryConfigManager::computeHash(std::string const& content)
     return std::format("{:016x}", hash);
 }
 
-fs::path DirectoryConfigManager::resolveConfigPath(fs::path const& path)
+fs::path DirectoryConfigManager::resolveConfigPath(fs::path const& path) const
 {
-    if (fs::is_directory(path))
+    if (_fs.isDirectory(path))
         return path / ".local-env.endo";
     return path;
 }
@@ -175,7 +184,7 @@ std::vector<fs::path> DirectoryConfigManager::findConfigFiles(std::string const&
     while (true)
     {
         auto const candidate = dir / ".local-env.endo";
-        if (fs::exists(candidate))
+        if (_fs.exists(candidate))
             configs.push_back(candidate);
 
         // Stop at HOME — don't walk further up
@@ -196,22 +205,13 @@ std::vector<fs::path> DirectoryConfigManager::findConfigFiles(std::string const&
 void DirectoryConfigManager::loadConfig(fs::path const& configFile)
 {
     // Read file content
-    std::string content;
-    try
+    auto const contentResult = _fs.readFile(configFile);
+    if (!contentResult)
     {
-        auto ifs = std::ifstream(configFile);
-        if (!ifs)
-        {
-            diag(std::format("endo: warning: cannot read {}", configFile.string()));
-            return;
-        }
-        content = std::string(std::istreambuf_iterator<char>(ifs), {});
-    }
-    catch (std::exception const& e)
-    {
-        diag(std::format("endo: warning: error reading {}: {}", configFile.string(), e.what()));
+        diag(std::format("endo: warning: cannot read {}: {}", configFile.string(), contentResult.error()));
         return;
     }
+    auto const& content = *contentResult;
 
     auto const hash = computeHash(content);
 
@@ -333,7 +333,8 @@ void DirectoryConfigManager::onDirectoryChanged(std::string const& newCwd)
     auto const commonLen = [&] {
         auto const maxLen = std::min(oldConfigs.size(), newConfigs.size());
         size_t i = 0;
-        while (i < maxLen && fs::weakly_canonical(oldConfigs[i]) == fs::weakly_canonical(newConfigs[i]))
+        while (i < maxLen
+               && _fs.weaklyCanonical(oldConfigs[i]) == _fs.weaklyCanonical(newConfigs[i]))
             ++i;
         return i;
     }();
@@ -351,25 +352,20 @@ void DirectoryConfigManager::onDirectoryChanged(std::string const& newCwd)
 void DirectoryConfigManager::allowConfig(fs::path const& configPath)
 {
     auto const resolved = resolveConfigPath(configPath);
-    if (!fs::exists(resolved))
+    if (!_fs.exists(resolved))
     {
         diag(std::format("endo: config file not found: {}", resolved.string()));
         return;
     }
 
-    std::string content;
-    try
+    auto const contentResult = _fs.readFile(resolved);
+    if (!contentResult)
     {
-        auto ifs = std::ifstream(resolved);
-        content = std::string(std::istreambuf_iterator<char>(ifs), {});
-    }
-    catch (std::exception const& e)
-    {
-        diag(std::format("endo: error reading {}: {}", resolved.string(), e.what()));
+        diag(std::format("endo: error reading {}: {}", resolved.string(), contentResult.error()));
         return;
     }
 
-    auto const hash = computeHash(content);
+    auto const hash = computeHash(*contentResult);
     _trustStore.setTrust(resolved, hash, true);
     diag(std::format("endo: trusted {}", resolved.string()));
 
@@ -380,33 +376,28 @@ void DirectoryConfigManager::allowConfig(fs::path const& configPath)
 void DirectoryConfigManager::denyConfig(fs::path const& configPath)
 {
     auto const resolved = resolveConfigPath(configPath);
-    if (!fs::exists(resolved))
+    if (!_fs.exists(resolved))
     {
         diag(std::format("endo: config file not found: {}", resolved.string()));
         return;
     }
 
-    std::string content;
-    try
+    auto const contentResult = _fs.readFile(resolved);
+    if (!contentResult)
     {
-        auto ifs = std::ifstream(resolved);
-        content = std::string(std::istreambuf_iterator<char>(ifs), {});
-    }
-    catch (std::exception const& e)
-    {
-        diag(std::format("endo: error reading {}: {}", resolved.string(), e.what()));
+        diag(std::format("endo: error reading {}: {}", resolved.string(), contentResult.error()));
         return;
     }
 
-    auto const hash = computeHash(content);
+    auto const hash = computeHash(*contentResult);
     _trustStore.setTrust(resolved, hash, false);
     diag(std::format("endo: denied {}", resolved.string()));
 
     // Unload if currently active
-    auto const canonical = fs::weakly_canonical(resolved);
+    auto const canonical = _fs.weaklyCanonical(resolved);
     for (auto it = _activeScopes.begin(); it != _activeScopes.end(); ++it)
     {
-        if (fs::weakly_canonical(it->configFilePath) == canonical)
+        if (_fs.weaklyCanonical(it->configFilePath) == canonical)
         {
             unloadConfig(*it);
             _activeScopes.erase(it);
@@ -422,10 +413,10 @@ void DirectoryConfigManager::revokeConfig(fs::path const& configPath)
     diag(std::format("endo: revoked trust for {}", resolved.string()));
 
     // Unload if currently active
-    auto const canonical = fs::weakly_canonical(resolved);
+    auto const canonical = _fs.weaklyCanonical(resolved);
     for (auto it = _activeScopes.begin(); it != _activeScopes.end(); ++it)
     {
-        if (fs::weakly_canonical(it->configFilePath) == canonical)
+        if (_fs.weaklyCanonical(it->configFilePath) == canonical)
         {
             unloadConfig(*it);
             _activeScopes.erase(it);

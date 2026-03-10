@@ -13,6 +13,7 @@
 #include <functional>
 #include <ranges>
 
+#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace std::string_view_literals;
@@ -27,6 +28,12 @@ endo::DiagnosticSink silentDiag()
 {
     return [](std::string const&) {
     };
+}
+
+/// Returns the NativeFileSystem singleton for test use.
+endo::FileSystem& testFs()
+{
+    return endo::NativeFileSystem::instance();
 }
 
 struct TestShell
@@ -102,14 +109,14 @@ TEST_CASE("dirconfig.trust_store.round_trip")
 
     // Create, set trust, save
     {
-        auto store = endo::DirectoryConfigTrustStore(env, silentDiag());
+        auto store = endo::DirectoryConfigTrustStore(testFs(), env, silentDiag());
         store.setTrust("/projects/foo/.local-env.endo", "abc123", true);
         store.setTrust("/projects/bar/.local-env.endo", "def456", false);
     }
 
     // Reload and verify
     {
-        auto store = endo::DirectoryConfigTrustStore(env, silentDiag());
+        auto store = endo::DirectoryConfigTrustStore(testFs(), env, silentDiag());
         store.load();
 
         auto const& entries = store.entries();
@@ -136,7 +143,7 @@ TEST_CASE("dirconfig.trust_store.hash_change_invalidates")
     endo::TestEnvironment env;
     env.set("HOME", tmpDir.string());
 
-    auto store = endo::DirectoryConfigTrustStore(env, silentDiag());
+    auto store = endo::DirectoryConfigTrustStore(testFs(), env, silentDiag());
     store.setTrust("/projects/foo/.local-env.endo", "original_hash", true);
 
     // Same hash -> trusted
@@ -160,7 +167,7 @@ TEST_CASE("dirconfig.trust_store.revoke")
     endo::TestEnvironment env;
     env.set("HOME", tmpDir.string());
 
-    auto store = endo::DirectoryConfigTrustStore(env, silentDiag());
+    auto store = endo::DirectoryConfigTrustStore(testFs(), env, silentDiag());
     store.setTrust("/projects/foo/.local-env.endo", "hash1", true);
     CHECK(store.checkTrust("/projects/foo/.local-env.endo", "hash1").has_value());
 
@@ -182,7 +189,7 @@ TEST_CASE("dirconfig.discovery.untrusted_config_not_loaded")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     // Config exists but is not trusted — should not be loaded
     mgr.onDirectoryChanged(tmpDir.dir.string());
     CHECK(mgr.activeScopes().empty());
@@ -200,7 +207,7 @@ TEST_CASE("dirconfig.discovery.no_config_file")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     mgr.onDirectoryChanged(tmpDir.string());
     CHECK(mgr.activeScopes().empty());
     CHECK(mgr.diagnostics().empty());
@@ -220,7 +227,7 @@ TEST_CASE("dirconfig.load.trusted_config_introduces_function")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     mgr.allowConfig(tmpDir.dir);
 
     // Verify function was loaded
@@ -241,7 +248,7 @@ TEST_CASE("dirconfig.unload.removes_function_on_cd_away")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
 
     // Trust and load
     mgr.allowConfig(tmpDir.dir);
@@ -264,7 +271,7 @@ TEST_CASE("dirconfig.load.trusted_config_introduces_binding")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     mgr.allowConfig(tmpDir.dir);
 
     // Verify binding was loaded
@@ -287,7 +294,7 @@ TEST_CASE("dirconfig.unload.removes_binding_on_cd_away")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     mgr.allowConfig(tmpDir.dir);
 
     auto const& bindings = ts.shell.fsharpState().valueBindings;
@@ -312,7 +319,7 @@ TEST_CASE("dirconfig.sibling_transition.swaps_configs")
     TestShell ts;
     ts.env.set("HOME", fs::temp_directory_path().string());
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
 
     // Start in project A
     setCwd(ts.env, projectA.dir);
@@ -364,7 +371,7 @@ TEST_CASE("dirconfig.diagnostics.untrusted_message_captured")
     ts.env.set("HOME", fs::temp_directory_path().string());
     setCwd(ts.env, tmpDir.dir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, testFs(), ts.env, silentDiag());
     mgr.onDirectoryChanged(tmpDir.dir.string());
 
     // Should have captured diagnostic about untrusted config

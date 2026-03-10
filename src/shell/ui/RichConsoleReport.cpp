@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "RichConsoleReport.hpp"
+#include <shell/TTY.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 
 #include <endo-language/parser/DiagnosticsAdapter.hpp>
@@ -271,6 +272,12 @@ RichConsoleReport::RichConsoleReport()
     _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
 }
 
+RichConsoleReport::RichConsoleReport(TTY const& tty): _tty(&tty)
+{
+    auto const* noColor = std::getenv("NO_COLOR");
+    _useColor = tty.isStderrTerminal() && (noColor == nullptr || noColor[0] == '\0');
+}
+
 void RichConsoleReport::setSourceText(std::string_view source)
 {
     _sourceText = source;
@@ -293,7 +300,11 @@ void RichConsoleReport::push_back(CoreVM::diagnostics::Message message)
             message.contextSnippet = line;
     }
 
-    std::cerr << formatDiagnostic(message, _useColor) << '\n';
+    auto formatted = formatDiagnostic(message, _useColor) + '\n';
+    if (_tty)
+        _tty->writeToStderr(formatted);
+    else
+        std::cerr << formatted;
 }
 
 bool RichConsoleReport::containsFailures() const noexcept

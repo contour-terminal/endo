@@ -152,6 +152,18 @@ void RealTTY::writeToStdout(std::string_view str) const
         throw std::runtime_error("write: " + std::string(strerror(errno)));
 }
 
+void RealTTY::writeToStderr(std::string_view str) const
+{
+    ssize_t const result = ::write(STDERR_FILENO, str.data(), str.size());
+    if (result == -1)
+        throw std::runtime_error("write: " + std::string(strerror(errno)));
+}
+
+bool RealTTY::isStderrTerminal() const noexcept
+{
+    return isatty(STDERR_FILENO) == 1;
+}
+
 void RealTTY::writeToStdin(std::string_view str) const
 {
     ssize_t const result = ::write(STDIN_FILENO, str.data(), str.size());
@@ -250,6 +262,19 @@ void TestPTY::writeToStdout(std::string_view str) const
     ssize_t const result = ::write(_ptySlave, str.data(), str.size());
     if (result == -1)
         throw std::runtime_error("write: " + std::string(strerror(errno)));
+}
+
+void TestPTY::writeToStderr(std::string_view str) const
+{
+    // In test mode, stderr output goes to the PTY to be captured alongside stdout.
+    ssize_t const result = ::write(_ptySlave, str.data(), str.size());
+    if (result == -1)
+        throw std::runtime_error("write: " + std::string(strerror(errno)));
+}
+
+bool TestPTY::isStderrTerminal() const noexcept
+{
+    return isatty(_ptySlave) != 0;
 }
 
 void TestPTY::writeToStdin(std::string_view str) const

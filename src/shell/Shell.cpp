@@ -90,6 +90,7 @@
 #include <agent/ui/ToolStatusComponent.hpp>
 #include <nlohmann/json.hpp>
 #include <platform/InstallPaths.hpp>
+#include <platform/NativeFileSystem.hpp>
 #include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
@@ -548,7 +549,12 @@ Shell::Shell(): Shell(RealTTY::instance(), PosixEnvironmentProvider::instance())
 }
 #endif
 
-Shell::Shell(TTY& tty, EnvironmentProvider& env):
+Shell::Shell(TTY& tty, EnvironmentProvider& env): Shell(tty, env, NativeFileSystem::instance())
+{
+}
+
+Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
+    _fs { fs },
     _env { env },
     _tty { tty },
     _processManager {
@@ -604,24 +610,24 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
 
     // 1. Installed location (relative to executable)
     if (auto const dir = endo::platform::resolveDataDir("definitions"); !dir.empty())
-        _outputDefinitions.loadFromDirectory(dir);
+        _outputDefinitions.loadFromDirectory(dir, _fs);
 
     // 2. Development fallback (source tree)
 #if defined(ENDO_DEFINITIONS_DIR)
-    _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR);
+    _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR, _fs);
 #endif
 
     // 3. User overrides
 #if defined(_WIN32)
     if (auto const* appData = std::getenv("LOCALAPPDATA"))
-        _outputDefinitions.loadFromDirectory(std::filesystem::path(appData) / "endo" / "definitions");
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(appData) / "endo" / "definitions", _fs);
     else if (auto const* userProfile = std::getenv("USERPROFILE"))
-        _outputDefinitions.loadFromDirectory(std::filesystem::path(userProfile) / ".config" / "endo"
-                                             / "definitions");
+        _outputDefinitions.loadFromDirectory(
+            std::filesystem::path(userProfile) / ".config" / "endo" / "definitions", _fs);
 #else
     if (auto const* home = std::getenv("HOME"))
-        _outputDefinitions.loadFromDirectory(std::filesystem::path(home) / ".config" / "endo"
-                                             / "definitions");
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(home) / ".config" / "endo" / "definitions",
+                                             _fs);
 #endif
 
     // Register output definition types and structured commands in persistent state
@@ -709,7 +715,8 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
 
-    _dirConfigManager = std::make_unique<DirectoryConfigManager>(*this, _env);
+    _dirConfigManager =
+        std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
 
     // Register dark/light mode auto-switching via terminal color scheme detection
     prompt.terminal().onColorSchemeChanged([](tui::ColorScheme scheme) {
@@ -851,27 +858,18 @@ void Shell::loadInitScript()
     if (auto const configDir = platform::configHome())
     {
         auto const initPath = *configDir / "endo" / "init.endo";
-        if (std::filesystem::exists(initPath))
+        if (_fs.exists(initPath))
         {
-            try
+            if (auto content = _fs.readFile(initPath))
             {
-                auto ifs = std::ifstream(initPath);
-                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
-                // init.endo is a configuration script, not interactive user input —
-                // suppress auto-display and unused-value detection.
-                auto const savedInteractive = _interactive;
-                auto const savedUnusedDetection = _unusedValueDetection;
-                _interactive = false;
-                _unusedValueDetection = false;
-                auto const initResult = execute(content, initPath.string());
-                _interactive = savedInteractive;
-                _unusedValueDetection = savedUnusedDetection;
-                if (initResult != 0)
-                    std::println(std::cerr, "endo: warning: init.endo exited with code {}", initResult);
+                if (auto const initResult = executeConfigScript(*content, initPath.string()); initResult != 0)
+                    _tty.writeToStderr(
+                        std::format("endo: warning: init.endo exited with code {}\n", initResult));
             }
-            catch (std::exception const& e)
+            else
             {
-                std::println(std::cerr, "endo: warning: error loading {}: {}", initPath.string(), e.what());
+                _tty.writeToStderr(
+                    std::format("endo: warning: error loading {}: {}\n", initPath.string(), content.error()));
             }
         }
     }
@@ -890,7 +888,7 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
     }
     catch (std::exception const& e)
     {
-        std::println(std::cerr, "endo: warning: error executing {}: {}", sourceName, e.what());
+        _tty.writeToStderr(std::format("endo: warning: error executing {}: {}\n", sourceName, e.what()));
         result = 1;
     }
     _interactive = savedInteractive;
@@ -909,15 +907,19 @@ void Shell::loadCompleters()
     std::set<std::string> seenBasenames;
 
     auto const loadDir = [&](std::filesystem::path const& dir) {
-        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir))
+        if (!_fs.exists(dir) || !_fs.isDirectory(dir))
             return;
 
         // Collect .endo files and sort alphabetically for deterministic load order
+        auto const entries = _fs.listDirectory(dir);
+        if (!entries)
+            return;
+
         std::vector<std::filesystem::path> files;
-        for (auto const& entry: std::filesystem::directory_iterator(dir))
+        for (auto const& entry: *entries)
         {
-            if (entry.is_regular_file() && entry.path().extension() == ".endo")
-                files.push_back(entry.path());
+            if (entry.isRegularFile && entry.path.extension() == ".endo")
+                files.push_back(entry.path);
         }
         std::ranges::sort(files);
 
@@ -928,22 +930,14 @@ void Shell::loadCompleters()
                 continue;
             seenBasenames.insert(basename);
 
-            try
+            if (auto content = _fs.readFile(path))
             {
-                auto ifs = std::ifstream(path);
-                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
-                auto const savedInteractive = _interactive;
-                auto const savedUnusedDetection = _unusedValueDetection;
-                _interactive = false;
-                _unusedValueDetection = false;
-                (void) execute(content, path.string());
-                _interactive = savedInteractive;
-                _unusedValueDetection = savedUnusedDetection;
+                (void) executeConfigScript(*content, path.string());
             }
-            catch (std::exception const& e)
+            else
             {
-                std::println(
-                    std::cerr, "endo: warning: error loading completer {}: {}", path.string(), e.what());
+                _tty.writeToStderr(std::format(
+                    "endo: warning: error loading completer {}: {}\n", path.string(), content.error()));
             }
         }
     };
@@ -1074,7 +1068,7 @@ int Shell::run()
 {
     if (_interactive && !_tty.isTerminal())
     {
-        std::cerr << "endo: interactive mode requires a terminal.\n";
+        _tty.writeToStderr("endo: interactive mode requires a terminal.\n");
         return EXIT_FAILURE;
     }
 
@@ -1143,7 +1137,7 @@ int Shell::run()
         // Populate prompt context for module evaluation
         {
             auto ctx = PromptContext {};
-            ctx.cwd = std::filesystem::current_path().string();
+            ctx.cwd = _fs.currentPath().string();
             emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
@@ -1279,7 +1273,7 @@ int Shell::run()
         // Populate prompt context for module evaluation
         {
             auto ctx = PromptContext {};
-            ctx.cwd = std::filesystem::current_path().string();
+            ctx.cwd = _fs.currentPath().string();
             emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
@@ -1375,7 +1369,7 @@ int Shell::run()
 
 int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)
 {
-    RichConsoleReport report;
+    RichConsoleReport report(_tty);
     report.setSourceText(lineBuffer);
     return execute(lineBuffer, report, sourceName);
 }
@@ -1641,7 +1635,7 @@ void Shell::reportJobStatus()
             default: continue; // Only report completed jobs
         }
 
-        std::println("[{}]{} {}\t{}", job->id, marker, stateStr, job->command);
+        _tty.writeToStdout(std::format("[{}]{} {}\t{}\n", job->id, marker, stateStr, job->command));
         job->notified = true;
     }
 

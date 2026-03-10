@@ -9,6 +9,8 @@
 namespace endo
 {
 
+class TTY;
+
 /// Controls whether ANSI color output is used.
 enum class ColorMode // NOLINT(performance-enum-size)
 {
@@ -33,10 +35,17 @@ enum class ColorMode // NOLINT(performance-enum-size)
 /// - Hint lines with suggestions
 ///
 /// Color output is automatically detected via isatty(STDERR_FILENO) and the NO_COLOR env var.
+/// When a TTY reference is provided, output goes through `_tty.writeToStderr()` instead of
+/// writing directly to `std::cerr`.
 class RichConsoleReport: public CoreVM::diagnostics::Report
 {
   public:
     RichConsoleReport();
+
+    /// Constructs a report that writes diagnostics through the given TTY.
+    ///
+    /// @param tty The TTY to use for stderr output and terminal detection.
+    explicit RichConsoleReport(TTY const& tty);
 
     /// Sets the source text for context snippet extraction.
     ///
@@ -51,6 +60,7 @@ class RichConsoleReport: public CoreVM::diagnostics::Report
   private:
     size_t _errorCount = 0;
     bool _useColor = false;
+    TTY const* _tty = nullptr;
     std::string_view _sourceText;
 };
 

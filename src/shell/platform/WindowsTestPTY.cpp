@@ -171,6 +171,23 @@ void WindowsTestPTY::writeToStdout(std::string_view str) const
     }
 }
 
+void WindowsTestPTY::writeToStderr(std::string_view str) const
+{
+    // In test mode, stderr output goes to the same output pipe as stdout.
+    DWORD bytesWritten = 0;
+    if (!WriteFile(_writeOutputHandle, str.data(), static_cast<DWORD>(str.size()), &bytesWritten, nullptr))
+    {
+        throw std::runtime_error(
+            std::format("WriteFile (stderr) failed: {}", static_cast<int>(GetLastError())));
+    }
+}
+
+bool WindowsTestPTY::isStderrTerminal() const noexcept
+{
+    // Pipes are not terminals.
+    return false;
+}
+
 void WindowsTestPTY::writeToStdin(std::string_view str) const
 {
     DWORD bytesWritten = 0;

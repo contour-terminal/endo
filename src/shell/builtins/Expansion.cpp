@@ -41,7 +41,7 @@ void Shell::builtinExpandTildeUser(CoreVM::Params& context)
     {
         auto const usersDir = std::filesystem::path(*userProfile).parent_path();
         auto const targetHome = usersDir / user;
-        if (std::filesystem::exists(targetHome))
+        if (_fs.exists(targetHome))
         {
             context.setResult(platform::normalizePath(targetHome) + suffix);
             return;

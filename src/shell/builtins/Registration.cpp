@@ -27,8 +27,6 @@
 #endif
 
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <ranges>
 #include <sstream>
 
@@ -719,20 +717,8 @@ void Shell::registerStructuredBuiltins()
 
             // Read file contents
             std::string contents;
-            try
-            {
-                auto const path = std::filesystem::path(filePath);
-                if (std::filesystem::exists(path))
-                {
-                    auto ifs = std::ifstream(path);
-                    contents.assign(std::istreambuf_iterator<char>(ifs),
-                                    std::istreambuf_iterator<char>());
-                }
-            }
-            catch (...) // NOLINT(bugprone-empty-catch)
-            {
-                // Intentionally ignored: file read failure leaves contents empty.
-            }
+            if (auto const result = _fs.readFile(filePath); result.has_value())
+                contents = *result;
 
             // Build variant from schema descriptor
             auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Json);
@@ -760,20 +746,8 @@ void Shell::registerStructuredBuiltins()
 
             // Read file contents
             std::string contents;
-            try
-            {
-                auto const path = std::filesystem::path(filePath);
-                if (std::filesystem::exists(path))
-                {
-                    auto ifs = std::ifstream(path);
-                    contents.assign(std::istreambuf_iterator<char>(ifs),
-                                    std::istreambuf_iterator<char>());
-                }
-            }
-            catch (...) // NOLINT(bugprone-empty-catch)
-            {
-                // Intentionally ignored: file read failure leaves contents empty.
-            }
+            if (auto const result = _fs.readFile(filePath); result.has_value())
+                contents = *result;
 
             auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Fields);
 

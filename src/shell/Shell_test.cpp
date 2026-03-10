@@ -19,6 +19,8 @@ using crispy::escape;
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/TableFormatter.hpp>
 
+#include <platform/NativeFileSystem.hpp>
+
 #include <endo-language/ide/CompletionContext.hpp>
 
 #include "Shell.hpp"
@@ -3752,7 +3754,7 @@ TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
     auto dir = std::filesystem::current_path() / "tmp" / "shell_history_test";
     std::filesystem::create_directories(dir);
 
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { endo::NativeFileSystem::instance() };
     history.setFilePath(dir / "history.yml");
 
     // Simulate the shell flow: add command, then mark with exit code
