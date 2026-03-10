@@ -5075,9 +5075,19 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
     if (!typeParams.empty())
         _genericTypeDefinitions[typeName] = GenericTypeDef { .typeParams = typeParams };
 
+    // RAII guard: on any early return, clean up _typeParamScope and _genericTypeDefinitions
+    auto typeDefCommitted = false;
+    auto const typeDefCleanup = [&](void*) {
+        if (!typeDefCommitted)
+        {
+            _typeParamScope.clear();
+            _genericTypeDefinitions.erase(typeName);
+        }
+    };
+    auto const cleanupGuard = std::unique_ptr<void, decltype(typeDefCleanup)>(this, typeDefCleanup);
+
     if (_lexer.currentToken() != Token::Equal)
     {
-        _typeParamScope.clear();
         _report.syntaxErrorWithSuggestions(currentLocation(),
                                            { "Add '=' after type name" },
                                            currentContextSnippet(),
@@ -5220,6 +5230,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
         _lexer.leaveFSharpExpr();
         if (!typeParams.empty())
             _genericTypeDefinitions[typeName].isUnion = true;
+        typeDefCommitted = true;
         _typeParamScope.clear();
         return std::make_unique<ast::UnionTypeDefStmt>(
             std::move(typeName), std::move(variants), std::move(typeParams), std::move(typeParamIds));
@@ -5304,6 +5315,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
         fieldNames.push_back(f.name);
     _knownRecordTypes[typeName] = std::move(fieldNames);
 
+    typeDefCommitted = true;
     _typeParamScope.clear();
     return std::make_unique<ast::RecordTypeDefStmt>(
         std::move(typeName), std::move(fields), std::move(typeParams), std::move(typeParamIds));

@@ -49,7 +49,6 @@ This document tracks the implementation status of F# language features as define
 - [x] Results: `result<T, E>` with `Ok` and `Error`
 - [x] Records: `type Person = { name: str; age: int }`
 - [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
-- [ ] Generic types
 - [ ] Ref cells: `ref<T>` (mutable reference cell)
 - [x] Generic types
 

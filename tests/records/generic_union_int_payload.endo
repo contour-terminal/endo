@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: Generic union instantiated with a different integer value
+# description: Generic union with integer payload
 # expect: 99
 
 type Box<'a> =
