@@ -59,6 +59,8 @@ std::optional<int> Shell::tryExecuteInlineBuiltin(std::string_view program,
         return executeInlineGrep(args, outputFd, inputFd);
     if (program == "timeout")
         return executeInlineTimeout(args, outputFd);
+    if (program == "dirconfig")
+        return executeInlineDirConfig(args, outputFd);
     return std::nullopt;
 }
 

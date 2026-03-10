@@ -45,6 +45,7 @@ void Shell::builtinChDir(CoreVM::Params& context)
         _env.set("PWD", _env.currentDirectory());
         _exitCode = 0;
         emitCurrentWorkingDirectory();
+        onDirectoryChanged();
     }
 
     context.setResult(result.has_value());
@@ -66,6 +67,7 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
         _env.set("PWD", _env.currentDirectory());
         _exitCode = 0;
         emitCurrentWorkingDirectory();
+        onDirectoryChanged();
     }
 
     context.setResult(result.has_value());

@@ -35,6 +35,7 @@ class ProviderFactory;
 struct AgentRunOptions;
 } // namespace endo::agent
 
+#include <shell/DirectoryConfig.hpp>
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/CompleterFunctionRegistry.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
@@ -115,6 +116,18 @@ class Shell final: public SignalCallback
     /// Call after construction for non-interactive modes that need shell config.
     void loadInitScript();
 
+    /// @brief Executes a config script with interactive/unused-value flags suppressed.
+    /// @param content The script source code.
+    /// @param sourceName Source name for diagnostics.
+    /// @return Exit code from execution.
+    int executeConfigScript(std::string const& content, std::string_view sourceName);
+
+    /// @brief Returns a mutable reference to the F# persistent state.
+    [[nodiscard]] FSharpPersistentState& fsharpState() noexcept { return _fsharpState; }
+
+    /// @brief Called when the working directory changes, to load/unload directory configs.
+    void onDirectoryChanged();
+
     /// @brief Runs the agent in headless/batch mode (no TUI).
     /// @param options Parsed command-line options for the headless run.
     /// @return Exit code (0 = success, non-zero = failure).
@@ -182,6 +195,7 @@ class Shell final: public SignalCallback
     void registerAgentConfigBuiltins();
     void registerMcpBuiltins();
     void registerCompleterBuiltins();
+    void registerDirectoryConfigBuiltins(); // builtins/DirectoryConfigBuiltins.cpp
 
     /// @brief Loads .endo completer scripts from user and system directories.
     void loadCompleters();
@@ -344,6 +358,9 @@ class Shell final: public SignalCallback
     void builtinBind(CoreVM::Params& context);
     void builtinWhich(CoreVM::Params& context);
 
+    // --- Directory config builtins (builtins/DirectoryConfigBuiltins.cpp) ---
+    [[nodiscard]] int executeInlineDirConfig(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+
     // --- Shared helpers ---
 
     /// @brief Renders markdown help text to a file descriptor.
@@ -415,6 +432,7 @@ class Shell final: public SignalCallback
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
     CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry
+    std::unique_ptr<DirectoryConfigManager> _dirConfigManager; ///< Per-directory config manager
 
     ProcessManager& _processManager;
 

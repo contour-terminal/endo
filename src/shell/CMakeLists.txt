@@ -123,6 +123,10 @@ add_library(endo-shell STATIC
     util/Suggestions.hpp
     util/Suggestions.cpp
 
+    # Directory Configuration
+    DirectoryConfig.hpp
+    DirectoryConfig.cpp
+
     # Builtins
     builtins/InlineCommands.cpp
     builtins/Registration.cpp
@@ -137,6 +141,7 @@ add_library(endo-shell STATIC
     builtins/ReadCommand.cpp
     builtins/UserCommands.cpp
     builtins/Output.cpp
+    builtins/DirectoryConfigBuiltins.cpp
 
     # Format
     FormatCommand.hpp
@@ -224,6 +229,7 @@ enable_static_linking(endo-bin)
 add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
+    DirectoryConfig_test.cpp
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp
     commands/TimeoutCommand_test.cpp
