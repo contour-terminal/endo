@@ -7,6 +7,7 @@
 #include <map>
 
 #include <agent/providers/local/ModelRegistry.hpp>
+#include <platform/UserPaths.hpp>
 
 namespace endo::agent::local
 {
@@ -222,6 +223,8 @@ auto modelStorageDir() -> std::filesystem::path
 #elif defined(_WIN32)
     if (auto const* localAppData = std::getenv("LOCALAPPDATA"))
         return std::filesystem::path(localAppData) / "endo" / "models";
+    if (auto const home = platform::homeDirectory())
+        return *home / ".local" / "share" / "endo" / "models";
     return std::filesystem::path("C:/endo/models");
 #else
     // Linux / other Unix: XDG_DATA_HOME or ~/.local/share

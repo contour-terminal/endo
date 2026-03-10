@@ -6,6 +6,7 @@
 #include <cmath>
 #include <filesystem>
 
+#include <platform/PathUtils.hpp>
 #include <platform/Types.hpp>
 
 #if !defined(_WIN32)
@@ -18,7 +19,9 @@ namespace endo
 void Shell::builtinExpandTilde(CoreVM::Params& context)
 {
     auto const& suffix = context.getString(1);
-    std::string home = std::string(_env.get("HOME").value_or(""));
+    auto const home = _env.homeDirectory()
+                          .transform([](auto const& p) { return platform::normalizePath(p); })
+                          .value_or(std::string {});
     context.setResult(home + suffix);
 }
 
@@ -40,7 +43,7 @@ void Shell::builtinExpandTildeUser(CoreVM::Params& context)
         auto const targetHome = usersDir / user;
         if (std::filesystem::exists(targetHome))
         {
-            context.setResult(targetHome.string() + suffix);
+            context.setResult(platform::normalizePath(targetHome) + suffix);
             return;
         }
     }

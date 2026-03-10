@@ -1297,10 +1297,10 @@ Component (base class)
   - [x] CPM-built dependencies when static: yaml-cpp, libunicode, CURL with mbedTLS backend
   - [x] Guard `-rdynamic` when static (incompatible with `-static`)
   - [x] CI workflow for static build artifact (`static-build.yml`)
-- [ ] Add Windows CMake preset
-- [ ] Configure MSVC and Clang-cl support
-- [ ] Set up Windows CI pipeline
-- [ ] Handle Windows-specific dependencies
+- [x] Add Windows CMake preset (4 presets: cl-debug, cl-release, clangcl-debug, clangcl-release)
+- [x] Configure MSVC and Clang-cl support (`PedanticCompiler.cmake` handles both)
+- [x] Set up Windows CI pipeline (`build.yml` has `windows-clangcl` job)
+- [x] Handle Windows-specific dependencies (`vcpkg.json` with 5 packages)
 - [x] Fix CoreVM `jump_to` macro for switch-based VM dispatch loop (Windows/MSVC): `break` inside `do { ... } while(0)` wrapper exits the do-while instead of the switch, causing fall-through to the next case handler and VM stack corruption
 - [x] Fix `isInPath()` PATH separator for Windows: use `;` instead of `:`, probe `.exe`/`.cmd`/`.bat` extensions, skip POSIX `owner_exec` permission check
 
@@ -1308,33 +1308,33 @@ Component (base class)
 
 **Dependency:** Phase 4.1, Milestone 0.2 (abstraction interface ✅)
 
-**Current State:** Platform abstraction interfaces complete with stub implementations
-(`WindowsPipe.cpp`, `WindowsTTY.cpp`, `WindowsProcess.cpp`). Stubs return `NotImplemented` errors.
+**Current State:** Platform abstraction interfaces complete with full implementations
+(`WindowsPipe.cpp`, `WindowsTTY.cpp`, `WindowsProcess.cpp`, `TerminalInputWin32.cpp`).
 
 **Design Decision:** Endo prefers forward slashes (`/`) as path separators on all platforms, including Windows.
 Windows APIs accept forward slashes, and this consistency simplifies auto-completion, path manipulation,
 and user muscle memory. Backslashes remain valid in user input but are normalized internally.
 
 **Tasks:**
-- [ ] Implement CreateProcess-based execution (replace `WindowsProcess.cpp` stubs)
-- [ ] Implement Windows pipe handling (replace `WindowsPipe.cpp` stubs)
-- [ ] Implement ConPTY integration for terminal (replace `WindowsTTY.cpp` stubs)
-- [ ] Implement Windows console input handling
-- [ ] Handle Windows path separators (prefer forward slashes `/` over backslashes `\`)
+- [x] Implement CreateProcess-based execution (`WindowsProcess.cpp`, 403 lines, full implementation)
+- [x] Implement Windows pipe handling (`WindowsPipe.cpp`, 120 lines, full implementation)
+- [x] Implement ConPTY integration for terminal (`WindowsTTY.cpp` + `TerminalInputWin32.cpp`, full console API)
+- [x] Implement Windows console input handling (`TerminalInputWin32.cpp` with VT input, poll, raw mode)
+- [x] Handle Windows path separators (`PathUtils.hpp` — `normalizePath()` at output boundaries)
 - [ ] Handle drive letters in paths (e.g., `C:/Users/...`)
-- [ ] Implement PATHEXT handling for executables
-- [ ] Add Windows-specific tests
+- [x] Implement PATHEXT handling for executables (`CommandResolver.cpp` with `.exe`, `.cmd`, `.bat`, `.com`, `.ps1`)
+- [x] Add Windows-specific tests (`WindowsPlatform_test.cpp`)
 
 ### Phase 4.3: Windows-Specific Features
 
 **Dependency:** Phase 4.2
 
 **Tasks:**
-- [ ] Implement PowerShell interoperability
+- [x] Implement PowerShell interoperability (`.ps1` in default PATHEXT, `shellExecCb` via `cmd.exe /c`)
 - [ ] Implement CMD compatibility mode (optional)
-- [ ] Handle Windows environment variables (case-insensitive)
-- [ ] Support UNC paths
-- [ ] Add Windows feature tests
+- [x] Handle Windows environment variables (case-insensitive) (`WindowsEnvironmentProvider` uses `CaseInsensitiveLess`)
+- [x] Support UNC paths (`normalizePath()` converts `\\server\share` → `//server/share`)
+- [x] Add Windows feature tests (`WindowsPlatform_test.cpp` with normalizePath, homeDirectory, configHome tests)
 
 ---
 
