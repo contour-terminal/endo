@@ -95,6 +95,8 @@ add_library(endo-shell STATIC
     completion/CompleterFunctionRegistry.hpp
     completion/ScriptedCompleter.hpp
     completion/ScriptedCompleter.cpp
+    completion/DirconfigSpec.hpp
+    completion/DirconfigSpec.cpp
     completion/GitSpec.hpp
     completion/GitSpec.cpp
 

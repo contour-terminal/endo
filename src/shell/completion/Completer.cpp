@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
+#include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
@@ -23,6 +24,7 @@ Completer::Completer(EnvironmentProvider const& env,
     // Git command spec completer (cmake/ssh/scp/ctest moved to scripted completers)
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
+    specCompleter->registerCommand(createDirconfigSpec(), nullptr);
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
