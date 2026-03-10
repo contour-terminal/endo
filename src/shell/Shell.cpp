@@ -877,6 +877,11 @@ void Shell::loadInitScript()
 
 int Shell::executeConfigScript(std::string const& content, std::string_view sourceName)
 {
+    // Save state that execute() overwrites — needed for re-entrant safety
+    // when called from a running VM (e.g., dirconfig allow triggers config loading)
+    auto savedProgram = std::move(_currentProgram);
+    auto* const savedRunner = _runner;
+
     auto const savedInteractive = _interactive;
     auto const savedUnusedDetection = _unusedValueDetection;
     _interactive = false;
@@ -893,6 +898,11 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
     }
     _interactive = savedInteractive;
     _unusedValueDetection = savedUnusedDetection;
+
+    // Restore outer program and runner so the calling VM can resume safely
+    _currentProgram = std::move(savedProgram);
+    _runner = savedRunner;
+
     return result;
 }
 
