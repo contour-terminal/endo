@@ -19,8 +19,9 @@ namespace endo
 void Shell::builtinExpandTilde(CoreVM::Params& context)
 {
     auto const& suffix = context.getString(1);
-    auto const home =
-        _env.homeDirectory().transform([](auto const& p) { return p.string(); }).value_or(std::string {});
+    auto const home = _env.homeDirectory()
+                          .transform([](auto const& p) { return platform::normalizePath(p); })
+                          .value_or(std::string {});
     context.setResult(home + suffix);
 }
 

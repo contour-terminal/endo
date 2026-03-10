@@ -217,7 +217,7 @@ auto resolveTraceLogDirectory() -> std::filesystem::path
         return *home / ".local" / "state" / "endo" / "trace-logs";
 
 #if defined(_WIN32)
-    if (auto const* temp = std::getenv("TEMP"))
+    if (auto const* temp = std::getenv("TEMP"); temp && *temp != '\0')
         return std::filesystem::path(temp) / "endo" / "trace-logs";
 #endif
     return std::filesystem::path("/tmp") / "endo" / "trace-logs";

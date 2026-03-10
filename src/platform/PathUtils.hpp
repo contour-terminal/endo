@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -32,7 +31,7 @@ namespace endo::platform
 /// @return The normalized path string
 [[nodiscard]] inline auto normalizePath(std::filesystem::path const& p) -> std::string
 {
-    return normalizePath(p.string());
+    return p.generic_string();
 }
 
 } // namespace endo::platform

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 
 #include <agent/tools/SaveMemoryTool.hpp>
@@ -52,26 +53,28 @@ class TempHome
     }
 
   private:
-    /// @brief Save the current value of an environment variable (empty string if unset).
-    static auto saveEnv(char const* name) -> std::string
+    /// @brief Save the current value of an environment variable (nullopt if unset).
+    static auto saveEnv(char const* name) -> std::optional<std::string>
     {
         auto const* val = std::getenv(name);
-        return val ? std::string(val) : std::string {};
+        if (val)
+            return std::string(val);
+        return std::nullopt;
     }
 
     /// @brief Restore an environment variable to its previous value, or unset it if it was unset.
-    static void restoreEnv(char const* name, std::string const& prev)
+    static void restoreEnv(char const* name, std::optional<std::string> const& prev)
     {
-        if (!prev.empty())
-            endo::testing::setTestEnv(name, prev.c_str());
+        if (prev.has_value())
+            endo::testing::setTestEnv(name, prev->c_str());
         else
             endo::testing::unsetTestEnv(name);
     }
 
     std::filesystem::path _path;
-    std::string _previousHome;
-    std::string _previousXdg;
-    std::string _previousAppdata;
+    std::optional<std::string> _previousHome;
+    std::optional<std::string> _previousXdg;
+    std::optional<std::string> _previousAppdata;
 };
 
 } // namespace
