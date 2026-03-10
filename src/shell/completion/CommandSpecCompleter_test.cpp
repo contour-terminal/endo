@@ -87,6 +87,9 @@ class MockQueryProvider: public endo::CommandQueryProvider
             return { { "abc1234", "Fix the bug" }, { "def5678", "Add feature" } };
         if (queryTag == "tracked-files")
             return { { "src/main.cpp", "tracked file" }, { "CMakeLists.txt", "tracked file" } };
+        if (queryTag == "worktrees")
+            return { { "wt-feature", "worktree [feature]" },
+                     { "wt-bugfix", "worktree [bugfix]" } };
         return {};
     }
 };
@@ -779,4 +782,79 @@ TEST_CASE("CommandSpecCompleter.worktree_add_branch_completion")
     CHECK_FALSE(results.empty());
     CHECK(hasCompletion(results, "main"));
     CHECK(hasCompletion(results, "develop"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_remove_completion")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree remove ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "wt-feature"));
+    CHECK(hasCompletion(results, "wt-bugfix"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_remove_options")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree remove -");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "--force"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_lock_completion")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree lock ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "wt-feature"));
+    CHECK(hasCompletion(results, "wt-bugfix"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_unlock_completion")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree unlock ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "wt-bugfix"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_move_completion")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree move ");
+    auto results = completer.complete(ctx);
+
+    // First positional arg: worktree name
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "wt-feature"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_list_options")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree list -");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "--porcelain"));
+    CHECK(hasCompletion(results, "--verbose"));
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_prune_options")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree prune -");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "--dry-run"));
+    CHECK(hasCompletion(results, "--verbose"));
 }

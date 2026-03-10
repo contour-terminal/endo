@@ -4,6 +4,8 @@
 add_library(endo-http STATIC
     HttpClient.hpp
     HttpClient.cpp
+    LocalTcpListener.hpp
+    LocalTcpListener.cpp
 )
 
 target_link_libraries(endo-http PUBLIC CURL::libcurl)

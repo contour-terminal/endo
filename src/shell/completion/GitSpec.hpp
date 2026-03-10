@@ -21,7 +21,7 @@ namespace endo
 ///
 /// Resolves queryTags: "branches", "local-branches", "remote-branches",
 /// "tags", "remotes", "stashes", "recent-commits", "aliases",
-/// "status-files", "tracked-files", "config-keys".
+/// "status-files", "tracked-files", "config-keys", "worktrees".
 class GitQueryProvider: public CommandQueryProvider
 {
   public:
@@ -37,6 +37,7 @@ class GitQueryProvider: public CommandQueryProvider
     [[nodiscard]] static std::vector<QueryResult> queryStatusFiles();
     [[nodiscard]] static std::vector<QueryResult> queryTrackedFiles();
     [[nodiscard]] static std::vector<QueryResult> queryConfigKeys();
+    [[nodiscard]] static std::vector<QueryResult> queryWorktrees();
 
     /// @brief Runs a command and returns stdout lines.
     [[nodiscard]] static std::vector<std::string> runCommand(std::string const& cmd);

@@ -25,6 +25,7 @@
 
 #include "CrashHandler.hpp"
 #include "FormatCommand.hpp"
+#include "HelpPrinter.hpp"
 #include "Shell.hpp"
 #include <agent/RunCommand.hpp>
 #include <agent/auth/LoginCommand.hpp>
@@ -37,79 +38,6 @@ namespace
 {
 
 constexpr std::string_view Version = "0.1.0";
-
-void printHelp(std::string_view programName)
-{
-    std::print(R"(endo - A modern shell written in C++23
-
-Usage: {0} [OPTIONS] [SCRIPT [ARGS...]]
-       {0} -c <COMMAND> [ARGS...]
-
-Options:
-  -h, --help         Show this help message and exit
-  -v, --version      Show version information and exit
-  -c <COMMAND>       Execute COMMAND and exit
-  --check            Compile without executing (syntax and semantic check)
-  --unused-detection Enable unused-value detection for F# bindings
-  --lsp              Launch Language Server Protocol server over stdio
-  --dap              Launch Debug Adapter Protocol server over stdio
-  --log-file=FILE    Log protocol messages to FILE (e.g. DAP I/O)
-  --log=<PATTERNS>   Enable logging for categories matching PATTERNS
-                     (comma-separated, supports wildcards)
-  --log-list         List all available log categories and exit
-
-Format:
-  format [OPTIONS] FILE...   Format Endo source files (see: endo format --help)
-
-Agent Commands:
-  agent login [PROVIDER]    Authenticate with an LLM provider (claude, openai, gemini)
-                            For Claude, offers OAuth (MAX/Pro/Teams) or API key login
-  agent status              Show configured providers and active selection
-  agent switch [PROVIDER]   Switch the active LLM provider
-  agent logout [PROVIDER]   Remove stored credentials for a provider (OAuth and API key)
-  agent models <subcmd>     Manage local GGUF models (list, download, remove, info)
-  agent trace replay <FILE> Replay a tool trace JSONL file
-
-Agent Options:
-  --agent-trace[=FILE]     Enable tool I/O tracing (auto-generated path if FILE omitted)
-
-Log Categories:
-  shell.debug        Shell execution debug output
-  vm.trace           VM instruction execution trace
-  vm.ir              VM IR (SSA) and bytecode dump
-  parser             Parser debug output
-  pipe               Unix pipe operations
-  vm.diag            VM diagnostics
-  vm.pass            VM optimization passes
-
-Script Execution:
-  When executing a script file, arguments after the script become positional
-  parameters ($1, $2, ...). The script path is available as $0.
-
-  When using -c, arguments after the command become positional parameters.
-  The program name is available as $0.
-
-  Scripts may start with a shebang line (#!/usr/bin/env endo) which is ignored.
-
-Examples:
-  {0}                              Start interactive shell
-  {0} script.sh                    Execute script file
-  {0} script.sh arg1 arg2          Execute script with arguments ($1=arg1, $2=arg2)
-  {0} -c 'echo hello'              Execute command string
-  {0} -c 'echo $1' foo             Execute command with argument ($1=foo)
-  {0} --log=shell.debug            Enable shell debug logging
-  {0} --log='shell.*,parser'       Enable multiple log categories
-  {0} agent login claude           Authenticate with Claude
-  {0} agent status                 Show provider status
-
-)",
-               programName);
-}
-
-void printVersion()
-{
-    std::print("endo version {}\n", Version);
-}
 
 void printLogCategories()
 {
@@ -357,13 +285,13 @@ int main(int argc, char const* argv[])
 
     if (parsed.showHelp)
     {
-        printHelp(programName);
+        endo::printHelp();
         return EXIT_SUCCESS;
     }
 
     if (parsed.showVersion)
     {
-        printVersion();
+        endo::printVersion();
         return EXIT_SUCCESS;
     }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <http/LocalTcpListener.hpp>
+
 #include <chrono>
 #include <expected>
 #include <string>
@@ -24,16 +26,16 @@ class OAuthCallbackServer
 {
   public:
     OAuthCallbackServer() = default;
-    ~OAuthCallbackServer();
+    ~OAuthCallbackServer() = default;
 
     OAuthCallbackServer(OAuthCallbackServer const&) = delete;
     OAuthCallbackServer& operator=(OAuthCallbackServer const&) = delete;
-    OAuthCallbackServer(OAuthCallbackServer&&) noexcept;
-    OAuthCallbackServer& operator=(OAuthCallbackServer&&) noexcept;
+    OAuthCallbackServer(OAuthCallbackServer&&) noexcept = default;
+    OAuthCallbackServer& operator=(OAuthCallbackServer&&) noexcept = default;
 
     /// Starts listening on 127.0.0.1 with an OS-assigned port.
     /// @return The port number on success, or an error message.
-    [[nodiscard]] auto start() -> std::expected<uint16_t, std::string>;
+    [[nodiscard]] auto start() -> std::expected<uint16_t, std::string> { return _listener.start(); }
 
     /// Blocks until the browser redirect arrives or the timeout expires.
     /// Extracts the `code` and `state` query parameters from the request URL,
@@ -44,10 +46,10 @@ class OAuthCallbackServer
         -> std::expected<OAuthCallback, std::string>;
 
     /// Closes the listening socket if still open.
-    void close();
+    void close() { _listener.close(); }
 
   private:
-    int _listenFd = -1;
+    http::LocalTcpListener _listener;
 };
 
 } // namespace endo::agent

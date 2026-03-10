@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <thread>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -22,6 +23,7 @@ using crispy::escape;
 #include <platform/NativeFileSystem.hpp>
 
 #include <endo-language/ide/CompletionContext.hpp>
+#include <http/LocalTcpListener.hpp>
 
 #include "Shell.hpp"
 #include "TTY.hpp"
@@ -156,6 +158,22 @@ TEST_CASE("shell.cd.relative_then_minus")
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/tmp");
     CHECK(shell.env.get("OLDPWD").value_or("") == "/tmp/subdir");
+}
+
+TEST_CASE("shell.cd.minus_returns_to_initial_cwd")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell.env.addValidPath("/home/testuser");
+
+    // First cd from initial directory
+    shell("cd /tmp");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/home/testuser");
+
+    // cd - should return to initial cwd, not ~/
+    shell("cd -");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
 }
 
 TEST_CASE("shell.cd.minus_no_oldpwd")
@@ -3719,21 +3737,67 @@ TEST_CASE("shell.partial_line_indicator.silent_on_failure")
 // Fetch Builtin Tests
 // ============================================================================
 
-TEST_CASE("shell.fsharp.fetch.invalid_url")
+TEST_CASE("shell.fsharp.fetch.unsupported_protocol")
 {
-    // fetch with an invalid URL should return Error result
+    // Unsupported URL scheme — curl rejects synchronously, no network access.
     TestShell shell;
-    shell(R"(match fetch "not-a-valid-url" with | Ok b -> print "ok" | Error e -> print "error")");
+    shell(R"(match fetch "badscheme://test" with | Ok b -> print "ok" | Error e -> print "error")");
     CHECK(escape(shell.output()) == escape("error"));
 }
 
-TEST_CASE("shell.fsharp.fetch.connection_refused")
+#if !defined(_WIN32)
+TEST_CASE("shell.fsharp.fetch.http_success")
 {
-    // fetch to a port with no listener should return Error result
+    // Local server returns 200 — fetch should return Ok(filename).
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_fetch_test";
+    std::filesystem::create_directories(tempDir);
+
+    auto listener = endo::http::LocalTcpListener {};
+    auto const port = listener.start();
+    REQUIRE(port.has_value());
+
+    auto serverThread = std::thread([&]() {
+        [[maybe_unused]] auto const _ =
+            listener.serveOnce(std::chrono::seconds(5),
+                               "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
+    });
+
+    auto const prevDir = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
     TestShell shell;
-    shell(R"(match fetch "http://localhost:1" with | Ok b -> print "ok" | Error e -> print "error")");
+    shell(std::format(
+        R"(match fetch "http://127.0.0.1:{}/test.txt" with | Ok b -> print "ok" | Error e -> print "error")",
+        *port));
+    serverThread.join();
+
+    CHECK(escape(shell.output()) == escape("ok"));
+
+    std::filesystem::current_path(prevDir);
+    std::filesystem::remove_all(tempDir);
+}
+
+TEST_CASE("shell.fsharp.fetch.http_error")
+{
+    // Local server returns 404 — fetch should return Error.
+    auto listener = endo::http::LocalTcpListener {};
+    auto const port = listener.start();
+    REQUIRE(port.has_value());
+
+    auto serverThread = std::thread([&]() {
+        [[maybe_unused]] auto const _ =
+            listener.serveOnce(std::chrono::seconds(5),
+                               "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    });
+
+    TestShell shell;
+    shell(std::format(
+        R"(match fetch "http://127.0.0.1:{}" with | Ok b -> print "ok" | Error e -> print "error")", *port));
+    serverThread.join();
+
     CHECK(escape(shell.output()) == escape("error"));
 }
+#endif
 
 // ============================================================================
 // Invalid command exit code

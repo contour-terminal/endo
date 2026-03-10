@@ -861,10 +861,19 @@ namespace
             .subcommands = {
                 { .name = "add", .description = "Create new worktree",
                   .options = {
-                    { .longName = "--detach", .description = "Detach HEAD" },
-                    { .longName = "--checkout", .description = "Checkout after creation" },
-                    { .longName = "--force", .shortName = "-f", .description = "Force operation" },
+                    { .longName = "--force", .shortName = "-f", .description = "Force checkout even if already checked out" },
+                    { .longName = "--detach", .shortName = "-d", .description = "Detach HEAD at named commit" },
+                    { .longName = "--checkout", .description = "Populate the new working tree" },
+                    { .longName = "--lock", .description = "Keep the new working tree locked" },
+                    { .longName = "--reason", .description = "Reason for locking",
+                      .valueKind = OptionValueKind::String },
+                    { .longName = "--orphan", .description = "Create unborn branch" },
+                    { .longName = "--track", .description = "Set up tracking mode" },
+                    { .longName = "--guess-remote", .description = "Try to match branch with remote" },
+                    { .longName = "--quiet", .shortName = "-q", .description = "Suppress progress reporting" },
                     { .longName = "", .shortName = "-b", .description = "Create new branch",
+                      .valueKind = OptionValueKind::String },
+                    { .longName = "", .shortName = "-B", .description = "Create or reset branch",
                       .valueKind = OptionValueKind::String },
                   },
                   .positionalArgs = {
@@ -872,13 +881,59 @@ namespace
                     { .kind = ArgKind::DynamicQuery, .description = "Branch", .queryTag = "branches" },
                   },
                 },
-                { .name = "list", .description = "List worktrees" },
-                { .name = "remove", .description = "Remove worktree" },
-                { .name = "prune", .description = "Prune stale worktree info" },
-                { .name = "lock", .description = "Lock worktree" },
-                { .name = "unlock", .description = "Unlock worktree" },
-                { .name = "move", .description = "Move worktree" },
-                { .name = "repair", .description = "Repair worktree links" },
+                { .name = "list", .description = "List worktrees",
+                  .options = {
+                    { .longName = "--porcelain", .description = "Machine-readable output" },
+                    { .longName = "--verbose", .shortName = "-v", .description = "Show extended annotations" },
+                    { .longName = "--expire", .description = "Mark worktrees older than time as prunable",
+                      .valueKind = OptionValueKind::String },
+                    { .longName = "", .shortName = "-z", .description = "Terminate records with NUL" },
+                  },
+                },
+                { .name = "remove", .description = "Remove worktree",
+                  .options = {
+                    { .longName = "--force", .shortName = "-f", .description = "Force removal even if dirty or locked" },
+                  },
+                  .positionalArgs = {
+                    { .kind = ArgKind::DynamicQuery, .description = "Worktree", .queryTag = "worktrees" },
+                  },
+                },
+                { .name = "prune", .description = "Prune stale worktree info",
+                  .options = {
+                    { .longName = "--dry-run", .shortName = "-n", .description = "Do not remove anything" },
+                    { .longName = "--verbose", .shortName = "-v", .description = "Report pruned worktrees" },
+                    { .longName = "--expire", .description = "Only expire worktrees older than time",
+                      .valueKind = OptionValueKind::String },
+                  },
+                },
+                { .name = "lock", .description = "Lock worktree",
+                  .options = {
+                    { .longName = "--reason", .description = "Reason for locking",
+                      .valueKind = OptionValueKind::String },
+                  },
+                  .positionalArgs = {
+                    { .kind = ArgKind::DynamicQuery, .description = "Worktree", .queryTag = "worktrees" },
+                  },
+                },
+                { .name = "unlock", .description = "Unlock worktree",
+                  .positionalArgs = {
+                    { .kind = ArgKind::DynamicQuery, .description = "Worktree", .queryTag = "worktrees" },
+                  },
+                },
+                { .name = "move", .description = "Move worktree to new path",
+                  .options = {
+                    { .longName = "--force", .shortName = "-f", .description = "Force move even if dirty or locked" },
+                  },
+                  .positionalArgs = {
+                    { .kind = ArgKind::DynamicQuery, .description = "Worktree", .queryTag = "worktrees" },
+                    { .kind = ArgKind::Path, .description = "New path" },
+                  },
+                },
+                { .name = "repair", .description = "Repair worktree links",
+                  .positionalArgs = {
+                    { .kind = ArgKind::Path, .description = "Path", .repeatable = true },
+                  },
+                },
             },
         };
     }
@@ -1039,6 +1094,8 @@ std::vector<QueryResult> GitQueryProvider::query(std::string_view queryTag)
         return queryTrackedFiles();
     if (queryTag == "config-keys")
         return queryConfigKeys();
+    if (queryTag == "worktrees")
+        return queryWorktrees();
     return {};
 }
 
@@ -1251,6 +1308,69 @@ std::vector<QueryResult> GitQueryProvider::queryConfigKeys()
         if (seen.insert(key).second)
             results.push_back(QueryResult { .text = key, .description = "config key" });
     }
+    return results;
+}
+
+std::vector<QueryResult> GitQueryProvider::queryWorktrees()
+{
+#if defined(_WIN32)
+    auto const lines = runCommand("git worktree list --porcelain 2>NUL");
+#else
+    auto const lines = runCommand("git worktree list --porcelain 2>/dev/null");
+#endif
+    auto results = std::vector<QueryResult> {};
+    auto path = std::string {};
+    auto branch = std::string {};
+    auto isBare = false;
+
+    auto const flushEntry = [&] {
+        if (path.empty())
+            return;
+        // Use the worktree directory name (basename) as the completion text.
+        // Git resolves worktree names via .git/worktrees/<name>/, so the
+        // basename is sufficient for commands like `git worktree remove`.
+        // Skip the bare/main worktree entry — it cannot be removed/locked/etc.
+        if (!isBare)
+        {
+            auto name = std::string {};
+            if (auto const pos = path.rfind('/'); pos != std::string::npos)
+                name = path.substr(pos + 1);
+            else
+                name = path;
+            auto desc = branch.empty() ? "worktree" : "worktree [" + branch + "]";
+            results.push_back(QueryResult { .text = std::move(name), .description = std::move(desc) });
+        }
+        path.clear();
+        branch.clear();
+        isBare = false;
+    };
+
+    for (auto const& line: lines)
+    {
+        if (line.starts_with("worktree "))
+        {
+            flushEntry();
+            path = line.substr(9);
+        }
+        else if (line.starts_with("branch "))
+        {
+            // Format: "branch refs/heads/name" — extract short name.
+            if (auto const lastSlash = line.rfind('/'); lastSlash != std::string::npos)
+                branch = line.substr(lastSlash + 1);
+            else
+                branch = line.substr(7);
+        }
+        else if (line == "bare")
+        {
+            isBare = true;
+        }
+        else if (line.empty())
+        {
+            flushEntry();
+        }
+    }
+    // Flush last entry (porcelain output may not end with a blank line).
+    flushEntry();
     return results;
 }
 
