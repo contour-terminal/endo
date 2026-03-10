@@ -319,7 +319,7 @@ void printHelp()
         "Pattern matching:",
         R"(endo -c 'match Some 42 with | Some x -> println $"some value of {x}" | None -> print "nothing"')");
     h.blank();
-    h.example("Sort and filter a list:", "endo -c '[3; 1; 4; 1; 5] |> sort |> filter (fun x -> x > 2) |> println'");
+    h.example("Sort and filter a list:", "endo -c '[3; 1; 4; 1; 5] |> sort |> filter (_ > 2) |> println'");
     h.blank();
     h.example("Execute a script with arguments:", "endo script.endo arg1 arg2");
 
