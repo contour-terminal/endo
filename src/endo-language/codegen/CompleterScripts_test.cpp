@@ -1379,8 +1379,10 @@ TEST_CASE("Completer.scripts.repl_persistence_no_leak", "[completer][scripts]")
 {
     // Simulate REPL: define a function with inner bindings and inner function definitions
     // that reference params. Neither inner `let resolved = ...` value bindings NOR inner
-    // function definitions (like `helper`) must be persisted as top-level entries,
-    // or the second prompt will fail with "Undefined F# identifier: args".
+    // function definitions (like `helper`) must be persisted as top-level entries.
+    // The function must be CALLED (prompt 2) to trigger AST inlining, which is when
+    // bindings would leak if the depth guard doesn't cover the inlining path.
+    // Prompt 3 verifies no leaked bindings cause "Undefined F# identifier: args".
     auto result = executeSession({
         R"(
             let my_func args prefix =
@@ -1390,6 +1392,7 @@ TEST_CASE("Completer.scripts.repl_persistence_no_leak", "[completer][scripts]")
                     | _ -> args
                 resolved
         )",
+        R"(my_func ["test"] "" |> each println)",
         R"(println "ok")",
     });
     REQUIRE(result.has_value());

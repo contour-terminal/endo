@@ -5394,7 +5394,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(node.name, std::move(func));
-            if (_compilingFunction)
+            if (_functionBodyDepth > 0)
                 _innerFunctionNames.insert(node.name);
 
             // Compile functions as separate IRFunctions (with captures as extra params).
@@ -5428,7 +5428,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(ab.name, std::move(func));
-            if (_compilingFunction)
+            if (_functionBodyDepth > 0)
                 _innerFunctionNames.insert(ab.name);
         }
 
@@ -5593,8 +5593,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 break;
             }
     }
-    // Only persist top-level bindings (not bindings inside compiled function bodies)
-    if (!_compilingFunction)
+    // Only persist top-level bindings (not bindings inside function bodies)
+    if (_functionBodyDepth == 0)
     {
         _newValueBindings.push_back({ node.name,
                                       node.value.get(),
@@ -7054,7 +7054,9 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
 
     // Inline the function body
+    ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
+    --_functionBodyDepth;
 
     if (func->returnKind != ReturnKind::Plain)
     {
@@ -8088,7 +8090,9 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     }
 
     // Inline the function body
+    ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
+    --_functionBodyDepth;
 
     // Validate return type annotation if present
     if (bodyResult && func->returnType)
@@ -8224,6 +8228,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     auto* savedCompilingFunction = _compilingFunction;
     _inTailPosition = true;
     _compilingFunction = irFunction;
+    ++_functionBodyDepth;
 
     // Codegen the function body
     auto* bodyResult = codegen(func.body);
@@ -8231,6 +8236,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     // Restore tail position and compiling function
     _inTailPosition = savedTailPosition;
     _compilingFunction = savedCompilingFunction;
+    --_functionBodyDepth;
 
     // Validate return type annotation if present
     if (bodyResult && func.returnType)
