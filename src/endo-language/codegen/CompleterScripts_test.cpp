@@ -1339,4 +1339,34 @@ TEST_CASE("Completer.scripts.glab_parses", "[completer][scripts]")
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
+
+TEST_CASE("Completer.scripts.claude_executes", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "claude.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(executesSuccessfully(content));
+}
+
+TEST_CASE("Completer.scripts.gh_executes", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "gh.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(executesSuccessfully(content));
+}
+
+TEST_CASE("Completer.scripts.glab_executes", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "glab.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(executesSuccessfully(content));
+}
 #endif

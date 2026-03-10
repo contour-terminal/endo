@@ -375,6 +375,10 @@ class Shell final: public SignalCallback
     void emitCommandFinished(int exitCode);
     void emitCurrentWorkingDirectory();
 
+    /// @brief Sets the terminal window title via OSC 2.
+    /// Control characters (C0, DEL, C1) are stripped to prevent escape injection.
+    void emitWindowTitle(std::string_view title);
+
     template <typename... Args>
     void error(std::format_string<Args...> const& message, Args&&... args)
     {
