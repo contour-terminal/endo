@@ -1370,3 +1370,26 @@ TEST_CASE("Completer.scripts.glab_executes", "[completer][scripts]")
     CHECK(executesSuccessfully(content));
 }
 #endif
+
+// =============================================================================
+// REPL persistence leak regression test
+// =============================================================================
+
+TEST_CASE("Completer.scripts.repl_persistence_no_leak", "[completer][scripts]")
+{
+    // Simulate REPL: define a function with inner bindings that reference params.
+    // Inner `let resolved = match args with ...` must NOT be persisted as a top-level
+    // binding, or the second prompt will fail with "Undefined F# identifier: args".
+    auto result = executeSession({
+        R"(
+            let my_func args prefix =
+                let resolved = match args with
+                    | cmd :: rest -> rest
+                    | _ -> args
+                resolved
+        )",
+        R"(println "ok")",
+    });
+    REQUIRE(result.has_value());
+    CHECK(result->output == "ok\n");
+}

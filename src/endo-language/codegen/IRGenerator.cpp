@@ -5389,13 +5389,17 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& [capName, capVal]: func.capturedBindings)
                 _sema.scopes().markUsed(capName);
 
-            registerFSharpFunction(node.name, std::move(func));
+            // Only register and compile at the top level (not inside compiled function bodies)
+            if (!_compilingFunction)
+            {
+                registerFSharpFunction(node.name, std::move(func));
 
-            // Compile functions as separate IRFunctions (with captures as extra params).
-            // For recursive functions, compiledFunction is set before body codegen so that
-            // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
-            if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
-                compileFunctionBody(node.name, *registered);
+                // Compile functions as separate IRFunctions (with captures as extra params).
+                // For recursive functions, compiledFunction is set before body codegen so that
+                // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
+                if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+                    compileFunctionBody(node.name, *registered);
+            }
         }
 
         // Register 'and' bindings (mutual recursion partners)
@@ -5421,11 +5425,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& [capName, capVal]: func.capturedBindings)
                 _sema.scopes().markUsed(capName);
 
-            registerFSharpFunction(ab.name, std::move(func));
+            if (!_compilingFunction)
+                registerFSharpFunction(ab.name, std::move(func));
         }
 
         // Compile mutual recursion 'and' bindings as functions (after ALL are registered)
-        if (isMutual)
+        if (isMutual && !_compilingFunction)
         {
             for (auto const& ab: node.andBindings)
             {
@@ -5585,13 +5590,17 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 break;
             }
     }
-    _newValueBindings.push_back({ node.name,
-                                  node.value.get(),
-                                  node.isMutable,
-                                  isObjectExpr,
-                                  storageType,
-                                  node.isExported,
-                                  objectTypeName });
+    // Only persist top-level bindings (not bindings inside compiled function bodies)
+    if (!_compilingFunction)
+    {
+        _newValueBindings.push_back({ node.name,
+                                      node.value.get(),
+                                      node.isMutable,
+                                      isObjectExpr,
+                                      storageType,
+                                      node.isExported,
+                                      objectTypeName });
+    }
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;
