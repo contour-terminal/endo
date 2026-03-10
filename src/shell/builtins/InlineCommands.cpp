@@ -1354,7 +1354,7 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
                 success = false;
                 continue;
             }
-            auto const result = _fs.createDirectories(path);
+            auto const result = _fs.createDirectory(path);
             if (!result.has_value())
             {
                 error("mkdir: cannot create directory '{}': {}", path, result.error());
@@ -1573,64 +1573,6 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                 }
             }
         }
-        else if (_fs.isDirectory(srcPath))
-        {
-            // Non-verbose recursive directory copy
-            auto const listResult = _fs.listDirectoryRecursive(srcPath);
-            if (!listResult.has_value())
-            {
-                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), listResult.error());
-                success = false;
-                continue;
-            }
-
-            if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
-            {
-                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
-                success = false;
-                continue;
-            }
-
-            for (auto const& entry: listResult.value())
-            {
-                auto const relativePath = std::filesystem::relative(entry.path, srcPath);
-                auto const entryTarget = target / relativePath;
-
-                if (entry.isDirectory)
-                {
-                    if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
-                    {
-                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
-                        success = false;
-                        break;
-                    }
-                }
-                else
-                {
-                    // Skip silently if no-clobber and target exists
-                    if (noClobber && _fs.exists(entryTarget))
-                        continue;
-
-                    auto const mkResult = _fs.createDirectories(entryTarget.parent_path());
-                    if (!mkResult.has_value())
-                    {
-                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
-                        success = false;
-                        break;
-                    }
-                    if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, overwrite);
-                        !cpResult.has_value())
-                    {
-                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), cpResult.error());
-                        success = false;
-                        break;
-                    }
-                }
-            }
-
-            if (verbose && success)
-                writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
-        }
         else
         {
             // Single file copy -- skip silently if no-clobber and target exists
@@ -1818,8 +1760,20 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         auto const renameResult = _fs.rename(srcPath, target);
         if (!renameResult.has_value())
         {
+            // Only fall back to copy+remove for cross-device errors
+            auto const& renameError = renameResult.error();
+            auto const isCrossDevice = renameError.find("cross-device") != std::string::npos
+                                       || renameError.find("Cross-device") != std::string::npos
+                                       || renameError.find("EXDEV") != std::string::npos;
+            if (!isCrossDevice)
+            {
+                error("mv: cannot move '{}' to '{}': {}", src, target.string(), renameError);
+                success = false;
+                continue;
+            }
+
             // Cross-device move: fallback to recursive copy + remove
-            // Try to copy the source to target
+            std::string copyError;
             auto copyFailed = false;
             if (_fs.isDirectory(srcPath))
             {
@@ -1847,6 +1801,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                             !mkResult.has_value())
                         {
                             copyFailed = true;
+                            copyError = mkResult.error();
                             break;
                         }
                     }
@@ -1856,12 +1811,14 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                         if (!mkResult.has_value())
                         {
                             copyFailed = true;
+                            copyError = mkResult.error();
                             break;
                         }
                         if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, true);
                             !cpResult.has_value())
                         {
                             copyFailed = true;
+                            copyError = cpResult.error();
                             break;
                         }
                     }
@@ -1870,12 +1827,15 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             else
             {
                 if (auto const cpResult = _fs.copyFile(srcPath, target, true); !cpResult.has_value())
+                {
                     copyFailed = true;
+                    copyError = cpResult.error();
+                }
             }
 
             if (copyFailed)
             {
-                error("mv: cannot move '{}' to '{}': {}", src, target.string(), renameResult.error());
+                error("mv: cannot move '{}' to '{}': {}", src, target.string(), copyError);
                 success = false;
                 continue;
             }

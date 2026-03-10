@@ -128,6 +128,15 @@ std::unique_ptr<std::iostream> NativeFileSystem::openReadWrite(fs::path const& p
     return stream;
 }
 
+std::expected<void, std::string> NativeFileSystem::createDirectory(fs::path const& path) const
+{
+    std::error_code ec;
+    if (!fs::create_directory(path, ec) || ec)
+        return std::unexpected(
+            std::format("Cannot create directory '{}': {}", path.string(), ec ? ec.message() : "No such file or directory"));
+    return {};
+}
+
 std::expected<void, std::string> NativeFileSystem::createDirectories(fs::path const& path) const
 {
     std::error_code ec;
@@ -202,7 +211,7 @@ NativeFileSystem::listDirectoryRecursive(fs::path const& path) const
 {
     std::error_code ec;
     auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry: fs::recursive_directory_iterator(path, ec))
+    for (auto const& entry: fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
     {
         entries.push_back(DirectoryEntry {
             .path = entry.path(),

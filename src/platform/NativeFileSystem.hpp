@@ -31,6 +31,8 @@ class NativeFileSystem final: public FileSystem
     [[nodiscard]] std::unique_ptr<std::iostream> openReadWrite(
         std::filesystem::path const& path) const override;
 
+    [[nodiscard]] std::expected<void, std::string> createDirectory(
+        std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> createDirectories(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<bool, std::string> remove(std::filesystem::path const& path) const override;

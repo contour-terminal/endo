@@ -140,9 +140,11 @@ InMemoryFileSystem::InMemoryFileSystem(std::initializer_list<FileEntry> entries)
 
 std::string InMemoryFileSystem::normalize(std::filesystem::path const& path) const
 {
-    if (path.is_relative())
-        return (_currentPath / path).lexically_normal().string();
-    return path.lexically_normal().string();
+    auto result = path.is_relative() ? (_currentPath / path).lexically_normal().string()
+                                     : path.lexically_normal().string();
+    // Normalize to forward slashes for cross-platform consistency
+    std::ranges::replace(result, '\\', '/');
+    return result;
 }
 
 void InMemoryFileSystem::ensureParentDirectories(std::filesystem::path const& path) const
@@ -214,6 +216,8 @@ std::expected<void, std::string> InMemoryFileSystem::appendFile(std::filesystem:
                                                                  std::string_view content) const
 {
     auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return std::unexpected(std::format("Permission denied: {}", key));
     ensureParentDirectories(path);
     _files[key].append(content);
     return {};
@@ -222,6 +226,8 @@ std::expected<void, std::string> InMemoryFileSystem::appendFile(std::filesystem:
 std::unique_ptr<std::istream> InMemoryFileSystem::openRead(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return nullptr;
     auto const it = _files.find(key);
     if (it == _files.end())
         return nullptr;
@@ -232,6 +238,8 @@ std::unique_ptr<std::ostream> InMemoryFileSystem::openWrite(std::filesystem::pat
                                                              bool append) const
 {
     auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return nullptr;
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
@@ -246,6 +254,20 @@ std::unique_ptr<std::iostream> InMemoryFileSystem::openReadWrite(
     if (!_files.contains(key))
         _files[key] = {};
     return std::make_unique<MemoryIOStream>(&_files[key]);
+}
+
+std::expected<void, std::string> InMemoryFileSystem::createDirectory(
+    std::filesystem::path const& path) const
+{
+    auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return std::unexpected(std::format("Permission denied: {}", key));
+    // Check that parent exists
+    auto const parent = std::filesystem::path(key).parent_path().string();
+    if (!parent.empty() && parent != "/" && !_directories.contains(parent))
+        return std::unexpected(std::format("No such file or directory: {}", parent));
+    _directories.insert(key);
+    return {};
 }
 
 std::expected<void, std::string> InMemoryFileSystem::createDirectories(
@@ -352,8 +374,39 @@ std::expected<void, std::string> InMemoryFileSystem::rename(std::filesystem::pat
 
     if (_directories.contains(srcKey))
     {
+        auto const srcPrefix = srcKey.ends_with('/') ? srcKey : srcKey + "/";
+        auto const dstPrefix = dstKey.ends_with('/') ? dstKey : dstKey + "/";
+
+        // Move nested files
+        auto filesToMove = std::vector<std::pair<std::string, std::string>> {};
+        for (auto const& [filePath, content]: _files)
+        {
+            if (filePath.starts_with(srcPrefix))
+                filesToMove.emplace_back(filePath, dstPrefix + filePath.substr(srcPrefix.size()));
+        }
+        for (auto const& [oldPath, newPath]: filesToMove)
+        {
+            _files[newPath] = std::move(_files[oldPath]);
+            _files.erase(oldPath);
+        }
+
+        // Move nested directories
+        auto dirsToMove = std::vector<std::pair<std::string, std::string>> {};
+        for (auto const& dirPath: _directories)
+        {
+            if (dirPath.starts_with(srcPrefix))
+                dirsToMove.emplace_back(dirPath, dstPrefix + dirPath.substr(srcPrefix.size()));
+        }
+        for (auto const& [oldPath, newPath]: dirsToMove)
+        {
+            _directories.erase(oldPath);
+            _directories.insert(newPath);
+        }
+
+        // Move the directory itself
         _directories.erase(srcKey);
         _directories.insert(dstKey);
+        ensureParentDirectories(to);
         return {};
     }
 
@@ -402,6 +455,25 @@ InMemoryFileSystem::listDirectory(std::filesystem::path const& path) const
         });
     }
 
+    // Collect symlink-only entries (not already in _files or _directories)
+    for (auto const& [symlinkPath, _]: _symlinks)
+    {
+        if (!symlinkPath.starts_with(prefix))
+            continue;
+        auto const rest = std::string_view(symlinkPath).substr(prefix.size());
+        if (rest.find('/') != std::string_view::npos)
+            continue;
+        if (!_files.contains(symlinkPath) && !_directories.contains(symlinkPath))
+        {
+            entries.push_back(DirectoryEntry {
+                .path = std::filesystem::path(symlinkPath),
+                .isDirectory = false,
+                .isRegularFile = false,
+                .isSymlink = true,
+            });
+        }
+    }
+
     return entries;
 }
 
@@ -437,6 +509,22 @@ InMemoryFileSystem::listDirectoryRecursive(std::filesystem::path const& path) co
                 .isDirectory = true,
                 .isRegularFile = false,
                 .isSymlink = _symlinks.contains(dirPath),
+            });
+        }
+    }
+
+    // Collect symlink-only entries (not already in _files or _directories)
+    for (auto const& [symlinkPath, _]: _symlinks)
+    {
+        if (!symlinkPath.starts_with(prefix))
+            continue;
+        if (!_files.contains(symlinkPath) && !_directories.contains(symlinkPath))
+        {
+            entries.push_back(DirectoryEntry {
+                .path = std::filesystem::path(symlinkPath),
+                .isDirectory = false,
+                .isRegularFile = false,
+                .isSymlink = true,
             });
         }
     }

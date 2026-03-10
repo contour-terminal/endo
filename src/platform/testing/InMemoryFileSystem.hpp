@@ -65,6 +65,8 @@ class InMemoryFileSystem final: public FileSystem
         std::filesystem::path const& path) const override;
 
     // Directory ops
+    [[nodiscard]] std::expected<void, std::string> createDirectory(
+        std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> createDirectories(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<bool, std::string> remove(

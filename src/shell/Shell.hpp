@@ -409,7 +409,9 @@ class Shell final: public SignalCallback
     template <typename... Args>
     void error(std::format_string<Args...> const& message, Args&&... args)
     {
-        _tty.writeToStderr(std::format("{}\n", std::format(message, std::forward<Args>(args)...)));
+        auto text = std::format(message, std::forward<Args>(args)...);
+        text += '\n';
+        _tty.writeToStderr(text);
     }
 
     // --- Agent mode ---

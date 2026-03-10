@@ -78,11 +78,13 @@ void executeFetch(CoreVM::Params& args,
     bool const showProgress =
         interactive && tty.isStderrTerminal() && getenv("ENDO_FETCH_QUIET") == nullptr;
 
+    bool progressWritten = false;
     if (showProgress)
     {
-        request.progressCallback = [&tty](size_t total, size_t now) -> bool {
+        request.progressCallback = [&tty, &progressWritten](size_t total, size_t now) -> bool {
             if (total > 0)
             {
+                progressWritten = true;
                 auto const pct = static_cast<int>((now * 100) / total);
                 auto const barWidth = 30;
                 auto const filled = (pct * barWidth) / 100;
@@ -96,6 +98,7 @@ void executeFetch(CoreVM::Params& args,
             }
             else if (now > 0)
             {
+                progressWritten = true;
                 tty.writeToStderr(std::format("\rfetch: {} bytes received", now));
             }
             return true;
@@ -104,8 +107,8 @@ void executeFetch(CoreVM::Params& args,
 
     auto result = client.download(request, outputPath);
 
-    // Clear progress bar
-    if (showProgress)
+    // Clear progress bar only if progress output was actually written
+    if (progressWritten)
         tty.writeToStderr(std::format("\r{}\r", std::string(60, ' ')));
 
     CoreVM::TypedObject* resultObj = nullptr;

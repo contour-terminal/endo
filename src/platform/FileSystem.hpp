@@ -45,6 +45,10 @@ class FileSystem
         std::filesystem::path const& path) const = 0;
 
     // Directory ops
+    /// Creates a single directory. Fails if the parent does not exist.
+    [[nodiscard]] virtual std::expected<void, std::string> createDirectory(
+        std::filesystem::path const& path) const = 0;
+    /// Creates a directory and all missing parent directories.
     [[nodiscard]] virtual std::expected<void, std::string> createDirectories(
         std::filesystem::path const& path) const = 0;
     [[nodiscard]] virtual std::expected<bool, std::string> remove(
