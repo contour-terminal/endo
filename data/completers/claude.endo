@@ -1,0 +1,36 @@
+let claude_complete args prefix =
+    let subcommands = ["mcp"; "auth"; "doctor"; "install"; "plugin"; "setup-token"; "update"]
+    let options = [
+        "--help"; "-h"; "--version"; "--verbose"; "-v"; "--debug"; "--model"; "--fallback-model";
+        "--permission-mode"; "--resume"; "-r"; "--continue"; "-c"; "--print"; "-p";
+        "--output-format"; "--input-format"; "--max-turns"; "--system-prompt";
+        "--append-system-prompt"; "--allowedTools"; "--disallowedTools"; "--mcp-config";
+        "--no-cache"; "--no-profile"; "--profile"; "--effort"; "--yes"; "-y"
+    ]
+    let models = [
+        "opus"; "sonnet"; "haiku"; "claude-opus-4-6"; "claude-sonnet-4-6";
+        "claude-haiku-4-5-20251001"
+    ]
+    let permission_modes = ["default"; "plan"; "auto"; "bypassPermissions"]
+    let output_formats = ["text"; "json"; "stream-json"]
+    let input_formats = ["text"; "stream-json"]
+    let effort_levels = ["low"; "medium"; "high"; "auto"]
+    let mcp_subcommands = ["add"; "list"; "get"; "remove"; "serve"; "start"; "stop"; "reset"]
+    let auth_subcommands = ["login"; "logout"; "status"]
+    let plugin_subcommands = ["install"; "list"; "enable"; "disable"; "uninstall"; "update"; "info"]
+    match args with
+    | [] when startsWith "-" prefix -> options
+    | [] -> subcommands
+    | ["--model"] | ["--fallback-model"] | [_; "--model"] | [_; "--fallback-model"] -> models
+    | ["--permission-mode"] | [_; "--permission-mode"] -> permission_modes
+    | ["--output-format"] | [_; "--output-format"] -> output_formats
+    | ["--input-format"] | [_; "--input-format"] -> input_formats
+    | ["--effort"] | [_; "--effort"] -> effort_levels
+    | [_] when startsWith "-" prefix -> options
+    | ["mcp"] -> mcp_subcommands
+    | ["auth"] -> auth_subcommands
+    | ["plugin"] -> plugin_subcommands
+    | _ when startsWith "-" prefix -> options
+    | _ -> []
+
+register_completer "claude" claude_complete

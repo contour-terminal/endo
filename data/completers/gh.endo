@@ -1,0 +1,79 @@
+let gh_complete args prefix =
+    let commands = [
+        "auth"; "browse"; "codespace"; "gist"; "issue"; "pr"; "project"; "release"; "repo"; "run";
+        "workflow"; "cache"; "alias"; "api"; "config"; "label"; "search"; "secret"; "ssh-key";
+        "status"; "variable"; "extension"; "gpg-key"; "completion"; "attestation"; "ruleset";
+        "copilot"; "org"
+    ]
+    let global_options = ["--help"; "--version"; "-R"; "--repo"]
+    let pr_subcommands = [
+        "checkout"; "checks"; "close"; "comment"; "create"; "diff"; "edit"; "list"; "merge";
+        "ready"; "reopen"; "review"; "status"; "view"
+    ]
+    let issue_subcommands = [
+        "close"; "comment"; "create"; "delete"; "develop"; "edit"; "list"; "lock"; "pin"; "reopen";
+        "status"; "transfer"; "unpin"; "unlock"; "view"
+    ]
+    let repo_subcommands = [
+        "archive"; "clone"; "create"; "delete"; "deploy-key"; "edit"; "fork"; "list"; "rename";
+        "set-default"; "sync"; "unarchive"; "view"
+    ]
+    let release_subcommands = [
+        "create"; "delete"; "delete-asset"; "download"; "edit"; "list"; "upload"; "view"
+    ]
+    let workflow_subcommands = ["disable"; "enable"; "list"; "run"; "view"]
+    let run_subcommands = ["cancel"; "delete"; "download"; "list"; "rerun"; "view"; "watch"]
+    let gist_subcommands = ["clone"; "create"; "delete"; "edit"; "list"; "rename"; "view"]
+    let codespace_subcommands = [
+        "code"; "cp"; "create"; "delete"; "edit"; "jupyter"; "list"; "logs"; "ports"; "rebuild";
+        "ssh"; "stop"; "view"
+    ]
+    let auth_subcommands = ["login"; "logout"; "refresh"; "setup-git"; "status"; "switch"; "token"]
+    let config_subcommands = ["get"; "list"; "set"; "clear-cache"]
+    let search_subcommands = ["code"; "commits"; "issues"; "prs"; "repos"]
+    let cache_subcommands = ["delete"; "list"]
+    let secret_subcommands = ["delete"; "list"; "set"]
+    let variable_subcommands = ["delete"; "get"; "list"; "set"]
+    let pr_create_options = [
+        "--title"; "--body"; "--base"; "--head"; "--draft"; "--fill"; "--label"; "--assignee";
+        "--reviewer"; "--milestone"; "--project"; "--web"
+    ]
+    let pr_list_options = [
+        "--state"; "--label"; "--assignee"; "--author"; "--base"; "--head"; "--limit"; "--search";
+        "--draft"; "--json"; "--web"
+    ]
+    let issue_create_options = [
+        "--title"; "--body"; "--label"; "--assignee"; "--milestone"; "--project"; "--web"
+    ]
+    let issue_list_options = [
+        "--state"; "--label"; "--assignee"; "--author"; "--milestone"; "--limit"; "--search";
+        "--json"; "--web"
+    ]
+    match args with
+    | [] when startsWith "-" prefix -> global_options
+    | [] -> commands
+    | ["pr"] when startsWith "-" prefix -> global_options
+    | ["pr"] -> pr_subcommands
+    | ["pr"; "create"] when startsWith "-" prefix -> pr_create_options
+    | ["pr"; "list"] when startsWith "-" prefix -> pr_list_options
+    | ["issue"] when startsWith "-" prefix -> global_options
+    | ["issue"] -> issue_subcommands
+    | ["issue"; "create"] when startsWith "-" prefix -> issue_create_options
+    | ["issue"; "list"] when startsWith "-" prefix -> issue_list_options
+    | [_] when startsWith "-" prefix -> global_options
+    | ["repo"] -> repo_subcommands
+    | ["release"] -> release_subcommands
+    | ["workflow"] -> workflow_subcommands
+    | ["run"] -> run_subcommands
+    | ["gist"] -> gist_subcommands
+    | ["codespace"] -> codespace_subcommands
+    | ["auth"] -> auth_subcommands
+    | ["config"] -> config_subcommands
+    | ["search"] -> search_subcommands
+    | ["cache"] -> cache_subcommands
+    | ["secret"] -> secret_subcommands
+    | ["variable"] -> variable_subcommands
+    | _ when startsWith "-" prefix -> global_options
+    | _ -> []
+
+register_completer "gh" gh_complete

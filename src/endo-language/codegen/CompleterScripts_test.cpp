@@ -803,6 +803,381 @@ TEST_CASE("Completer.flatpak.simple_function_with_match", "[completer][flatpak]"
 }
 
 // =============================================================================
+// claude completer logic tests
+// =============================================================================
+
+TEST_CASE("Completer.claude.options_list_not_empty", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let options = [
+            "--help"; "-h"; "--version"; "--verbose"; "-v"; "--debug";
+            "--model"; "--fallback-model"; "--permission-mode"; "--resume"; "-r";
+            "--continue"; "-c"; "--print"; "-p"; "--output-format"; "--input-format";
+            "--max-turns"; "--system-prompt"; "--append-system-prompt";
+            "--allowedTools"; "--disallowedTools"; "--mcp-config";
+            "--no-cache"; "--no-profile"; "--profile"; "--effort";
+            "--yes"; "-y"
+        ]
+        print (toText (length options))
+    )") == "29");
+}
+
+TEST_CASE("Completer.claude.model_completion", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let models = [
+            "opus"; "sonnet"; "haiku";
+            "claude-opus-4-6"; "claude-sonnet-4-6"; "claude-haiku-4-5-20251001"
+        ]
+        print (toText (length models))
+    )") == "6");
+}
+
+TEST_CASE("Completer.claude.permission_mode_values", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let permission_modes = ["default"; "plan"; "auto"; "bypassPermissions"]
+        each println permission_modes
+    )") == "default\nplan\nauto\nbypassPermissions\n");
+}
+
+TEST_CASE("Completer.claude.subcommands_list", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let subcommands = [
+            "mcp"; "auth"; "doctor"; "install"; "plugin"; "setup-token"; "update"
+        ]
+        print (toText (length subcommands))
+    )") == "7");
+}
+
+TEST_CASE("Completer.claude.mcp_subcommands", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let mcp_subcommands = [
+            "add"; "list"; "get"; "remove"; "serve"; "start"; "stop"; "reset"
+        ]
+        print (toText (length mcp_subcommands))
+    )") == "8");
+}
+
+TEST_CASE("Completer.claude.effort_levels", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let effort_levels = ["low"; "medium"; "high"; "auto"]
+        each println effort_levels
+    )") == "low\nmedium\nhigh\nauto\n");
+}
+
+TEST_CASE("Completer.claude.output_format_values", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let output_formats = ["text"; "json"; "stream-json"]
+        each println output_formats
+    )") == "text\njson\nstream-json\n");
+}
+
+TEST_CASE("Completer.claude.complete_function_returns_subcommands", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let claude_complete args prefix =
+            let subcommands = ["mcp"; "auth"; "doctor"; "install"; "plugin"; "setup-token"; "update"]
+            let options = ["--help"; "--model"; "--resume"]
+            match args with
+            | [] when startsWith "-" prefix -> options
+            | [] -> subcommands
+            | _ -> []
+
+        claude_complete [] "" |> each println
+    )") == "mcp\nauth\ndoctor\ninstall\nplugin\nsetup-token\nupdate\n");
+}
+
+TEST_CASE("Completer.claude.complete_function_returns_options", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let claude_complete args prefix =
+            let subcommands = ["mcp"; "auth"; "doctor"]
+            let options = ["--help"; "--model"; "--resume"]
+            match args with
+            | [] when startsWith "-" prefix -> options
+            | [] -> subcommands
+            | _ -> []
+
+        claude_complete [] "--" |> each println
+    )") == "--help\n--model\n--resume\n");
+}
+
+TEST_CASE("Completer.claude.model_match_arm", "[completer][claude]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let claude_complete args prefix =
+            let models = ["opus"; "sonnet"; "haiku"]
+            match args with
+            | ["--model"] -> models
+            | _ -> []
+
+        claude_complete ["--model"] "" |> each println
+    )") == "opus\nsonnet\nhaiku\n");
+}
+
+// =============================================================================
+// gh completer logic tests
+// =============================================================================
+
+TEST_CASE("Completer.gh.top_level_commands", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let commands = [
+            "auth"; "browse"; "codespace"; "gist"; "issue"; "pr"; "project"; "release";
+            "repo"; "run"; "workflow"; "cache"; "alias"; "api"; "config"; "label";
+            "search"; "secret"; "ssh-key"; "status"; "variable"; "extension";
+            "gpg-key"; "completion"; "attestation"; "ruleset"; "copilot"; "org"
+        ]
+        print (toText (length commands))
+    )") == "28");
+}
+
+TEST_CASE("Completer.gh.pr_subcommands", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let pr_subcommands = [
+            "checkout"; "checks"; "close"; "comment"; "create"; "diff"; "edit";
+            "list"; "merge"; "ready"; "reopen"; "review"; "status"; "view"
+        ]
+        print (toText (length pr_subcommands))
+    )") == "14");
+}
+
+TEST_CASE("Completer.gh.issue_subcommands", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let issue_subcommands = [
+            "close"; "comment"; "create"; "delete"; "develop"; "edit"; "list";
+            "lock"; "pin"; "reopen"; "status"; "transfer"; "unpin"; "unlock"; "view"
+        ]
+        print (toText (length issue_subcommands))
+    )") == "15");
+}
+
+TEST_CASE("Completer.gh.complete_function_returns_commands", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let gh_complete args prefix =
+            let commands = ["auth"; "issue"; "pr"; "repo"]
+            let global_options = ["--help"; "--version"]
+            match args with
+            | [] when startsWith "-" prefix -> global_options
+            | [] -> commands
+            | _ -> []
+
+        gh_complete [] "" |> each println
+    )") == "auth\nissue\npr\nrepo\n");
+}
+
+TEST_CASE("Completer.gh.pr_create_options", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let gh_complete args prefix =
+            let pr_create_options = ["--title"; "--body"; "--draft"; "--fill"]
+            match args with
+            | ["pr"; "create"] when startsWith "-" prefix -> pr_create_options
+            | _ -> []
+
+        gh_complete ["pr"; "create"] "--" |> each println
+    )") == "--title\n--body\n--draft\n--fill\n");
+}
+
+TEST_CASE("Completer.gh.pr_dispatch", "[completer][gh]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let gh_complete args prefix =
+            let commands = ["auth"; "issue"; "pr"]
+            let pr_subcommands = ["checkout"; "create"; "list"; "merge"; "view"]
+            match args with
+            | [] -> commands
+            | ["pr"] -> pr_subcommands
+            | _ -> []
+
+        gh_complete ["pr"] "" |> each println
+    )") == "checkout\ncreate\nlist\nmerge\nview\n");
+}
+
+// =============================================================================
+// glab completer logic tests
+// =============================================================================
+
+TEST_CASE("Completer.glab.top_level_commands", "[completer][glab]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let commands = [
+            "alias"; "api"; "auth"; "check-update"; "ci"; "completion"; "config";
+            "help"; "incident"; "issue"; "label"; "mr"; "release"; "repo";
+            "schedule"; "snippet"; "ssh-key"; "user"; "variable"; "version"
+        ]
+        print (toText (length commands))
+    )") == "20");
+}
+
+TEST_CASE("Completer.glab.mr_subcommands", "[completer][glab]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let mr_subcommands = [
+            "approve"; "checkout"; "close"; "create"; "delete"; "diff"; "for";
+            "issues"; "list"; "merge"; "note"; "rebase"; "reopen"; "revoke";
+            "subscribe"; "todo"; "unsubscribe"; "update"; "view"
+        ]
+        print (toText (length mr_subcommands))
+    )") == "19");
+}
+
+TEST_CASE("Completer.glab.ci_alias_resolves", "[completer][glab]")
+{
+    // Verify that "pipe" and "pipeline" aliases resolve to "ci" subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let ci_subcommands = [
+            "artifact"; "delete"; "get"; "lint"; "list"; "retry"; "run";
+            "status"; "trace"; "trigger"; "view"
+        ]
+        let resolve_alias cmd =
+            match cmd with
+            | "pipe" -> "ci"
+            | "pipeline" -> "ci"
+            | "project" -> "repo"
+            | _ -> cmd
+
+        let glab_complete args prefix =
+            let resolved = match args with
+                | cmd :: rest -> (resolve_alias cmd) :: rest
+                | _ -> args
+            match resolved with
+            | ["ci"] -> ci_subcommands
+            | _ -> []
+
+        glab_complete ["pipe"] "" |> each println
+    )") == "artifact\ndelete\nget\nlint\nlist\nretry\nrun\nstatus\ntrace\ntrigger\nview\n");
+}
+
+TEST_CASE("Completer.glab.pipeline_alias_resolves", "[completer][glab]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let ci_subcommands = ["lint"; "list"; "run"]
+        let resolve_alias cmd =
+            match cmd with
+            | "pipe" -> "ci"
+            | "pipeline" -> "ci"
+            | _ -> cmd
+
+        let glab_complete args prefix =
+            let resolved = match args with
+                | cmd :: rest -> (resolve_alias cmd) :: rest
+                | _ -> args
+            match resolved with
+            | ["ci"] -> ci_subcommands
+            | _ -> []
+
+        glab_complete ["pipeline"] "" |> each println
+    )") == "lint\nlist\nrun\n");
+}
+
+TEST_CASE("Completer.glab.mr_create_options", "[completer][glab]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let glab_complete args prefix =
+            let mr_create_options = ["--title"; "--description"; "--draft"; "--fill"]
+            match args with
+            | ["mr"; "create"] when startsWith "-" prefix -> mr_create_options
+            | _ -> []
+
+        glab_complete ["mr"; "create"] "--" |> each println
+    )") == "--title\n--description\n--draft\n--fill\n");
+}
+
+TEST_CASE("Completer.glab.project_alias_resolves", "[completer][glab]")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let repo_subcommands = ["clone"; "create"; "list"]
+        let resolve_alias cmd =
+            match cmd with
+            | "project" -> "repo"
+            | _ -> cmd
+
+        let glab_complete args prefix =
+            let resolved = match args with
+                | cmd :: rest -> (resolve_alias cmd) :: rest
+                | _ -> args
+            match resolved with
+            | ["repo"] -> repo_subcommands
+            | _ -> []
+
+        glab_complete ["project"] "" |> each println
+    )") == "clone\ncreate\nlist\n");
+}
+
+// =============================================================================
+// Subcommand option completion tests — verify --<TAB> after subcommands works
+// =============================================================================
+
+TEST_CASE("Completer.claude.mcp_option_completion", "[completer][claude]")
+{
+    // `claude mcp --<TAB>` should return options, not mcp_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let claude_complete args prefix =
+            let subcommands = ["mcp"; "auth"; "doctor"]
+            let options = ["--help"; "--model"; "--resume"]
+            let mcp_subcommands = ["add"; "list"; "get"; "remove"]
+            match args with
+            | [] when startsWith "-" prefix -> options
+            | [] -> subcommands
+            | [_] when startsWith "-" prefix -> options
+            | ["mcp"] -> mcp_subcommands
+            | _ when startsWith "-" prefix -> options
+            | _ -> []
+
+        claude_complete ["mcp"] "--" |> each println
+    )") == "--help\n--model\n--resume\n");
+}
+
+TEST_CASE("Completer.gh.repo_option_completion", "[completer][gh]")
+{
+    // `gh repo --<TAB>` should return global_options, not repo_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let gh_complete args prefix =
+            let commands = ["auth"; "issue"; "pr"; "repo"]
+            let global_options = ["--help"; "--version"]
+            let repo_subcommands = ["clone"; "create"; "list"]
+            match args with
+            | [] when startsWith "-" prefix -> global_options
+            | [] -> commands
+            | [_] when startsWith "-" prefix -> global_options
+            | ["repo"] -> repo_subcommands
+            | _ when startsWith "-" prefix -> global_options
+            | _ -> []
+
+        gh_complete ["repo"] "--" |> each println
+    )") == "--help\n--version\n");
+}
+
+TEST_CASE("Completer.glab.ci_option_completion", "[completer][glab]")
+{
+    // `glab ci --<TAB>` should return global_options, not ci_subcommands
+    CHECK(executeSourceAndGetOutput(R"(
+        let glab_complete args prefix =
+            let commands = ["ci"; "mr"; "issue"; "repo"]
+            let global_options = ["--help"; "--version"]
+            let ci_subcommands = ["lint"; "list"; "run"]
+            match args with
+            | [] when startsWith "-" prefix -> global_options
+            | [] -> commands
+            | [_] when startsWith "-" prefix -> global_options
+            | ["ci"] -> ci_subcommands
+            | _ when startsWith "-" prefix -> global_options
+            | _ -> []
+
+        glab_complete ["ci"] "--" |> each println
+    )") == "--help\n--version\n");
+}
+
+// =============================================================================
 // BlockExpr scope cleanup regression tests (heap-use-after-free fix)
 // =============================================================================
 
@@ -890,6 +1265,7 @@ TEST_CASE("Completer.scripts.cmake_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "cmake.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -899,6 +1275,7 @@ TEST_CASE("Completer.scripts.ctest_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "ctest.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -908,6 +1285,7 @@ TEST_CASE("Completer.scripts.ssh_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "ssh.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -917,6 +1295,7 @@ TEST_CASE("Completer.scripts.scp_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "scp.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
@@ -926,6 +1305,37 @@ TEST_CASE("Completer.scripts.flatpak_parses", "[completer][scripts]")
     auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "flatpak.endo";
     REQUIRE(std::filesystem::exists(path));
     auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(parse(content) != nullptr);
+}
+
+TEST_CASE("Completer.scripts.claude_parses", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "claude.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(parse(content) != nullptr);
+}
+
+TEST_CASE("Completer.scripts.gh_parses", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "gh.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+    CHECK(parse(content) != nullptr);
+}
+
+TEST_CASE("Completer.scripts.glab_parses", "[completer][scripts]")
+{
+    auto path = std::filesystem::path(ENDO_COMPLETERS_DIR) / "glab.endo";
+    REQUIRE(std::filesystem::exists(path));
+    auto ifs = std::ifstream(path);
+    REQUIRE(ifs.is_open());
     auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
     CHECK(parse(content) != nullptr);
 }
