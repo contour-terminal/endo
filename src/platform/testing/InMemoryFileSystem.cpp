@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/testing/InMemoryFileSystem.hpp>
-
 #include <algorithm>
 #include <format>
 #include <sstream>
+
+#include <platform/testing/InMemoryFileSystem.hpp>
 
 namespace endo::platform::testing
 {
@@ -190,8 +190,7 @@ std::filesystem::path InMemoryFileSystem::currentPath() const
     return _currentPath;
 }
 
-std::expected<std::string, std::string> InMemoryFileSystem::readFile(
-    std::filesystem::path const& path) const
+std::expected<std::string, std::string> InMemoryFileSystem::readFile(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
     if (_deniedPaths.contains(key))
@@ -202,7 +201,7 @@ std::expected<std::string, std::string> InMemoryFileSystem::readFile(
 }
 
 std::expected<void, std::string> InMemoryFileSystem::writeFile(std::filesystem::path const& path,
-                                                                std::string_view content) const
+                                                               std::string_view content) const
 {
     auto const key = normalize(path);
     if (_deniedPaths.contains(key))
@@ -213,7 +212,7 @@ std::expected<void, std::string> InMemoryFileSystem::writeFile(std::filesystem::
 }
 
 std::expected<void, std::string> InMemoryFileSystem::appendFile(std::filesystem::path const& path,
-                                                                 std::string_view content) const
+                                                                std::string_view content) const
 {
     auto const key = normalize(path);
     if (_deniedPaths.contains(key))
@@ -235,7 +234,7 @@ std::unique_ptr<std::istream> InMemoryFileSystem::openRead(std::filesystem::path
 }
 
 std::unique_ptr<std::ostream> InMemoryFileSystem::openWrite(std::filesystem::path const& path,
-                                                             bool append) const
+                                                            bool append) const
 {
     auto const key = normalize(path);
     if (_deniedPaths.contains(key))
@@ -246,18 +245,18 @@ std::unique_ptr<std::ostream> InMemoryFileSystem::openWrite(std::filesystem::pat
     return std::make_unique<MemoryOStream>(&_files[key], append);
 }
 
-std::unique_ptr<std::iostream> InMemoryFileSystem::openReadWrite(
-    std::filesystem::path const& path) const
+std::unique_ptr<std::iostream> InMemoryFileSystem::openReadWrite(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return nullptr;
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
     return std::make_unique<MemoryIOStream>(&_files[key]);
 }
 
-std::expected<void, std::string> InMemoryFileSystem::createDirectory(
-    std::filesystem::path const& path) const
+std::expected<void, std::string> InMemoryFileSystem::createDirectory(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
     if (_deniedPaths.contains(key))
@@ -287,6 +286,8 @@ std::expected<void, std::string> InMemoryFileSystem::createDirectories(
 std::expected<bool, std::string> InMemoryFileSystem::remove(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
+    if (_deniedPaths.contains(key))
+        return std::unexpected(std::format("Permission denied: {}", key));
     auto const fileErased = _files.erase(key) > 0;
     auto const dirErased = _directories.erase(key) > 0;
     auto const symlinkErased = _symlinks.erase(key) > 0;
@@ -298,6 +299,8 @@ std::expected<std::uintmax_t, std::string> InMemoryFileSystem::removeAll(
     std::filesystem::path const& path) const
 {
     auto const prefix = normalize(path);
+    if (_deniedPaths.contains(prefix))
+        return std::unexpected(std::format("Permission denied: {}", prefix));
     std::uintmax_t count = 0;
 
     // Remove all files under this path
@@ -340,8 +343,8 @@ std::expected<std::uintmax_t, std::string> InMemoryFileSystem::removeAll(
 }
 
 std::expected<void, std::string> InMemoryFileSystem::copyFile(std::filesystem::path const& from,
-                                                               std::filesystem::path const& to,
-                                                               bool overwrite) const
+                                                              std::filesystem::path const& to,
+                                                              bool overwrite) const
 {
     auto const srcKey = normalize(from);
     auto const dstKey = normalize(to);
@@ -359,7 +362,7 @@ std::expected<void, std::string> InMemoryFileSystem::copyFile(std::filesystem::p
 }
 
 std::expected<void, std::string> InMemoryFileSystem::rename(std::filesystem::path const& from,
-                                                             std::filesystem::path const& to) const
+                                                            std::filesystem::path const& to) const
 {
     auto const srcKey = normalize(from);
     auto const dstKey = normalize(to);
@@ -413,8 +416,8 @@ std::expected<void, std::string> InMemoryFileSystem::rename(std::filesystem::pat
     return std::unexpected(std::format("Source not found: {}", srcKey));
 }
 
-std::expected<std::vector<FileSystem::DirectoryEntry>, std::string>
-InMemoryFileSystem::listDirectory(std::filesystem::path const& path) const
+std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> InMemoryFileSystem::listDirectory(
+    std::filesystem::path const& path) const
 {
     auto const dirKey = normalize(path);
     if (!_directories.contains(dirKey))
@@ -477,8 +480,8 @@ InMemoryFileSystem::listDirectory(std::filesystem::path const& path) const
     return entries;
 }
 
-std::expected<std::vector<FileSystem::DirectoryEntry>, std::string>
-InMemoryFileSystem::listDirectoryRecursive(std::filesystem::path const& path) const
+std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> InMemoryFileSystem::
+    listDirectoryRecursive(std::filesystem::path const& path) const
 {
     auto const dirKey = normalize(path);
     if (!_directories.contains(dirKey))
@@ -562,8 +565,8 @@ std::expected<std::filesystem::perms, std::string> InMemoryFileSystem::permissio
     return std::filesystem::perms::owner_read | std::filesystem::perms::owner_write;
 }
 
-std::expected<void, std::string> InMemoryFileSystem::setPermissions(
-    std::filesystem::path const& path, std::filesystem::perms perms) const
+std::expected<void, std::string> InMemoryFileSystem::setPermissions(std::filesystem::path const& path,
+                                                                    std::filesystem::perms perms) const
 {
     auto const key = normalize(path);
     if (!exists(path))
@@ -587,8 +590,9 @@ void InMemoryFileSystem::setCurrentPath(std::filesystem::path const& path)
     _directories.insert(path.string());
 }
 
-void InMemoryFileSystem::addFile(std::filesystem::path const& path, std::string content,
-                                  std::filesystem::perms perms)
+void InMemoryFileSystem::addFile(std::filesystem::path const& path,
+                                 std::string content,
+                                 std::filesystem::perms perms)
 {
     auto const key = normalize(path);
     _files[key] = std::move(content);
@@ -598,7 +602,8 @@ void InMemoryFileSystem::addFile(std::filesystem::path const& path, std::string 
 
 void InMemoryFileSystem::addExecutable(std::filesystem::path const& path, std::string content)
 {
-    addFile(path, std::move(content),
+    addFile(path,
+            std::move(content),
             std::filesystem::perms::owner_read | std::filesystem::perms::owner_write
                 | std::filesystem::perms::owner_exec);
 }
@@ -615,8 +620,7 @@ void InMemoryFileSystem::addDirectory(std::filesystem::path const& path)
         _directories.insert(p.string());
 }
 
-void InMemoryFileSystem::addSymlink(std::filesystem::path const& path,
-                                     std::filesystem::path const& target)
+void InMemoryFileSystem::addSymlink(std::filesystem::path const& path, std::filesystem::path const& target)
 {
     auto const key = normalize(path);
     _symlinks[key] = target.string();

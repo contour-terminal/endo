@@ -549,8 +549,7 @@ Shell::Shell(): Shell(RealTTY::instance(), PosixEnvironmentProvider::instance())
 }
 #endif
 
-Shell::Shell(TTY& tty, EnvironmentProvider& env):
-    Shell(tty, env, NativeFileSystem::instance())
+Shell::Shell(TTY& tty, EnvironmentProvider& env): Shell(tty, env, NativeFileSystem::instance())
 {
 }
 
@@ -627,8 +626,8 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
             std::filesystem::path(userProfile) / ".config" / "endo" / "definitions", _fs);
 #else
     if (auto const* home = std::getenv("HOME"))
-        _outputDefinitions.loadFromDirectory(
-            std::filesystem::path(home) / ".config" / "endo" / "definitions", _fs);
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(home) / ".config" / "endo" / "definitions",
+                                             _fs);
 #endif
 
     // Register output definition types and structured commands in persistent state
@@ -716,7 +715,8 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
 
-    _dirConfigManager = std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
+    _dirConfigManager =
+        std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
 
     // Register dark/light mode auto-switching via terminal color scheme detection
     prompt.terminal().onColorSchemeChanged([](tui::ColorScheme scheme) {
@@ -862,21 +862,14 @@ void Shell::loadInitScript()
         {
             if (auto content = _fs.readFile(initPath))
             {
-                // init.endo is a configuration script, not interactive user input —
-                // suppress auto-display and unused-value detection.
-                auto const savedInteractive = _interactive;
-                auto const savedUnusedDetection = _unusedValueDetection;
-                _interactive = false;
-                _unusedValueDetection = false;
-                auto const initResult = execute(*content, initPath.string());
-                _interactive = savedInteractive;
-                _unusedValueDetection = savedUnusedDetection;
-                if (initResult != 0)
-                    _tty.writeToStderr(std::format("endo: warning: init.endo exited with code {}\n", initResult));
+                if (auto const initResult = executeConfigScript(*content, initPath.string()); initResult != 0)
+                    _tty.writeToStderr(
+                        std::format("endo: warning: init.endo exited with code {}\n", initResult));
             }
             else
             {
-                _tty.writeToStderr(std::format("endo: warning: error loading {}: {}\n", initPath.string(), content.error()));
+                _tty.writeToStderr(
+                    std::format("endo: warning: error loading {}: {}\n", initPath.string(), content.error()));
             }
         }
     }
@@ -939,18 +932,12 @@ void Shell::loadCompleters()
 
             if (auto content = _fs.readFile(path))
             {
-                auto const savedInteractive = _interactive;
-                auto const savedUnusedDetection = _unusedValueDetection;
-                _interactive = false;
-                _unusedValueDetection = false;
-                (void) execute(*content, path.string());
-                _interactive = savedInteractive;
-                _unusedValueDetection = savedUnusedDetection;
+                (void) executeConfigScript(*content, path.string());
             }
             else
             {
-                _tty.writeToStderr(
-                    std::format("endo: warning: error loading completer {}: {}\n", path.string(), content.error()));
+                _tty.writeToStderr(std::format(
+                    "endo: warning: error loading completer {}: {}\n", path.string(), content.error()));
             }
         }
     };

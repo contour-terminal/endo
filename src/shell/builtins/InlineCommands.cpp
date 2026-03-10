@@ -1533,7 +1533,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
             for (auto const& entry: listResult.value())
             {
-                auto const relativePath = std::filesystem::relative(entry.path, srcPath);
+                auto const relativePath = entry.path.lexically_relative(srcPath);
                 auto const entryTarget = target / relativePath;
 
                 if (entry.isDirectory)
@@ -1568,8 +1568,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                         continue;
                     }
                     if (verbose)
-                        writeOutput(
-                            std::format("'{}' -> '{}'\n", entry.path.string(), entryTarget.string()));
+                        writeOutput(std::format("'{}' -> '{}'\n", entry.path.string(), entryTarget.string()));
                 }
             }
         }
@@ -1793,12 +1792,11 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                 }
                 for (auto const& entry: listResult.value())
                 {
-                    auto const relativePath = std::filesystem::relative(entry.path, srcPath);
+                    auto const relativePath = entry.path.lexically_relative(srcPath);
                     auto const entryTarget = target / relativePath;
                     if (entry.isDirectory)
                     {
-                        if (auto const mkResult = _fs.createDirectories(entryTarget);
-                            !mkResult.has_value())
+                        if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
                         {
                             copyFailed = true;
                             copyError = mkResult.error();
@@ -2000,7 +1998,8 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
             auto const ftype = pathFileType(searchPath);
             auto const isFile = _fs.isRegularFile(searchPath);
-            auto const sizeResult = isFile ? _fs.fileSize(searchPath) : std::expected<std::uintmax_t, std::string>(0);
+            auto const sizeResult =
+                isFile ? _fs.fileSize(searchPath) : std::expected<std::uintmax_t, std::string>(0);
             auto const mtimeResult = _fs.lastWriteTime(searchPath);
 
             find::FindEntry entry {
@@ -2030,7 +2029,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
         for (auto const& dirEntry: listResult.value())
         {
             // Compute depth from relative path
-            auto const relativePath = std::filesystem::relative(dirEntry.path, searchPath);
+            auto const relativePath = dirEntry.path.lexically_relative(searchPath);
             auto const depth = static_cast<int>(std::distance(relativePath.begin(), relativePath.end()));
 
             if (options.maxDepth.has_value() && depth > options.maxDepth.value())
@@ -2040,8 +2039,8 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
 
             auto const ftype = entryFileType(dirEntry);
-            auto const sizeResult =
-                dirEntry.isRegularFile ? _fs.fileSize(dirEntry.path) : std::expected<std::uintmax_t, std::string>(0);
+            auto const sizeResult = dirEntry.isRegularFile ? _fs.fileSize(dirEntry.path)
+                                                           : std::expected<std::uintmax_t, std::string>(0);
             auto const mtimeResult = _fs.lastWriteTime(dirEntry.path);
 
             find::FindEntry entry {
@@ -2230,7 +2229,11 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             std::vector<std::string> lines;
             std::string line;
             while (std::getline(*fileStream, line))
+            {
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
                 lines.push_back(std::move(line));
+            }
 
             auto const matches =
                 grep::searchLines(lines, *regex, opts, filePath.string(), showFilename, useColor, writer);

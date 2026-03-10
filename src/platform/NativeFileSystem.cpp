@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/NativeFileSystem.hpp>
-
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <sstream>
+
+#include <platform/NativeFileSystem.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -78,7 +79,7 @@ std::expected<std::string, std::string> NativeFileSystem::readFile(fs::path cons
 }
 
 std::expected<void, std::string> NativeFileSystem::writeFile(fs::path const& path,
-                                                              std::string_view content) const
+                                                             std::string_view content) const
 {
     auto ofs = std::ofstream(path, std::ios::binary | std::ios::trunc);
     if (!ofs)
@@ -91,7 +92,7 @@ std::expected<void, std::string> NativeFileSystem::writeFile(fs::path const& pat
 }
 
 std::expected<void, std::string> NativeFileSystem::appendFile(fs::path const& path,
-                                                               std::string_view content) const
+                                                              std::string_view content) const
 {
     auto ofs = std::ofstream(path, std::ios::binary | std::ios::app);
     if (!ofs)
@@ -132,8 +133,9 @@ std::expected<void, std::string> NativeFileSystem::createDirectory(fs::path cons
 {
     std::error_code ec;
     if (!fs::create_directory(path, ec) || ec)
-        return std::unexpected(
-            std::format("Cannot create directory '{}': {}", path.string(), ec ? ec.message() : "No such file or directory"));
+        return std::unexpected(std::format("Cannot create directory '{}': {}",
+                                           path.string(),
+                                           ec ? ec.message() : "No such file or directory"));
     return {};
 }
 
@@ -142,7 +144,8 @@ std::expected<void, std::string> NativeFileSystem::createDirectories(fs::path co
     std::error_code ec;
     fs::create_directories(path, ec);
     if (ec)
-        return std::unexpected(std::format("Cannot create directories '{}': {}", path.string(), ec.message()));
+        return std::unexpected(
+            std::format("Cannot create directories '{}': {}", path.string(), ec.message()));
     return {};
 }
 
@@ -164,8 +167,9 @@ std::expected<std::uintmax_t, std::string> NativeFileSystem::removeAll(fs::path 
     return result;
 }
 
-std::expected<void, std::string> NativeFileSystem::copyFile(fs::path const& from, fs::path const& to,
-                                                             bool overwrite) const
+std::expected<void, std::string> NativeFileSystem::copyFile(fs::path const& from,
+                                                            fs::path const& to,
+                                                            bool overwrite) const
 {
     std::error_code ec;
     auto const opts = overwrite ? fs::copy_options::overwrite_existing : fs::copy_options::none;
@@ -176,8 +180,7 @@ std::expected<void, std::string> NativeFileSystem::copyFile(fs::path const& from
     return {};
 }
 
-std::expected<void, std::string> NativeFileSystem::rename(fs::path const& from,
-                                                           fs::path const& to) const
+std::expected<void, std::string> NativeFileSystem::rename(fs::path const& from, fs::path const& to) const
 {
     std::error_code ec;
     fs::rename(from, to, ec);
@@ -206,12 +209,13 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     return entries;
 }
 
-std::expected<std::vector<FileSystem::DirectoryEntry>, std::string>
-NativeFileSystem::listDirectoryRecursive(fs::path const& path) const
+std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSystem::listDirectoryRecursive(
+    fs::path const& path) const
 {
     std::error_code ec;
     auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry: fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
+    for (auto const& entry:
+         fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
     {
         entries.push_back(DirectoryEntry {
             .path = entry.path(),
@@ -235,8 +239,7 @@ std::expected<std::uintmax_t, std::string> NativeFileSystem::fileSize(fs::path c
     return size;
 }
 
-std::expected<fs::file_time_type, std::string> NativeFileSystem::lastWriteTime(
-    fs::path const& path) const
+std::expected<fs::file_time_type, std::string> NativeFileSystem::lastWriteTime(fs::path const& path) const
 {
     std::error_code ec;
     auto const time = fs::last_write_time(path, ec);
@@ -255,14 +258,12 @@ std::expected<fs::perms, std::string> NativeFileSystem::permissions(fs::path con
     return status.permissions();
 }
 
-std::expected<void, std::string> NativeFileSystem::setPermissions(fs::path const& path,
-                                                                    fs::perms perms) const
+std::expected<void, std::string> NativeFileSystem::setPermissions(fs::path const& path, fs::perms perms) const
 {
     std::error_code ec;
     fs::permissions(path, perms, ec);
     if (ec)
-        return std::unexpected(
-            std::format("Cannot set permissions '{}': {}", path.string(), ec.message()));
+        return std::unexpected(std::format("Cannot set permissions '{}': {}", path.string(), ec.message()));
     return {};
 }
 
