@@ -569,6 +569,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
     _env.setAndExport("SHELL", "endo");
+    _env.set("PWD", _env.currentDirectory());
 
     // Track shell nesting level (0 = outermost)
     if (auto const shlvl = _env.get("ENDO_SHLVL"); shlvl.has_value())

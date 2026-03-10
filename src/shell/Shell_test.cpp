@@ -160,6 +160,22 @@ TEST_CASE("shell.cd.relative_then_minus")
     CHECK(shell.env.get("OLDPWD").value_or("") == "/tmp/subdir");
 }
 
+TEST_CASE("shell.cd.minus_returns_to_initial_cwd")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell.env.addValidPath("/home/testuser");
+
+    // First cd from initial directory
+    shell("cd /tmp");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/home/testuser");
+
+    // cd - should return to initial cwd, not ~/
+    shell("cd -");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
+}
+
 TEST_CASE("shell.cd.minus_no_oldpwd")
 {
     TestShell shell;
