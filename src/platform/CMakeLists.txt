@@ -16,6 +16,9 @@ add_library(endo-platform STATIC
     UserPaths.hpp
     PathUtils.hpp
     ProcessProvider.hpp
+    FileSystem.hpp
+    NativeFileSystem.hpp
+    NativeFileSystem.cpp
     FileInfoProvider.hpp
     SignalHandler.hpp
     SignalHandler.cpp
@@ -26,6 +29,8 @@ add_library(endo-platform STATIC
     testing/MockPipe.hpp
     testing/MockProcessProvider.hpp
     testing/MockFileInfoProvider.hpp
+    testing/InMemoryFileSystem.hpp
+    testing/InMemoryFileSystem.cpp
 )
 
 # Platform-specific implementations

@@ -255,7 +255,8 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             // Mark the job as stopped
             WaitResult stoppedResult { .exitCode = 0, .stopped = true };
             jobTable.updateJobState(_currentProcessGroupPids.front(), stoppedResult);
-            std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+            _tty.writeToStdout(
+                std::format("\n[{}]+  Stopped                 {}\n", jobTable.getCurrentJob()->id, command));
         }
 
         _pipelineCommands.clear();
@@ -376,7 +377,8 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnCon
     {
         (void) jobTable.addJob(pgid, { pid }, command);
         jobTable.updateJobState(pid, *waitResult);
-        std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+        _tty.writeToStdout(
+            std::format("\n[{}]+  Stopped                 {}\n", jobTable.getCurrentJob()->id, command));
     }
 
     return result;
@@ -486,10 +488,7 @@ std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::stri
 #endif
     )
     {
-        std::error_code ec;
-        if (std::filesystem::exists(programPath, ec)
-            && (std::filesystem::is_regular_file(programPath, ec)
-                || std::filesystem::is_symlink(programPath, ec)))
+        if (_fs.exists(programPath) && (_fs.isRegularFile(programPath) || _fs.isSymlink(programPath)))
         {
             return programPath;
         }

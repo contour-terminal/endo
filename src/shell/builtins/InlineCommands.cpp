@@ -15,7 +15,6 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <iostream>
 #include <ranges>
 #include <span>
@@ -1096,10 +1095,8 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
     bool success = true;
     for (auto const& path: paths)
     {
-        namespace fs = std::filesystem;
-
         // Preserve root: reject "/"
-        auto const canonical = fs::path(path).lexically_normal();
+        auto const canonical = std::filesystem::path(path).lexically_normal();
         if (canonical == "/" || canonical == "//" || canonical.string() == "\\")
         {
             error("rm: it is dangerous to operate recursively on '/'");
@@ -1116,9 +1113,7 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
-        std::error_code ec;
-        auto const status = fs::symlink_status(path, ec);
-        if (ec || !fs::exists(status))
+        if (!_fs.exists(path))
         {
             if (!force)
             {
@@ -1128,11 +1123,14 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
+        auto const pathIsDirectory = _fs.isDirectory(path);
+        auto const pathIsSymlink = _fs.isSymlink(path);
+
         // Interactive prompt
         if (interactive && !force)
         {
             std::string prompt;
-            if (fs::is_directory(status))
+            if (pathIsDirectory)
                 prompt = std::format("rm: remove directory '{}'? ", path);
             else
                 prompt = std::format("rm: remove file '{}'? ", path);
@@ -1147,36 +1145,35 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
                 continue;
         }
 
-        if (fs::is_directory(status) && !fs::is_symlink(status))
+        if (pathIsDirectory && !pathIsSymlink)
         {
             if (recursive)
             {
                 if (verbose)
                 {
                     // Manual recursive traversal to print each entry (matches GNU coreutils rm -vr)
-                    auto entries = std::vector<fs::path> {};
-                    for (auto const& entry: fs::recursive_directory_iterator(
-                             path, fs::directory_options::skip_permission_denied, ec))
+                    auto const listResult = _fs.listDirectoryRecursive(path);
+                    if (!listResult.has_value())
                     {
-                        if (ec)
-                            break;
-                        entries.push_back(entry.path());
-                    }
-                    if (ec)
-                    {
-                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        error("rm: cannot remove '{}': {}", path, listResult.error());
                         success = false;
                     }
                     else
                     {
-                        // Reverse for leaf-to-root removal order
+                        // Collect paths and reverse for leaf-to-root removal order
+                        auto entries = std::vector<std::filesystem::path> {};
+                        for (auto const& entry: listResult.value())
+                            entries.push_back(entry.path);
                         std::ranges::reverse(entries);
                         auto allOk = true;
                         for (auto const& entry: entries)
                         {
-                            if (!fs::remove(entry, ec) || ec)
+                            auto const removeResult = _fs.remove(entry);
+                            if (!removeResult.has_value() || !removeResult.value())
                             {
-                                error("rm: cannot remove '{}': {}", entry.string(), ec.message());
+                                error("rm: cannot remove '{}': {}",
+                                      entry.string(),
+                                      removeResult.has_value() ? "Unknown error" : removeResult.error());
                                 allOk = false;
                                 break;
                             }
@@ -1186,33 +1183,41 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
                         {
                             success = false;
                         }
-                        else if (!fs::remove(path, ec) || ec)
-                        {
-                            error("rm: cannot remove '{}': {}", path, ec.message());
-                            success = false;
-                        }
                         else
                         {
-                            writeOutput(std::format("removed '{}'\n", path));
+                            auto const removeResult = _fs.remove(path);
+                            if (!removeResult.has_value() || !removeResult.value())
+                            {
+                                error("rm: cannot remove '{}': {}",
+                                      path,
+                                      removeResult.has_value() ? "Unknown error" : removeResult.error());
+                                success = false;
+                            }
+                            else
+                            {
+                                writeOutput(std::format("removed '{}'\n", path));
+                            }
                         }
                     }
                 }
                 else
                 {
-                    auto const count = fs::remove_all(path, ec);
-                    if (ec)
+                    auto const removeResult = _fs.removeAll(path);
+                    if (!removeResult.has_value())
                     {
-                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        error("rm: cannot remove '{}': {}", path, removeResult.error());
                         success = false;
                     }
-                    (void) count;
                 }
             }
             else if (removeEmptyDirs)
             {
-                if (!fs::remove(path, ec) || ec)
+                auto const removeResult = _fs.remove(path);
+                if (!removeResult.has_value() || !removeResult.value())
                 {
-                    error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Directory not empty");
+                    error("rm: cannot remove '{}': {}",
+                          path,
+                          removeResult.has_value() ? "Directory not empty" : removeResult.error());
                     success = false;
                 }
                 else if (verbose)
@@ -1228,9 +1233,12 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
         }
         else
         {
-            if (!fs::remove(path, ec) || ec)
+            auto const removeResult = _fs.remove(path);
+            if (!removeResult.has_value() || !removeResult.value())
             {
-                error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Unknown error");
+                error("rm: cannot remove '{}': {}",
+                      path,
+                      removeResult.has_value() ? "Unknown error" : removeResult.error());
                 success = false;
             }
             else if (verbose)
@@ -1326,34 +1334,30 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
     bool success = true;
     for (auto const& path: paths)
     {
-        namespace fs = std::filesystem;
-        std::error_code ec;
-
         if (parents)
         {
-            fs::create_directories(path, ec);
-            if (ec)
+            auto const result = _fs.createDirectories(path);
+            if (!result.has_value())
             {
-                error("mkdir: cannot create directory '{}': {}", path, ec.message());
+                error("mkdir: cannot create directory '{}': {}", path, result.error());
                 success = false;
                 continue;
             }
-            if (verbose && fs::exists(path))
+            if (verbose && _fs.exists(path))
                 writeOutput(std::format("mkdir: created directory '{}'\n", path));
         }
         else
         {
-            if (fs::exists(path, ec))
+            if (_fs.exists(path))
             {
                 error("mkdir: cannot create directory '{}': File exists", path);
                 success = false;
                 continue;
             }
-            if (!fs::create_directory(path, ec) || ec)
+            auto const result = _fs.createDirectories(path);
+            if (!result.has_value())
             {
-                error("mkdir: cannot create directory '{}': {}",
-                      path,
-                      ec ? ec.message() : "No such file or directory");
+                error("mkdir: cannot create directory '{}': {}", path, result.error());
                 success = false;
                 continue;
             }
@@ -1476,11 +1480,10 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
         return 1;
     }
 
-    namespace fs = std::filesystem;
-
-    auto const dest = fs::path(paths.back());
+    auto const dest = std::filesystem::path(paths.back());
     auto const sources = std::span(paths.data(), paths.size() - 1);
-    auto const destIsDir = fs::is_directory(dest);
+    auto const destIsDir = _fs.isDirectory(dest);
+    auto const overwrite = !noClobber;
 
     if (sources.size() > 1 && !destIsDir)
     {
@@ -1488,28 +1491,19 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
         return 1;
     }
 
-    auto copyOptions = fs::copy_options::none;
-    if (noClobber)
-        copyOptions |= fs::copy_options::skip_existing;
-    else
-        copyOptions |= fs::copy_options::overwrite_existing;
-    if (recursive)
-        copyOptions |= fs::copy_options::recursive;
-
     bool success = true;
     for (auto const& src: sources)
     {
-        auto const srcPath = fs::path(src);
-        std::error_code ec;
+        auto const srcPath = std::filesystem::path(src);
 
-        if (!fs::exists(srcPath, ec))
+        if (!_fs.exists(srcPath))
         {
             error("cp: cannot stat '{}': No such file or directory", src);
             success = false;
             continue;
         }
 
-        if (fs::is_directory(srcPath) && !recursive)
+        if (_fs.isDirectory(srcPath) && !recursive)
         {
             error("cp: -r not specified; omitting directory '{}'", src);
             success = false;
@@ -1518,69 +1512,134 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
         auto const target = destIsDir ? dest / srcPath.filename() : dest;
 
-        if (recursive && fs::is_directory(srcPath) && verbose)
+        if (recursive && _fs.isDirectory(srcPath))
         {
-            // Verbose recursive copy: iterate and copy individually to report each file
-            for (auto const& entry: fs::recursive_directory_iterator(srcPath, ec))
+            // Recursive directory copy: list all entries and copy individually
+            auto const listResult = _fs.listDirectoryRecursive(srcPath);
+            if (!listResult.has_value())
             {
-                auto const relativePath = fs::relative(entry.path(), srcPath, ec);
+                error("cp: cannot copy '{}': {}", src, listResult.error());
+                success = false;
+                continue;
+            }
+
+            // Create the top-level target directory
+            if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
+            {
+                error("cp: cannot create directory '{}': {}", target.string(), mkResult.error());
+                success = false;
+                continue;
+            }
+
+            for (auto const& entry: listResult.value())
+            {
+                auto const relativePath = std::filesystem::relative(entry.path, srcPath);
                 auto const entryTarget = target / relativePath;
 
-                if (entry.is_directory())
+                if (entry.isDirectory)
                 {
-                    fs::create_directories(entryTarget, ec);
-                    if (ec)
+                    if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
                     {
-                        error("cp: cannot create directory '{}': {}", entryTarget.string(), ec.message());
+                        error("cp: cannot create directory '{}': {}", entryTarget.string(), mkResult.error());
                         success = false;
                     }
                 }
                 else
                 {
+                    // Skip silently if no-clobber and target exists
+                    if (noClobber && _fs.exists(entryTarget))
+                        continue;
+
                     // Ensure parent directory exists
-                    fs::create_directories(entryTarget.parent_path(), ec);
-                    auto fileCopyOptions = fs::copy_options::none;
-                    if (noClobber)
-                        fileCopyOptions |= fs::copy_options::skip_existing;
-                    else
-                        fileCopyOptions |= fs::copy_options::overwrite_existing;
-                    fs::copy_file(entry.path(), entryTarget, fileCopyOptions, ec);
-                    if (ec)
+                    if (auto const mkResult = _fs.createDirectories(entryTarget.parent_path());
+                        !mkResult.has_value())
                     {
-                        error("cp: cannot copy '{}': {}", entry.path().string(), ec.message());
+                        error("cp: cannot create directory '{}': {}",
+                              entryTarget.parent_path().string(),
+                              mkResult.error());
                         success = false;
                         continue;
                     }
-                    writeOutput(std::format("'{}' -> '{}'\n", entry.path().string(), entryTarget.string()));
+                    if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, overwrite);
+                        !cpResult.has_value())
+                    {
+                        error("cp: cannot copy '{}': {}", entry.path.string(), cpResult.error());
+                        success = false;
+                        continue;
+                    }
+                    if (verbose)
+                        writeOutput(
+                            std::format("'{}' -> '{}'\n", entry.path.string(), entryTarget.string()));
                 }
             }
-            // Copy the top-level directory itself (create it if needed)
-            fs::create_directories(target, ec);
-            if (ec)
+        }
+        else if (_fs.isDirectory(srcPath))
+        {
+            // Non-verbose recursive directory copy
+            auto const listResult = _fs.listDirectoryRecursive(srcPath);
+            if (!listResult.has_value())
             {
-                error("cp: cannot create directory '{}': {}", target.string(), ec.message());
+                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), listResult.error());
                 success = false;
+                continue;
             }
+
+            if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
+            {
+                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
+                success = false;
+                continue;
+            }
+
+            for (auto const& entry: listResult.value())
+            {
+                auto const relativePath = std::filesystem::relative(entry.path, srcPath);
+                auto const entryTarget = target / relativePath;
+
+                if (entry.isDirectory)
+                {
+                    if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
+                    {
+                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
+                        success = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    // Skip silently if no-clobber and target exists
+                    if (noClobber && _fs.exists(entryTarget))
+                        continue;
+
+                    auto const mkResult = _fs.createDirectories(entryTarget.parent_path());
+                    if (!mkResult.has_value())
+                    {
+                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), mkResult.error());
+                        success = false;
+                        break;
+                    }
+                    if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, overwrite);
+                        !cpResult.has_value())
+                    {
+                        error("cp: cannot copy '{}' to '{}': {}", src, target.string(), cpResult.error());
+                        success = false;
+                        break;
+                    }
+                }
+            }
+
+            if (verbose && success)
+                writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
         }
         else
         {
-            if (fs::is_directory(srcPath))
-            {
-                fs::copy(srcPath, target, copyOptions, ec);
-            }
-            else
-            {
-                auto fileCopyOptions = fs::copy_options::none;
-                if (noClobber)
-                    fileCopyOptions |= fs::copy_options::skip_existing;
-                else
-                    fileCopyOptions |= fs::copy_options::overwrite_existing;
-                fs::copy_file(srcPath, target, fileCopyOptions, ec);
-            }
+            // Single file copy -- skip silently if no-clobber and target exists
+            if (noClobber && _fs.exists(target))
+                continue;
 
-            if (ec)
+            if (auto const cpResult = _fs.copyFile(srcPath, target, overwrite); !cpResult.has_value())
             {
-                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), ec.message());
+                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), cpResult.error());
                 success = false;
                 continue;
             }
@@ -1712,11 +1771,9 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         return 1;
     }
 
-    namespace fs = std::filesystem;
-
-    auto const dest = fs::path(paths.back());
+    auto const dest = std::filesystem::path(paths.back());
     auto const sources = std::span(paths.data(), paths.size() - 1);
-    auto const destIsDir = fs::is_directory(dest);
+    auto const destIsDir = _fs.isDirectory(dest);
 
     if (sources.size() > 1 && !destIsDir)
     {
@@ -1727,11 +1784,9 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
     auto success = true;
     for (auto const& src: sources)
     {
-        auto const srcPath = fs::path(src);
-        std::error_code ec;
+        auto const srcPath = std::filesystem::path(src);
 
-        auto const srcStatus = fs::symlink_status(srcPath, ec);
-        if (ec || !fs::exists(srcStatus))
+        if (!_fs.exists(srcPath))
         {
             error("mv: cannot stat '{}': No such file or directory", src);
             success = false;
@@ -1741,7 +1796,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         auto const target = destIsDir ? dest / srcPath.filename() : dest;
 
         // Check if target already exists
-        if (fs::exists(target))
+        if (_fs.exists(target))
         {
             if (noClobber)
                 continue;
@@ -1760,34 +1815,78 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         }
 
         // Attempt rename (fast path: same filesystem)
-        fs::rename(srcPath, target, ec);
-        if (ec)
+        auto const renameResult = _fs.rename(srcPath, target);
+        if (!renameResult.has_value())
         {
-            // Cross-device move: fallback to copy + remove
-            if (ec == std::errc::cross_device_link)
+            // Cross-device move: fallback to recursive copy + remove
+            // Try to copy the source to target
+            auto copyFailed = false;
+            if (_fs.isDirectory(srcPath))
             {
-                auto copyOptions = fs::copy_options::recursive | fs::copy_options::overwrite_existing;
-                fs::copy(srcPath, target, copyOptions, ec);
-                if (ec)
+                // Recursive directory copy
+                if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
                 {
-                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), ec.message());
+                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), mkResult.error());
                     success = false;
                     continue;
                 }
-                fs::remove_all(srcPath, ec);
-                if (ec)
+                auto const listResult = _fs.listDirectoryRecursive(srcPath);
+                if (!listResult.has_value())
                 {
-                    error("mv: moved '{}' to '{}' but failed to remove source: {}",
-                          src,
-                          target.string(),
-                          ec.message());
+                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), listResult.error());
                     success = false;
                     continue;
+                }
+                for (auto const& entry: listResult.value())
+                {
+                    auto const relativePath = std::filesystem::relative(entry.path, srcPath);
+                    auto const entryTarget = target / relativePath;
+                    if (entry.isDirectory)
+                    {
+                        if (auto const mkResult = _fs.createDirectories(entryTarget);
+                            !mkResult.has_value())
+                        {
+                            copyFailed = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        auto const mkResult = _fs.createDirectories(entryTarget.parent_path());
+                        if (!mkResult.has_value())
+                        {
+                            copyFailed = true;
+                            break;
+                        }
+                        if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, true);
+                            !cpResult.has_value())
+                        {
+                            copyFailed = true;
+                            break;
+                        }
+                    }
                 }
             }
             else
             {
-                error("mv: cannot move '{}' to '{}': {}", src, target.string(), ec.message());
+                if (auto const cpResult = _fs.copyFile(srcPath, target, true); !cpResult.has_value())
+                    copyFailed = true;
+            }
+
+            if (copyFailed)
+            {
+                error("mv: cannot move '{}' to '{}': {}", src, target.string(), renameResult.error());
+                success = false;
+                continue;
+            }
+
+            auto const removeResult = _fs.removeAll(srcPath);
+            if (!removeResult.has_value())
+            {
+                error("mv: moved '{}' to '{}' but failed to remove source: {}",
+                      src,
+                      target.string(),
+                      removeResult.error());
                 success = false;
                 continue;
             }
@@ -1841,8 +1940,6 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
 
 int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
-    namespace fs = std::filesystem;
-
     // Parse arguments (skip args[0] which is "find")
     std::vector<std::string> findArgs;
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -1908,26 +2005,50 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
     auto const separator = options.print0 ? std::string_view("\0", 1) : std::string_view("\n");
 
+    // Helper to derive std::filesystem::file_type from FileSystem::DirectoryEntry booleans
+    auto entryFileType = [](FileSystem::DirectoryEntry const& de) -> std::filesystem::file_type {
+        if (de.isSymlink)
+            return std::filesystem::file_type::symlink;
+        if (de.isDirectory)
+            return std::filesystem::file_type::directory;
+        if (de.isRegularFile)
+            return std::filesystem::file_type::regular;
+        return std::filesystem::file_type::unknown;
+    };
+
+    // Helper to determine file type for a path via _fs queries
+    auto pathFileType = [this](std::filesystem::path const& p) -> std::filesystem::file_type {
+        if (_fs.isSymlink(p))
+            return std::filesystem::file_type::symlink;
+        if (_fs.isDirectory(p))
+            return std::filesystem::file_type::directory;
+        if (_fs.isRegularFile(p))
+            return std::filesystem::file_type::regular;
+        return std::filesystem::file_type::unknown;
+    };
+
     for (auto const& searchPath: options.searchPaths)
     {
-        std::error_code ec;
-
         // Output the search path itself (depth 0)
         if (!options.minDepth.has_value() || options.minDepth.value() <= 0)
         {
-            auto const status = fs::symlink_status(searchPath, ec);
-            if (ec)
+            if (!_fs.exists(searchPath))
             {
-                error("find: '{}': {}", searchPath.string(), ec.message());
+                error("find: '{}': No such file or directory", searchPath.string());
                 continue;
             }
+
+            auto const ftype = pathFileType(searchPath);
+            auto const isFile = _fs.isRegularFile(searchPath);
+            auto const sizeResult = isFile ? _fs.fileSize(searchPath) : std::expected<std::uintmax_t, std::string>(0);
+            auto const mtimeResult = _fs.lastWriteTime(searchPath);
 
             find::FindEntry entry {
                 .path = searchPath,
                 .filename = searchPath.filename().string(),
-                .type = status.type(),
-                .size = fs::is_regular_file(status) ? fs::file_size(searchPath, ec) : 0,
-                .mtime = fs::last_write_time(searchPath, ec),
+                .type = ftype,
+                .size = sizeResult.value_or(0),
+                .mtime = mtimeResult.value_or(std::filesystem::file_time_type {}),
                 .depth = 0,
             };
 
@@ -1942,40 +2063,39 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
         if (options.maxDepth.has_value() && options.maxDepth.value() == 0)
             continue;
 
-        auto dirIter =
-            fs::recursive_directory_iterator(searchPath, fs::directory_options::skip_permission_denied, ec);
-        if (ec)
+        auto const listResult = _fs.listDirectoryRecursive(searchPath);
+        if (!listResult.has_value())
             continue;
 
-        for (auto const& dirEntry: dirIter)
+        for (auto const& dirEntry: listResult.value())
         {
-            auto const depth = dirIter.depth() + 1;
+            // Compute depth from relative path
+            auto const relativePath = std::filesystem::relative(dirEntry.path, searchPath);
+            auto const depth = static_cast<int>(std::distance(relativePath.begin(), relativePath.end()));
 
             if (options.maxDepth.has_value() && depth > options.maxDepth.value())
-            {
-                dirIter.disable_recursion_pending();
                 continue;
-            }
 
             if (options.minDepth.has_value() && depth < options.minDepth.value())
                 continue;
 
-            auto const status = dirEntry.symlink_status(ec);
-            if (ec)
-                continue;
+            auto const ftype = entryFileType(dirEntry);
+            auto const sizeResult =
+                dirEntry.isRegularFile ? _fs.fileSize(dirEntry.path) : std::expected<std::uintmax_t, std::string>(0);
+            auto const mtimeResult = _fs.lastWriteTime(dirEntry.path);
 
             find::FindEntry entry {
-                .path = dirEntry.path(),
-                .filename = dirEntry.path().filename().string(),
-                .type = status.type(),
-                .size = dirEntry.is_regular_file(ec) ? dirEntry.file_size(ec) : 0,
-                .mtime = dirEntry.last_write_time(ec),
+                .path = dirEntry.path,
+                .filename = dirEntry.path.filename().string(),
+                .type = ftype,
+                .size = sizeResult.value_or(0),
+                .mtime = mtimeResult.value_or(std::filesystem::file_time_type {}),
                 .depth = depth,
             };
 
             if (!expression || expression->evaluate(entry))
             {
-                auto const output = dirEntry.path().string() + std::string(separator);
+                auto const output = dirEntry.path.string() + std::string(separator);
                 platformWrite(outputFd, output.data(), output.size());
             }
         }
@@ -2138,8 +2258,8 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
 
             // Read file
-            std::ifstream file(filePath);
-            if (!file.is_open())
+            auto fileStream = _fs.openRead(filePath);
+            if (!fileStream || !fileStream->good())
             {
                 if (!opts.suppressErrors)
                     error("grep: {}: Permission denied", filePath.string());
@@ -2149,7 +2269,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
 
             std::vector<std::string> lines;
             std::string line;
-            while (std::getline(file, line))
+            while (std::getline(*fileStream, line))
                 lines.push_back(std::move(line));
 
             auto const matches =
@@ -2295,8 +2415,8 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandl
 
     // Timeout reached — send configured signal
     if (opts.verbose)
-        std::cerr << std::format(
-            "timeout: sending signal {} to command '{}'\n", opts.signal, opts.command[0]);
+        _tty.writeToStderr(
+            std::format("timeout: sending signal {} to command '{}'\n", opts.signal, opts.command[0]));
     if (auto const sendResult = _processManager.sendSignal(pid, opts.signal); !sendResult.has_value())
         return 125;
 
@@ -2328,7 +2448,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandl
 
         // Grace period expired — send SIGKILL
         if (opts.verbose)
-            std::cerr << std::format("timeout: sending SIGKILL to command '{}'\n", opts.command[0]);
+            _tty.writeToStderr(std::format("timeout: sending SIGKILL to command '{}'\n", opts.command[0]));
 
 #if !defined(_WIN32)
         if (auto const sendResult = _processManager.sendSignal(pid, 9); !sendResult.has_value())

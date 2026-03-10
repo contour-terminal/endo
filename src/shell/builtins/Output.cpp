@@ -13,7 +13,6 @@
 
 #include <filesystem>
 #include <format>
-#include <print>
 
 #include <platform/Types.hpp>
 
@@ -31,13 +30,15 @@ using endo::http::HttpRequest;
 void executeFetch(CoreVM::Params& args,
                   std::string const& url,
                   std::vector<std::string> headers,
-                  bool interactive)
+                  bool interactive,
+                  endo::TTY const& tty,
+                  endo::FileSystem const& fs)
 {
     auto* runner = args.caller();
 
     // Determine output filename from URL, or generate a unique one
     auto filename = endo::http::extractFilenameFromUrl(url);
-    auto outputPath = std::filesystem::current_path();
+    auto outputPath = fs.currentPath();
 
     if (filename)
     {
@@ -75,11 +76,11 @@ void executeFetch(CoreVM::Params& args,
 
     // Progress bar on stderr when interactive, stderr is a TTY, and not suppressed
     bool const showProgress =
-        interactive && isatty(STDERR_FILENO) != 0 && getenv("ENDO_FETCH_QUIET") == nullptr;
+        interactive && tty.isStderrTerminal() && getenv("ENDO_FETCH_QUIET") == nullptr;
 
     if (showProgress)
     {
-        request.progressCallback = [](size_t total, size_t now) -> bool {
+        request.progressCallback = [&tty](size_t total, size_t now) -> bool {
             if (total > 0)
             {
                 auto const pct = static_cast<int>((now * 100) / total);
@@ -91,11 +92,11 @@ void executeFetch(CoreVM::Params& args,
                     bar += '>';
                     bar.append(static_cast<size_t>(barWidth - filled - 1), ' ');
                 }
-                std::print(stderr, "\r[{}] {}%", bar, pct);
+                tty.writeToStderr(std::format("\r[{}] {}%", bar, pct));
             }
             else if (now > 0)
             {
-                std::print(stderr, "\rfetch: {} bytes received", now);
+                tty.writeToStderr(std::format("\rfetch: {} bytes received", now));
             }
             return true;
         };
@@ -105,7 +106,7 @@ void executeFetch(CoreVM::Params& args,
 
     // Clear progress bar
     if (showProgress)
-        std::print(stderr, "\r{}\r", std::string(60, ' '));
+        tty.writeToStderr(std::format("\r{}\r", std::string(60, ' ')));
 
     CoreVM::TypedObject* resultObj = nullptr;
 
@@ -119,7 +120,8 @@ void executeFetch(CoreVM::Params& args,
     else if (result.has_value())
     {
         // HTTP error (non-2xx): delete the file and return Error(message)
-        std::filesystem::remove(outputPath);
+        auto const removeResult = fs.remove(outputPath);
+        (void) removeResult;
         auto msg = std::format("HTTP {}", result->statusCode);
         resultObj = runner->makeErrorResult(reinterpret_cast<uintptr_t>(runner->newString(msg)),
                                             CoreVM::LiteralType::String);
@@ -271,7 +273,7 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
 void Shell::builtinFetch(CoreVM::Params& context)
 {
     auto const& url = context.getString(1);
-    executeFetch(context, url, {}, _interactive);
+    executeFetch(context, url, {}, _interactive, _tty, _fs);
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const)
@@ -292,7 +294,7 @@ void Shell::builtinFetchWithHeaders(CoreVM::Params& context)
         cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
     }
 
-    executeFetch(context, url, std::move(headers), _interactive);
+    executeFetch(context, url, std::move(headers), _interactive, _tty, _fs);
 }
 
 } // namespace endo

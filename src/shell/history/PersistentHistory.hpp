@@ -10,6 +10,8 @@
 
 #include "History.hpp"
 
+#include <platform/FileSystem.hpp>
+
 namespace endo
 {
 
@@ -30,9 +32,10 @@ struct HistoryEntry
 class PersistentHistory final: public History
 {
   public:
-    /// @brief Constructs a persistent history with the given maximum size.
+    /// @brief Constructs a persistent history with the given filesystem and maximum size.
+    /// @param fs The filesystem interface to use for reading/writing history files.
     /// @param maxSize Maximum number of entries to store (default: 5000).
-    explicit PersistentHistory(size_t maxSize = 5000);
+    explicit PersistentHistory(FileSystem const& fs, size_t maxSize = 5000);
 
     void add(std::string entry) override;
     [[nodiscard]] std::vector<std::string> const& entries() const override;
@@ -89,6 +92,7 @@ class PersistentHistory final: public History
     /// @brief Evicts the oldest/least-used entries when at capacity.
     void evictIfNeeded();
 
+    FileSystem const& _fs;                  ///< Filesystem interface for I/O.
     std::vector<HistoryEntry> _richEntries; ///< Full entry data with metadata.
     std::vector<std::string> _entries;      ///< String cache for entries() return.
     std::filesystem::path _filePath;        ///< Path to the history file.

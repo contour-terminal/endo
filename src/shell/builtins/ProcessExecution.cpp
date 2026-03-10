@@ -383,7 +383,8 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             // Mark the job as stopped
             WaitResult stoppedResult { .exitCode = 0, .stopped = true };
             jobTable.updateJobState(_currentProcessGroupPids.front(), stoppedResult);
-            std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+            _tty.writeToStdout(
+                std::format("\n[{}]+  Stopped                 {}\n", jobTable.getCurrentJob()->id, command));
         }
 
         _pipelineCommands.clear();

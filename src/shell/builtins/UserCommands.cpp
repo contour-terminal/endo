@@ -5,9 +5,7 @@
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/TerminalOutput.hpp>
 
-#include <filesystem>
 #include <format>
-#include <print>
 
 #include <platform/Types.hpp>
 
@@ -35,7 +33,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         auto const& bindings = prompt.keyBindings().bindings();
         for (auto const& [chord, action]: bindings)
         {
-            std::println("{}\t{}", chord.toString(), tui::editActionToString(action));
+            _tty.writeToStdout(std::format("{}\t{}\n", chord.toString(), tui::editActionToString(action)));
         }
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
@@ -84,7 +82,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         auto const& bindings = prompt.keyBindings().bindings();
         for (auto const& [chord, action]: bindings)
         {
-            std::println("{}\t{}", chord.toString(), tui::editActionToString(action));
+            _tty.writeToStdout(std::format("{}\t{}\n", chord.toString(), tui::editActionToString(action)));
         }
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
@@ -285,7 +283,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
         // If program contains a path separator, treat as path
         if (program.contains('/') || program.contains('\\'))
         {
-            if (std::filesystem::exists(program))
+            if (_fs.exists(program))
             {
                 writeOutput(program + "\n");
                 found = true;

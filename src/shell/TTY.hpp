@@ -83,6 +83,17 @@ class TTY
         writeToStdout(std::format(fmt, std::forward<Args>(args)...));
     }
 
+    virtual void writeToStderr(std::string_view str) const = 0;
+
+    template <typename... Args>
+    void writeToStderr(std::format_string<Args...> const& fmt, Args&&... args) const
+    {
+        writeToStderr(std::format(fmt, std::forward<Args>(args)...));
+    }
+
+    /// Checks if stderr is connected to a terminal.
+    [[nodiscard]] virtual bool isStderrTerminal() const noexcept = 0;
+
     virtual void writeToStdin(std::string_view str) const = 0;
 
     template <typename... Args>
@@ -116,6 +127,8 @@ class WindowsTTY final: public TTY
     [[nodiscard]] std::optional<char> readCharWithTimeout(
         std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
+    void writeToStderr(std::string_view str) const override;
+    [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
   private:
@@ -146,6 +159,8 @@ class WindowsTestPTY final: public TTY
     [[nodiscard]] std::optional<char> readCharWithTimeout(
         std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
+    void writeToStderr(std::string_view str) const override;
+    [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
     /// Returns the output that was written to the TTY.
@@ -204,6 +219,8 @@ class RealTTY final: public TTY
     [[nodiscard]] std::optional<char> readCharWithTimeout(
         std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
+    void writeToStderr(std::string_view str) const override;
+    [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
   private:
@@ -230,6 +247,8 @@ class TestPTY final: public TTY
     [[nodiscard]] std::optional<char> readCharWithTimeout(
         std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
+    void writeToStderr(std::string_view str) const override;
+    [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
     // Returns the output that was written to the TTY.

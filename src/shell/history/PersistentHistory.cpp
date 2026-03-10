@@ -9,14 +9,15 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <ranges>
+#include <sstream>
 #include <string>
 
 namespace endo
 {
 
-PersistentHistory::PersistentHistory(size_t maxSize): _filePath(defaultHistoryPath()), _maxSize(maxSize)
+PersistentHistory::PersistentHistory(FileSystem const& fs, size_t maxSize):
+    _fs(fs), _filePath(defaultHistoryPath()), _maxSize(maxSize)
 {
     _richEntries.reserve(std::min(maxSize, size_t { 256 }));
 }
@@ -41,12 +42,16 @@ void PersistentHistory::setFilePath(std::filesystem::path path)
 
 void PersistentHistory::load()
 {
-    if (!std::filesystem::exists(_filePath))
+    if (!_fs.exists(_filePath))
         return;
 
     try
     {
-        auto const root = YAML::LoadFile(_filePath.string());
+        auto const content = _fs.readFile(_filePath);
+        if (!content)
+            return;
+
+        auto const root = YAML::Load(*content);
         if (!root["entries"])
             return;
 
@@ -95,7 +100,7 @@ void PersistentHistory::load()
 void PersistentHistory::autoImportIfEmpty()
 {
     // Only import if our history file does not exist
-    if (std::filesystem::exists(_filePath))
+    if (_fs.exists(_filePath))
         return;
 
     // Try fish first, then zsh, then bash
@@ -108,7 +113,7 @@ void PersistentHistory::autoImportIfEmpty()
 
     // Fish
     auto const fishPath = homePath / ".local" / "share" / "fish" / "fish_history";
-    if (std::filesystem::exists(fishPath))
+    if (_fs.exists(fishPath))
     {
         if (importFish(fishPath) > 0)
         {
@@ -125,7 +130,7 @@ void PersistentHistory::autoImportIfEmpty()
     else
         zshPath = homePath / ".zsh_history";
 
-    if (std::filesystem::exists(zshPath))
+    if (_fs.exists(zshPath))
     {
         if (importZsh(zshPath) > 0)
         {
@@ -142,7 +147,7 @@ void PersistentHistory::autoImportIfEmpty()
     else
         bashPath = homePath / ".bash_history";
 
-    if (std::filesystem::exists(bashPath))
+    if (_fs.exists(bashPath))
     {
         if (importBash(bashPath) > 0)
         {
@@ -334,7 +339,8 @@ void PersistentHistory::flush()
     // Create parent directories
     auto const parentDir = _filePath.parent_path();
     if (!parentDir.empty())
-        std::filesystem::create_directories(parentDir);
+        if (!_fs.createDirectories(parentDir))
+            return;
 
     // Serialize to YAML
     auto emitter = YAML::Emitter {};
@@ -362,14 +368,13 @@ void PersistentHistory::flush()
 
     // Atomic write: write to .tmp, then rename
     auto const tmpPath = std::filesystem::path(_filePath.string() + ".tmp");
-    {
-        auto ofs = std::ofstream(tmpPath);
-        if (!ofs)
-            return;
-        ofs << emitter.c_str() << '\n';
-    }
+    auto const content = std::string(emitter.c_str()) + '\n';
+    if (!_fs.writeFile(tmpPath, content))
+        return;
 
-    std::filesystem::rename(tmpPath, _filePath);
+    if (!_fs.rename(tmpPath, _filePath))
+        return;
+
     _dirty = false;
 }
 
@@ -408,16 +413,17 @@ void PersistentHistory::evictIfNeeded()
 
 size_t PersistentHistory::importFish(std::filesystem::path const& path)
 {
-    auto ifs = std::ifstream(path);
-    if (!ifs)
+    auto const fileContent = _fs.readFile(path);
+    if (!fileContent)
         return 0;
 
     auto commands = std::vector<std::pair<std::string, std::time_t>> {};
     auto currentCmd = std::string {};
     auto currentTs = std::time_t { 0 };
 
+    auto iss = std::istringstream(*fileContent);
     auto line = std::string {};
-    while (std::getline(ifs, line))
+    while (std::getline(iss, line))
     {
         if (line.starts_with("- cmd: "))
         {
@@ -476,14 +482,15 @@ size_t PersistentHistory::importFish(std::filesystem::path const& path)
 
 size_t PersistentHistory::importZsh(std::filesystem::path const& path)
 {
-    auto ifs = std::ifstream(path);
-    if (!ifs)
+    auto const fileContent = _fs.readFile(path);
+    if (!fileContent)
         return 0;
 
     auto commands = std::vector<std::pair<std::string, std::time_t>> {};
+    auto iss = std::istringstream(*fileContent);
     auto line = std::string {};
 
-    while (std::getline(ifs, line))
+    while (std::getline(iss, line))
     {
         if (line.empty())
             continue;
@@ -552,14 +559,15 @@ size_t PersistentHistory::importZsh(std::filesystem::path const& path)
 
 size_t PersistentHistory::importBash(std::filesystem::path const& path)
 {
-    auto ifs = std::ifstream(path);
-    if (!ifs)
+    auto const fileContent = _fs.readFile(path);
+    if (!fileContent)
         return 0;
 
     auto commands = std::vector<std::string> {};
+    auto iss = std::istringstream(*fileContent);
     auto line = std::string {};
 
-    while (std::getline(ifs, line))
+    while (std::getline(iss, line))
     {
         // Skip timestamp lines (bash HISTTIMEFORMAT)
         if (line.starts_with('#'))

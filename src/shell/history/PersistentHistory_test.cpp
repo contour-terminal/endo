@@ -3,15 +3,21 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
 
 #include "PersistentHistory.hpp"
+
+#include <platform/NativeFileSystem.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 namespace
 {
+
+auto const& testFs()
+{
+    return endo::NativeFileSystem::instance();
+}
 
 /// @brief RAII helper that creates a temporary directory and removes it on destruction.
 struct TempDir
@@ -30,8 +36,8 @@ struct TempDir
 void writeFile(std::filesystem::path const& path, std::string_view content)
 {
     std::filesystem::create_directories(path.parent_path());
-    auto ofs = std::ofstream(path);
-    ofs << content;
+    auto const result = testFs().writeFile(path, content);
+    REQUIRE(result.has_value());
 }
 
 } // namespace
@@ -39,7 +45,7 @@ void writeFile(std::filesystem::path const& path, std::string_view content)
 TEST_CASE("PersistentHistory.basic_add_and_search", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("git status");
@@ -57,7 +63,7 @@ TEST_CASE("PersistentHistory.basic_add_and_search", "[history]")
 TEST_CASE("PersistentHistory.fuzzy_search", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("git status");
@@ -72,7 +78,7 @@ TEST_CASE("PersistentHistory.fuzzy_search", "[history]")
 TEST_CASE("PersistentHistory.deduplication", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("git status");
@@ -87,7 +93,7 @@ TEST_CASE("PersistentHistory.deduplication", "[history]")
 TEST_CASE("PersistentHistory.markLastResult_persists_on_success", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("echo hello");
@@ -103,7 +109,7 @@ TEST_CASE("PersistentHistory.markLastResult_persists_on_success", "[history]")
 TEST_CASE("PersistentHistory.markLastResult_does_not_persist_new_on_failure", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("nonexistent_command");
@@ -119,7 +125,7 @@ TEST_CASE("PersistentHistory.markLastResult_does_not_persist_new_on_failure", "[
 TEST_CASE("PersistentHistory.previously_persisted_unpersisted_on_failure", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     // First: add and succeed
@@ -142,7 +148,7 @@ TEST_CASE("PersistentHistory.failure_removes_from_disk_on_roundtrip", "[history]
 
     // Persist two commands successfully
     {
-        auto history = endo::PersistentHistory {};
+        auto history = endo::PersistentHistory { testFs() };
         history.setFilePath(filePath);
 
         history.add("git status");
@@ -154,7 +160,7 @@ TEST_CASE("PersistentHistory.failure_removes_from_disk_on_roundtrip", "[history]
 
     // Re-run "git status" with failure — should un-persist it
     {
-        auto history = endo::PersistentHistory {};
+        auto history = endo::PersistentHistory { testFs() };
         history.setFilePath(filePath);
         history.load();
         REQUIRE(history.size() == 2);
@@ -165,7 +171,7 @@ TEST_CASE("PersistentHistory.failure_removes_from_disk_on_roundtrip", "[history]
 
     // Reload and verify only "cmake --build" survives
     {
-        auto history = endo::PersistentHistory {};
+        auto history = endo::PersistentHistory { testFs() };
         history.setFilePath(filePath);
         history.load();
 
@@ -181,7 +187,7 @@ TEST_CASE("PersistentHistory.load_save_roundtrip", "[history]")
 
     // Create and save
     {
-        auto history = endo::PersistentHistory {};
+        auto history = endo::PersistentHistory { testFs() };
         history.setFilePath(filePath);
 
         history.add("git status");
@@ -196,7 +202,7 @@ TEST_CASE("PersistentHistory.load_save_roundtrip", "[history]")
 
     // Load in a new instance
     {
-        auto history = endo::PersistentHistory {};
+        auto history = endo::PersistentHistory { testFs() };
         history.setFilePath(filePath);
         history.load();
 
@@ -210,7 +216,7 @@ TEST_CASE("PersistentHistory.load_save_roundtrip", "[history]")
 TEST_CASE("PersistentHistory.recency_over_frequency", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     // Add "git status" many times to boost frequency
@@ -235,7 +241,7 @@ TEST_CASE("PersistentHistory.recency_over_frequency", "[history]")
 TEST_CASE("PersistentHistory.frequency_tiebreaker", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     // Build up frequency for "git status" (executionCount = 20)
@@ -270,7 +276,7 @@ TEST_CASE("PersistentHistory.frequency_tiebreaker", "[history]")
 TEST_CASE("PersistentHistory.maxSize_eviction", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory(5); // small max
+    auto history = endo::PersistentHistory(testFs(), 5); // small max
     history.setFilePath(dir.path / "history.yml");
 
     for (auto i = 0; i < 6; ++i)
@@ -294,7 +300,7 @@ TEST_CASE("PersistentHistory.import_fish", "[history]")
               "- cmd: ls -la\n"
               "  when: 1707849200\n");
 
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
     auto const imported = history.importFish(fishPath);
     CHECK(imported == 3);
@@ -315,7 +321,7 @@ TEST_CASE("PersistentHistory.import_zsh_extended", "[history]")
               ": 1707849400:0;cmake --build\n"
               ": 1707849200:0;ls -la\n");
 
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
     auto const imported = history.importZsh(zshPath);
     CHECK(imported == 3);
@@ -334,7 +340,7 @@ TEST_CASE("PersistentHistory.import_bash", "[history]")
               "cmake --build\n"
               "ls -la\n");
 
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
     auto const imported = history.importBash(bashPath);
     CHECK(imported == 3);
@@ -347,7 +353,7 @@ TEST_CASE("PersistentHistory.import_bash", "[history]")
 TEST_CASE("PersistentHistory.nonexistent_file_loads_empty", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "does_not_exist.yml");
     history.load();
 
@@ -361,7 +367,7 @@ TEST_CASE("PersistentHistory.corrupt_yaml_loads_empty", "[history]")
     auto const filePath = dir.path / "history.yml";
     writeFile(filePath, "{{{{not valid yaml at all!!!!}}}}");
 
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(filePath);
     history.load();
 
@@ -371,7 +377,7 @@ TEST_CASE("PersistentHistory.corrupt_yaml_loads_empty", "[history]")
 TEST_CASE("PersistentHistory.entries_returns_unique_set", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("git status");
@@ -391,7 +397,7 @@ TEST_CASE("PersistentHistory.entries_returns_unique_set", "[history]")
 TEST_CASE("PersistentHistory.trim_whitespace", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("  git status  ");
@@ -406,7 +412,7 @@ TEST_CASE("PersistentHistory.trim_whitespace", "[history]")
 TEST_CASE("PersistentHistory.whitespace_only_not_added", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("   ");
@@ -419,7 +425,7 @@ TEST_CASE("PersistentHistory.whitespace_only_not_added", "[history]")
 TEST_CASE("PersistentHistory.trimmed_duplicates_detected", "[history]")
 {
     auto dir = TempDir {};
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(dir.path / "history.yml");
 
     history.add("git status");
@@ -434,7 +440,7 @@ TEST_CASE("PersistentHistory.atomic_flush_uses_tmp", "[history]")
 {
     auto dir = TempDir {};
     auto const filePath = dir.path / "history.yml";
-    auto history = endo::PersistentHistory {};
+    auto history = endo::PersistentHistory { testFs() };
     history.setFilePath(filePath);
 
     history.add("test command");
