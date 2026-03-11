@@ -21,6 +21,10 @@
 namespace endo
 {
 
+// Forward declarations for module system
+struct ModuleDescriptor;
+class ModuleLoader;
+
 /// Describes the return type category of a function for auto-wrapping support.
 enum class ReturnKind // NOLINT(performance-enum-size)
 {
@@ -117,6 +121,22 @@ struct FSharpPersistentState
 
     /// Properties persisted across REPL prompts (name -> accessor metadata).
     std::unordered_map<std::string, PersistedProperty> properties;
+
+    /// Module loader with cache (persists across REPL prompts, ensures import-once).
+    std::shared_ptr<ModuleLoader> moduleLoader;
+
+    /// Describes a module whose names have been brought into scope via `open`.
+    struct OpenedModuleEntry
+    {
+        std::string modulePath;                  ///< Dotted module path (e.g., "Math")
+        std::vector<std::string> selectiveNames; ///< Empty = all; non-empty = selective open
+    };
+
+    /// Ordered list of opened module names (for re-establishing scope each prompt).
+    std::vector<OpenedModuleEntry> openedModules;
+
+    /// Module names that have been imported (for re-establishing qualified access each prompt).
+    std::vector<std::string> importedModules;
 };
 
 /// Generates IR code from an AST.
@@ -258,6 +278,11 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::UnionTypeDefStmt const& node) override;
     void visit(ast::UnionConstructorExpr const& node) override;
     void visit(ast::ExecPipelineExpr const& node) override;
+
+    // Module system
+    void visit(ast::ImportStmt const& node) override;
+    void visit(ast::OpenStmt const& node) override;
+    void visit(ast::ModuleDeclStmt const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -799,6 +824,14 @@ class IRGenerator final: public ast::Visitor
 
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;
+
+    /// Modules loaded via `import` in the current session (name -> descriptor).
+    /// Used for qualified access (Module.member) resolution.
+    std::unordered_map<std::string, ModuleDescriptor const*> _loadedModules;
+
+    /// Owns inline module descriptors when no ModuleLoader is available (e.g., in tests).
+    /// Keeps the descriptors alive for the duration of IR generation.
+    std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _ownedInlineModules;
 
     /// When true, the current expression's result will be discarded (statement context).
     /// Used by MatchExpr to skip emitting the dead result load in the merge block.

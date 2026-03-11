@@ -596,9 +596,11 @@ void ASTPrinter::visit(MutAssignExpr const& node)
 void ASTPrinter::visit(LetBindingStmt const& node)
 {
     _result += "let ";
-    if (node.isExported)
+    if (node.visibility == Visibility::Exported)
         _result += "export ";
-    if (node.isMutable)
+    if (node.visibility == Visibility::Private)
+        _result += "private ";
+    if (node.mutability == Mutability::Mutable)
         _result += "mut ";
     if (node.resourceMode == ResourceMode::Use)
         _result += "use ";
@@ -1239,6 +1241,43 @@ void ASTPrinter::visit(ExecPipelineExpr const& node)
             arg->accept(*this);
         }
     }
+}
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+void ASTPrinter::visit(ImportStmt const& node)
+{
+    _result += "import " + node.modulePath;
+}
+
+void ASTPrinter::visit(OpenStmt const& node)
+{
+    _result += "open " + node.modulePath;
+    if (!node.selectiveNames.empty())
+    {
+        _result += " with (";
+        for (size_t i = 0; i < node.selectiveNames.size(); ++i)
+        {
+            if (i > 0)
+                _result += ", ";
+            _result += node.selectiveNames[i];
+        }
+        _result += ")";
+    }
+}
+
+void ASTPrinter::visit(ModuleDeclStmt const& node)
+{
+    _result += "module " + node.name + " =\n";
+    for (auto const& stmt: node.body)
+    {
+        _result += "    ";
+        stmt->accept(*this);
+        _result += '\n';
+    }
+    _result += "end";
 }
 
 } // namespace endo::ast

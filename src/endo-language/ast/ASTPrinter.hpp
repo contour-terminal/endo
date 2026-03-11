@@ -108,6 +108,11 @@ class ASTPrinter: public Visitor
     void visit(UnionConstructorExpr const& node) override;
     void visit(ExecPipelineExpr const& node) override;
 
+    // Module system
+    void visit(ImportStmt const& node) override;
+    void visit(OpenStmt const& node) override;
+    void visit(ModuleDeclStmt const& node) override;
+
   private:
     void printIfExpr(IfExpr const& node, std::string_view keyword);
     void printComprehensionGenerator(ListComprehensionExpr const& node);

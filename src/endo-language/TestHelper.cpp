@@ -8,6 +8,7 @@
 #include <endo-language/builtins/TypeFormatters.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/parser/Parser.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -807,6 +808,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
 {
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
 
     ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
 

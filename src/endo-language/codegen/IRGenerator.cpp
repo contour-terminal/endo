@@ -5,6 +5,7 @@
 #include <endo-language/ast/Pattern.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/codegen/PatternIRGenerator.hpp>
+#include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/parser/DiagnosticsAdapter.hpp>
 #include <endo-language/sema/FreeVariableCollector.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
@@ -355,6 +356,45 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             fsProp.getter = prop.getter;
             fsProp.setter = prop.setter;
             generator._fsharpProperties[name] = fsProp;
+        }
+    }
+
+    // Restore module state from persistent state (import-once / open persistence).
+    if (persistentState && persistentState->moduleLoader)
+    {
+        // Re-register imported modules for qualified access
+        for (auto const& moduleName: persistentState->importedModules)
+        {
+            if (auto const* desc = persistentState->moduleLoader->findModule(moduleName))
+                generator._loadedModules[moduleName] = desc;
+        }
+
+        // Re-apply opened modules (bring names into scope)
+        for (auto const& entry: persistentState->openedModules)
+        {
+            if (auto const* desc = persistentState->moduleLoader->findModule(entry.modulePath))
+            {
+                // Register module functions in current scope
+                for (auto const& [funcName, persisted]: desc->functions)
+                {
+                    if (desc->isPrivate(funcName))
+                        continue;
+                    // Check selective open
+                    if (!entry.selectiveNames.empty()
+                        && std::ranges::find(entry.selectiveNames, funcName) == entry.selectiveNames.end())
+                        continue;
+
+                    FSharpFunction func;
+                    func.parameters = persisted.parameters;
+                    func.parameterTypes = persisted.parameterTypes;
+                    func.returnType = persisted.returnType;
+                    func.body = persisted.body;
+                    func.returnKind = persisted.returnKind;
+                    func.isRecursive = persisted.isRecursive;
+                    func.hasVariadicParam = persisted.hasVariadicParam;
+                    generator.registerFSharpFunction(funcName, std::move(func));
+                }
+            }
         }
     }
 
@@ -5308,8 +5348,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
         for (auto const& name: bindingNames)
         {
-            bindFSharpVariable(
-                name, bindingStorage[name], node.isMutable, /*isExported=*/false, node.location);
+            bindFSharpVariable(name,
+                               bindingStorage[name],
+                               node.mutability == ast::Mutability::Mutable,
+                               /*isExported=*/false,
+                               node.location);
 
             // Annotate record field bindings with their field types
             if (recTypeInfo)
@@ -5347,7 +5390,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
-    if (node.isExported && node.isFunction())
+    if (node.visibility == ast::Visibility::Exported && node.isFunction())
     {
         reportTypeError("'let export' cannot be used with function definitions");
         return;
@@ -5451,7 +5494,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // We register the lambda as a function under the variable name
     if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(node.value.get()))
     {
-        if (node.isExported)
+        if (node.visibility == ast::Visibility::Exported)
         {
             reportTypeError("'let export' cannot be used with lambda expressions");
             return;
@@ -5500,7 +5543,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
     // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
     // Users should compose with |> join ":" to convert lists before exporting.
-    if (node.isExported && isObjectExpr)
+    if (node.visibility == ast::Visibility::Exported && isObjectExpr)
     {
         reportTypeError("'let export' requires a scalar type (string, number, float, bool), "
                         "not a compound type. Use '|> join \":\"' to convert lists to strings.");
@@ -5571,15 +5614,20 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(node.name, storage, node.isMutable, node.location);
+        bindFSharpObjectVariable(
+            node.name, storage, node.mutability == ast::Mutability::Mutable, node.location);
     }
     else
     {
-        bindFSharpVariable(node.name, storage, node.isMutable, node.isExported, node.location);
+        bindFSharpVariable(node.name,
+                           storage,
+                           node.mutability == ast::Mutability::Mutable,
+                           node.visibility == ast::Visibility::Exported,
+                           node.location);
     }
 
     // Export the binding as an environment variable if requested
-    if (node.isExported)
+    if (node.visibility == ast::Visibility::Exported)
         emitExportVariable(storage, node.name);
 
     // Record for REPL persistence (re-evaluated at each subsequent prompt)
@@ -5598,10 +5646,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     {
         _newValueBindings.push_back({ node.name,
                                       node.value.get(),
-                                      node.isMutable,
+                                      node.mutability == ast::Mutability::Mutable,
                                       isObjectExpr,
                                       storageType,
-                                      node.isExported,
+                                      node.visibility == ast::Visibility::Exported,
                                       objectTypeName });
     }
 
@@ -7422,6 +7470,83 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                                     std::string_view(method));
                     return;
                 }
+            }
+
+            // User-defined module function call: Module.func args
+            if (auto modIt = _loadedModules.find(modIdent->name); modIt != _loadedModules.end())
+            {
+                auto const* descriptor = modIt->second;
+
+                // Check private access
+                if (descriptor->isPrivate(method))
+                {
+                    reportTypeError(
+                        "'{}' is private and cannot be accessed outside module '{}'", method, modIdent->name);
+                    return;
+                }
+
+                // Look up the function in the module
+                if (auto funcIt = descriptor->functions.find(method); funcIt != descriptor->functions.end())
+                {
+                    auto const& persisted = funcIt->second;
+                    FSharpFunction func;
+                    func.parameters = persisted.parameters;
+                    func.parameterTypes = persisted.parameterTypes;
+                    func.returnType = persisted.returnType;
+                    func.body = persisted.body;
+                    func.returnKind = persisted.returnKind;
+                    func.isRecursive = persisted.isRecursive;
+                    func.hasVariadicParam = persisted.hasVariadicParam;
+
+                    // Evaluate arguments
+                    auto savedTailPos = _inTailPosition;
+                    _inTailPosition = false;
+                    auto const savedCaptureMode = _shellCommandCaptureMode;
+                    _shellCommandCaptureMode = true;
+                    auto args = std::vector<CoreVM::Value*> {};
+                    for (auto const* argExpr: argExprs)
+                    {
+                        auto* argValue = codegen(argExpr);
+                        if (!argValue)
+                        {
+                            reportTypeError("Failed to evaluate function argument");
+                            return;
+                        }
+                        args.push_back(argValue);
+                    }
+                    _shellCommandCaptureMode = savedCaptureMode;
+                    _inTailPosition = savedTailPos;
+
+                    // Register ALL module functions temporarily so intra-module calls
+                    // resolve during AST inlining (e.g., cube calls private sq).
+                    auto tempRegistered = std::vector<std::string> {};
+                    for (auto const& [fnName, fnPersisted]: descriptor->functions)
+                    {
+                        if (!lookupFSharpFunction(fnName))
+                        {
+                            FSharpFunction tempFunc;
+                            tempFunc.parameters = fnPersisted.parameters;
+                            tempFunc.parameterTypes = fnPersisted.parameterTypes;
+                            tempFunc.returnType = fnPersisted.returnType;
+                            tempFunc.body = fnPersisted.body;
+                            tempFunc.returnKind = fnPersisted.returnKind;
+                            tempFunc.isRecursive = fnPersisted.isRecursive;
+                            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
+                            registerFSharpFunction(fnName, std::move(tempFunc));
+                            tempRegistered.push_back(fnName);
+                        }
+                    }
+                    auto const* registeredFunc = lookupFSharpFunction(method);
+                    if (registeredFunc)
+                        generateFSharpCall(registeredFunc, method, args);
+                    // Remove temporary registrations to avoid polluting the outer scope
+                    for (auto const& name: tempRegistered)
+                        _fsharpFunctions.erase(name);
+                    return;
+                }
+
+                reportTypeError("Module '{}' has no member '{}'", modIdent->name, std::string_view(method));
+                return;
             }
         }
 
@@ -10717,6 +10842,33 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             reportTypeError("File has no member '{}'", std::string_view(node.fieldName));
             return;
         }
+
+        // User-defined module qualified access: Module.member
+        if (auto it = _loadedModules.find(modIdent->name); it != _loadedModules.end())
+        {
+            auto const* descriptor = it->second;
+
+            // Check for private access
+            if (descriptor->isPrivate(node.fieldName))
+            {
+                reportTypeError("'{}' is private and cannot be accessed outside module '{}'",
+                                node.fieldName,
+                                modIdent->name);
+                return;
+            }
+
+            // Check if it's a function (bare access without arguments)
+            if (descriptor->functions.contains(node.fieldName))
+            {
+                // Bare function access without arguments — this is used for e.g., partial application
+                // For now, report that arguments are needed (like File.xxx)
+                reportTypeError("{}.{} requires arguments", modIdent->name, node.fieldName);
+                return;
+            }
+
+            reportTypeError("Module '{}' has no member '{}'", modIdent->name, node.fieldName);
+            return;
+        }
     }
 
     // Codegen the object expression
@@ -11223,6 +11375,258 @@ void IRGenerator::visit(ast::ExecPipelineExpr const& node)
 
         // Emit piped execution
         _result = execBuiltCommandPiped(lastInChain);
+    }
+}
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+void IRGenerator::visit(ast::ImportStmt const& node)
+{
+    if (!_persistentState || !_persistentState->moduleLoader)
+    {
+        reportTypeError("Module system not available (no module loader configured)");
+        return;
+    }
+
+    auto* loader = _persistentState->moduleLoader.get();
+    auto const* descriptor = loader->loadModule(node.modulePath);
+    if (!descriptor)
+        return; // Error already reported by ModuleLoader
+
+    // Register for qualified access
+    _loadedModules[node.modulePath] = descriptor;
+
+    // Also handle dotted names: for "Geometry.Circle", register as "Geometry.Circle"
+    // and ensure parent "Geometry" is accessible for chained access.
+    auto const dotPos = node.modulePath.find('.');
+    if (dotPos != std::string::npos)
+    {
+        // Register the full dotted path
+        _loadedModules[node.modulePath] = descriptor;
+    }
+
+    // Register types from the module
+    for (auto const& pt: descriptor->productTypes)
+        _builder.program()->addCustomProductType(pt);
+    for (auto const& st: descriptor->sumTypes)
+        _builder.program()->addCustomSumType(st);
+
+    // Register constructors for pattern matching
+    for (auto const& [ctorName, ctorInfo]: descriptor->constructors)
+    {
+        ConstructorInfo ci;
+        ci.typeName = ctorInfo.typeName;
+        ci.tag = ctorInfo.variantIndex;
+        ci.payloadSlots = ctorInfo.payloadSlots;
+        _sema.types().registerConstructor(ctorName, std::move(ci));
+    }
+
+    // Register module functions for dot-completion (Module.member)
+    if (_persistentState)
+    {
+        auto& modFuncs = _persistentState->moduleFunctions[node.modulePath];
+        for (auto const& [funcName, persisted]: descriptor->functions)
+        {
+            if (!descriptor->isPrivate(funcName))
+            {
+                auto sig = node.modulePath + "." + funcName;
+                if (!persisted.parameters.empty())
+                {
+                    sig += " :";
+                    for (auto const& param: persisted.parameters)
+                        sig += " " + param;
+                }
+                modFuncs.push_back(CoreVM::ModuleFunctionInfo { .name = funcName, .signature = sig });
+            }
+        }
+    }
+
+    // Persist for REPL session continuity
+    if (_persistentState)
+    {
+        auto& imported = _persistentState->importedModules;
+        if (std::ranges::find(imported, node.modulePath) == imported.end())
+            imported.push_back(node.modulePath);
+    }
+}
+
+void IRGenerator::visit(ast::OpenStmt const& node)
+{
+    if (!_persistentState || !_persistentState->moduleLoader)
+    {
+        reportTypeError("Module system not available (no module loader configured)");
+        return;
+    }
+
+    auto* loader = _persistentState->moduleLoader.get();
+    auto const* descriptor = loader->loadModule(node.modulePath);
+    if (!descriptor)
+        return;
+
+    // Ensure qualified access also works
+    _loadedModules[node.modulePath] = descriptor;
+
+    // Bring public names into scope
+    for (auto const& [funcName, persisted]: descriptor->functions)
+    {
+        if (descriptor->isPrivate(funcName))
+            continue;
+
+        // Selective open: only bring listed names
+        if (!node.selectiveNames.empty()
+            && std::ranges::find(node.selectiveNames, funcName) == node.selectiveNames.end())
+        {
+            continue;
+        }
+
+        FSharpFunction func;
+        func.parameters = persisted.parameters;
+        func.parameterTypes = persisted.parameterTypes;
+        func.returnType = persisted.returnType;
+        func.body = persisted.body;
+        func.returnKind = persisted.returnKind;
+        func.isRecursive = persisted.isRecursive;
+        func.hasVariadicParam = persisted.hasVariadicParam;
+        registerFSharpFunction(funcName, std::move(func));
+    }
+
+    // Register types from the module
+    for (auto const& pt: descriptor->productTypes)
+        _builder.program()->addCustomProductType(pt);
+    for (auto const& st: descriptor->sumTypes)
+        _builder.program()->addCustomSumType(st);
+
+    // Register constructors
+    for (auto const& [ctorName, ctorInfo]: descriptor->constructors)
+    {
+        ConstructorInfo ci;
+        ci.typeName = ctorInfo.typeName;
+        ci.tag = ctorInfo.variantIndex;
+        ci.payloadSlots = ctorInfo.payloadSlots;
+        _sema.types().registerConstructor(ctorName, std::move(ci));
+    }
+
+    // Validate selective open names
+    for (auto const& name: node.selectiveNames)
+    {
+        if (!descriptor->functions.contains(name) && !descriptor->constructors.contains(name))
+        {
+            reportTypeError("Module '{}' has no member '{}' (in selective open)", node.modulePath, name);
+        }
+        else if (descriptor->isPrivate(name))
+        {
+            reportTypeError(
+                "'{}' is private and cannot be accessed outside module '{}'", name, node.modulePath);
+        }
+    }
+
+    // Also persist imported status
+    {
+        auto& imported = _persistentState->importedModules;
+        if (std::ranges::find(imported, node.modulePath) == imported.end())
+            imported.push_back(node.modulePath);
+    }
+
+    // Persist for REPL session continuity
+    if (_persistentState)
+    {
+        _persistentState->openedModules.push_back(FSharpPersistentState::OpenedModuleEntry {
+            .modulePath = node.modulePath, .selectiveNames = node.selectiveNames });
+    }
+}
+
+void IRGenerator::visit(ast::ModuleDeclStmt const& node)
+{
+    // Compile inline module body: codegen each statement and collect exports
+    auto descriptor = std::make_unique<ModuleDescriptor>();
+    descriptor->name = node.name;
+
+    // Save current state
+    auto savedFunctions = _fsharpFunctions;
+    auto savedNewBindings = _newValueBindings;
+    _newValueBindings.clear();
+
+    // Push a new scope for the module body
+    pushFSharpScope();
+
+    // Collect private names from the module body AST
+    for (auto const& stmt: node.body)
+    {
+        if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(stmt.get()))
+        {
+            if (letStmt->visibility == ast::Visibility::Private)
+                descriptor->privateNames.insert(letStmt->name);
+        }
+    }
+
+    // Codegen each statement in the module body
+    for (auto const& stmt: node.body)
+    {
+        codegen(stmt.get());
+        if (_hasErrors)
+            break;
+    }
+
+    // Collect functions defined in the module body
+    for (auto const& [name, func]: _fsharpFunctions)
+    {
+        // Only include functions that weren't in the saved state
+        if (savedFunctions.contains(name))
+            continue;
+
+        FSharpPersistentState::PersistedFunction persisted;
+        persisted.parameters = func.parameters;
+        persisted.parameterTypes = func.parameterTypes;
+        persisted.returnType = func.returnType;
+        persisted.body = func.body;
+        persisted.returnKind = func.returnKind;
+        persisted.isRecursive = func.isRecursive;
+        persisted.hasVariadicParam = func.hasVariadicParam;
+        descriptor->functions[name] = std::move(persisted);
+    }
+
+    // Collect value bindings
+    descriptor->valueBindings = std::move(_newValueBindings);
+
+    popFSharpScope();
+
+    // Restore state
+    _fsharpFunctions = std::move(savedFunctions);
+    _newValueBindings = std::move(savedNewBindings);
+
+    // Register the module — transfer ownership to moduleLoader if available, otherwise keep locally.
+    auto const* registeredDesc = descriptor.get();
+    _loadedModules[node.name] = registeredDesc;
+
+    if (_persistentState && _persistentState->moduleLoader)
+        _persistentState->moduleLoader->registerInlineModule(node.name, std::move(descriptor));
+    else
+        _ownedInlineModules[node.name] = std::move(descriptor);
+
+    // Register module functions for dot-completion (Module.member)
+    if (_persistentState)
+    {
+        auto& modFuncs = _persistentState->moduleFunctions[node.name];
+        for (auto const& [funcName, persisted]: registeredDesc->functions)
+        {
+            if (!registeredDesc->isPrivate(funcName))
+            {
+                auto sig = node.name + "." + funcName;
+                if (!persisted.parameters.empty())
+                {
+                    sig += " :";
+                    for (auto const& param: persisted.parameters)
+                        sig += " " + param;
+                }
+                modFuncs.push_back(CoreVM::ModuleFunctionInfo { .name = funcName, .signature = sig });
+            }
+        }
+
+        auto& imported = _persistentState->importedModules;
+        if (std::ranges::find(imported, node.name) == imported.end())
+            imported.push_back(node.name);
     }
 }
 
