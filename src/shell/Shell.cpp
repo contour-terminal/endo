@@ -13,6 +13,7 @@
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/parser/Parser.hpp>
 
 #include <tui/Canvas.hpp>
@@ -607,6 +608,21 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         _fsharpState.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
     }
 
+    // Initialize module loader for import/open support
+    {
+        _fsharpState.moduleLoader = std::make_shared<endo::ModuleLoader>(_runtime, _moduleReport);
+
+        // Add search paths: user modules, then system stdlib
+        auto const userModulesDir =
+            std::filesystem::path(_env.get("HOME").value_or("")) / ".config" / "endo" / "modules";
+        if (std::filesystem::exists(userModulesDir))
+            _fsharpState.moduleLoader->addSearchPath(userModulesDir);
+
+        // System stdlib path (relative to executable)
+        if (auto const stdlibDir = endo::platform::resolveDataDir("stdlib"); !stdlibDir.empty())
+            _fsharpState.moduleLoader->addSearchPath(stdlibDir);
+    }
+
     // Load output definition files for structured pipelines
 
     // 1. Installed location (relative to executable)
@@ -749,6 +765,12 @@ void Shell::setOptimize(bool optimize)
 void Shell::setAgentTracePath(std::string path)
 {
     _agentTracePath = std::move(path);
+}
+
+void Shell::addModuleSearchPath(std::filesystem::path path)
+{
+    if (_fsharpState.moduleLoader)
+        _fsharpState.moduleLoader->addSearchPath(std::move(path));
 }
 
 void Shell::setInteractive(bool interactive)
