@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <ranges>
 #include <sstream>
@@ -36,9 +37,9 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
         return it->second.get();
 
     // Circular dependency detection
-    if (_loadingStack.contains(dottedName))
+    if (_loadingSet.contains(dottedName))
     {
-        // Build the cycle chain for the error message
+        // Build the cycle chain from the ordered loading stack
         std::string chain;
         for (auto const& name: _loadingStack)
         {
@@ -80,9 +81,11 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
     }
 
     // Compile the module
-    _loadingStack.insert(dottedName);
+    _loadingStack.push_back(dottedName);
+    _loadingSet.insert(dottedName);
     auto descriptor = compileModule(dottedName, *resolved);
-    _loadingStack.erase(dottedName);
+    _loadingStack.pop_back();
+    _loadingSet.erase(dottedName);
 
     if (!descriptor)
         return nullptr;
@@ -215,6 +218,10 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
     // Generate IR to get full function metadata.
     // Use a temporary persistent state to capture the definitions.
     auto tempState = FSharpPersistentState {};
+    // Enable nested imports when this loader is managed by a shared_ptr.
+    // Stack-allocated loaders (e.g., in tests) skip this — weak_from_this() is empty.
+    if (auto self = weak_from_this().lock())
+        tempState.moduleLoader = std::move(self);
     auto ir = IRGenerator::generate(*ast, _report, _runtime, &tempState);
     if (!ir)
         return nullptr;

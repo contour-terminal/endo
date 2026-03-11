@@ -1,4 +1,4 @@
-#Modules& Imports
+# Modules & Imports
 
 Endo's module system lets you organize functions, types, and values into reusable, namespaced
 units. Modules follow F# conventions: PascalCase names, qualified access, and import-once semantics.
@@ -202,7 +202,7 @@ Endo detects circular dependencies at load time. If module A imports module B, w
 module A, a clear error is reported:
 
 ```text
-Error: Circular module dependency: ModA -> ModB -> ModA
+Error: Circular module dependency: ModA → ModB → ModA
 ```
 
 ### 12.11 Error Messages
@@ -210,7 +210,7 @@ Error: Circular module dependency: ModA -> ModB -> ModA
 | Situation | Error Message |
 |-----------|---------------|
 | Module not found | `Module 'Foo' not found. Searched: ./Foo.endo, ...` |
-| Circular dependency | `Circular module dependency: A -> B -> A` |
+| Circular dependency | `Circular module dependency: A → B → A` |
 | Unknown member | `Module 'Math' has no member 'nonexistent'` |
 | Private member | `'Math.helper' is private and cannot be accessed outside module 'Math'` |
 | No module loader | `Module system not available (no module loader configured)` |

@@ -505,6 +505,35 @@ print (Math.cube 3)
     }
 }
 
+TEST_CASE("module.inline.value_binding_access", "[module][codegen]")
+{
+    SECTION("access value binding via qualified name")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Constants =
+    let pi = 3
+    let e = 2
+end
+print (Constants.pi)
+)" });
+        CHECK(output == "3");
+    }
+
+    SECTION("access multiple value bindings")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Constants =
+    let pi = 3
+    let e = 2
+end
+print (Constants.pi + Constants.e)
+)" });
+        CHECK(output == "5");
+    }
+}
+
 TEST_CASE("module.file.private_enforcement", "[module][codegen]")
 {
     auto& rt = TestRuntime::instance();

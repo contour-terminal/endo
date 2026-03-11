@@ -829,6 +829,16 @@ class IRGenerator final: public ast::Visitor
     /// Used for qualified access (Module.member) resolution.
     std::unordered_map<std::string, ModuleDescriptor const*> _loadedModules;
 
+    /// Result of flattening a dotted access path (e.g., `Geometry.Circle.area`).
+    struct FlattenedPath
+    {
+        std::string modulePath; ///< e.g., "Geometry.Circle" or "Math"
+        std::string memberName; ///< e.g., "area" or "square"
+    };
+
+    /// Flattens a chain of FieldAccessExpr nodes into a module path and member name.
+    [[nodiscard]] static std::optional<FlattenedPath> flattenDottedPath(ast::Expr const* expr);
+
     /// Owns inline module descriptors when no ModuleLoader is available (e.g., in tests).
     /// Keeps the descriptors alive for the duration of IR generation.
     std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _ownedInlineModules;

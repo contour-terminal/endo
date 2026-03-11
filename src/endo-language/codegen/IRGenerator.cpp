@@ -7550,6 +7550,85 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             }
         }
 
+        // Multi-level module function call: Geometry.Circle.area args
+        if (auto flattened = flattenDottedPath(fieldAccess))
+        {
+            if (auto modIt = _loadedModules.find(flattened->modulePath); modIt != _loadedModules.end())
+            {
+                auto const* descriptor = modIt->second;
+
+                if (descriptor->isPrivate(flattened->memberName))
+                {
+                    reportTypeError("'{}' is private and cannot be accessed outside module '{}'",
+                                    flattened->memberName,
+                                    flattened->modulePath);
+                    return;
+                }
+
+                if (auto funcIt = descriptor->functions.find(flattened->memberName);
+                    funcIt != descriptor->functions.end())
+                {
+                    auto const& persisted = funcIt->second;
+                    FSharpFunction func;
+                    func.parameters = persisted.parameters;
+                    func.parameterTypes = persisted.parameterTypes;
+                    func.returnType = persisted.returnType;
+                    func.body = persisted.body;
+                    func.returnKind = persisted.returnKind;
+                    func.isRecursive = persisted.isRecursive;
+                    func.hasVariadicParam = persisted.hasVariadicParam;
+
+                    // Evaluate arguments
+                    auto savedTailPos = _inTailPosition;
+                    _inTailPosition = false;
+                    auto const savedCaptureMode = _shellCommandCaptureMode;
+                    _shellCommandCaptureMode = true;
+                    auto args = std::vector<CoreVM::Value*> {};
+                    for (auto const* argExpr: argExprs)
+                    {
+                        auto* argValue = codegen(argExpr);
+                        if (!argValue)
+                        {
+                            reportTypeError("Failed to evaluate function argument");
+                            return;
+                        }
+                        args.push_back(argValue);
+                    }
+                    _shellCommandCaptureMode = savedCaptureMode;
+                    _inTailPosition = savedTailPos;
+
+                    // Register ALL module functions temporarily for intra-module calls
+                    auto tempRegistered = std::vector<std::string> {};
+                    for (auto const& [fnName, fnPersisted]: descriptor->functions)
+                    {
+                        if (!lookupFSharpFunction(fnName))
+                        {
+                            FSharpFunction tempFunc;
+                            tempFunc.parameters = fnPersisted.parameters;
+                            tempFunc.parameterTypes = fnPersisted.parameterTypes;
+                            tempFunc.returnType = fnPersisted.returnType;
+                            tempFunc.body = fnPersisted.body;
+                            tempFunc.returnKind = fnPersisted.returnKind;
+                            tempFunc.isRecursive = fnPersisted.isRecursive;
+                            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
+                            registerFSharpFunction(fnName, std::move(tempFunc));
+                            tempRegistered.push_back(fnName);
+                        }
+                    }
+                    auto const* registeredFunc = lookupFSharpFunction(flattened->memberName);
+                    if (registeredFunc)
+                        generateFSharpCall(registeredFunc, flattened->memberName, args);
+                    for (auto const& name: tempRegistered)
+                        _fsharpFunctions.erase(name);
+                    return;
+                }
+
+                reportTypeError(
+                    "Module '{}' has no member '{}'", flattened->modulePath, flattened->memberName);
+                return;
+            }
+        }
+
         // Case 2: Method-style — opt.map f
         if (method == "map" || method == "bind" || method == "defaultValue")
         {
@@ -10725,6 +10804,34 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
     annotateObjectTypeId(_result, typeInfo->typeId);
 }
 
+std::optional<IRGenerator::FlattenedPath> IRGenerator::flattenDottedPath(ast::Expr const* expr)
+{
+    auto const* fieldAccess = dynamic_cast<ast::FieldAccessExpr const*>(expr);
+    if (!fieldAccess)
+        return std::nullopt;
+
+    auto memberName = fieldAccess->fieldName;
+    auto pathSegments = std::vector<std::string> {};
+    auto const* current = fieldAccess->object.get();
+
+    while (auto const* inner = dynamic_cast<ast::FieldAccessExpr const*>(current))
+    {
+        pathSegments.push_back(inner->fieldName);
+        current = inner->object.get();
+    }
+
+    auto const* baseIdent = dynamic_cast<ast::IdentifierExpr const*>(current);
+    if (!baseIdent)
+        return std::nullopt;
+
+    auto modulePath = baseIdent->name;
+    std::ranges::reverse(pathSegments);
+    for (auto const& seg: pathSegments)
+        modulePath += "." + seg;
+
+    return FlattenedPath { .modulePath = std::move(modulePath), .memberName = std::move(memberName) };
+}
+
 void IRGenerator::visit(ast::FieldAccessExpr const& node)
 {
     TRACE_SCOPE("visit(FieldAccessExpr)");
@@ -10857,6 +10964,15 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
 
+            // Value binding access (e.g., Math.pi)
+            auto valIt = std::ranges::find_if(descriptor->valueBindings,
+                                              [&](auto const& vb) { return vb.name == node.fieldName; });
+            if (valIt != descriptor->valueBindings.end())
+            {
+                codegen(valIt->value);
+                return;
+            }
+
             // Check if it's a function (bare access without arguments)
             if (descriptor->functions.contains(node.fieldName))
             {
@@ -10867,6 +10983,41 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             }
 
             reportTypeError("Module '{}' has no member '{}'", modIdent->name, node.fieldName);
+            return;
+        }
+    }
+
+    // Multi-level module qualified access: Geometry.Circle.member
+    if (auto flattened = flattenDottedPath(&node))
+    {
+        if (auto it = _loadedModules.find(flattened->modulePath); it != _loadedModules.end())
+        {
+            auto const* descriptor = it->second;
+
+            if (descriptor->isPrivate(flattened->memberName))
+            {
+                reportTypeError("'{}' is private and cannot be accessed outside module '{}'",
+                                flattened->memberName,
+                                flattened->modulePath);
+                return;
+            }
+
+            // Value binding access
+            auto valIt = std::ranges::find_if(descriptor->valueBindings,
+                                              [&](auto const& vb) { return vb.name == flattened->memberName; });
+            if (valIt != descriptor->valueBindings.end())
+            {
+                codegen(valIt->value);
+                return;
+            }
+
+            if (descriptor->functions.contains(flattened->memberName))
+            {
+                reportTypeError("{}.{} requires arguments", flattened->modulePath, flattened->memberName);
+                return;
+            }
+
+            reportTypeError("Module '{}' has no member '{}'", flattened->modulePath, flattened->memberName);
             return;
         }
     }
@@ -11397,15 +11548,6 @@ void IRGenerator::visit(ast::ImportStmt const& node)
 
     // Register for qualified access
     _loadedModules[node.modulePath] = descriptor;
-
-    // Also handle dotted names: for "Geometry.Circle", register as "Geometry.Circle"
-    // and ensure parent "Geometry" is accessible for chained access.
-    auto const dotPos = node.modulePath.find('.');
-    if (dotPos != std::string::npos)
-    {
-        // Register the full dotted path
-        _loadedModules[node.modulePath] = descriptor;
-    }
 
     // Register types from the module
     for (auto const& pt: descriptor->productTypes)

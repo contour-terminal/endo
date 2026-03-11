@@ -613,10 +613,13 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         _fsharpState.moduleLoader = std::make_shared<endo::ModuleLoader>(_runtime, _moduleReport);
 
         // Add search paths: user modules, then system stdlib
-        auto const userModulesDir =
-            std::filesystem::path(_env.get("HOME").value_or("")) / ".config" / "endo" / "modules";
-        if (std::filesystem::exists(userModulesDir))
-            _fsharpState.moduleLoader->addSearchPath(userModulesDir);
+        if (auto const home = _env.get("HOME"); home && !home->empty())
+        {
+            auto const userModulesDir =
+                std::filesystem::path(*home) / ".config" / "endo" / "modules";
+            if (std::filesystem::exists(userModulesDir))
+                _fsharpState.moduleLoader->addSearchPath(userModulesDir);
+        }
 
         // System stdlib path (relative to executable)
         if (auto const stdlibDir = endo::platform::resolveDataDir("stdlib"); !stdlibDir.empty())

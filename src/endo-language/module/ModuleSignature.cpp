@@ -4,6 +4,7 @@
 #include <endo-language/module/ModuleDescriptor.hpp>
 
 #include <algorithm>
+#include <format>
 #include <fstream>
 #include <ranges>
 #include <sstream>

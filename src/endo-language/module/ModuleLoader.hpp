@@ -21,7 +21,7 @@ namespace endo
 /// Implements import-once semantics: each module is loaded exactly once per session.
 /// Supports file-based modules (.endo files) and inline module definitions.
 /// Detects circular dependencies via a loading stack.
-class ModuleLoader
+class ModuleLoader: public std::enable_shared_from_this<ModuleLoader>
 {
   public:
     /// Constructs a module loader with the given runtime and diagnostics report.
@@ -79,8 +79,10 @@ class ModuleLoader
     /// Checks if a name starts with an uppercase letter (PascalCase convention).
     [[nodiscard]] static bool isPascalCase(std::string_view name);
 
-    /// Loading stack for circular dependency detection.
-    std::unordered_set<std::string> _loadingStack;
+    /// Ordered loading stack for cycle chain reporting.
+    std::vector<std::string> _loadingStack;
+    /// O(1) lookup companion for cycle detection.
+    std::unordered_set<std::string> _loadingSet;
 
     /// Module cache keyed by canonical name.
     std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _cache;

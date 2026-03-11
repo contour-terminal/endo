@@ -158,9 +158,23 @@ def build_module_cmd(endo_path: Path, module_dir: Path | None) -> list[str]:
     return cmd
 
 
+def _validate_module_filename(filename: str) -> None:
+    """Validate a virtual module filename from a `# file:` annotation."""
+    p = Path(filename)
+    if p.is_absolute() or p.drive:
+        raise ValueError(f"invalid virtual module filename (absolute path): {filename!r}")
+    if ".." in p.parts:
+        raise ValueError(f"invalid virtual module filename (.. not allowed): {filename!r}")
+    if len(p.parts) != 1:
+        raise ValueError(f"invalid virtual module filename (directories not allowed): {filename!r}")
+    if p.suffix != ".endo":
+        raise ValueError(f"invalid virtual module filename (must end with .endo): {filename!r}")
+
+
 def write_virtual_modules(virtual_modules: dict[str, str], module_dir: Path) -> None:
     """Write all virtual module files into the module directory."""
     for filename, content in virtual_modules.items():
+        _validate_module_filename(filename)
         (module_dir / filename).write_text(content, encoding="utf-8")
 
 
