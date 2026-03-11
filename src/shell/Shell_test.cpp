@@ -3766,6 +3766,7 @@ TEST_CASE("shell.fsharp.fetch.http_success")
     std::filesystem::current_path(tempDir);
 
     TestShell shell;
+    shell.shell.setInteractive(false);
     shell(std::format(
         R"(match fetch "http://127.0.0.1:{}/test.txt" with | Ok b -> print "ok" | Error e -> print "error")",
         *port));
