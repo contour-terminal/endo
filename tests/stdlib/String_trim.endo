@@ -1,0 +1,11 @@
+# description: String.trim removes leading/trailing whitespace
+# module-path: STDLIB
+# expect: hello
+# expect:
+# expect: no-space
+# expect:
+
+import String
+println (String.trim "  hello  ")
+println (String.trim "")
+println (String.trim "no-space")

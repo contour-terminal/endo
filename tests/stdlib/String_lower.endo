@@ -1,0 +1,11 @@
+# description: String.lower converts to lowercase
+# module-path: STDLIB
+# expect: hello
+# expect:
+# expect: hello world
+# expect:
+
+import String
+println (String.lower "HELLO")
+println (String.lower "")
+println (String.lower "Hello World")

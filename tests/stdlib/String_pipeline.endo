@@ -1,0 +1,13 @@
+# description: String functions work in pipelines via open
+# module-path: STDLIB
+# expect: HELLO
+# expect: true
+# expect: hahaha
+# expect:
+
+import String
+open String
+
+println ("hello" |> upper)
+println ("hello" |> startsWith "he")
+println ("ha" |> repeat 3)

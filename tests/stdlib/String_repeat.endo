@@ -1,0 +1,11 @@
+# description: String.repeat repeats a string n times
+# module-path: STDLIB
+# expect: hahaha
+# expect:
+# expect: x
+# expect:
+
+import String
+println (String.repeat 3 "ha")
+println (String.repeat 0 "ha")
+println (String.repeat 1 "x")

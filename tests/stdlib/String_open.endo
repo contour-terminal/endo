@@ -1,0 +1,13 @@
+# description: open String brings names into unqualified scope
+# module-path: STDLIB
+# expect: HELLO
+# expect: olleh
+# expect: hello
+# expect:
+
+import String
+open String
+
+println (upper "hello")
+println (rev "hello")
+println (lower "HELLO")

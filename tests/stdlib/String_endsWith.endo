@@ -1,0 +1,9 @@
+# description: String.endsWith checks suffix
+# module-path: STDLIB
+# expect: true
+# expect: false
+# expect:
+
+import String
+println (String.endsWith "lo" "hello")
+println (String.endsWith "world" "hello")

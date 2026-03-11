@@ -1,0 +1,9 @@
+# description: String.contains checks substring
+# module-path: STDLIB
+# expect: true
+# expect: false
+# expect:
+
+import String
+println (String.contains "ell" "hello")
+println (String.contains "xyz" "hello")
