@@ -474,6 +474,17 @@ class IRGenerator final: public ast::Visitor
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
 
+    /// Converts a PersistedFunction to an FSharpFunction (without captured bindings).
+    [[nodiscard]] static FSharpFunction toFSharpFunction(
+        FSharpPersistentState::PersistedFunction const& persisted);
+
+    /// Registers a module's product types, sum types, and constructors into the IR program
+    /// and semantic analyzer.
+    void registerModuleTypes(ModuleDescriptor const* descriptor);
+
+    /// Registers a module's functions for dot-completion (Module.member) in the persistent state.
+    void registerModuleCompletion(ModuleDescriptor const* descriptor, std::string const& moduleName);
+
     // F# function call dispatch helpers (extracted from visit(ApplicationExpr))
 
     /// Generates IR for a partial application (under-saturated call).

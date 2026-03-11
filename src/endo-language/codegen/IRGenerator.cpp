@@ -276,17 +276,9 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     {
         for (auto const& [name, persisted]: persistentState->functions)
         {
-            FSharpFunction func;
-            func.parameters = persisted.parameters;
-            func.parameterTypes = persisted.parameterTypes;
-            func.returnType = persisted.returnType;
-            func.body = persisted.body;
-            func.returnKind = persisted.returnKind;
-            func.isRecursive = persisted.isRecursive;
-            func.hasVariadicParam = persisted.hasVariadicParam;
             // capturedBindings intentionally left empty — captures from previous
             // IR programs are no longer valid; only pure functions persist correctly.
-            generator.registerFSharpFunction(name, std::move(func));
+            generator.registerFSharpFunction(name, toFSharpFunction(persisted));
         }
 
         // Pre-load persisted value bindings (in order, so dependencies resolve correctly)
@@ -402,15 +394,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                         && std::ranges::find(entry.selectiveNames, funcName) == entry.selectiveNames.end())
                         continue;
 
-                    FSharpFunction func;
-                    func.parameters = persisted.parameters;
-                    func.parameterTypes = persisted.parameterTypes;
-                    func.returnType = persisted.returnType;
-                    func.body = persisted.body;
-                    func.returnKind = persisted.returnKind;
-                    func.isRecursive = persisted.isRecursive;
-                    func.hasVariadicParam = persisted.hasVariadicParam;
-                    generator.registerFSharpFunction(funcName, std::move(func));
+                    generator.registerFSharpFunction(funcName, toFSharpFunction(persisted));
                 }
 
                 // Bring value bindings into unqualified scope
@@ -11539,6 +11523,62 @@ void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
         _fsharpFunctions.erase(name);
 }
 
+IRGenerator::FSharpFunction IRGenerator::toFSharpFunction(
+    FSharpPersistentState::PersistedFunction const& persisted)
+{
+    FSharpFunction func;
+    func.parameters = persisted.parameters;
+    func.parameterTypes = persisted.parameterTypes;
+    func.returnType = persisted.returnType;
+    func.body = persisted.body;
+    func.returnKind = persisted.returnKind;
+    func.isRecursive = persisted.isRecursive;
+    func.hasVariadicParam = persisted.hasVariadicParam;
+    return func;
+}
+
+void IRGenerator::registerModuleTypes(ModuleDescriptor const* descriptor)
+{
+    for (auto const& pt: descriptor->productTypes)
+        _builder.program()->addCustomProductType(pt);
+    for (auto const& st: descriptor->sumTypes)
+        _builder.program()->addCustomSumType(st);
+
+    for (auto const& [ctorName, ctorInfo]: descriptor->constructors)
+    {
+        ConstructorInfo ci;
+        ci.typeName = ctorInfo.typeName;
+        ci.tag = ctorInfo.variantIndex;
+        ci.payloadSlots = ctorInfo.payloadSlots;
+        _sema.types().registerConstructor(ctorName, std::move(ci));
+    }
+}
+
+void IRGenerator::registerModuleCompletion(ModuleDescriptor const* descriptor, std::string const& moduleName)
+{
+    if (!_persistentState)
+        return;
+
+    auto& modFuncs = _persistentState->moduleFunctions[moduleName];
+    for (auto const& [funcName, persisted]: descriptor->functions)
+    {
+        if (!descriptor->isPrivate(funcName))
+        {
+            auto sig = std::format("{}.{}", moduleName, funcName);
+            if (!persisted.parameters.empty())
+            {
+                sig += " :";
+                for (auto const& param: persisted.parameters)
+                {
+                    sig += " ";
+                    sig += param;
+                }
+            }
+            modFuncs.push_back(CoreVM::ModuleFunctionInfo { .name = funcName, .signature = sig });
+        }
+    }
+}
+
 void IRGenerator::codegenModuleValueBindings(ModuleDescriptor const* descriptor,
                                              std::string const& moduleName,
                                              bool force)
@@ -11578,41 +11618,11 @@ void IRGenerator::visit(ast::ImportStmt const& node)
     // Codegen value bindings once and store in allocas (avoid re-evaluation on each access)
     codegenModuleValueBindings(descriptor, node.modulePath, /*force=*/true);
 
-    // Register types from the module
-    for (auto const& pt: descriptor->productTypes)
-        _builder.program()->addCustomProductType(pt);
-    for (auto const& st: descriptor->sumTypes)
-        _builder.program()->addCustomSumType(st);
-
-    // Register constructors for pattern matching
-    for (auto const& [ctorName, ctorInfo]: descriptor->constructors)
-    {
-        ConstructorInfo ci;
-        ci.typeName = ctorInfo.typeName;
-        ci.tag = ctorInfo.variantIndex;
-        ci.payloadSlots = ctorInfo.payloadSlots;
-        _sema.types().registerConstructor(ctorName, std::move(ci));
-    }
+    // Register types and constructors from the module
+    registerModuleTypes(descriptor);
 
     // Register module functions for dot-completion (Module.member)
-    if (_persistentState)
-    {
-        auto& modFuncs = _persistentState->moduleFunctions[node.modulePath];
-        for (auto const& [funcName, persisted]: descriptor->functions)
-        {
-            if (!descriptor->isPrivate(funcName))
-            {
-                auto sig = node.modulePath + "." + funcName;
-                if (!persisted.parameters.empty())
-                {
-                    sig += " :";
-                    for (auto const& param: persisted.parameters)
-                        sig += " " + param;
-                }
-                modFuncs.push_back(CoreVM::ModuleFunctionInfo { .name = funcName, .signature = sig });
-            }
-        }
-    }
+    registerModuleCompletion(descriptor, node.modulePath);
 
     // Persist for REPL session continuity
     if (_persistentState)
@@ -11655,15 +11665,7 @@ void IRGenerator::visit(ast::OpenStmt const& node)
             continue;
         }
 
-        FSharpFunction func;
-        func.parameters = persisted.parameters;
-        func.parameterTypes = persisted.parameterTypes;
-        func.returnType = persisted.returnType;
-        func.body = persisted.body;
-        func.returnKind = persisted.returnKind;
-        func.isRecursive = persisted.isRecursive;
-        func.hasVariadicParam = persisted.hasVariadicParam;
-        registerFSharpFunction(funcName, std::move(func));
+        registerFSharpFunction(funcName, toFSharpFunction(persisted));
     }
 
     // Bring public value bindings into unqualified scope
@@ -11685,21 +11687,8 @@ void IRGenerator::visit(ast::OpenStmt const& node)
         }
     }
 
-    // Register types from the module
-    for (auto const& pt: descriptor->productTypes)
-        _builder.program()->addCustomProductType(pt);
-    for (auto const& st: descriptor->sumTypes)
-        _builder.program()->addCustomSumType(st);
-
-    // Register constructors
-    for (auto const& [ctorName, ctorInfo]: descriptor->constructors)
-    {
-        ConstructorInfo ci;
-        ci.typeName = ctorInfo.typeName;
-        ci.tag = ctorInfo.variantIndex;
-        ci.payloadSlots = ctorInfo.payloadSlots;
-        _sema.types().registerConstructor(ctorName, std::move(ci));
-    }
+    // Register types and constructors from the module
+    registerModuleTypes(descriptor);
 
     // Validate selective open names (check functions, constructors, AND value bindings)
     for (auto const& name: node.selectiveNames)
@@ -11717,16 +11706,13 @@ void IRGenerator::visit(ast::OpenStmt const& node)
         }
     }
 
-    // Also persist imported status
+    // Persist for REPL session continuity (deduplicate)
+    if (_persistentState)
     {
         auto& imported = _persistentState->importedModules;
         if (std::ranges::find(imported, node.modulePath) == imported.end())
             imported.push_back(node.modulePath);
-    }
 
-    // Persist for REPL session continuity (deduplicate)
-    if (_persistentState)
-    {
         auto it = std::ranges::find_if(_persistentState->openedModules,
                                        [&](auto const& e) { return e.modulePath == node.modulePath; });
         if (it != _persistentState->openedModules.end())
@@ -11809,24 +11795,10 @@ void IRGenerator::visit(ast::ModuleDeclStmt const& node)
         _ownedInlineModules[node.name] = std::move(descriptor);
 
     // Register module functions for dot-completion (Module.member)
+    registerModuleCompletion(registeredDesc, node.name);
+
     if (_persistentState)
     {
-        auto& modFuncs = _persistentState->moduleFunctions[node.name];
-        for (auto const& [funcName, persisted]: registeredDesc->functions)
-        {
-            if (!registeredDesc->isPrivate(funcName))
-            {
-                auto sig = node.name + "." + funcName;
-                if (!persisted.parameters.empty())
-                {
-                    sig += " :";
-                    for (auto const& param: persisted.parameters)
-                        sig += " " + param;
-                }
-                modFuncs.push_back(CoreVM::ModuleFunctionInfo { .name = funcName, .signature = sig });
-            }
-        }
-
         auto& imported = _persistentState->importedModules;
         if (std::ranges::find(imported, node.name) == imported.end())
             imported.push_back(node.name);
