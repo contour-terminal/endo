@@ -10,7 +10,9 @@ Options:
     FILES              Specific .md files (default: all docs/**/*.md)
 
 Markers:
-    <!-- endo-no-check -->  Skip the following code block entirely
+    <!-- endo-no-check -->       Skip the following code block entirely
+    # file: Name.endo            First line of a block — defines a virtual module file
+                                 (available to subsequent blocks via --module-path)
 
 Output verification:
     Lines containing '# => expected' are used to verify execution output.
@@ -20,8 +22,10 @@ Output verification:
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -90,11 +94,25 @@ def strip_output_comments(source: str) -> str:
     return "\n".join(cleaned)
 
 
+def parse_file_annotation(source: str) -> tuple[str | None, str]:
+    """Check if source starts with '# file: <filename>' annotation.
+
+    Returns (filename, remaining_source) if annotated, or (None, source) otherwise.
+    """
+    lines = source.splitlines()
+    if lines and lines[0].strip().startswith("# file:"):
+        filename = lines[0].strip()[len("# file:"):].strip()
+        remaining = "\n".join(lines[1:])
+        return filename, remaining
+    return None, source
+
+
 def extract_code_blocks(filepath: Path) -> list[dict]:
     """Extract all ```endo code blocks from a markdown file.
 
-    Returns a list of dicts with keys: source, line, skip.
+    Returns a list of dicts with keys: source, line, skip, filename.
     Blocks preceded by <!-- endo-no-check --> on the previous non-empty line are marked skip.
+    Blocks whose first line is '# file: Name.endo' are module definitions (filename is set).
     """
     blocks = []
     lines = filepath.read_text(encoding="utf-8").splitlines()
@@ -118,25 +136,47 @@ def extract_code_blocks(filepath: Path) -> list[dict]:
             while i < len(lines) and not lines[i].strip().startswith("```"):
                 source_lines.append(lines[i])
                 i += 1
+
+            source = "\n".join(source_lines)
+            filename, remaining = parse_file_annotation(source)
+
             blocks.append({
-                "source": "\n".join(source_lines),
+                "source": remaining if filename else source,
                 "line": start_line,
                 "skip": skip,
+                "filename": filename,
             })
         i += 1
     return blocks
 
 
-def check_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]:
+def build_module_cmd(endo_path: Path, module_dir: Path | None) -> list[str]:
+    """Build the base endo command with optional --module-path."""
+    cmd = [str(endo_path)]
+    if module_dir is not None:
+        cmd.extend(["--module-path", str(module_dir)])
+    return cmd
+
+
+def write_virtual_modules(virtual_modules: dict[str, str], module_dir: Path) -> None:
+    """Write all virtual module files into the module directory."""
+    for filename, content in virtual_modules.items():
+        (module_dir / filename).write_text(content, encoding="utf-8")
+
+
+def check_block(source: str, endo_path: Path, tmp_dir: Path,
+                module_dir: Path | None = None) -> tuple[bool, str]:
     """Write source to a temp file and run endo --check on it.
 
     Returns (success, stderr_output).
     """
     tmp_file = tmp_dir / "snippet.endo"
     tmp_file.write_text(source, encoding="utf-8")
+    cmd = build_module_cmd(endo_path, module_dir)
+    cmd.extend(["--check", str(tmp_file)])
     try:
         result = subprocess.run(
-            [str(endo_path), "--check", str(tmp_file)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10,
@@ -146,7 +186,8 @@ def check_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]
         return False, "timeout (10s)"
 
 
-def run_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]:
+def run_block(source: str, endo_path: Path, tmp_dir: Path,
+              module_dir: Path | None = None) -> tuple[bool, str]:
     """Execute an endo block and verify its output against # => comments.
 
     Returns (success, error_message).
@@ -156,9 +197,11 @@ def run_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]:
 
     tmp_file = tmp_dir / "snippet.endo"
     tmp_file.write_text(clean_source, encoding="utf-8")
+    cmd = build_module_cmd(endo_path, module_dir)
+    cmd.append(str(tmp_file))
     try:
         result = subprocess.run(
-            [str(endo_path), str(tmp_file)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10,
@@ -244,9 +287,22 @@ def main() -> int:
 
     for md_file in md_files:
         blocks = extract_code_blocks(md_file)
+
+        # Track virtual modules accumulated across blocks in this file
+        virtual_modules: dict[str, str] = {}
+        module_dir: Path | None = None
+
         for block in blocks:
             total += 1
             rel_path = md_file.relative_to(root) if md_file.is_relative_to(root) else md_file
+
+            # Handle module-definition blocks (# file: annotation)
+            if block["filename"]:
+                virtual_modules[block["filename"]] = block["source"]
+                skipped += 1
+                if args.verbose:
+                    print(f"  FILE {rel_path}:{block['line']} -> {block['filename']}")
+                continue
 
             if block["skip"]:
                 skipped += 1
@@ -254,9 +310,17 @@ def main() -> int:
                     print(f"  SKIP {rel_path}:{block['line']}")
                 continue
 
+            # Set up module directory if we have virtual modules
+            active_module_dir = None
+            if virtual_modules:
+                if module_dir is None:
+                    module_dir = Path(tempfile.mkdtemp(prefix="endo-doc-modules-"))
+                write_virtual_modules(virtual_modules, module_dir)
+                active_module_dir = module_dir
+
             # Auto-detect: blocks with # => comments are executed and output-verified
             if has_expected_output(block["source"]):
-                success, error = run_block(block["source"], endo, tmp_dir)
+                success, error = run_block(block["source"], endo, tmp_dir, active_module_dir)
                 if success:
                     passed += 1
                     if args.verbose:
@@ -274,7 +338,7 @@ def main() -> int:
                 continue
 
             # Default: syntax check only
-            success, stderr = check_block(block["source"], endo, tmp_dir)
+            success, stderr = check_block(block["source"], endo, tmp_dir, active_module_dir)
             if success:
                 passed += 1
                 if args.verbose:
@@ -289,6 +353,11 @@ def main() -> int:
                     msg += f"\n{indent_stderr}"
                 failures.append(msg)
                 print(msg)
+
+        # Cleanup per-file module directory
+        if module_dir is not None:
+            shutil.rmtree(module_dir, ignore_errors=True)
+            module_dir = None
 
     # Summary
     print(f"\nResults: {passed} passed, {failed} failed, {skipped} skipped, {total} total")

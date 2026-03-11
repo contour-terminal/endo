@@ -102,6 +102,7 @@ nav:
     - Temperature: examples/temperature.md
     - Validation: examples/validation.md
     - Fetch: examples/fetch.md
+    - Modules: examples/modules.md
   - Shell:
     - Overview: shell/index.md
     - Configuration: shell/configuration.md
