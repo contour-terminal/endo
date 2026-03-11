@@ -108,8 +108,8 @@ class Parser
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     /// Parses `let Name with get () = ... and set (v) = ...` property syntax.
     /// @param letColumn The column of the `let` keyword, used as indentation reference for multi-line bodies.
-    std::unique_ptr<ast::LetBindingStmt> parsePropertyAccessors(bool isExported,
-                                                                bool isMutable,
+    std::unique_ptr<ast::LetBindingStmt> parsePropertyAccessors(ast::Visibility visibility,
+                                                                ast::Mutability mutability,
                                                                 std::string name,
                                                                 std::optional<TypePtr> returnType,
                                                                 size_t letColumn);
@@ -156,6 +156,25 @@ class Parser
     std::unique_ptr<ast::Expr> parseShellCommandExpr(); // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseExecPipeline();     // exec prog args | exec prog args
     std::unique_ptr<ast::Expr> parseTryWith();          // try expr with ... | try expr finally ...
+
+    // Module system
+
+    /// Parses `import ModulePath` where ModulePath is a dotted PascalCase name.
+    /// @return An ImportStmt with the resolved module path (e.g., "Math" or "Geometry.Circle").
+    std::unique_ptr<ast::ImportStmt> parseImport();
+
+    /// Parses `open ModulePath` or `open ModulePath with (name1, name2, ...)`.
+    /// @return An OpenStmt with the module path and optional selective name list.
+    std::unique_ptr<ast::OpenStmt> parseOpen();
+
+    /// Parses `module Name = body... end` where Name is a PascalCase identifier.
+    /// The body may contain let, type, import, open, and nested module declarations.
+    /// @return A ModuleDeclStmt with the module name and body statements.
+    std::unique_ptr<ast::ModuleDeclStmt> parseModuleDecl();
+
+    /// Returns true if the next token after current is a PascalCase identifier.
+    /// Used for directive disambiguation: `import Math` (module) vs `import requests` (shell).
+    [[nodiscard]] bool nextIsPascalCaseIdentifier() const;
 
     // Type definitions (records and discriminated unions)
     std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int

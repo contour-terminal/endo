@@ -24,7 +24,7 @@ TEST_CASE("Parser.FSharp.let_simple_int")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "x");
-    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
     CHECK(letStmt->parameters.empty());
 
     auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
@@ -44,7 +44,7 @@ TEST_CASE("Parser.FSharp.let_mutable")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "counter");
-    CHECK(letStmt->isMutable == true);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Mutable);
     CHECK(letStmt->parameters.empty());
 
     auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
@@ -64,8 +64,8 @@ TEST_CASE("Parser.FSharp.let_export")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "X");
-    CHECK(letStmt->isExported == true);
-    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->visibility == endo::ast::Visibility::Exported);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
     CHECK(letStmt->isRecursive == false);
     CHECK(letStmt->parameters.empty());
 }
@@ -82,8 +82,8 @@ TEST_CASE("Parser.FSharp.let_export_mut")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "X");
-    CHECK(letStmt->isExported == true);
-    CHECK(letStmt->isMutable == true);
+    CHECK(letStmt->visibility == endo::ast::Visibility::Exported);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Mutable);
 }
 
 TEST_CASE("Parser.FSharp.let_function_single_param")
@@ -98,7 +98,7 @@ TEST_CASE("Parser.FSharp.let_function_single_param")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "double");
-    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
     REQUIRE(letStmt->parameters.size() == 1);
     CHECK(letStmt->parameters[0].name == "x");
     CHECK(letStmt->isFunction() == true);
@@ -1612,7 +1612,7 @@ TEST_CASE("Parser.FSharp.let_rec_basic")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "countdown");
-    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
     CHECK(letStmt->isRecursive == true);
     CHECK(letStmt->isFunction() == true);
     REQUIRE(letStmt->parameters.size() == 1);

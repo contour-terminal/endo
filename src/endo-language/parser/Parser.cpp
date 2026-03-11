@@ -267,6 +267,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     return nullptr;
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
+            else if (_lexer.isDirective("import") && nextIsPascalCaseIdentifier())
+                return parseImport();
+            else if (_lexer.isDirective("open") && nextIsPascalCaseIdentifier())
+                return parseOpen();
+            else if (_lexer.isDirective("module") && nextIsPascalCaseIdentifier())
+                return parseModuleDecl();
             else if (_lexer.isDirective("while"))
                 return parseWhile();
             else if (_lexer.isDirective("for"))
@@ -3508,6 +3514,23 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     if (isExported)
         _lexer.nextToken(); // consume 'export'
 
+    // Check for 'private' modifier (module-internal visibility)
+    bool const isPrivate = _lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "private";
+    if (isPrivate)
+    {
+        if (isExported)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use either 'export' or 'private', not both" },
+                currentContextSnippet(),
+                "'let export private' is not allowed; 'export' and 'private' are mutually exclusive");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'private'
+    }
+
     // Check for 'mut' modifier
     bool const isMutable = _lexer.currentToken() == Token::Mut;
     if (isMutable)
@@ -3585,7 +3608,10 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         }
 
         _lexer.leaveFSharpExpr();
-        auto result = std::make_unique<ast::LetBindingStmt>(isMutable, std::move(pat), std::move(value));
+        auto result = std::make_unique<ast::LetBindingStmt>(isMutable ? ast::Mutability::Mutable
+                                                                      : ast::Mutability::Immutable,
+                                                            std::move(pat),
+                                                            std::move(value));
         result->resourceMode = resourceMode;
         result->location =
             result->value && result->value->location
@@ -3633,13 +3659,21 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     }
 
     // Property syntax: let Name with get/set ...
+    auto const vis = [&] {
+        if (isExported)
+            return ast::Visibility::Exported;
+        if (isPrivate)
+            return ast::Visibility::Private;
+        return ast::Visibility::Default;
+    }();
+    auto const mut = isMutable ? ast::Mutability::Mutable : ast::Mutability::Immutable;
+
     // Unambiguous: Token::With after a property name with no parameters is distinct from match-with
     // Allow 'with' on the next line after the property name (consume newlines with pushback)
     auto const skippedNewlinesBeforeWith = consumeNewlines();
     if (_lexer.currentToken() == Token::With && parameters.empty() && !isRecursive)
     {
-        return parsePropertyAccessors(
-            isExported, isMutable, std::move(name), std::move(returnType), letColumn);
+        return parsePropertyAccessors(vis, mut, std::move(name), std::move(returnType), letColumn);
     }
     // Not a property — push back newline to preserve statement boundary
     if (skippedNewlinesBeforeWith > 0)
@@ -3683,8 +3717,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    auto result = std::make_unique<ast::LetBindingStmt>(isExported,
-                                                        isMutable,
+    auto result = std::make_unique<ast::LetBindingStmt>(vis,
+                                                        mut,
                                                         isRecursive,
                                                         std::move(name),
                                                         std::move(parameters),
@@ -3816,8 +3850,11 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     return result;
 }
 
-std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
-    bool isExported, bool isMutable, std::string name, std::optional<TypePtr> returnType, size_t letColumn)
+std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(ast::Visibility visibility,
+                                                                    ast::Mutability mutability,
+                                                                    std::string name,
+                                                                    std::optional<TypePtr> returnType,
+                                                                    size_t letColumn)
 {
     TRACE_SCOPE("parsePropertyAccessors");
 
@@ -3825,8 +3862,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
     _lexer.nextToken(); // consume 'with'
     consumeNewlines();  // allow 'get'/'set' on the next line after 'with'
 
-    auto result = std::make_unique<ast::LetBindingStmt>(isExported,
-                                                        isMutable,
+    auto result = std::make_unique<ast::LetBindingStmt>(visibility,
+                                                        mutability,
                                                         false,
                                                         std::move(name),
                                                         std::vector<ast::TypedParameter> {},
@@ -8235,6 +8272,228 @@ std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
     _lexer.nextToken(); // consume '}'
 
     return std::make_unique<pattern::RecordPattern>(std::move(fields), hasWildcard);
+}
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+bool Parser::nextIsPascalCaseIdentifier() const
+{
+    // Peek at the next token to check if it's a PascalCase identifier.
+    // Uses pushBackToken to restore lexer state after peeking.
+    //
+    // pushBackToken(tok, lit) does: push _currentToken onto stack, set _currentToken = tok
+    // So to restore: pushBackToken(savedToken) will push current (which is the peeked token)
+    // onto the stack, and set current back to saved. Then on next nextToken(), the peeked
+    // token is popped from the stack — correct single-peek behavior.
+    auto& lexer = const_cast<Lexer&>(_lexer);
+    auto const savedToken = lexer.currentToken();
+    auto const savedLiteral = std::string(lexer.currentLiteral());
+    auto const savedRange = lexer.currentRange();
+
+    lexer.nextToken(); // advance to peek at next token
+    auto const nextToken = lexer.currentToken();
+    auto const nextLiteral = std::string(lexer.currentLiteral());
+
+    // Restore: push current (peeked token) onto stack, set current back to saved
+    lexer.pushBackToken(savedToken, savedLiteral, savedRange);
+
+    // Check if peeked token is a PascalCase identifier
+    if (nextToken != Token::Identifier && nextToken != Token::String)
+        return false;
+
+    return !nextLiteral.empty() && std::isupper(static_cast<unsigned char>(nextLiteral[0]));
+}
+
+std::unique_ptr<ast::ImportStmt> Parser::parseImport()
+{
+    TRACE_SCOPE("parseImport");
+    auto const loc = _lexer.currentRange();
+    consumeDirective("import"); // consume "import"
+
+    // Parse dotted module path: Ident { "." Ident }
+    if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a module name (e.g., 'import Math')" },
+                                           currentContextSnippet(),
+                                           "Expected module name after 'import', got '{}'",
+                                           _lexer.currentTokenText());
+        return nullptr;
+    }
+
+    // In shell mode, dots are part of the identifier (e.g., "Geometry.Circle" is one token).
+    // In F# mode, dots are separate tokens. Handle both cases.
+    auto modulePath = std::string(_lexer.currentLiteral());
+    _lexer.nextToken(); // consume module name
+
+    // If in F# mode, dots may be separate tokens
+    while (_lexer.currentToken() == Token::Dot)
+    {
+        _lexer.nextToken(); // consume '.'
+        if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+        {
+            _report.syntaxError(
+                currentLocation(), "Expected module name after '.', got '{}'", _lexer.currentTokenText());
+            return nullptr;
+        }
+        modulePath += "." + std::string(_lexer.currentLiteral());
+        _lexer.nextToken();
+    }
+
+    auto result = std::make_unique<ast::ImportStmt>(std::move(modulePath));
+    result->location = loc;
+    return result;
+}
+
+std::unique_ptr<ast::OpenStmt> Parser::parseOpen()
+{
+    TRACE_SCOPE("parseOpen");
+    auto const loc = _lexer.currentRange();
+    consumeDirective("open"); // consume "open"
+
+    // Parse dotted module path
+    if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a module name (e.g., 'open Math')" },
+                                           currentContextSnippet(),
+                                           "Expected module name after 'open', got '{}'",
+                                           _lexer.currentTokenText());
+        return nullptr;
+    }
+
+    // In shell mode, dots are part of identifiers; in F# mode, they're separate tokens.
+    auto modulePath = std::string(_lexer.currentLiteral());
+    _lexer.nextToken();
+
+    // Handle F# mode dotted segments
+    while (_lexer.currentToken() == Token::Dot)
+    {
+        _lexer.nextToken();
+        if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+        {
+            _report.syntaxError(
+                currentLocation(), "Expected module name after '.', got '{}'", _lexer.currentTokenText());
+            return nullptr;
+        }
+        modulePath += "." + std::string(_lexer.currentLiteral());
+        _lexer.nextToken();
+    }
+
+    // Parse optional selective open: with (name1, name2, ...)
+    // Need F# mode for '(' and ',' to be separate tokens.
+    auto selectiveNames = std::vector<std::string> {};
+    // "with" is Token::Identifier in shell mode, Token::With in F# mode
+    if ((_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "with")
+        || _lexer.currentToken() == Token::With)
+    {
+        // Enter F# mode first, so the token AFTER "with" is lexed correctly ('(' → RndOpen)
+        _lexer.enterFSharpExpr();
+        _lexer.nextToken(); // consume "with" — next token will be lexed in F# mode
+        if (_lexer.currentToken() != Token::RndOpen)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxError(currentLocation(),
+                                "Expected '(' after 'with' in selective open, got '{}'",
+                                _lexer.currentTokenText());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '('
+
+        // Parse comma-separated identifier list
+        while (_lexer.currentToken() != Token::RndClose && _lexer.currentToken() != Token::EndOfInput)
+        {
+            if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+            {
+                _lexer.leaveFSharpExpr();
+                _report.syntaxError(currentLocation(),
+                                    "Expected name in selective open, got '{}'",
+                                    _lexer.currentTokenText());
+                return nullptr;
+            }
+            selectiveNames.emplace_back(_lexer.currentLiteral());
+            _lexer.nextToken();
+
+            if (_lexer.currentToken() == Token::Comma)
+                _lexer.nextToken(); // consume ','
+        }
+
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxError(currentLocation(),
+                                "Expected ')' to close selective open, got '{}'",
+                                _lexer.currentTokenText());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ')'
+        _lexer.leaveFSharpExpr();
+    }
+
+    auto result = std::make_unique<ast::OpenStmt>(std::move(modulePath), std::move(selectiveNames));
+    result->location = loc;
+    return result;
+}
+
+std::unique_ptr<ast::ModuleDeclStmt> Parser::parseModuleDecl()
+{
+    TRACE_SCOPE("parseModuleDecl");
+    auto const loc = _lexer.currentRange();
+    consumeDirective("module"); // consume "module"
+
+    // Parse module name
+    if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+    {
+        _report.syntaxError(
+            currentLocation(), "Expected module name after 'module', got '{}'", _lexer.currentTokenText());
+        return nullptr;
+    }
+
+    auto name = std::string(_lexer.currentLiteral());
+    _lexer.nextToken(); // consume name
+
+    // Expect '='
+    if (_lexer.currentToken() != Token::Equal)
+    {
+        _report.syntaxError(currentLocation(),
+                            "Expected '=' after module name '{}', got '{}'",
+                            name,
+                            _lexer.currentTokenText());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '='
+
+    // Skip newlines after '='
+    consumeNewlines();
+
+    // Parse module body statements until "end"
+    auto body = std::vector<std::unique_ptr<ast::Statement>> {};
+    while (_lexer.currentToken() != Token::EndOfInput)
+    {
+        consumeNewlines();
+
+        // Check for "end" keyword
+        if (_lexer.isDirective("end"))
+        {
+            _lexer.nextToken(); // consume "end"
+            break;
+        }
+
+        auto stmt = parseStmt();
+        if (!stmt)
+            return nullptr;
+
+        body.push_back(std::move(stmt));
+
+        // Consume statement separators
+        consumeUntilNotOneOf(Token::LineFeed, Token::Semicolon);
+    }
+
+    auto result = std::make_unique<ast::ModuleDeclStmt>(std::move(name), std::move(body));
+    result->location = loc;
+    return result;
 }
 
 } // namespace endo
