@@ -764,3 +764,119 @@ TEST_CASE("module.loader.available_nested_modules", "[module][loader]")
     CHECK(std::ranges::find(names, "Math") != names.end());
     CHECK(std::ranges::find(names, "Geometry.Circle") != names.end());
 }
+
+// =============================================================================
+// Additional test coverage (test gaps from code review)
+// =============================================================================
+
+TEST_CASE("module.loader.circular_dependency_error_message", "[module][loader]")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearErrors();
+
+    TempModuleDir tmpDir;
+    tmpDir.writeModule("CycleA", "import CycleB\nlet f (x: int) : int = x");
+    tmpDir.writeModule("CycleB", "import CycleA\nlet g (x: int) : int = x");
+
+    ModuleLoader loader(rt.runtime, rt.report);
+    loader.addSearchPath(tmpDir.dir);
+
+    auto const* desc = loader.loadModule("CycleA");
+    CHECK(desc == nullptr);
+    CHECK(rt.hasErrors());
+}
+
+TEST_CASE("module.open.selective_invalid_name", "[module][codegen]")
+{
+    SECTION("selective open with nonexistent name reports error")
+    {
+        auto result = executeSession({
+            R"(
+module Math =
+    let square (x: int) : int = x * x
+open Math with (nonexistent)
+)" });
+        CHECK(!result.has_value());
+    }
+}
+
+TEST_CASE("module.open.selective_private_name", "[module][codegen]")
+{
+    SECTION("selective open of private name reports error")
+    {
+        auto result = executeSession({
+            R"(
+module Math =
+    let private helper (x: int) : int = x + 1
+    let square (x: int) : int = x * x
+open Math with (helper)
+)" });
+        CHECK(!result.has_value());
+    }
+}
+
+TEST_CASE("module.inline.private_qualified_access_denied", "[module][codegen]")
+{
+    SECTION("private value cannot be accessed via qualified path")
+    {
+        CHECK(generatesIRWithError(R"(
+module Secret =
+    let private hidden = 42
+    let visible = 1
+print (Secret.hidden)
+)",
+                                   "private"));
+    }
+}
+
+TEST_CASE("module.signature.malformed_warning", "[module][signature]")
+{
+    TempModuleDir tmpDir;
+
+    SECTION("malformed val line produces warning")
+    {
+        auto sigPath = tmpDir.dir / "Bad.endoi";
+        {
+            std::ofstream(sigPath) << "val missing_colon int -> int\n"
+                                   << "val good : int -> int\n";
+        }
+        auto sig = parseModuleSignature(sigPath);
+        REQUIRE(sig.has_value());
+        CHECK(sig->entries.size() == 1); // Only the good entry
+        CHECK(sig->warnings.size() == 1);
+        CHECK(sig->warnings[0].find("missing") != std::string::npos);
+    }
+}
+
+TEST_CASE("module.signature.validation_mismatch", "[module][signature]")
+{
+    SECTION("missing type reports error")
+    {
+        ModuleDescriptor desc;
+        desc.name = "Geom";
+        // No types defined
+
+        ModuleSignature sig;
+        sig.moduleName = "Geom";
+        sig.entries.push_back({ SignatureEntry::Kind::Type, "Point", "{ x: int; y: int }" });
+
+        auto errors = validateSignature(desc, sig);
+        REQUIRE(errors.size() == 1);
+        CHECK(errors[0].find("missing type") != std::string::npos);
+        CHECK(errors[0].find("Point") != std::string::npos);
+    }
+
+    SECTION("multiple missing entries report multiple errors")
+    {
+        ModuleDescriptor desc;
+        desc.name = "Math";
+
+        ModuleSignature sig;
+        sig.moduleName = "Math";
+        sig.entries.push_back({ SignatureEntry::Kind::Val, "square", "int -> int" });
+        sig.entries.push_back({ SignatureEntry::Kind::Val, "cube", "int -> int" });
+
+        auto errors = validateSignature(desc, sig);
+        CHECK(errors.size() == 2);
+    }
+}

@@ -7514,7 +7514,6 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             {
                 auto const* descriptor = modIt->second;
 
-                // Check private access
                 if (descriptor->isPrivate(method))
                 {
                     reportTypeError(
@@ -7522,77 +7521,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     return;
                 }
 
-                // Look up the function in the module
-                if (auto funcIt = descriptor->functions.find(method); funcIt != descriptor->functions.end())
-                {
-                    auto const& persisted = funcIt->second;
-                    FSharpFunction func;
-                    func.parameters = persisted.parameters;
-                    func.parameterTypes = persisted.parameterTypes;
-                    func.returnType = persisted.returnType;
-                    func.body = persisted.body;
-                    func.returnKind = persisted.returnKind;
-                    func.isRecursive = persisted.isRecursive;
-                    func.hasVariadicParam = persisted.hasVariadicParam;
-
-                    // Evaluate arguments
-                    auto savedTailPos = _inTailPosition;
-                    _inTailPosition = false;
-                    auto const savedCaptureMode = _shellCommandCaptureMode;
-                    _shellCommandCaptureMode = true;
-                    auto args = std::vector<CoreVM::Value*> {};
-                    for (auto const* argExpr: argExprs)
-                    {
-                        auto* argValue = codegen(argExpr);
-                        if (!argValue)
-                        {
-                            reportTypeError("Failed to evaluate function argument");
-                            return;
-                        }
-                        args.push_back(argValue);
-                    }
-                    _shellCommandCaptureMode = savedCaptureMode;
-                    _inTailPosition = savedTailPos;
-
-                    // Register ALL module functions temporarily so intra-module calls
-                    // resolve during AST inlining (e.g., cube calls private sq).
-                    auto tempRegistered = std::vector<std::string> {};
-                    for (auto const& [fnName, fnPersisted]: descriptor->functions)
-                    {
-                        if (!lookupFSharpFunction(fnName))
-                        {
-                            FSharpFunction tempFunc;
-                            tempFunc.parameters = fnPersisted.parameters;
-                            tempFunc.parameterTypes = fnPersisted.parameterTypes;
-                            tempFunc.returnType = fnPersisted.returnType;
-                            tempFunc.body = fnPersisted.body;
-                            tempFunc.returnKind = fnPersisted.returnKind;
-                            tempFunc.isRecursive = fnPersisted.isRecursive;
-                            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
-                            registerFSharpFunction(fnName, std::move(tempFunc));
-                            tempRegistered.push_back(fnName);
-                        }
-                    }
-                    // Also bind module value allocas into scope so function bodies
-                    // can reference value bindings from the same module.
-                    pushFSharpScope();
-                    if (auto valMapIt = _moduleValueAllocas.find(modIdent->name);
-                        valMapIt != _moduleValueAllocas.end())
-                    {
-                        for (auto const& [vbName, vbAlloca]: valMapIt->second)
-                            bindFSharpVariable(vbName, vbAlloca, false, false);
-                    }
-                    auto const* registeredFunc = lookupFSharpFunction(method);
-                    if (registeredFunc)
-                        generateFSharpCall(registeredFunc, method, args);
-                    popFSharpScope();
-                    // Remove temporary registrations to avoid polluting the outer scope
-                    for (auto const& name: tempRegistered)
-                        _fsharpFunctions.erase(name);
-                    return;
-                }
-
-                reportTypeError("Module '{}' has no member '{}'", modIdent->name, std::string_view(method));
+                generateModuleFunctionCall(descriptor, modIdent->name, method, argExprs);
                 return;
             }
         }
@@ -7612,75 +7541,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     return;
                 }
 
-                if (auto funcIt = descriptor->functions.find(flattened->memberName);
-                    funcIt != descriptor->functions.end())
-                {
-                    auto const& persisted = funcIt->second;
-                    FSharpFunction func;
-                    func.parameters = persisted.parameters;
-                    func.parameterTypes = persisted.parameterTypes;
-                    func.returnType = persisted.returnType;
-                    func.body = persisted.body;
-                    func.returnKind = persisted.returnKind;
-                    func.isRecursive = persisted.isRecursive;
-                    func.hasVariadicParam = persisted.hasVariadicParam;
-
-                    // Evaluate arguments
-                    auto savedTailPos = _inTailPosition;
-                    _inTailPosition = false;
-                    auto const savedCaptureMode = _shellCommandCaptureMode;
-                    _shellCommandCaptureMode = true;
-                    auto args = std::vector<CoreVM::Value*> {};
-                    for (auto const* argExpr: argExprs)
-                    {
-                        auto* argValue = codegen(argExpr);
-                        if (!argValue)
-                        {
-                            reportTypeError("Failed to evaluate function argument");
-                            return;
-                        }
-                        args.push_back(argValue);
-                    }
-                    _shellCommandCaptureMode = savedCaptureMode;
-                    _inTailPosition = savedTailPos;
-
-                    // Register ALL module functions temporarily for intra-module calls
-                    auto tempRegistered = std::vector<std::string> {};
-                    for (auto const& [fnName, fnPersisted]: descriptor->functions)
-                    {
-                        if (!lookupFSharpFunction(fnName))
-                        {
-                            FSharpFunction tempFunc;
-                            tempFunc.parameters = fnPersisted.parameters;
-                            tempFunc.parameterTypes = fnPersisted.parameterTypes;
-                            tempFunc.returnType = fnPersisted.returnType;
-                            tempFunc.body = fnPersisted.body;
-                            tempFunc.returnKind = fnPersisted.returnKind;
-                            tempFunc.isRecursive = fnPersisted.isRecursive;
-                            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
-                            registerFSharpFunction(fnName, std::move(tempFunc));
-                            tempRegistered.push_back(fnName);
-                        }
-                    }
-                    // Bind module value allocas into scope for function body inlining
-                    pushFSharpScope();
-                    if (auto valMapIt = _moduleValueAllocas.find(flattened->modulePath);
-                        valMapIt != _moduleValueAllocas.end())
-                    {
-                        for (auto const& [vbName, vbAlloca]: valMapIt->second)
-                            bindFSharpVariable(vbName, vbAlloca, false, false);
-                    }
-                    auto const* registeredFunc = lookupFSharpFunction(flattened->memberName);
-                    if (registeredFunc)
-                        generateFSharpCall(registeredFunc, flattened->memberName, args);
-                    popFSharpScope();
-                    for (auto const& name: tempRegistered)
-                        _fsharpFunctions.erase(name);
-                    return;
-                }
-
-                reportTypeError(
-                    "Module '{}' has no member '{}'", flattened->modulePath, flattened->memberName);
+                generateModuleFunctionCall(
+                    descriptor, flattened->modulePath, flattened->memberName, argExprs);
                 return;
             }
         }
@@ -11029,12 +10891,13 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                     return;
                 }
             }
-            // Fallback: check descriptor value bindings (shouldn't normally reach here)
-            auto valIt = std::ranges::find_if(descriptor->valueBindings,
-                                              [&](auto const& vb) { return vb.name == node.fieldName; });
-            if (valIt != descriptor->valueBindings.end())
+            // Check if it's a value binding that wasn't pre-evaluated (internal error)
+            if (std::ranges::any_of(descriptor->valueBindings,
+                                    [&](auto const& vb) { return vb.name == node.fieldName; }))
             {
-                codegen(valIt->value);
+                reportTypeError("Internal error: module value binding '{}' not pre-evaluated for module '{}'",
+                                node.fieldName,
+                                modIdent->name);
                 return;
             }
 
@@ -11077,12 +10940,13 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                     return;
                 }
             }
-            // Fallback: check descriptor value bindings
-            auto valIt = std::ranges::find_if(
-                descriptor->valueBindings, [&](auto const& vb) { return vb.name == flattened->memberName; });
-            if (valIt != descriptor->valueBindings.end())
+            // Check if it's a value binding that wasn't pre-evaluated (internal error)
+            if (std::ranges::any_of(descriptor->valueBindings,
+                                    [&](auto const& vb) { return vb.name == flattened->memberName; }))
             {
-                codegen(valIt->value);
+                reportTypeError("Internal error: module value binding '{}' not pre-evaluated for module '{}'",
+                                flattened->memberName,
+                                flattened->modulePath);
                 return;
             }
 
@@ -11608,6 +11472,93 @@ void IRGenerator::visit(ast::ExecPipelineExpr const& node)
 // Module System
 // ============================================================================
 
+void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
+                                             std::string const& moduleName,
+                                             std::string const& memberName,
+                                             std::vector<ast::Expr const*> const& argExprs)
+{
+    auto funcIt = descriptor->functions.find(memberName);
+    if (funcIt == descriptor->functions.end())
+    {
+        reportTypeError("Module '{}' has no member '{}'", moduleName, std::string_view(memberName));
+        return;
+    }
+
+    // Evaluate arguments
+    auto savedTailPos = _inTailPosition;
+    _inTailPosition = false;
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    _shellCommandCaptureMode = true;
+    auto args = std::vector<CoreVM::Value*> {};
+    for (auto const* argExpr: argExprs)
+    {
+        auto* argValue = codegen(argExpr);
+        if (!argValue)
+        {
+            reportTypeError("Failed to evaluate function argument");
+            return;
+        }
+        args.push_back(argValue);
+    }
+    _shellCommandCaptureMode = savedCaptureMode;
+    _inTailPosition = savedTailPos;
+
+    // Register ALL module functions temporarily so intra-module calls
+    // resolve during AST inlining (e.g., cube calls private sq).
+    auto tempRegistered = std::vector<std::string> {};
+    for (auto const& [fnName, fnPersisted]: descriptor->functions)
+    {
+        if (!lookupFSharpFunction(fnName))
+        {
+            FSharpFunction tempFunc;
+            tempFunc.parameters = fnPersisted.parameters;
+            tempFunc.parameterTypes = fnPersisted.parameterTypes;
+            tempFunc.returnType = fnPersisted.returnType;
+            tempFunc.body = fnPersisted.body;
+            tempFunc.returnKind = fnPersisted.returnKind;
+            tempFunc.isRecursive = fnPersisted.isRecursive;
+            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
+            registerFSharpFunction(fnName, std::move(tempFunc));
+            tempRegistered.push_back(fnName);
+        }
+    }
+    // Bind module value allocas into scope so function bodies
+    // can reference value bindings from the same module.
+    pushFSharpScope();
+    if (auto valMapIt = _moduleValueAllocas.find(moduleName); valMapIt != _moduleValueAllocas.end())
+    {
+        for (auto const& [vbName, vbAlloca]: valMapIt->second)
+            bindFSharpVariable(vbName, vbAlloca, false, false);
+    }
+    auto const* registeredFunc = lookupFSharpFunction(memberName);
+    if (registeredFunc)
+        generateFSharpCall(registeredFunc, memberName, args);
+    popFSharpScope();
+    // Remove temporary registrations to avoid polluting the outer scope
+    for (auto const& name: tempRegistered)
+        _fsharpFunctions.erase(name);
+}
+
+void IRGenerator::codegenModuleValueBindings(ModuleDescriptor const* descriptor,
+                                             std::string const& moduleName,
+                                             bool force)
+{
+    if (!force && _moduleValueAllocas.contains(moduleName))
+        return;
+
+    for (auto const& vb: descriptor->valueBindings)
+    {
+        if (descriptor->isPrivate(vb.name))
+            continue;
+        auto* val = codegen(vb.value);
+        if (!val)
+            continue;
+        auto* storage = createAllocaInEntryBlock(val->type(), moduleName + "." + vb.name);
+        _builder.createStore(storage, val, vb.name);
+        _moduleValueAllocas[moduleName][vb.name] = storage;
+    }
+}
+
 void IRGenerator::visit(ast::ImportStmt const& node)
 {
     if (!_persistentState || !_persistentState->moduleLoader)
@@ -11625,17 +11576,7 @@ void IRGenerator::visit(ast::ImportStmt const& node)
     _loadedModules[node.modulePath] = descriptor;
 
     // Codegen value bindings once and store in allocas (avoid re-evaluation on each access)
-    for (auto const& vb: descriptor->valueBindings)
-    {
-        if (descriptor->isPrivate(vb.name))
-            continue;
-        auto* val = codegen(vb.value);
-        if (!val)
-            continue;
-        auto* storage = createAllocaInEntryBlock(val->type(), node.modulePath + "." + vb.name);
-        _builder.createStore(storage, val, vb.name);
-        _moduleValueAllocas[node.modulePath][vb.name] = storage;
-    }
+    codegenModuleValueBindings(descriptor, node.modulePath, /*force=*/true);
 
     // Register types from the module
     for (auto const& pt: descriptor->productTypes)
@@ -11699,20 +11640,7 @@ void IRGenerator::visit(ast::OpenStmt const& node)
     _loadedModules[node.modulePath] = descriptor;
 
     // Codegen value bindings once if not already done (import may have preceded open)
-    if (!_moduleValueAllocas.contains(node.modulePath))
-    {
-        for (auto const& vb: descriptor->valueBindings)
-        {
-            if (descriptor->isPrivate(vb.name))
-                continue;
-            auto* val = codegen(vb.value);
-            if (!val)
-                continue;
-            auto* storage = createAllocaInEntryBlock(val->type(), node.modulePath + "." + vb.name);
-            _builder.createStore(storage, val, vb.name);
-            _moduleValueAllocas[node.modulePath][vb.name] = storage;
-        }
-    }
+    codegenModuleValueBindings(descriptor, node.modulePath);
 
     // Bring public functions into scope
     for (auto const& [funcName, persisted]: descriptor->functions)
@@ -11873,17 +11801,7 @@ void IRGenerator::visit(ast::ModuleDeclStmt const& node)
     _loadedModules[node.name] = registeredDesc;
 
     // Codegen value bindings once and store in allocas (avoid re-evaluation on each access)
-    for (auto const& vb: registeredDesc->valueBindings)
-    {
-        if (registeredDesc->isPrivate(vb.name))
-            continue;
-        auto* val = codegen(vb.value);
-        if (!val)
-            continue;
-        auto* storage = createAllocaInEntryBlock(val->type(), node.name + "." + vb.name);
-        _builder.createStore(storage, val, vb.name);
-        _moduleValueAllocas[node.name][vb.name] = storage;
-    }
+    codegenModuleValueBindings(registeredDesc, node.name, /*force=*/true);
 
     if (_persistentState && _persistentState->moduleLoader)
         _persistentState->moduleLoader->registerInlineModule(node.name, std::move(descriptor));

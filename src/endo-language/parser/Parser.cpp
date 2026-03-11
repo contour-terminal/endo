@@ -8278,7 +8278,7 @@ std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
 // Module System
 // ============================================================================
 
-bool Parser::nextIsPascalCaseIdentifier() const
+bool Parser::nextIsPascalCaseIdentifier()
 {
     // Peek at the next token to check if it's a PascalCase identifier.
     // Uses pushBackToken to restore lexer state after peeking.
@@ -8287,17 +8287,16 @@ bool Parser::nextIsPascalCaseIdentifier() const
     // So to restore: pushBackToken(savedToken) will push current (which is the peeked token)
     // onto the stack, and set current back to saved. Then on next nextToken(), the peeked
     // token is popped from the stack — correct single-peek behavior.
-    auto& lexer = const_cast<Lexer&>(_lexer);
-    auto const savedToken = lexer.currentToken();
-    auto const savedLiteral = std::string(lexer.currentLiteral());
-    auto const savedRange = lexer.currentRange();
+    auto const savedToken = _lexer.currentToken();
+    auto const savedLiteral = std::string(_lexer.currentLiteral());
+    auto const savedRange = _lexer.currentRange();
 
-    lexer.nextToken(); // advance to peek at next token
-    auto const nextToken = lexer.currentToken();
-    auto const nextLiteral = std::string(lexer.currentLiteral());
+    _lexer.nextToken(); // advance to peek at next token
+    auto const nextToken = _lexer.currentToken();
+    auto const nextLiteral = std::string(_lexer.currentLiteral());
 
     // Restore: push current (peeked token) onto stack, set current back to saved
-    lexer.pushBackToken(savedToken, savedLiteral, savedRange);
+    _lexer.pushBackToken(savedToken, savedLiteral, savedRange);
 
     // Check if peeked token is a PascalCase identifier
     if (nextToken != Token::Identifier && nextToken != Token::String)
@@ -8306,13 +8305,39 @@ bool Parser::nextIsPascalCaseIdentifier() const
     return !nextLiteral.empty() && std::isupper(static_cast<unsigned char>(nextLiteral[0]));
 }
 
+std::string Parser::parseModulePath()
+{
+    if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+        return {};
+
+    // In shell mode, dots are part of the identifier (e.g., "Geometry.Circle" is one token).
+    // In F# mode, dots are separate tokens. Handle both cases.
+    auto modulePath = std::string(_lexer.currentLiteral());
+    _lexer.nextToken();
+
+    // Handle F# mode dotted segments
+    while (_lexer.currentToken() == Token::Dot)
+    {
+        _lexer.nextToken(); // consume '.'
+        if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+        {
+            _report.syntaxError(
+                currentLocation(), "Expected module name after '.', got '{}'", _lexer.currentTokenText());
+            return {};
+        }
+        modulePath += "." + std::string(_lexer.currentLiteral());
+        _lexer.nextToken();
+    }
+
+    return modulePath;
+}
+
 std::unique_ptr<ast::ImportStmt> Parser::parseImport()
 {
     TRACE_SCOPE("parseImport");
     auto const loc = _lexer.currentRange();
     consumeDirective("import"); // consume "import"
 
-    // Parse dotted module path: Ident { "." Ident }
     if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -8323,24 +8348,9 @@ std::unique_ptr<ast::ImportStmt> Parser::parseImport()
         return nullptr;
     }
 
-    // In shell mode, dots are part of the identifier (e.g., "Geometry.Circle" is one token).
-    // In F# mode, dots are separate tokens. Handle both cases.
-    auto modulePath = std::string(_lexer.currentLiteral());
-    _lexer.nextToken(); // consume module name
-
-    // If in F# mode, dots may be separate tokens
-    while (_lexer.currentToken() == Token::Dot)
-    {
-        _lexer.nextToken(); // consume '.'
-        if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
-        {
-            _report.syntaxError(
-                currentLocation(), "Expected module name after '.', got '{}'", _lexer.currentTokenText());
-            return nullptr;
-        }
-        modulePath += "." + std::string(_lexer.currentLiteral());
-        _lexer.nextToken();
-    }
+    auto modulePath = parseModulePath();
+    if (modulePath.empty())
+        return nullptr;
 
     auto result = std::make_unique<ast::ImportStmt>(std::move(modulePath));
     result->location = loc;
@@ -8353,7 +8363,6 @@ std::unique_ptr<ast::OpenStmt> Parser::parseOpen()
     auto const loc = _lexer.currentRange();
     consumeDirective("open"); // consume "open"
 
-    // Parse dotted module path
     if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -8364,23 +8373,9 @@ std::unique_ptr<ast::OpenStmt> Parser::parseOpen()
         return nullptr;
     }
 
-    // In shell mode, dots are part of identifiers; in F# mode, they're separate tokens.
-    auto modulePath = std::string(_lexer.currentLiteral());
-    _lexer.nextToken();
-
-    // Handle F# mode dotted segments
-    while (_lexer.currentToken() == Token::Dot)
-    {
-        _lexer.nextToken();
-        if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
-        {
-            _report.syntaxError(
-                currentLocation(), "Expected module name after '.', got '{}'", _lexer.currentTokenText());
-            return nullptr;
-        }
-        modulePath += "." + std::string(_lexer.currentLiteral());
-        _lexer.nextToken();
-    }
+    auto modulePath = parseModulePath();
+    if (modulePath.empty())
+        return nullptr;
 
     // Parse optional selective open: with (name1, name2, ...)
     // Need F# mode for '(' and ',' to be separate tokens.

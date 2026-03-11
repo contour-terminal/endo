@@ -35,6 +35,7 @@ struct ModuleSignature
 {
     std::string moduleName; ///< Module name derived from filename
     std::vector<SignatureEntry> entries;
+    std::vector<std::string> warnings; ///< Warnings for malformed lines during parsing
 
     /// Returns true if the signature declares a member with the given name.
     [[nodiscard]] bool declares(std::string const& name) const;

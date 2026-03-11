@@ -287,6 +287,28 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::OpenStmt const& node) override;
     void visit(ast::ModuleDeclStmt const& node) override;
 
+    /// Generates a call to a module function by temporarily registering all module functions
+    /// and value bindings into scope, then calling generateFSharpCall.
+    ///
+    /// @param descriptor  Module descriptor containing functions and value bindings.
+    /// @param moduleName  Module name for value alloca lookup.
+    /// @param memberName  Function name within the module.
+    /// @param argExprs    Argument expressions to evaluate and pass.
+    void generateModuleFunctionCall(ModuleDescriptor const* descriptor,
+                                    std::string const& moduleName,
+                                    std::string const& memberName,
+                                    std::vector<ast::Expr const*> const& argExprs);
+
+    /// Codegens a module's value bindings once and stores them in allocas.
+    /// Skips private bindings. No-op if already evaluated for this module.
+    ///
+    /// @param descriptor  Module descriptor with value bindings.
+    /// @param moduleName  Key for the _moduleValueAllocas map.
+    /// @param force       If true, always evaluate (even if already present).
+    void codegenModuleValueBindings(ModuleDescriptor const* descriptor,
+                                    std::string const& moduleName,
+                                    bool force = false);
+
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
 

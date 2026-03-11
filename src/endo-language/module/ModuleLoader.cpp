@@ -10,7 +10,6 @@
 #include <format>
 #include <fstream>
 #include <ranges>
-#include <sstream>
 #include <string>
 
 namespace endo
@@ -26,6 +25,7 @@ ModuleLoader::ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report
 void ModuleLoader::addSearchPath(std::filesystem::path path)
 {
     _searchPaths.emplace_back(std::move(path));
+    _availableModulesCache.reset(); // Invalidate cache
 }
 
 ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
@@ -76,14 +76,8 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
 
     // Check cache by resolved path (same file via different relative paths)
     auto const canonicalPath = fs::canonical(*resolved).string();
-    for (auto const& [name, desc]: _cache)
-    {
-        if (desc->sourcePath == canonicalPath)
-        {
-            // Same file loaded under a different name — return existing descriptor
-            return desc.get();
-        }
-    }
+    if (auto pathIt = _cacheByPath.find(canonicalPath); pathIt != _cacheByPath.end())
+        return pathIt->second;
 
     // Compile the module
     _loadingStack.push_back(dottedName);
@@ -96,6 +90,8 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
         return nullptr;
 
     auto* result = descriptor.get();
+    if (!result->sourcePath.empty())
+        _cacheByPath[result->sourcePath.string()] = result;
     _cache[dottedName] = std::move(descriptor);
     return result;
 }
@@ -157,7 +153,19 @@ std::vector<std::string> ModuleLoader::loadedModuleNames() const
 
 std::vector<std::string> ModuleLoader::availableModuleNames() const
 {
-    auto names = std::vector<std::string> {};
+    if (_availableModulesCache)
+    {
+        // Merge cached filesystem results with currently loaded modules
+        auto names = *_availableModulesCache;
+        for (auto const& [name, _]: _cache)
+            names.push_back(name);
+        std::ranges::sort(names);
+        auto const [first, last] = std::ranges::unique(names);
+        names.erase(first, last);
+        return names;
+    }
+
+    auto fsNames = std::vector<std::string> {};
     for (auto const& searchPath: _searchPaths)
     {
         if (!fs::exists(searchPath) || !fs::is_directory(searchPath))
@@ -195,16 +203,18 @@ std::vector<std::string> ModuleLoader::availableModuleNames() const
             if (!dottedName.empty())
                 dottedName += '.';
             dottedName += stem;
-            names.push_back(std::move(dottedName));
+            fsNames.push_back(std::move(dottedName));
         }
     }
+    _availableModulesCache = fsNames;
+
     // Also include already-loaded modules
     for (auto const& [name, _]: _cache)
-        names.push_back(name);
-    std::ranges::sort(names);
-    auto const [first, last] = std::ranges::unique(names);
-    names.erase(first, last);
-    return names;
+        fsNames.push_back(name);
+    std::ranges::sort(fsNames);
+    auto const [first, last] = std::ranges::unique(fsNames);
+    fsNames.erase(first, last);
+    return fsNames;
 }
 
 std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const& name, fs::path const& path)
@@ -286,6 +296,8 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
     {
         if (auto sig = parseModuleSignature(sigPath))
         {
+            for (auto const& warning: sig->warnings)
+                _report.syntaxError(CoreVM::SourceLocation {}, "Signature warning: {}", warning);
             auto const errors = validateSignature(*descriptor, *sig);
             for (auto const& err: errors)
                 _report.syntaxError(CoreVM::SourceLocation {}, "{}", err);
@@ -300,12 +312,14 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
 std::vector<std::string> ModuleLoader::splitDottedName(std::string const& dottedName)
 {
     auto segments = std::vector<std::string> {};
-    auto ss = std::istringstream(dottedName);
-    auto segment = std::string {};
-    while (std::getline(ss, segment, '.'))
+    auto start = std::string::size_type { 0 };
+    while (start < dottedName.size())
     {
-        if (!segment.empty())
-            segments.push_back(std::move(segment));
+        auto const dotPos = dottedName.find('.', start);
+        auto const end = (dotPos != std::string::npos) ? dotPos : dottedName.size();
+        if (end > start)
+            segments.emplace_back(dottedName, start, end - start);
+        start = end + 1;
     }
     return segments;
 }

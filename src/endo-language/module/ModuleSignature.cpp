@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <endo-language/module/ModuleSignature.hpp>
-
 #include <endo-language/module/ModuleDescriptor.hpp>
+#include <endo-language/module/ModuleSignature.hpp>
 
 #include <algorithm>
 #include <format>
@@ -44,7 +43,11 @@ std::optional<ModuleSignature> parseModuleSignature(std::filesystem::path const&
             auto const rest = trimmed.substr(4);
             auto const colonPos = rest.find(':');
             if (colonPos == std::string::npos)
-                continue; // Malformed, skip
+            {
+                sig.warnings.push_back(
+                    std::format("Malformed val declaration (missing ':'): {}", std::string(trimmed)));
+                continue;
+            }
 
             auto nameStr = std::string(rest.substr(0, colonPos));
             // Trim whitespace from name
@@ -112,16 +115,14 @@ std::vector<std::string> validateSignature(ModuleDescriptor const& descriptor,
             case SignatureEntry::Kind::Val: {
                 // Check if the module exports a function or value with this name
                 auto const hasFunction = descriptor.functions.contains(entry.name);
-                auto const hasValue =
-                    std::ranges::any_of(descriptor.valueBindings,
-                                        [&](auto const& b) { return b.name == entry.name; });
+                auto const hasValue = std::ranges::any_of(
+                    descriptor.valueBindings, [&](auto const& b) { return b.name == entry.name; });
                 if (!hasFunction && !hasValue)
                 {
-                    errors.push_back(std::format(
-                        "Module '{}' does not match signature: missing '{} : {}'",
-                        descriptor.name,
-                        entry.name,
-                        entry.signature));
+                    errors.push_back(std::format("Module '{}' does not match signature: missing '{} : {}'",
+                                                 descriptor.name,
+                                                 entry.name,
+                                                 entry.signature));
                 }
                 break;
             }
@@ -129,14 +130,13 @@ std::vector<std::string> validateSignature(ModuleDescriptor const& descriptor,
                 // Check if the module exports a type with this name
                 auto const hasProduct = std::ranges::any_of(
                     descriptor.productTypes, [&](auto const& t) { return t.name == entry.name; });
-                auto const hasSum = std::ranges::any_of(
-                    descriptor.sumTypes, [&](auto const& t) { return t.name == entry.name; });
+                auto const hasSum = std::ranges::any_of(descriptor.sumTypes,
+                                                        [&](auto const& t) { return t.name == entry.name; });
                 if (!hasProduct && !hasSum)
                 {
-                    errors.push_back(std::format(
-                        "Module '{}' does not match signature: missing type '{}'",
-                        descriptor.name,
-                        entry.name));
+                    errors.push_back(std::format("Module '{}' does not match signature: missing type '{}'",
+                                                 descriptor.name,
+                                                 entry.name));
                 }
                 break;
             }

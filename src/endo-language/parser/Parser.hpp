@@ -174,7 +174,12 @@ class Parser
 
     /// Returns true if the next token after current is a PascalCase identifier.
     /// Used for directive disambiguation: `import Math` (module) vs `import requests` (shell).
-    [[nodiscard]] bool nextIsPascalCaseIdentifier() const;
+    [[nodiscard]] bool nextIsPascalCaseIdentifier();
+
+    /// Parses a dotted module path: Ident { "." Ident }.
+    /// Handles both shell mode (dots in identifier) and F# mode (dots as separate tokens).
+    /// @return The parsed dotted path string (e.g., "Geometry.Circle"), or empty on error.
+    [[nodiscard]] std::string parseModulePath();
 
     // Type definitions (records and discriminated unions)
     std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int

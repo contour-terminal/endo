@@ -83,8 +83,14 @@ class ModuleLoader: public std::enable_shared_from_this<ModuleLoader>
     /// Module cache keyed by canonical name.
     std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _cache;
 
+    /// Secondary cache: canonical file path -> descriptor pointer for O(1) path-based dedup.
+    std::unordered_map<std::string, ModuleDescriptor*> _cacheByPath;
+
     /// Search paths for module resolution.
     std::vector<std::filesystem::path> _searchPaths;
+
+    /// Cached available module names. Invalidated when search paths change.
+    mutable std::optional<std::vector<std::string>> _availableModulesCache;
 
     CoreVM::Runtime& _runtime;            // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::diagnostics::Report& _report; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
