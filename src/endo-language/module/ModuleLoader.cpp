@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <endo-language/module/ModuleLoader.hpp>
-
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
+#include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/module/ModuleSignature.hpp>
 #include <endo-language/parser/Parser.hpp>
 
@@ -30,7 +29,7 @@ void ModuleLoader::addSearchPath(std::filesystem::path path)
 }
 
 ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
-                                                  std::optional<fs::path> const& relativeTo)
+                                                 std::optional<fs::path> const& relativeTo)
 {
     // Check cache first
     if (auto it = _cache.find(dottedName); it != _cache.end())
@@ -56,12 +55,18 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
     auto const resolved = resolveModulePath(dottedName, relativeTo);
     if (!resolved)
     {
-        // Build search locations for the error message
+        // Build the expected relative path for the error message (e.g., "Geometry/Circle.endo")
+        auto const segments = splitDottedName(dottedName);
+        auto relPath = fs::path {};
+        for (size_t i = 0; i < segments.size() - 1; ++i)
+            relPath /= segments[i];
+        relPath /= segments.back() + ".endo";
+
         std::string searched;
         if (relativeTo)
-            searched += std::format("./{}.endo, ", dottedName);
+            searched += std::format("{}, ", (relativeTo->parent_path() / relPath).string());
         for (auto const& sp: _searchPaths)
-            searched += std::format("{}/{}.endo, ", sp.string(), dottedName);
+            searched += std::format("{}, ", (sp / relPath).string());
         if (searched.size() >= 2)
             searched.erase(searched.size() - 2); // remove trailing ", "
         _report.syntaxError(
@@ -157,14 +162,40 @@ std::vector<std::string> ModuleLoader::availableModuleNames() const
     {
         if (!fs::exists(searchPath) || !fs::is_directory(searchPath))
             continue;
-        for (auto const& entry: fs::directory_iterator(searchPath))
+        for (auto const& entry: fs::recursive_directory_iterator(searchPath))
         {
-            if (entry.is_regular_file() && entry.path().extension() == ".endo")
+            if (!entry.is_regular_file() || entry.path().extension() != ".endo")
+                continue;
+
+            // Build dotted name from relative path (e.g., "Geometry/Circle.endo" -> "Geometry.Circle")
+            auto const relPath = fs::relative(entry.path(), searchPath);
+            std::string dottedName;
+            bool allPascalCase = true;
+
+            for (auto const& component: relPath.parent_path())
             {
-                auto stem = entry.path().stem().string();
-                if (isPascalCase(stem))
-                    names.push_back(std::move(stem));
+                auto const seg = component.string();
+                if (!isPascalCase(seg))
+                {
+                    allPascalCase = false;
+                    break;
+                }
+                if (!dottedName.empty())
+                    dottedName += '.';
+                dottedName += seg;
             }
+
+            if (!allPascalCase)
+                continue;
+
+            auto const stem = relPath.stem().string();
+            if (!isPascalCase(stem))
+                continue;
+
+            if (!dottedName.empty())
+                dottedName += '.';
+            dottedName += stem;
+            names.push_back(std::move(dottedName));
         }
     }
     // Also include already-loaded modules
@@ -176,8 +207,7 @@ std::vector<std::string> ModuleLoader::availableModuleNames() const
     return names;
 }
 
-std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const& name,
-                                                              fs::path const& path)
+std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const& name, fs::path const& path)
 {
     // Read source file
     auto ifs = std::ifstream(path);
@@ -218,6 +248,7 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
     // Generate IR to get full function metadata.
     // Use a temporary persistent state to capture the definitions.
     auto tempState = FSharpPersistentState {};
+    tempState.sourceFilePath = path; // Enable relative module resolution from this file
     // Enable nested imports when this loader is managed by a shared_ptr.
     // Stack-allocated loaders (e.g., in tests) skip this — weak_from_this() is empty.
     if (auto self = weak_from_this().lock())

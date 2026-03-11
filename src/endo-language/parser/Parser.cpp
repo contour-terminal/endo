@@ -8468,16 +8468,15 @@ std::unique_ptr<ast::ModuleDeclStmt> Parser::parseModuleDecl()
     // Skip newlines after '='
     consumeNewlines();
 
-    // Parse module body statements until "end"
+    // Parse module body using offside rule (indentation-based scoping, F# style)
+    auto const moduleColumn = loc.begin.column > 0 ? loc.begin.column : size_t { 1 };
     auto body = std::vector<std::unique_ptr<ast::Statement>> {};
     while (_lexer.currentToken() != Token::EndOfInput)
     {
-        consumeNewlines();
-
-        // Check for "end" keyword
-        if (_lexer.isDirective("end"))
+        // Offside rule: stop when indentation returns to or before module keyword column
+        if (currentTokenColumn() <= moduleColumn)
         {
-            _lexer.nextToken(); // consume "end"
+            _lexer.pushBackToken(Token::LineFeed, "\n");
             break;
         }
 
@@ -8485,10 +8484,38 @@ std::unique_ptr<ast::ModuleDeclStmt> Parser::parseModuleDecl()
         if (!stmt)
             return nullptr;
 
+        // Module bodies only allow declarations (let, type, open, import, module)
+        if (!dynamic_cast<ast::LetBindingStmt*>(stmt.get())
+            && !dynamic_cast<ast::RecordTypeDefStmt*>(stmt.get())
+            && !dynamic_cast<ast::UnionTypeDefStmt*>(stmt.get())
+            && !dynamic_cast<ast::ImportStmt*>(stmt.get()) && !dynamic_cast<ast::OpenStmt*>(stmt.get())
+            && !dynamic_cast<ast::ModuleDeclStmt*>(stmt.get()))
+        {
+            _report.syntaxError(currentLocation(),
+                                "Module bodies only allow declarations (let, type, open, import, module)");
+            return nullptr;
+        }
+
         body.push_back(std::move(stmt));
 
         // Consume statement separators
-        consumeUntilNotOneOf(Token::LineFeed, Token::Semicolon);
+        bool sawLineFeed = false;
+        while (_lexer.currentToken() == Token::LineFeed || _lexer.currentToken() == Token::Semicolon)
+        {
+            if (_lexer.currentToken() == Token::LineFeed)
+                sawLineFeed = true;
+            _lexer.nextToken();
+        }
+
+        if (_lexer.currentToken() == Token::EndOfInput)
+            break;
+
+        // If we crossed a line boundary, check indentation
+        if (sawLineFeed && currentTokenColumn() <= moduleColumn)
+        {
+            _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
     }
 
     auto result = std::make_unique<ast::ModuleDeclStmt>(std::move(name), std::move(body));

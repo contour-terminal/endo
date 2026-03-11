@@ -215,6 +215,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     IRGenerator generator(report, runtime, sema);
     generator._persistentState = persistentState;
     generator._unusedValueDetection = unusedValueDetection;
+    if (persistentState)
+        generator._currentModuleSourcePath = persistentState->sourceFilePath;
 
     generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
     generator._builder.setFunction(generator._builder.getFunction(GLOBAL_SCOPE_INIT_NAME));
@@ -362,11 +364,27 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     // Restore module state from persistent state (import-once / open persistence).
     if (persistentState && persistentState->moduleLoader)
     {
-        // Re-register imported modules for qualified access
+        // Re-register imported modules for qualified access and re-evaluate value bindings
         for (auto const& moduleName: persistentState->importedModules)
         {
             if (auto const* desc = persistentState->moduleLoader->findModule(moduleName))
+            {
                 generator._loadedModules[moduleName] = desc;
+
+                // Re-evaluate value bindings into allocas
+                for (auto const& vb: desc->valueBindings)
+                {
+                    if (desc->isPrivate(vb.name))
+                        continue;
+                    auto* val = generator.codegen(vb.value);
+                    if (!val)
+                        continue;
+                    auto* storage =
+                        generator.createAllocaInEntryBlock(val->type(), moduleName + "." + vb.name);
+                    generator._builder.createStore(storage, val, vb.name);
+                    generator._moduleValueAllocas[moduleName][vb.name] = storage;
+                }
+            }
         }
 
         // Re-apply opened modules (bring names into scope)
@@ -393,6 +411,25 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                     func.isRecursive = persisted.isRecursive;
                     func.hasVariadicParam = persisted.hasVariadicParam;
                     generator.registerFSharpFunction(funcName, std::move(func));
+                }
+
+                // Bring value bindings into unqualified scope
+                for (auto const& vb: desc->valueBindings)
+                {
+                    if (desc->isPrivate(vb.name))
+                        continue;
+                    if (!entry.selectiveNames.empty()
+                        && std::ranges::find(entry.selectiveNames, vb.name) == entry.selectiveNames.end())
+                        continue;
+                    if (auto& modAllocas = generator._moduleValueAllocas[entry.modulePath];
+                        modAllocas.contains(vb.name))
+                    {
+                        auto* storage = modAllocas[vb.name];
+                        if (vb.isObjectExpr)
+                            generator.bindFSharpObjectVariable(vb.name, storage, false);
+                        else
+                            generator.bindFSharpVariable(vb.name, storage, false, false);
+                    }
                 }
             }
         }
@@ -7536,9 +7573,19 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                             tempRegistered.push_back(fnName);
                         }
                     }
+                    // Also bind module value allocas into scope so function bodies
+                    // can reference value bindings from the same module.
+                    pushFSharpScope();
+                    if (auto valMapIt = _moduleValueAllocas.find(modIdent->name);
+                        valMapIt != _moduleValueAllocas.end())
+                    {
+                        for (auto const& [vbName, vbAlloca]: valMapIt->second)
+                            bindFSharpVariable(vbName, vbAlloca, false, false);
+                    }
                     auto const* registeredFunc = lookupFSharpFunction(method);
                     if (registeredFunc)
                         generateFSharpCall(registeredFunc, method, args);
+                    popFSharpScope();
                     // Remove temporary registrations to avoid polluting the outer scope
                     for (auto const& name: tempRegistered)
                         _fsharpFunctions.erase(name);
@@ -7615,9 +7662,18 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                             tempRegistered.push_back(fnName);
                         }
                     }
+                    // Bind module value allocas into scope for function body inlining
+                    pushFSharpScope();
+                    if (auto valMapIt = _moduleValueAllocas.find(flattened->modulePath);
+                        valMapIt != _moduleValueAllocas.end())
+                    {
+                        for (auto const& [vbName, vbAlloca]: valMapIt->second)
+                            bindFSharpVariable(vbName, vbAlloca, false, false);
+                    }
                     auto const* registeredFunc = lookupFSharpFunction(flattened->memberName);
                     if (registeredFunc)
                         generateFSharpCall(registeredFunc, flattened->memberName, args);
+                    popFSharpScope();
                     for (auto const& name: tempRegistered)
                         _fsharpFunctions.erase(name);
                     return;
@@ -10964,7 +11020,16 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
 
-            // Value binding access (e.g., Math.pi)
+            // Value binding access (e.g., Math.pi) — load from pre-evaluated alloca
+            if (auto modIt = _moduleValueAllocas.find(modIdent->name); modIt != _moduleValueAllocas.end())
+            {
+                if (auto valIt = modIt->second.find(node.fieldName); valIt != modIt->second.end())
+                {
+                    _result = _builder.createLoad(valIt->second, node.fieldName);
+                    return;
+                }
+            }
+            // Fallback: check descriptor value bindings (shouldn't normally reach here)
             auto valIt = std::ranges::find_if(descriptor->valueBindings,
                                               [&](auto const& vb) { return vb.name == node.fieldName; });
             if (valIt != descriptor->valueBindings.end())
@@ -11002,9 +11067,19 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
 
-            // Value binding access
-            auto valIt = std::ranges::find_if(descriptor->valueBindings,
-                                              [&](auto const& vb) { return vb.name == flattened->memberName; });
+            // Value binding access — load from pre-evaluated alloca
+            if (auto modIt = _moduleValueAllocas.find(flattened->modulePath);
+                modIt != _moduleValueAllocas.end())
+            {
+                if (auto valIt = modIt->second.find(flattened->memberName); valIt != modIt->second.end())
+                {
+                    _result = _builder.createLoad(valIt->second, flattened->memberName);
+                    return;
+                }
+            }
+            // Fallback: check descriptor value bindings
+            auto valIt = std::ranges::find_if(
+                descriptor->valueBindings, [&](auto const& vb) { return vb.name == flattened->memberName; });
             if (valIt != descriptor->valueBindings.end())
             {
                 codegen(valIt->value);
@@ -11542,12 +11617,25 @@ void IRGenerator::visit(ast::ImportStmt const& node)
     }
 
     auto* loader = _persistentState->moduleLoader.get();
-    auto const* descriptor = loader->loadModule(node.modulePath);
+    auto const* descriptor = loader->loadModule(node.modulePath, _currentModuleSourcePath);
     if (!descriptor)
         return; // Error already reported by ModuleLoader
 
     // Register for qualified access
     _loadedModules[node.modulePath] = descriptor;
+
+    // Codegen value bindings once and store in allocas (avoid re-evaluation on each access)
+    for (auto const& vb: descriptor->valueBindings)
+    {
+        if (descriptor->isPrivate(vb.name))
+            continue;
+        auto* val = codegen(vb.value);
+        if (!val)
+            continue;
+        auto* storage = createAllocaInEntryBlock(val->type(), node.modulePath + "." + vb.name);
+        _builder.createStore(storage, val, vb.name);
+        _moduleValueAllocas[node.modulePath][vb.name] = storage;
+    }
 
     // Register types from the module
     for (auto const& pt: descriptor->productTypes)
@@ -11603,14 +11691,30 @@ void IRGenerator::visit(ast::OpenStmt const& node)
     }
 
     auto* loader = _persistentState->moduleLoader.get();
-    auto const* descriptor = loader->loadModule(node.modulePath);
+    auto const* descriptor = loader->loadModule(node.modulePath, _currentModuleSourcePath);
     if (!descriptor)
         return;
 
     // Ensure qualified access also works
     _loadedModules[node.modulePath] = descriptor;
 
-    // Bring public names into scope
+    // Codegen value bindings once if not already done (import may have preceded open)
+    if (!_moduleValueAllocas.contains(node.modulePath))
+    {
+        for (auto const& vb: descriptor->valueBindings)
+        {
+            if (descriptor->isPrivate(vb.name))
+                continue;
+            auto* val = codegen(vb.value);
+            if (!val)
+                continue;
+            auto* storage = createAllocaInEntryBlock(val->type(), node.modulePath + "." + vb.name);
+            _builder.createStore(storage, val, vb.name);
+            _moduleValueAllocas[node.modulePath][vb.name] = storage;
+        }
+    }
+
+    // Bring public functions into scope
     for (auto const& [funcName, persisted]: descriptor->functions)
     {
         if (descriptor->isPrivate(funcName))
@@ -11634,6 +11738,25 @@ void IRGenerator::visit(ast::OpenStmt const& node)
         registerFSharpFunction(funcName, std::move(func));
     }
 
+    // Bring public value bindings into unqualified scope
+    for (auto const& vb: descriptor->valueBindings)
+    {
+        if (descriptor->isPrivate(vb.name))
+            continue;
+        if (!node.selectiveNames.empty()
+            && std::ranges::find(node.selectiveNames, vb.name) == node.selectiveNames.end())
+            continue;
+
+        if (auto& modAllocas = _moduleValueAllocas[node.modulePath]; modAllocas.contains(vb.name))
+        {
+            auto* storage = modAllocas[vb.name];
+            if (vb.isObjectExpr)
+                bindFSharpObjectVariable(vb.name, storage, false);
+            else
+                bindFSharpVariable(vb.name, storage, false, false);
+        }
+    }
+
     // Register types from the module
     for (auto const& pt: descriptor->productTypes)
         _builder.program()->addCustomProductType(pt);
@@ -11650,10 +11773,12 @@ void IRGenerator::visit(ast::OpenStmt const& node)
         _sema.types().registerConstructor(ctorName, std::move(ci));
     }
 
-    // Validate selective open names
+    // Validate selective open names (check functions, constructors, AND value bindings)
     for (auto const& name: node.selectiveNames)
     {
-        if (!descriptor->functions.contains(name) && !descriptor->constructors.contains(name))
+        auto const hasValue =
+            std::ranges::any_of(descriptor->valueBindings, [&](auto const& vb) { return vb.name == name; });
+        if (!descriptor->functions.contains(name) && !descriptor->constructors.contains(name) && !hasValue)
         {
             reportTypeError("Module '{}' has no member '{}' (in selective open)", node.modulePath, name);
         }
@@ -11671,11 +11796,16 @@ void IRGenerator::visit(ast::OpenStmt const& node)
             imported.push_back(node.modulePath);
     }
 
-    // Persist for REPL session continuity
+    // Persist for REPL session continuity (deduplicate)
     if (_persistentState)
     {
-        _persistentState->openedModules.push_back(FSharpPersistentState::OpenedModuleEntry {
-            .modulePath = node.modulePath, .selectiveNames = node.selectiveNames });
+        auto it = std::ranges::find_if(_persistentState->openedModules,
+                                       [&](auto const& e) { return e.modulePath == node.modulePath; });
+        if (it != _persistentState->openedModules.end())
+            it->selectiveNames = node.selectiveNames;
+        else
+            _persistentState->openedModules.push_back(FSharpPersistentState::OpenedModuleEntry {
+                .modulePath = node.modulePath, .selectiveNames = node.selectiveNames });
     }
 }
 
@@ -11741,6 +11871,19 @@ void IRGenerator::visit(ast::ModuleDeclStmt const& node)
     // Register the module — transfer ownership to moduleLoader if available, otherwise keep locally.
     auto const* registeredDesc = descriptor.get();
     _loadedModules[node.name] = registeredDesc;
+
+    // Codegen value bindings once and store in allocas (avoid re-evaluation on each access)
+    for (auto const& vb: registeredDesc->valueBindings)
+    {
+        if (registeredDesc->isPrivate(vb.name))
+            continue;
+        auto* val = codegen(vb.value);
+        if (!val)
+            continue;
+        auto* storage = createAllocaInEntryBlock(val->type(), node.name + "." + vb.name);
+        _builder.createStore(storage, val, vb.name);
+        _moduleValueAllocas[node.name][vb.name] = storage;
+    }
 
     if (_persistentState && _persistentState->moduleLoader)
         _persistentState->moduleLoader->registerInlineModule(node.name, std::move(descriptor));

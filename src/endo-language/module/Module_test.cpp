@@ -109,7 +109,6 @@ TEST_CASE("module.parser.module_decl", "[module][parser]")
         auto ast = parse(R"(
 module Helpers =
     let double x = x * 2
-end
 )");
         REQUIRE(ast != nullptr);
         auto const* compound = dynamic_cast<ast::CompoundStmt const*>(ast.get());
@@ -160,32 +159,34 @@ TEST_CASE("module.parser.ast_printer", "[module][parser]")
 
 namespace
 {
-    /// RAII helper for creating temporary module files for testing.
-    struct TempModuleDir
+/// RAII helper for creating temporary module files for testing.
+struct TempModuleDir
+{
+    std::filesystem::path dir;
+
+    TempModuleDir(): dir(std::filesystem::temp_directory_path() / "endo_module_test")
     {
-        std::filesystem::path dir;
+        std::filesystem::create_directories(dir);
+    }
 
-        TempModuleDir(): dir(std::filesystem::temp_directory_path() / "endo_module_test")
-        {
-            std::filesystem::create_directories(dir);
-        }
+    ~TempModuleDir() { std::filesystem::remove_all(dir); }
 
-        ~TempModuleDir() { std::filesystem::remove_all(dir); }
+    void writeModule(std::string const& name, std::string const& content) const
+    {
+        auto path = dir / (name + ".endo");
+        std::ofstream(path) << content;
+    }
 
-        void writeModule(std::string const& name, std::string const& content) const
-        {
-            auto path = dir / (name + ".endo");
-            std::ofstream(path) << content;
-        }
-
-        void writeNestedModule(std::string const& parent, std::string const& name, std::string const& content) const
-        {
-            auto parentDir = dir / parent;
-            std::filesystem::create_directories(parentDir);
-            auto path = parentDir / (name + ".endo");
-            std::ofstream(path) << content;
-        }
-    };
+    void writeNestedModule(std::string const& parent,
+                           std::string const& name,
+                           std::string const& content) const
+    {
+        auto parentDir = dir / parent;
+        std::filesystem::create_directories(parentDir);
+        auto path = parentDir / (name + ".endo");
+        std::ofstream(path) << content;
+    }
+};
 } // namespace
 
 TEST_CASE("module.loader.resolution", "[module][loader]")
@@ -299,7 +300,6 @@ TEST_CASE("module.inline.basic", "[module][codegen]")
             R"(
 module Helpers =
     let double (x: int) : int = x * 2
-end
 print (Helpers.double 5)
 )" });
         CHECK(output == "10");
@@ -315,7 +315,6 @@ TEST_CASE("module.inline.multiple_functions", "[module][codegen]")
 module Math =
     let square (x: int) : int = x * x
     let cube (x: int) : int = x * x * x
-end
 print (Math.square 4)
 )" });
         CHECK(output == "16");
@@ -330,7 +329,6 @@ TEST_CASE("module.inline.repl_persistence", "[module][codegen]")
             R"(
 module Helpers =
     let double (x: int) : int = x * 2
-end
 )",
             "print (Helpers.double 7)" });
         CHECK(output == "14");
@@ -345,10 +343,8 @@ TEST_CASE("module.inline.multiple_modules", "[module][codegen]")
             R"(
 module A =
     let f (x: int) : int = x + 1
-end
 module B =
     let g (x: int) : int = x * 10
-end
 print (A.f (B.g 3))
 )" });
         CHECK(output == "31");
@@ -363,10 +359,8 @@ TEST_CASE("module.inline.qualified_call_chain", "[module][codegen]")
             R"(
 module Math =
     let square (x: int) : int = x * x
-end
 module Utils =
     let inc (x: int) : int = x + 1
-end
 print (Utils.inc (Math.square 5))
 )" });
         CHECK(output == "26");
@@ -473,7 +467,6 @@ TEST_CASE("module.inline.private_access_denied", "[module][codegen]")
 module Secret =
     let private helper (x: int) : int = x + 1
     let public_fn (x: int) : int = helper x
-end
 print (Secret.helper 5)
 )",
                                    "private"));
@@ -487,7 +480,6 @@ TEST_CASE("module.inline.private_internal_access", "[module][codegen]")
         CHECK(generatesIRSuccessfully(R"(
 module Math =
     let private sq (x: int) : int = x * x
-end
 )"));
     }
 
@@ -498,7 +490,6 @@ end
 module Math =
     let private sq (x: int) : int = x * x
     let cube (x: int) : int = (sq x) * x
-end
 print (Math.cube 3)
 )" });
         CHECK(output == "27");
@@ -514,7 +505,6 @@ TEST_CASE("module.inline.value_binding_access", "[module][codegen]")
 module Constants =
     let pi = 3
     let e = 2
-end
 print (Constants.pi)
 )" });
         CHECK(output == "3");
@@ -527,7 +517,6 @@ print (Constants.pi)
 module Constants =
     let pi = 3
     let e = 2
-end
 print (Constants.pi + Constants.e)
 )" });
         CHECK(output == "5");
@@ -652,7 +641,9 @@ TEST_CASE("module.signature.loader_integration", "[module][signature]")
     SECTION("module with matching signature loads successfully")
     {
         auto sigPath = tmpDir.dir / "Checked.endoi";
-        { std::ofstream(sigPath) << "val square : int -> int\n"; }
+        {
+            std::ofstream(sigPath) << "val square : int -> int\n";
+        }
 
         ModuleLoader loader(rt.runtime, rt.report);
         loader.addSearchPath(tmpDir.dir);
@@ -664,7 +655,9 @@ TEST_CASE("module.signature.loader_integration", "[module][signature]")
     SECTION("module with mismatched signature fails to load")
     {
         auto sigPath = tmpDir.dir / "Checked.endoi";
-        { std::ofstream(sigPath) << "val nonexistent : int -> int\n"; }
+        {
+            std::ofstream(sigPath) << "val nonexistent : int -> int\n";
+        }
 
         ModuleLoader loader(rt.runtime, rt.report);
         loader.addSearchPath(tmpDir.dir);
@@ -672,4 +665,102 @@ TEST_CASE("module.signature.loader_integration", "[module][signature]")
         auto const* desc = loader.loadModule("Checked");
         CHECK(desc == nullptr);
     }
+}
+
+// =============================================================================
+// Value binding tests (evaluate once, open support, dedup)
+// =============================================================================
+
+TEST_CASE("module.inline.computed_value_binding", "[module][codegen]")
+{
+    SECTION("computed value evaluated once and loaded on each access")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Config =
+    let value = 2 + 3
+print (Config.value + Config.value)
+)" });
+        CHECK(output == "10");
+    }
+}
+
+TEST_CASE("module.inline.value_binding_via_open", "[module][codegen]")
+{
+    SECTION("value bindings accessible via open (unqualified)")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Constants =
+    let pi = 3
+    let e = 2
+open Constants
+print (pi + e)
+)" });
+        CHECK(output == "5");
+    }
+}
+
+TEST_CASE("module.inline.value_binding_selective_open", "[module][codegen]")
+{
+    SECTION("selective open brings only listed value bindings")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Constants =
+    let pi = 3
+    let e = 2
+open Constants with (pi)
+print pi
+)" });
+        CHECK(output == "3");
+    }
+}
+
+TEST_CASE("module.inline.value_and_function_mix", "[module][codegen]")
+{
+    SECTION("module with both value bindings and functions")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Utils =
+    let offset = 10
+    let add (x: int) : int = x + offset
+print (Utils.add 5)
+)" });
+        CHECK(output == "15");
+    }
+}
+
+TEST_CASE("module.inline.open_deduplication", "[module][codegen]")
+{
+    SECTION("repeated open does not crash or duplicate entries")
+    {
+        auto output = executeSessionAndGetOutput({
+            R"(
+module Math =
+    let square (x: int) : int = x * x
+open Math
+open Math
+print (square 4)
+)" });
+        CHECK(output == "16");
+    }
+}
+
+TEST_CASE("module.loader.available_nested_modules", "[module][loader]")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearErrors();
+
+    TempModuleDir tmpDir;
+    tmpDir.writeModule("Math", "let x = 1");
+    tmpDir.writeNestedModule("Geometry", "Circle", "let area (r: int) : int = r * r * 3");
+
+    ModuleLoader loader(rt.runtime, rt.report);
+    loader.addSearchPath(tmpDir.dir);
+
+    auto names = loader.availableModuleNames();
+    CHECK(std::ranges::find(names, "Math") != names.end());
+    CHECK(std::ranges::find(names, "Geometry.Circle") != names.end());
 }

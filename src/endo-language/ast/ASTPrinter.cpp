@@ -1277,7 +1277,6 @@ void ASTPrinter::visit(ModuleDeclStmt const& node)
         stmt->accept(*this);
         _result += '\n';
     }
-    _result += "end";
 }
 
 } // namespace endo::ast

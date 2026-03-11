@@ -38,23 +38,19 @@ class ModuleLoader: public std::enable_shared_from_this<ModuleLoader>
     /// @param dottedName    The module name (e.g., "Math", "Geometry.Circle").
     /// @param relativeTo    Optional path of the importing file (for relative resolution).
     /// @return Pointer to the module descriptor, or nullptr on failure.
-    ModuleDescriptor const* loadModule(
-        std::string const& dottedName,
-        std::optional<std::filesystem::path> const& relativeTo = std::nullopt);
+    ModuleDescriptor const* loadModule(std::string const& dottedName,
+                                       std::optional<std::filesystem::path> const& relativeTo = std::nullopt);
 
     /// Resolves a dotted module name to a filesystem path.
     ///
     /// Search order:
-    /// 1. Relative to importing file: `./Name.endo`
-    /// 2. Relative directory module: `./Name/` (for nested `Name.Sub`)
-    /// 3. Project modules directory: `./modules/Name.endo`
-    /// 4. User modules: `~/.config/endo/modules/Name.endo`
-    /// 5. System stdlib: each search path in order
+    /// 1. Relative to importing file (if `relativeTo` is provided)
+    /// 2. Each search path in order (caller-configured, typically:
+    ///    project `modules/`, user `~/.config/endo/modules/`, system stdlib)
     ///
     /// @return Resolved absolute path, or std::nullopt if not found.
     [[nodiscard]] std::optional<std::filesystem::path> resolveModulePath(
-        std::string const& dottedName,
-        std::optional<std::filesystem::path> relativeTo) const;
+        std::string const& dottedName, std::optional<std::filesystem::path> relativeTo) const;
 
     /// Registers an inline module (from `module Name = ... end`).
     void registerInlineModule(std::string const& name, std::unique_ptr<ModuleDescriptor> descriptor);

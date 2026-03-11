@@ -5,13 +5,12 @@ units. Modules follow F# conventions: PascalCase names, qualified access, and im
 
 ### 12.1 Inline Module Definitions
 
-Modules can be defined inline using `module Name = ... end`:
+Modules can be defined inline using `module Name = ...`:
 
 ```endo
 module Helpers =
     let double (x: int) : int = x * 2
     let triple (x: int) : int = x * 3
-end
 
 println (Helpers.double 5)   # => 10
 println (Helpers.triple 4)   # => 12
@@ -28,12 +27,10 @@ You can define several modules and call across them freely:
 module Math =
     let square (x: int) : int = x * x
     let cube (x: int) : int = x * x * x
-end
 
 module Utils =
     let inc (x: int) : int = x + 1
     let dec (x: int) : int = x - 1
-end
 
 println (Math.square 5)                  # => 25
 println (Math.cube 3)                    # => 27
@@ -49,7 +46,6 @@ Both qualified and unqualified access work after `open`.
 module Math =
     let square (x: int) : int = x * x
     let cube (x: int) : int = x * x * x
-end
 
 open Math
 
@@ -68,7 +64,6 @@ module Math =
     let square (x: int) : int = x * x
     let cube (x: int) : int = x * x * x
     let double (x: int) : int = x * 2
-end
 
 open Math with (square, cube)
 
@@ -149,7 +144,7 @@ The following, however, defines an inline module (because `Helpers` is PascalCas
 ```endo
 module Helpers =
     let f (x: int) : int = x + 1
-end
+
 println (Helpers.f 5)   # => 6
 ```
 
@@ -168,9 +163,7 @@ When resolving `import Foo`, Endo searches these locations in order:
 | Priority | Location | Example |
 |----------|----------|---------|
 | 1 | Relative to importing file | `./Foo.endo` |
-| 2 | Subdirectory (for nested modules) | `./Foo/Bar.endo` |
-| 3 | User modules directory | `~/.config/endo/modules/Foo.endo` |
-| 4 | System stdlib | `<prefix>/share/endo/stdlib/Foo.endo` |
+| 2 | Each search path in order | `~/.config/endo/modules/Foo.endo`, `<prefix>/share/endo/stdlib/Foo.endo` |
 
 For nested modules like `import Geometry.Circle`:
 
@@ -188,7 +181,7 @@ definitions all persist across prompts:
 ```text
 $ module Quick =
 >     let half (x: int) : int = x / 2
-> end
+>
 $ Quick.half 10
 5
 $ open Quick
@@ -226,7 +219,7 @@ let content = File.readAll "data.txt"
 let size = File.size "data.txt"
 ```
 
-User-defined modules require explicit `import` or inline `module ... end` definitions.
+User-defined modules require explicit `import` or inline `module ... =` definitions.
 
 ### 12.13 Creating Your Own Modules
 
@@ -244,7 +237,6 @@ module StringUtils =
         | _ -> repeat (acc + s) s (n - 1)
 
     let greet (name: str) : str = "Hello, " + name + "!"
-end
 
 println (StringUtils.repeat "" "ha" 3)       # => hahaha
 println (StringUtils.greet "world")          # => Hello, world!
@@ -258,7 +250,6 @@ module StringUtils =
         match n with
         | 0 -> acc
         | _ -> repeat (acc + s) s (n - 1)
-end
 
 open StringUtils with (repeat)
 
@@ -269,7 +260,7 @@ println (repeat "" "ho" 3)   # => hohoho
 
 | Feature | Syntax | Effect |
 |---------|--------|--------|
-| Inline module | `module M = ... end` | Define module in current file/REPL |
+| Inline module | `module M = ...` | Define module in current file/REPL |
 | Import (file) | `import Math` | Qualified access: `Math.square 5` |
 | Open | `open Math` | Unqualified + qualified access |
 | Selective open | `open Math with (square)` | Only listed names unqualified |

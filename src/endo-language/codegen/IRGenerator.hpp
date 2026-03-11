@@ -137,6 +137,9 @@ struct FSharpPersistentState
 
     /// Module names that have been imported (for re-establishing qualified access each prompt).
     std::vector<std::string> importedModules;
+
+    /// Path of the source file being compiled (for relative module resolution).
+    std::optional<std::filesystem::path> sourceFilePath;
 };
 
 /// Generates IR code from an AST.
@@ -829,6 +832,11 @@ class IRGenerator final: public ast::Visitor
     /// Used for qualified access (Module.member) resolution.
     std::unordered_map<std::string, ModuleDescriptor const*> _loadedModules;
 
+    /// Pre-evaluated module value binding allocas (module name -> binding name -> alloca).
+    /// Value bindings are codegen'd once at import/module-declaration time, not on each access.
+    std::unordered_map<std::string, std::unordered_map<std::string, CoreVM::AllocaInstr*>>
+        _moduleValueAllocas;
+
     /// Result of flattening a dotted access path (e.g., `Geometry.Circle.area`).
     struct FlattenedPath
     {
@@ -842,6 +850,9 @@ class IRGenerator final: public ast::Visitor
     /// Owns inline module descriptors when no ModuleLoader is available (e.g., in tests).
     /// Keeps the descriptors alive for the duration of IR generation.
     std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _ownedInlineModules;
+
+    /// Source file path of the current compilation unit (for relative module resolution).
+    std::optional<std::filesystem::path> _currentModuleSourcePath;
 
     /// When true, the current expression's result will be discarded (statement context).
     /// Used by MatchExpr to skip emitting the dead result load in the merge block.

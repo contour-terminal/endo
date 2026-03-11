@@ -2629,8 +2629,6 @@ void SourceFormatter::visit(ast::ModuleDeclStmt const& node)
         emitNewline();
     }
     dedent();
-    emitIndent();
-    emit("end");
     emitTrailingComment(node);
 }
 
