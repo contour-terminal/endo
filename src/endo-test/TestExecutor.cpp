@@ -259,12 +259,30 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 return result;
             }
 
+            // Resolve STDLIB magic token in module paths
+            auto modulePaths = testFile.modulePaths;
+            for (auto& p: modulePaths)
+            {
+                if (p == "STDLIB")
+                    p = ENDO_STDLIB_DIR;
+            }
+
             // Execution tests
             ExecutionResult execResult;
             if (testFile.isSessionTest && !testFile.sessionPrompts.empty())
-                execResult = executeSession(testFile.sessionPrompts);
+            {
+                if (!modulePaths.empty())
+                    execResult = executeSession(testFile.sessionPrompts, modulePaths);
+                else
+                    execResult = executeSession(testFile.sessionPrompts);
+            }
             else
-                execResult = executeSource(testFile.source, testFile.unusedValueDetection);
+            {
+                if (!modulePaths.empty())
+                    execResult = executeSource(testFile.source, modulePaths, testFile.unusedValueDetection);
+                else
+                    execResult = executeSource(testFile.source, testFile.unusedValueDetection);
+            }
 
             auto const endTime = std::chrono::steady_clock::now();
             result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);

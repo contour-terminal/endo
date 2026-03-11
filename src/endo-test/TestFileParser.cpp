@@ -155,6 +155,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.unusedValueDetection = true;
                 continue;
             }
+            if (auto val = parseDirective(line, "module-path"))
+            {
+                result.modulePaths.emplace_back(*val);
+                continue;
+            }
 
             // Unknown directive or plain comment — skip
             continue;

@@ -157,6 +157,14 @@ std::string parseAndPrintAST(std::string const& source);
 /// Returns the execution result (exit code and captured output) or an error.
 ExecutionResult executeSource(std::string const& source, bool unusedValueDetection = false);
 
+/// Generates IR from source code with module paths, compiles to bytecode, and executes it.
+/// @param source             Source code to execute
+/// @param modulePaths        Additional module search paths for the module loader
+/// @param unusedValueDetection Enable unused value detection during IR generation
+ExecutionResult executeSource(std::string const& source,
+                              std::vector<std::string> const& modulePaths,
+                              bool unusedValueDetection = false);
+
 /// Executes source code and returns the captured output.
 /// Throws ExecutionError if execution fails.
 std::string executeSourceAndGetOutput(std::string const& source);
@@ -184,6 +192,14 @@ ExecutionResult executeInteractive(std::string const& source);
 /// @param prompts  The source strings to execute in order
 /// @return The execution result of the **last** prompt
 ExecutionResult executeSession(std::vector<std::string> const& prompts);
+
+/// Simulates a REPL session with additional module search paths.
+///
+/// @param prompts      The source strings to execute in order
+/// @param modulePaths  Additional module search paths for the module loader
+/// @return The execution result of the **last** prompt
+ExecutionResult executeSession(std::vector<std::string> const& prompts,
+                               std::vector<std::string> const& modulePaths);
 
 /// Executes a multi-prompt session and returns the captured output from the last prompt.
 /// Throws ExecutionError if any prompt fails.
