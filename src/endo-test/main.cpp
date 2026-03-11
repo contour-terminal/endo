@@ -99,6 +99,8 @@ Test File Format:
     # mock-which: PROG=/path     Set mock which path
     # expect-env: KEY=VALUE      Verify environment variable after execution
     # expect-nonempty            Assert output is non-empty
+    # aux-file: <filename>       Start an auxiliary file section (for multi-file module tests)
+    # main-file:                 End aux file section, rest is main test source
 
   Example:
     # description: Addition of two integers

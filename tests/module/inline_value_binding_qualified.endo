@@ -1,0 +1,7 @@
+# description: Access value binding via qualified name
+# expect: 3
+module Constants =
+    let pi = 3
+    let e = 2
+
+print (Constants.pi)

@@ -1,0 +1,9 @@
+# description: Value bindings accessible via open (unqualified)
+# session-separator: ---
+# expect: 5
+module Constants =
+    let pi = 3
+    let e = 2
+
+open Constants
+print (pi + e)

@@ -1,0 +1,6 @@
+# description: Selective open with nonexistent name reports error
+# expect-error:
+module Math =
+    let square (x: int): int = x * x
+
+open Math with (nonexistent)

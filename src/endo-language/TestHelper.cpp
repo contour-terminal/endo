@@ -671,6 +671,46 @@ bool generatesIRWithError(std::string const& source,
     return false;
 }
 
+bool generatesIRWithError(std::string const& source,
+                          std::string_view expectedErrorSubstring,
+                          std::vector<std::string> const& modulePaths,
+                          bool unusedValueDetection)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    // Create persistent state with module loader
+    FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    for (auto const& path: modulePaths)
+        fsharpState.moduleLoader->addSearchPath(path);
+
+    // Parse
+    Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+    auto ast = parser.parse();
+    if (!ast)
+    {
+        // Parse failed — check if error matches
+        for (auto const& msg: testRuntime.report.messages())
+            if (msg.text.find(expectedErrorSubstring) != std::string::npos)
+                return true;
+        return false;
+    }
+
+    // Generate IR
+    auto ir = IRGenerator::generate(
+        *ast, testRuntime.report, testRuntime.runtime, &fsharpState, unusedValueDetection);
+    if (ir && !testRuntime.hasErrors())
+        return false; // Expected failure but IR generation succeeded
+
+    for (auto const& msg: testRuntime.report.messages())
+        if (msg.text.find(expectedErrorSubstring) != std::string::npos)
+            return true;
+
+    return false;
+}
+
 ast::Statement* getFirstStatement(ast::Statement* stmt)
 {
     if (auto* compound = dynamic_cast<ast::CompoundStmt*>(stmt))

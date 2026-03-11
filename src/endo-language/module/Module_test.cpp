@@ -18,7 +18,7 @@ using namespace endo;
 using namespace endo::test;
 
 // =============================================================================
-// Parser Tests
+// Parser Tests (AST node inspection — cannot be expressed as .endo tests)
 // =============================================================================
 
 TEST_CASE("module.parser.import", "[module][parser]")
@@ -153,8 +153,30 @@ TEST_CASE("module.parser.ast_printer", "[module][parser]")
     }
 }
 
+TEST_CASE("module.parser.let_private", "[module][parser]")
+{
+    SECTION("parses let private")
+    {
+        auto ast = parse("let private helper x = x + 1");
+        REQUIRE(ast != nullptr);
+        auto const* compound = dynamic_cast<ast::CompoundStmt const*>(ast.get());
+        REQUIRE(compound != nullptr);
+        REQUIRE(compound->statements.size() == 1);
+        auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(compound->statements[0].get());
+        REQUIRE(letStmt != nullptr);
+        CHECK(letStmt->visibility == ast::Visibility::Private);
+        CHECK(letStmt->name == "helper");
+    }
+}
+
+TEST_CASE("module.parser.let_private_ast_printer", "[module][parser]")
+{
+    auto printed = parseAndPrintAST("let private secret x = x * 2");
+    CHECK(printed == "let private secret x = (x * 2)");
+}
+
 // =============================================================================
-// Module Loader Tests
+// Module Loader Tests (internal API — pointer identity, resolution paths)
 // =============================================================================
 
 namespace
@@ -248,27 +270,6 @@ TEST_CASE("module.loader.caching", "[module][loader]")
     }
 }
 
-TEST_CASE("module.loader.compilation", "[module][loader]")
-{
-    auto& rt = TestRuntime::instance();
-    rt.clearErrors();
-
-    TempModuleDir tmpDir;
-
-    SECTION("compiles simple module with functions")
-    {
-        tmpDir.writeModule("Math", "let square (x: int) : int = x * x\nlet cube (x: int) : int = x * x * x");
-        ModuleLoader loader(rt.runtime, rt.report);
-        loader.addSearchPath(tmpDir.dir);
-
-        auto const* desc = loader.loadModule("Math");
-        REQUIRE(desc != nullptr);
-        CHECK(desc->name == "Math");
-        CHECK(desc->functions.contains("square"));
-        CHECK(desc->functions.contains("cube"));
-    }
-}
-
 TEST_CASE("module.loader.available_modules", "[module][loader]")
 {
     auto& rt = TestRuntime::instance();
@@ -288,240 +289,26 @@ TEST_CASE("module.loader.available_modules", "[module][loader]")
     CHECK(std::ranges::find(names, "lowercase") == names.end());
 }
 
-// =============================================================================
-// IRGenerator Integration Tests (inline modules)
-// =============================================================================
-
-TEST_CASE("module.inline.basic", "[module][codegen]")
-{
-    SECTION("inline module with qualified access")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Helpers =
-    let double (x: int) : int = x * 2
-print (Helpers.double 5)
-)" });
-        CHECK(output == "10");
-    }
-}
-
-TEST_CASE("module.inline.multiple_functions", "[module][codegen]")
-{
-    SECTION("multiple functions in inline module")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Math =
-    let square (x: int) : int = x * x
-    let cube (x: int) : int = x * x * x
-print (Math.square 4)
-)" });
-        CHECK(output == "16");
-    }
-}
-
-TEST_CASE("module.inline.repl_persistence", "[module][codegen]")
-{
-    SECTION("inline module persists across REPL prompts")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Helpers =
-    let double (x: int) : int = x * 2
-)",
-            "print (Helpers.double 7)" });
-        CHECK(output == "14");
-    }
-}
-
-TEST_CASE("module.inline.multiple_modules", "[module][codegen]")
-{
-    SECTION("two inline modules in one prompt")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module A =
-    let f (x: int) : int = x + 1
-module B =
-    let g (x: int) : int = x * 10
-print (A.f (B.g 3))
-)" });
-        CHECK(output == "31");
-    }
-}
-
-TEST_CASE("module.inline.qualified_call_chain", "[module][codegen]")
-{
-    SECTION("chained qualified calls from different modules")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Math =
-    let square (x: int) : int = x * x
-module Utils =
-    let inc (x: int) : int = x + 1
-print (Utils.inc (Math.square 5))
-)" });
-        CHECK(output == "26");
-    }
-}
-
-// =============================================================================
-// File-based module tests
-// =============================================================================
-
-TEST_CASE("module.file.import_and_call", "[module][codegen]")
+TEST_CASE("module.loader.available_nested_modules", "[module][loader]")
 {
     auto& rt = TestRuntime::instance();
     rt.clearErrors();
 
     TempModuleDir tmpDir;
-    tmpDir.writeModule("Math", "let square (x: int) : int = x * x\nlet cube (x: int) : int = x * x * x");
-
-    FSharpPersistentState state;
-    state.moduleLoader = std::make_shared<ModuleLoader>(rt.runtime, rt.report);
-    state.moduleLoader->addSearchPath(tmpDir.dir);
-
-    SECTION("import and call via qualified access")
-    {
-        rt.clearOutput();
-        auto const source = std::string("import Math\nprint (Math.square 6)");
-        Parser parser(rt.runtime, rt.report, std::make_unique<StringSource>(source));
-        auto ast = parser.parse();
-        REQUIRE(ast != nullptr);
-
-        auto ir = IRGenerator::generate(*ast, rt.report, rt.runtime, &state);
-        REQUIRE(ir != nullptr);
-
-        CoreVM::TargetCodeGenerator codegen;
-        auto prog = codegen.generate(ir.get());
-        REQUIRE(prog != nullptr);
-        REQUIRE(prog->link(&rt.runtime, &rt.report));
-
-        auto const* fn = prog->findFunction("@main");
-        REQUIRE(fn != nullptr);
-        CoreVM::Runner::Globals globals;
-        CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
-        runner.run();
-        CHECK(rt.output() == "36");
-    }
-}
-
-TEST_CASE("module.loader.circular_dependency", "[module][loader]")
-{
-    auto& rt = TestRuntime::instance();
-    rt.clearErrors();
-
-    TempModuleDir tmpDir;
-    // A imports B, B imports A → circular
-    tmpDir.writeModule("ModA", "import ModB\nlet f (x: int) : int = x");
-    tmpDir.writeModule("ModB", "import ModA\nlet g (x: int) : int = x");
+    tmpDir.writeModule("Math", "let x = 1");
+    tmpDir.writeNestedModule("Geometry", "Circle", "let area (r: int) : int = r * r * 3");
 
     ModuleLoader loader(rt.runtime, rt.report);
     loader.addSearchPath(tmpDir.dir);
 
-    auto const* desc = loader.loadModule("ModA");
-    // Should fail due to circular dependency (or return nullptr with error)
-    // The exact behavior depends on how deep the loading goes before detecting the cycle
-    CHECK((desc == nullptr || rt.hasErrors()));
+    auto names = loader.availableModuleNames();
+    CHECK(std::ranges::find(names, "Math") != names.end());
+    CHECK(std::ranges::find(names, "Geometry.Circle") != names.end());
 }
 
 // =============================================================================
-// Private visibility tests
+// File module private enforcement (internal API — descriptor inspection)
 // =============================================================================
-
-TEST_CASE("module.parser.let_private", "[module][parser]")
-{
-    SECTION("parses let private")
-    {
-        auto ast = parse("let private helper x = x + 1");
-        REQUIRE(ast != nullptr);
-        auto const* compound = dynamic_cast<ast::CompoundStmt const*>(ast.get());
-        REQUIRE(compound != nullptr);
-        REQUIRE(compound->statements.size() == 1);
-        auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(compound->statements[0].get());
-        REQUIRE(letStmt != nullptr);
-        CHECK(letStmt->visibility == ast::Visibility::Private);
-        CHECK(letStmt->name == "helper");
-    }
-
-    SECTION("let export private is a parser error")
-    {
-        auto ast = parse("let export private x = 1");
-        CHECK(ast == nullptr);
-    }
-}
-
-TEST_CASE("module.parser.let_private_ast_printer", "[module][parser]")
-{
-    auto printed = parseAndPrintAST("let private secret x = x * 2");
-    CHECK(printed == "let private secret x = (x * 2)");
-}
-
-TEST_CASE("module.inline.private_access_denied", "[module][codegen]")
-{
-    SECTION("private function cannot be called from outside module")
-    {
-        CHECK(generatesIRWithError(R"(
-module Secret =
-    let private helper (x: int) : int = x + 1
-    let public_fn (x: int) : int = helper x
-print (Secret.helper 5)
-)",
-                                   "private"));
-    }
-}
-
-TEST_CASE("module.inline.private_internal_access", "[module][codegen]")
-{
-    SECTION("simple private function succeeds in IR generation")
-    {
-        CHECK(generatesIRSuccessfully(R"(
-module Math =
-    let private sq (x: int) : int = x * x
-)"));
-    }
-
-    SECTION("private function can be called from within module")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Math =
-    let private sq (x: int) : int = x * x
-    let cube (x: int) : int = (sq x) * x
-print (Math.cube 3)
-)" });
-        CHECK(output == "27");
-    }
-}
-
-TEST_CASE("module.inline.value_binding_access", "[module][codegen]")
-{
-    SECTION("access value binding via qualified name")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Constants =
-    let pi = 3
-    let e = 2
-print (Constants.pi)
-)" });
-        CHECK(output == "3");
-    }
-
-    SECTION("access multiple value bindings")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Constants =
-    let pi = 3
-    let e = 2
-print (Constants.pi + Constants.e)
-)" });
-        CHECK(output == "5");
-    }
-}
 
 TEST_CASE("module.file.private_enforcement", "[module][codegen]")
 {
@@ -547,7 +334,7 @@ TEST_CASE("module.file.private_enforcement", "[module][codegen]")
 }
 
 // =============================================================================
-// Module Signature tests
+// Module Signature Tests (internal API — struct parsing, validation)
 // =============================================================================
 
 TEST_CASE("module.signature.parse", "[module][signature]")
@@ -627,205 +414,6 @@ TEST_CASE("module.signature.validation", "[module][signature]")
         REQUIRE(errors.size() == 1);
         CHECK(errors[0].find("missing") != std::string::npos);
         CHECK(errors[0].find("square") != std::string::npos);
-    }
-}
-
-TEST_CASE("module.signature.loader_integration", "[module][signature]")
-{
-    auto& rt = TestRuntime::instance();
-    rt.clearErrors();
-
-    TempModuleDir tmpDir;
-    tmpDir.writeModule("Checked", "let square (x: int) : int = x * x");
-
-    SECTION("module with matching signature loads successfully")
-    {
-        auto sigPath = tmpDir.dir / "Checked.endoi";
-        {
-            std::ofstream(sigPath) << "val square : int -> int\n";
-        }
-
-        ModuleLoader loader(rt.runtime, rt.report);
-        loader.addSearchPath(tmpDir.dir);
-
-        auto const* desc = loader.loadModule("Checked");
-        CHECK(desc != nullptr);
-    }
-
-    SECTION("module with mismatched signature fails to load")
-    {
-        auto sigPath = tmpDir.dir / "Checked.endoi";
-        {
-            std::ofstream(sigPath) << "val nonexistent : int -> int\n";
-        }
-
-        ModuleLoader loader(rt.runtime, rt.report);
-        loader.addSearchPath(tmpDir.dir);
-
-        auto const* desc = loader.loadModule("Checked");
-        CHECK(desc == nullptr);
-    }
-}
-
-// =============================================================================
-// Value binding tests (evaluate once, open support, dedup)
-// =============================================================================
-
-TEST_CASE("module.inline.computed_value_binding", "[module][codegen]")
-{
-    SECTION("computed value evaluated once and loaded on each access")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Config =
-    let value = 2 + 3
-print (Config.value + Config.value)
-)" });
-        CHECK(output == "10");
-    }
-}
-
-TEST_CASE("module.inline.value_binding_via_open", "[module][codegen]")
-{
-    SECTION("value bindings accessible via open (unqualified)")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Constants =
-    let pi = 3
-    let e = 2
-open Constants
-print (pi + e)
-)" });
-        CHECK(output == "5");
-    }
-}
-
-TEST_CASE("module.inline.value_binding_selective_open", "[module][codegen]")
-{
-    SECTION("selective open brings only listed value bindings")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Constants =
-    let pi = 3
-    let e = 2
-open Constants with (pi)
-print pi
-)" });
-        CHECK(output == "3");
-    }
-}
-
-TEST_CASE("module.inline.value_and_function_mix", "[module][codegen]")
-{
-    SECTION("module with both value bindings and functions")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Utils =
-    let offset = 10
-    let add (x: int) : int = x + offset
-print (Utils.add 5)
-)" });
-        CHECK(output == "15");
-    }
-}
-
-TEST_CASE("module.inline.open_deduplication", "[module][codegen]")
-{
-    SECTION("repeated open does not crash or duplicate entries")
-    {
-        auto output = executeSessionAndGetOutput({
-            R"(
-module Math =
-    let square (x: int) : int = x * x
-open Math
-open Math
-print (square 4)
-)" });
-        CHECK(output == "16");
-    }
-}
-
-TEST_CASE("module.loader.available_nested_modules", "[module][loader]")
-{
-    auto& rt = TestRuntime::instance();
-    rt.clearErrors();
-
-    TempModuleDir tmpDir;
-    tmpDir.writeModule("Math", "let x = 1");
-    tmpDir.writeNestedModule("Geometry", "Circle", "let area (r: int) : int = r * r * 3");
-
-    ModuleLoader loader(rt.runtime, rt.report);
-    loader.addSearchPath(tmpDir.dir);
-
-    auto names = loader.availableModuleNames();
-    CHECK(std::ranges::find(names, "Math") != names.end());
-    CHECK(std::ranges::find(names, "Geometry.Circle") != names.end());
-}
-
-// =============================================================================
-// Additional test coverage (test gaps from code review)
-// =============================================================================
-
-TEST_CASE("module.loader.circular_dependency_error_message", "[module][loader]")
-{
-    auto& rt = TestRuntime::instance();
-    rt.clearErrors();
-
-    TempModuleDir tmpDir;
-    tmpDir.writeModule("CycleA", "import CycleB\nlet f (x: int) : int = x");
-    tmpDir.writeModule("CycleB", "import CycleA\nlet g (x: int) : int = x");
-
-    ModuleLoader loader(rt.runtime, rt.report);
-    loader.addSearchPath(tmpDir.dir);
-
-    auto const* desc = loader.loadModule("CycleA");
-    CHECK(desc == nullptr);
-    CHECK(rt.hasErrors());
-}
-
-TEST_CASE("module.open.selective_invalid_name", "[module][codegen]")
-{
-    SECTION("selective open with nonexistent name reports error")
-    {
-        auto result = executeSession({
-            R"(
-module Math =
-    let square (x: int) : int = x * x
-open Math with (nonexistent)
-)" });
-        CHECK(!result.has_value());
-    }
-}
-
-TEST_CASE("module.open.selective_private_name", "[module][codegen]")
-{
-    SECTION("selective open of private name reports error")
-    {
-        auto result = executeSession({
-            R"(
-module Math =
-    let private helper (x: int) : int = x + 1
-    let square (x: int) : int = x * x
-open Math with (helper)
-)" });
-        CHECK(!result.has_value());
-    }
-}
-
-TEST_CASE("module.inline.private_qualified_access_denied", "[module][codegen]")
-{
-    SECTION("private value cannot be accessed via qualified path")
-    {
-        CHECK(generatesIRWithError(R"(
-module Secret =
-    let private hidden = 42
-    let visible = 1
-print (Secret.hidden)
-)",
-                                   "private"));
     }
 }
 

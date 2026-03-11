@@ -1,0 +1,10 @@
+# description: File module private function cannot be called externally
+# expect-error: private
+# aux-file: Priv.endo
+let private helper (x: int): int = x + 1
+
+let public_fn (x: int): int = helper x
+
+# main-file:
+import Priv
+print (Priv.helper 5)

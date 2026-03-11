@@ -1,0 +1,9 @@
+# description: Module with matching signature loads successfully
+# expect: 25
+# aux-file: Checked.endo
+let square (x: int) : int = x * x
+# aux-file: Checked.endoi
+val square : int -> int
+# main-file:
+import Checked
+print (Checked.square 5)

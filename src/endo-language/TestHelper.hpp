@@ -131,6 +131,13 @@ bool generatesIRWithError(std::string const& source,
                           std::string_view expectedErrorSubstring,
                           bool unusedValueDetection = false);
 
+/// Attempts IR generation with module search paths and checks for expected error.
+/// Returns true if IR generation fails AND at least one error message contains expectedErrorSubstring.
+bool generatesIRWithError(std::string const& source,
+                          std::string_view expectedErrorSubstring,
+                          std::vector<std::string> const& modulePaths,
+                          bool unusedValueDetection = false);
+
 /// Helper to get the first statement from a compound statement.
 /// Returns nullptr if the statement is not a compound statement or is empty.
 ast::Statement* getFirstStatement(ast::Statement* stmt);

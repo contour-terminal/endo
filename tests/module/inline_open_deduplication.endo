@@ -1,0 +1,9 @@
+# description: Repeated open does not crash or duplicate entries
+# session-separator: ---
+# expect: 16
+module Math =
+    let square (x: int): int = x * x
+
+open Math
+open Math
+print (square 4)

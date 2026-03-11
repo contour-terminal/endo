@@ -1,0 +1,7 @@
+# description: Private function cannot be called from outside module
+# expect-error: private
+module Secret =
+    let private helper (x: int): int = x + 1
+    let public_fn (x: int): int = helper x
+
+print (Secret.helper 5)

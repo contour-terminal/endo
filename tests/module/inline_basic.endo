@@ -1,0 +1,6 @@
+# description: Inline module with qualified access
+# expect: 10
+module Helpers =
+    let double (x: int): int = x * 2
+
+print (Helpers.double 5)

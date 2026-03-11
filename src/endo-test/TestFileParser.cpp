@@ -61,8 +61,55 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
     std::ostringstream sourceStream;
     std::string line;
 
+    // Aux-file accumulation state
+    bool inAuxFile = false;
+    std::string currentAuxFileName;
+    std::ostringstream currentAuxContent;
+
     while (std::getline(file, line))
     {
+        // Check for aux-file / main-file markers at any point (even past metadata)
+        if (auto val = parseDirective(line, "aux-file"))
+        {
+            // Finalize previous aux file if any
+            if (inAuxFile && !currentAuxFileName.empty())
+            {
+                auto content = currentAuxContent.str();
+                if (!content.empty() && content.back() == '\n')
+                    content.pop_back();
+                result.auxiliaryFiles.emplace_back(std::move(currentAuxFileName), std::move(content));
+                currentAuxContent.str("");
+                currentAuxContent.clear();
+            }
+            currentAuxFileName = std::string(*val);
+            inAuxFile = true;
+            inMetadata = false; // aux-file ends the metadata section
+            continue;
+        }
+
+        if (parseDirective(line, "main-file").has_value())
+        {
+            // Finalize current aux file
+            if (inAuxFile && !currentAuxFileName.empty())
+            {
+                auto content = currentAuxContent.str();
+                if (!content.empty() && content.back() == '\n')
+                    content.pop_back();
+                result.auxiliaryFiles.emplace_back(std::move(currentAuxFileName), std::move(content));
+                currentAuxContent.str("");
+                currentAuxContent.clear();
+            }
+            inAuxFile = false;
+            // Rest of file is main source
+            continue;
+        }
+
+        if (inAuxFile)
+        {
+            currentAuxContent << line << '\n';
+            continue;
+        }
+
         if (inMetadata)
         {
             auto trimmedLine = trim(line);
@@ -167,6 +214,15 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
 
         // Past metadata — accumulate source
         sourceStream << line << '\n';
+    }
+
+    // Finalize any trailing aux file (no main-file marker at end)
+    if (inAuxFile && !currentAuxFileName.empty())
+    {
+        auto content = currentAuxContent.str();
+        if (!content.empty() && content.back() == '\n')
+            content.pop_back();
+        result.auxiliaryFiles.emplace_back(std::move(currentAuxFileName), std::move(content));
     }
 
     result.source = sourceStream.str();

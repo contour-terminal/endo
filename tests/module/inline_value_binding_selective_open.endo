@@ -1,0 +1,9 @@
+# description: Selective open brings only listed value bindings
+# session-separator: ---
+# expect: 3
+module Constants =
+    let pi = 3
+    let e = 2
+
+open Constants with (pi)
+print pi
