@@ -24,19 +24,6 @@ class LetBindingCompleter: public CompletionProvider
 
     [[nodiscard]] int priority() const override { return 90; }
 
-    /// @brief Formats a human-readable description for a persisted function.
-    /// @param name The function name.
-    /// @param func The persisted function metadata.
-    /// @return Description string like "fn(x, y)" or "rec fn(n: int) -> int".
-    [[nodiscard]] static std::string formatFunctionDescription(
-        std::string const& name, FSharpPersistentState::PersistedFunction const& func);
-
-    /// @brief Formats a human-readable description for a persisted value binding.
-    /// @param binding The persisted value binding metadata.
-    /// @return Description string like "value" or "mutable value".
-    [[nodiscard]] static std::string formatValueDescription(
-        FSharpPersistentState::PersistedValueBinding const& binding);
-
   private:
     FSharpPersistentState const& _state;
 };

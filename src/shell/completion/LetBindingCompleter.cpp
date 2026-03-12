@@ -95,46 +95,4 @@ bool LetBindingCompleter::canHandle(CompletionContextType type) const
     return type == CompletionContextType::Command;
 }
 
-std::string LetBindingCompleter::formatFunctionDescription(
-    std::string const& name, FSharpPersistentState::PersistedFunction const& func)
-{
-    std::string result;
-
-    if (func.isRecursive)
-        result += "rec ";
-
-    result += name;
-    result += '(';
-
-    for (size_t i = 0; i < func.parameters.size(); ++i)
-    {
-        if (i > 0)
-            result += ", ";
-
-        result += func.parameters[i];
-
-        if (i < func.parameterTypes.size() && func.parameterTypes[i].has_value())
-        {
-            result += ": ";
-            result += toString(*func.parameterTypes[i]);
-        }
-    }
-
-    result += ')';
-
-    if (func.returnType.has_value())
-    {
-        result += " -> ";
-        result += toString(*func.returnType);
-    }
-
-    return result;
-}
-
-std::string LetBindingCompleter::formatValueDescription(
-    FSharpPersistentState::PersistedValueBinding const& binding)
-{
-    return binding.isMutable ? "mutable value" : "value";
-}
-
 } // namespace endo

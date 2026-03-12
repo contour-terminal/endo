@@ -200,44 +200,6 @@ std::vector<std::string> expandRecursiveGlob(std::string_view pattern)
     return results;
 }
 
-bool globMatch(std::string_view text, std::string_view pattern)
-{
-    size_t ti = 0;
-    size_t pi = 0;
-    size_t starIdx = std::string_view::npos;
-    size_t matchIdx = 0;
-
-    while (ti < text.size())
-    {
-        if (pi < pattern.size() && (pattern[pi] == '?' || pattern[pi] == text[ti]))
-        {
-            ++ti;
-            ++pi;
-        }
-        else if (pi < pattern.size() && pattern[pi] == '*')
-        {
-            starIdx = pi;
-            matchIdx = ti;
-            ++pi;
-        }
-        else if (starIdx != std::string_view::npos)
-        {
-            pi = starIdx + 1;
-            ++matchIdx;
-            ti = matchIdx;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    while (pi < pattern.size() && pattern[pi] == '*')
-        ++pi;
-
-    return pi == pattern.size();
-}
-
 std::vector<size_t> findPrefixMatches(std::string_view text, std::string_view pattern)
 {
     std::vector<size_t> matches;

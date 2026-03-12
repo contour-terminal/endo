@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <shell/util/GlobMatcher.hpp>
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -17,43 +19,6 @@ namespace fs = std::filesystem;
 
 namespace
 {
-
-/// Simple glob pattern matching with '*' wildcard.
-[[nodiscard]] bool matchesGlob(std::string_view text, std::string_view pattern) noexcept
-{
-    size_t ti = 0;
-    size_t pi = 0;
-    size_t starTi = std::string_view::npos;
-    size_t starPi = std::string_view::npos;
-
-    while (ti < text.size())
-    {
-        if (pi < pattern.size() && (pattern[pi] == text[ti] || pattern[pi] == '?'))
-        {
-            ++ti;
-            ++pi;
-        }
-        else if (pi < pattern.size() && pattern[pi] == '*')
-        {
-            starPi = pi++;
-            starTi = ti;
-        }
-        else if (starPi != std::string_view::npos)
-        {
-            pi = starPi + 1;
-            ti = ++starTi;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    while (pi < pattern.size() && pattern[pi] == '*')
-        ++pi;
-
-    return pi == pattern.size();
-}
 
 /// Discovers .endo test files in the given directory.
 [[nodiscard]] std::vector<fs::path> discoverTestFiles(fs::path const& testDir)
@@ -203,7 +168,7 @@ struct CliOptions
     if (filters.empty())
         return true;
     return std::ranges::any_of(
-        filters, [relativePath](auto const& pattern) { return matchesGlob(relativePath, pattern); });
+        filters, [relativePath](auto const& pattern) { return endo::globMatch(relativePath, pattern); });
 }
 
 } // namespace
