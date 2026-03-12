@@ -1,0 +1,10 @@
+# description: Import and call module function from file
+# expect: 36
+# aux-file: Math.endo
+let square (x: int): int = x * x
+
+let cube (x: int): int = x * x * x
+
+# main-file:
+import Math
+print (Math.square 6)

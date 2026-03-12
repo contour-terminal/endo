@@ -87,6 +87,13 @@ add_library(endo STATIC
     builtins/TypeFormatters.cpp
     builtins/StubRuntime.hpp
 
+    # Module System
+    module/ModuleDescriptor.hpp
+    module/ModuleLoader.hpp
+    module/ModuleLoader.cpp
+    module/ModuleSignature.hpp
+    module/ModuleSignature.cpp
+
     # Source Code Formatter
     format/FormatConfig.hpp
     format/FormatConfig.cpp
@@ -128,6 +135,7 @@ if(ENDO_TESTING)
         codegen/StringBuiltins_test.cpp
         builtins/JsonQuery_test.cpp
         builtins/StdlibDescriptors_test.cpp
+        module/Module_test.cpp
 
         ide/CompletionCandidates_test.cpp
         ide/CompletionContext_test.cpp

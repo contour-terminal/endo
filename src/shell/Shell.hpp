@@ -83,6 +83,7 @@ class Shell final: public SignalCallback
     [[nodiscard]] EnvironmentProvider const& environment() const noexcept;
 
     [[nodiscard]] FileSystem& fs() noexcept { return _fs; }
+
     [[nodiscard]] FileSystem const& fs() const noexcept { return _fs; }
 
     void setOptimize(bool optimize);
@@ -96,6 +97,9 @@ class Shell final: public SignalCallback
     /// @brief Sets the trace file path for agent tool I/O tracing.
     /// @param path File path for JSONL trace output. Empty triggers auto-generated path.
     void setAgentTracePath(std::string path);
+
+    /// Adds an additional module search path (for --module-path CLI option).
+    void addModuleSearchPath(std::filesystem::path path);
 
     /// Set interactive mode (controls prompts, job notifications, etc.)
     void setInteractive(bool interactive);
@@ -173,7 +177,7 @@ class Shell final: public SignalCallback
     FileSystem& _fs; ///< Filesystem interface (declared before history for init order)
 
   public:
-    PersistentHistory history { _fs };   ///< Command history for completion (persisted to disk)
+    PersistentHistory history { _fs };    ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
 
     /// Agent configuration loaded from agent.yml (API keys) and overridden by init.endo builtins.
@@ -439,6 +443,7 @@ class Shell final: public SignalCallback
     std::chrono::system_clock::time_point _sessionCreatedAt; ///< Creation time of the active session.
 
     CoreVM::Runtime _runtime;
+    CoreVM::diagnostics::BufferedReport _moduleReport; ///< Diagnostics report for module loading
     EnvironmentProvider& _env;
     TTY& _tty;
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts

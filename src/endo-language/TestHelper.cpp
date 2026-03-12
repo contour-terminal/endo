@@ -8,6 +8,7 @@
 #include <endo-language/builtins/TypeFormatters.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/parser/Parser.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -670,6 +671,46 @@ bool generatesIRWithError(std::string const& source,
     return false;
 }
 
+bool generatesIRWithError(std::string const& source,
+                          std::string_view expectedErrorSubstring,
+                          std::vector<std::string> const& modulePaths,
+                          bool unusedValueDetection)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    // Create persistent state with module loader
+    FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    for (auto const& path: modulePaths)
+        fsharpState.moduleLoader->addSearchPath(path);
+
+    // Parse
+    Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+    auto ast = parser.parse();
+    if (!ast)
+    {
+        // Parse failed — check if error matches
+        for (auto const& msg: testRuntime.report.messages())
+            if (msg.text.find(expectedErrorSubstring) != std::string::npos)
+                return true;
+        return false;
+    }
+
+    // Generate IR
+    auto ir = IRGenerator::generate(
+        *ast, testRuntime.report, testRuntime.runtime, &fsharpState, unusedValueDetection);
+    if (ir && !testRuntime.hasErrors())
+        return false; // Expected failure but IR generation succeeded
+
+    for (auto const& msg: testRuntime.report.messages())
+        if (msg.text.find(expectedErrorSubstring) != std::string::npos)
+            return true;
+
+    return false;
+}
+
 ast::Statement* getFirstStatement(ast::Statement* stmt)
 {
     if (auto* compound = dynamic_cast<ast::CompoundStmt*>(stmt))
@@ -726,6 +767,59 @@ ExecutionResult executeSource(std::string const& source, bool unusedValueDetecti
     CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
 
     // Runner::run() returns true if exit code was non-zero, false if it was 0
+    bool exitNonZero = runner.run();
+    int64_t exitCode = exitNonZero ? 1 : 0;
+
+    return TestExecutionSuccess { .exitCode = exitCode, .output = testRuntime.output() };
+}
+
+ExecutionResult executeSource(std::string const& source,
+                              std::vector<std::string> const& modulePaths,
+                              bool unusedValueDetection)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    // Create persistent state with module loader
+    FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    for (auto const& path: modulePaths)
+        fsharpState.moduleLoader->addSearchPath(path);
+
+    // Parse
+    Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+    auto ast = parser.parse();
+    if (!ast || testRuntime.hasErrors())
+        return std::unexpected(TestError::ParseFailed);
+
+    // Generate IR with persistent state (for module support)
+    auto ir = IRGenerator::generate(
+        *ast, testRuntime.report, testRuntime.runtime, &fsharpState, unusedValueDetection);
+    if (!ir || testRuntime.hasErrors())
+        return std::unexpected(TestError::IRGenerationFailed);
+
+    // Generate target code
+    CoreVM::TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(ir.get());
+    if (!targetProgram)
+        return std::unexpected(TestError::CodeGenerationFailed);
+
+    // Register type formatters for human-readable display
+    builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+
+    // Link the program to the runtime
+    if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+        return std::unexpected(TestError::LinkFailed);
+
+    // Find the main function
+    CoreVM::Function const* fn = targetProgram->findFunction("@main");
+    if (!fn)
+        return std::unexpected(TestError::FunctionNotFound);
+
+    // Execute
+    CoreVM::Runner::Globals globals;
+    CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
     bool exitNonZero = runner.run();
     int64_t exitCode = exitNonZero ? 1 : 0;
 
@@ -807,6 +901,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
 {
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
 
     ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
 
@@ -862,6 +957,78 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
         // Save runtime values of mutable bindings for cross-prompt persistence.
         // Allocas are at the bottom of the stack (positions 0, 1, 2, ...),
         // matching the order of persisted value bindings.
+        auto const& stack = runner.stack();
+        for (size_t i = 0; i < fsharpState.valueBindings.size() && i < stack.size(); ++i)
+            if (fsharpState.valueBindings[i].isMutable)
+                fsharpState.mutableSnapshots[fsharpState.valueBindings[i].name] = stack[i];
+
+        lastResult = TestExecutionSuccess { .exitCode = exitCode, .output = testRuntime.output() };
+    }
+
+    return lastResult;
+}
+
+ExecutionResult executeSession(std::vector<std::string> const& prompts,
+                               std::vector<std::string> const& modulePaths)
+{
+    auto& testRuntime = TestRuntime::instance();
+    FSharpPersistentState fsharpState;
+    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    for (auto const& path: modulePaths)
+        fsharpState.moduleLoader->addSearchPath(path);
+
+    ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
+
+    for (auto const& source: prompts)
+    {
+        testRuntime.clearErrors();
+        testRuntime.clearOutput();
+
+        // Parse
+        Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+        if (!fsharpState.functions.empty() || !fsharpState.valueBindings.empty())
+        {
+            std::unordered_set<std::string> names;
+            for (auto const& [name, _]: fsharpState.functions)
+                names.insert(name);
+            for (auto const& binding: fsharpState.valueBindings)
+                names.insert(binding.name);
+            parser.setKnownFSharpFunctions(std::move(names));
+        }
+        auto ast = parser.parse();
+        if (!ast || testRuntime.hasErrors())
+            return std::unexpected(TestError::ParseFailed);
+
+        // Generate IR with persistent state
+        auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime, &fsharpState);
+        if (!ir || testRuntime.hasErrors())
+            return std::unexpected(TestError::IRGenerationFailed);
+
+        // Retain the AST so persisted function body pointers remain valid
+        fsharpState.retainedASTs.push_back(std::move(ast));
+
+        // Generate target code
+        CoreVM::TargetCodeGenerator codegen;
+        auto targetProgram = codegen.generate(ir.get());
+        if (!targetProgram)
+            return std::unexpected(TestError::CodeGenerationFailed);
+
+        // Link
+        if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+            return std::unexpected(TestError::LinkFailed);
+
+        // Find main function
+        CoreVM::Function const* fn = targetProgram->findFunction("@main");
+        if (!fn)
+            return std::unexpected(TestError::FunctionNotFound);
+
+        // Execute
+        CoreVM::Runner::Globals globals;
+        CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+        bool exitNonZero = runner.run();
+        int64_t exitCode = exitNonZero ? 1 : 0;
+
+        // Save runtime values of mutable bindings for cross-prompt persistence.
         auto const& stack = runner.stack();
         for (size_t i = 0; i < fsharpState.valueBindings.size() && i < stack.size(); ++i)
             if (fsharpState.valueBindings[i].isMutable)

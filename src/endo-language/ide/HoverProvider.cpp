@@ -941,8 +941,8 @@ namespace
                 }
 
                 return formatLetBinding(name,
-                                        letStmt->isExported,
-                                        letStmt->isMutable,
+                                        letStmt->visibility == ast::Visibility::Exported,
+                                        letStmt->mutability == ast::Mutability::Mutable,
                                         letStmt->isRecursive,
                                         letStmt->parameters,
                                         letStmt->returnType,

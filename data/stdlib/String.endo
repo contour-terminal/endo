@@ -1,0 +1,34 @@
+// String utility functions for the Endo standard library.
+
+/// Returns the number of characters in a string.
+let length (value: string): int = string_length value
+
+/// Converts a string to uppercase.
+let upper (value: string): string = toUpper value
+
+/// Converts a string to lowercase.
+let lower (value: string): string = toLower value
+
+/// Returns the string reversed.
+let rev (value: string): string =
+    split "" value
+        |> reverse
+        |> join ""
+
+/// Trims leading and trailing whitespace from a string.
+let trim (value: string): string = trim value
+
+/// Returns true if the string starts with the given prefix.
+let startsWith (prefix: string) (value: string): bool = value |> startsWith prefix
+
+/// Returns true if the string ends with the given suffix.
+let endsWith (suffix: string) (value: string): bool = value |> endsWith suffix
+
+/// Returns true if the string contains the given substring.
+let contains (sub: string) (value: string): bool = value |> contains sub
+
+/// Repeats a string n times.
+let repeat (n: int) (value: string): string =
+    value
+        |> replicate n
+        |> join ""

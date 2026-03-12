@@ -1,0 +1,7 @@
+# description: Multiple functions in inline module
+# expect: 16
+module Math =
+    let square (x: int): int = x * x
+    let cube (x: int): int = x * x * x
+
+print (Math.square 4)

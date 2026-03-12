@@ -1,0 +1,7 @@
+# description: Module with both value bindings and functions
+# expect: 15
+module Utils =
+    let offset = 10
+    let add (x: int): int = x + offset
+
+print (Utils.add 5)

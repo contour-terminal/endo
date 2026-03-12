@@ -21,6 +21,10 @@
 namespace endo
 {
 
+// Forward declarations for module system
+struct ModuleDescriptor;
+class ModuleLoader;
+
 /// Describes the return type category of a function for auto-wrapping support.
 enum class ReturnKind // NOLINT(performance-enum-size)
 {
@@ -117,6 +121,25 @@ struct FSharpPersistentState
 
     /// Properties persisted across REPL prompts (name -> accessor metadata).
     std::unordered_map<std::string, PersistedProperty> properties;
+
+    /// Module loader with cache (persists across REPL prompts, ensures import-once).
+    std::shared_ptr<ModuleLoader> moduleLoader;
+
+    /// Describes a module whose names have been brought into scope via `open`.
+    struct OpenedModuleEntry
+    {
+        std::string modulePath;                  ///< Dotted module path (e.g., "Math")
+        std::vector<std::string> selectiveNames; ///< Empty = all; non-empty = selective open
+    };
+
+    /// Ordered list of opened module names (for re-establishing scope each prompt).
+    std::vector<OpenedModuleEntry> openedModules;
+
+    /// Module names that have been imported (for re-establishing qualified access each prompt).
+    std::vector<std::string> importedModules;
+
+    /// Path of the source file being compiled (for relative module resolution).
+    std::optional<std::filesystem::path> sourceFilePath;
 };
 
 /// Generates IR code from an AST.
@@ -258,6 +281,33 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::UnionTypeDefStmt const& node) override;
     void visit(ast::UnionConstructorExpr const& node) override;
     void visit(ast::ExecPipelineExpr const& node) override;
+
+    // Module system
+    void visit(ast::ImportStmt const& node) override;
+    void visit(ast::OpenStmt const& node) override;
+    void visit(ast::ModuleDeclStmt const& node) override;
+
+    /// Generates a call to a module function by temporarily registering all module functions
+    /// and value bindings into scope, then calling generateFSharpCall.
+    ///
+    /// @param descriptor  Module descriptor containing functions and value bindings.
+    /// @param moduleName  Module name for value alloca lookup.
+    /// @param memberName  Function name within the module.
+    /// @param argExprs    Argument expressions to evaluate and pass.
+    void generateModuleFunctionCall(ModuleDescriptor const* descriptor,
+                                    std::string const& moduleName,
+                                    std::string const& memberName,
+                                    std::vector<ast::Expr const*> const& argExprs);
+
+    /// Codegens a module's value bindings once and stores them in allocas.
+    /// Skips private bindings. No-op if already evaluated for this module.
+    ///
+    /// @param descriptor  Module descriptor with value bindings.
+    /// @param moduleName  Key for the _moduleValueAllocas map.
+    /// @param force       If true, always evaluate (even if already present).
+    void codegenModuleValueBindings(ModuleDescriptor const* descriptor,
+                                    std::string const& moduleName,
+                                    bool force = false);
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -423,6 +473,17 @@ class IRGenerator final: public ast::Visitor
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    /// Converts a PersistedFunction to an FSharpFunction (without captured bindings).
+    [[nodiscard]] static FSharpFunction toFSharpFunction(
+        FSharpPersistentState::PersistedFunction const& persisted);
+
+    /// Registers a module's product types, sum types, and constructors into the IR program
+    /// and semantic analyzer.
+    void registerModuleTypes(ModuleDescriptor const* descriptor);
+
+    /// Registers a module's functions for dot-completion (Module.member) in the persistent state.
+    void registerModuleCompletion(ModuleDescriptor const* descriptor, std::string const& moduleName);
 
     // F# function call dispatch helpers (extracted from visit(ApplicationExpr))
 
@@ -799,6 +860,32 @@ class IRGenerator final: public ast::Visitor
 
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;
+
+    /// Modules loaded via `import` in the current session (name -> descriptor).
+    /// Used for qualified access (Module.member) resolution.
+    std::unordered_map<std::string, ModuleDescriptor const*> _loadedModules;
+
+    /// Pre-evaluated module value binding allocas (module name -> binding name -> alloca).
+    /// Value bindings are codegen'd once at import/module-declaration time, not on each access.
+    std::unordered_map<std::string, std::unordered_map<std::string, CoreVM::AllocaInstr*>>
+        _moduleValueAllocas;
+
+    /// Result of flattening a dotted access path (e.g., `Geometry.Circle.area`).
+    struct FlattenedPath
+    {
+        std::string modulePath; ///< e.g., "Geometry.Circle" or "Math"
+        std::string memberName; ///< e.g., "area" or "square"
+    };
+
+    /// Flattens a chain of FieldAccessExpr nodes into a module path and member name.
+    [[nodiscard]] static std::optional<FlattenedPath> flattenDottedPath(ast::Expr const* expr);
+
+    /// Owns inline module descriptors when no ModuleLoader is available (e.g., in tests).
+    /// Keeps the descriptors alive for the duration of IR generation.
+    std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> _ownedInlineModules;
+
+    /// Source file path of the current compilation unit (for relative module resolution).
+    std::optional<std::filesystem::path> _currentModuleSourcePath;
 
     /// When true, the current expression's result will be discarded (statement context).
     /// Used by MatchExpr to skip emitting the dead result load in the merge block.

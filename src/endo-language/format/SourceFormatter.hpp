@@ -139,6 +139,11 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void visit(ast::UnionConstructorExpr const& node) override;
     void visit(ast::ExecPipelineExpr const& node) override;
 
+    // Module system
+    void visit(ast::ImportStmt const& node) override;
+    void visit(ast::OpenStmt const& node) override;
+    void visit(ast::ModuleDeclStmt const& node) override;
+
     // ========================================================================
     // pattern::PatternVisitor overrides
     // ========================================================================

@@ -1,0 +1,11 @@
+# description: String.upper converts to uppercase
+# module-path: STDLIB
+# expect: HELLO
+# expect:
+# expect: HELLO WORLD
+# expect:
+
+import String
+println (String.upper "hello")
+println (String.upper "")
+println (String.upper "Hello World")

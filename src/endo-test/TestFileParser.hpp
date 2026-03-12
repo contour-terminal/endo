@@ -37,8 +37,13 @@ struct TestFile
     std::vector<std::pair<std::string, std::string>> mockEnv;        ///< Mock environment variables
     std::vector<std::pair<std::string, std::string>> mockWhichPaths; ///< Mock which paths
     std::vector<std::pair<std::string, std::string>> expectedEnv;    ///< Expected env vars after execution
-    bool expectNonEmptyOutput = false; ///< Assert output is non-empty (no exact match)
-    bool unusedValueDetection = false; ///< Enable unused value detection during IR generation
+    bool expectNonEmptyOutput = false;    ///< Assert output is non-empty (no exact match)
+    bool unusedValueDetection = false;    ///< Enable unused value detection during IR generation
+    std::vector<std::string> modulePaths; ///< Additional module search paths
+
+    /// Auxiliary source files embedded in test (for multi-file module tests).
+    /// Each pair is (filename, content). Written to a temp dir at execution time.
+    std::vector<std::pair<std::string, std::string>> auxiliaryFiles;
 };
 
 /// Parses an .endo test file into its metadata directives and source code.

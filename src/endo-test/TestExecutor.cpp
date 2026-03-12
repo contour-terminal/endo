@@ -4,13 +4,35 @@
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
 
+#include <chrono>
+#include <filesystem>
 #include <format>
+#include <fstream>
 
 namespace endo::test
 {
 
 namespace
 {
+
+    /// RAII helper that creates a temporary directory and removes it on destruction.
+    struct TempTestDir
+    {
+        std::filesystem::path dir;
+
+        TempTestDir():
+            dir(std::filesystem::temp_directory_path()
+                / ("endo_test_aux_"
+                   + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))
+        {
+            std::filesystem::create_directories(dir);
+        }
+
+        ~TempTestDir() { std::filesystem::remove_all(dir); }
+
+        TempTestDir(TempTestDir const&) = delete;
+        TempTestDir& operator=(TempTestDir const&) = delete;
+    };
 
     /// Joins expected output lines with newlines as separator (not terminator).
     /// To express a trailing newline, add an empty `# expect:` line at the end.
@@ -86,6 +108,25 @@ TestResult TestExecutor::run(TestFile const& testFile)
             testRuntime.setMockWhichPath(prog, path);
     }
 
+    // Materialize auxiliary files to a temp directory if present
+    std::optional<TempTestDir> auxDir;
+    if (!testFile.auxiliaryFiles.empty())
+    {
+        auxDir.emplace();
+        for (auto const& [filename, content]: testFile.auxiliaryFiles)
+        {
+            auto filePath = auxDir->dir / filename;
+            // Create parent directories for nested paths (e.g., Geometry/Circle.endo)
+            std::filesystem::create_directories(filePath.parent_path());
+            std::ofstream(filePath) << content;
+        }
+    }
+
+    // Build effective module paths (aux dir prepended if present)
+    auto effectiveModulePaths = testFile.modulePaths;
+    if (auxDir.has_value())
+        effectiveModulePaths.insert(effectiveModulePaths.begin(), auxDir->dir.string());
+
     switch (testFile.mode)
     {
         case TestMode::ParseOnly: {
@@ -138,6 +179,19 @@ TestResult TestExecutor::run(TestFile const& testFile)
                         {
                             allFound = false;
                             result.failureMessage = "Expected IR generation failure but it succeeded";
+                            break;
+                        }
+                    }
+                    else if (!effectiveModulePaths.empty())
+                    {
+                        if (!generatesIRWithError(testFile.source,
+                                                  expectedError,
+                                                  effectiveModulePaths,
+                                                  testFile.unusedValueDetection))
+                        {
+                            allFound = false;
+                            result.failureMessage =
+                                std::format("Expected error containing \"{}\" not found", expectedError);
                             break;
                         }
                     }
@@ -244,6 +298,19 @@ TestResult TestExecutor::run(TestFile const& testFile)
                             break;
                         }
                     }
+                    else if (!effectiveModulePaths.empty())
+                    {
+                        if (!generatesIRWithError(testFile.source,
+                                                  expectedError,
+                                                  effectiveModulePaths,
+                                                  testFile.unusedValueDetection))
+                        {
+                            allFound = false;
+                            result.failureMessage =
+                                std::format("Expected error containing \"{}\" not found", expectedError);
+                            break;
+                        }
+                    }
                     else if (!generatesIRWithError(
                                  testFile.source, expectedError, testFile.unusedValueDetection))
                     {
@@ -259,12 +326,30 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 return result;
             }
 
+            // Resolve STDLIB magic token in module paths
+            auto modulePaths = effectiveModulePaths;
+            for (auto& p: modulePaths)
+            {
+                if (p == "STDLIB")
+                    p = ENDO_STDLIB_DIR;
+            }
+
             // Execution tests
             ExecutionResult execResult;
             if (testFile.isSessionTest && !testFile.sessionPrompts.empty())
-                execResult = executeSession(testFile.sessionPrompts);
+            {
+                if (!modulePaths.empty())
+                    execResult = executeSession(testFile.sessionPrompts, modulePaths);
+                else
+                    execResult = executeSession(testFile.sessionPrompts);
+            }
             else
-                execResult = executeSource(testFile.source, testFile.unusedValueDetection);
+            {
+                if (!modulePaths.empty())
+                    execResult = executeSource(testFile.source, modulePaths, testFile.unusedValueDetection);
+                else
+                    execResult = executeSource(testFile.source, testFile.unusedValueDetection);
+            }
 
             auto const endTime = std::chrono::steady_clock::now();
             result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);

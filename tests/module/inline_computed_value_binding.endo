@@ -1,0 +1,6 @@
+# description: Computed value evaluated once and loaded on each access
+# expect: 10
+module Config =
+    let value = 2 + 3
+
+print (Config.value + Config.value)

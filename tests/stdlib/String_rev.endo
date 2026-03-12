@@ -1,0 +1,11 @@
+# description: String.rev reverses strings
+# module-path: STDLIB
+# expect: olleh
+# expect:
+# expect: a
+# expect:
+
+import String
+println (String.rev "hello")
+println (String.rev "")
+println (String.rev "a")

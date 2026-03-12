@@ -1,0 +1,11 @@
+# description: String.length returns character count
+# module-path: STDLIB
+# expect: 5
+# expect: 0
+# expect: 5
+# expect:
+
+import String
+println (String.length "hello")
+println (String.length "")
+println (String.length "a b c")

@@ -1,0 +1,15 @@
+# description: Circular dependency is detected and reported
+# expect-error:
+# aux-file: CycleA.endo
+import CycleB
+
+let f (x: int): int = x
+
+# aux-file: CycleB.endo
+import CycleA
+
+let g (x: int): int = x
+
+# main-file:
+import CycleA
+print (CycleA.f 1)

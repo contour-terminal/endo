@@ -1,0 +1,11 @@
+# description: selective open imports only listed names
+# module-path: STDLIB
+# expect: HELLO
+# expect: hello
+# expect:
+
+import String
+open String with (upper, lower)
+
+println (upper "hello")
+println (lower "HELLO")

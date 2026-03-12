@@ -1,0 +1,9 @@
+# description: String.startsWith checks prefix
+# module-path: STDLIB
+# expect: true
+# expect: false
+# expect:
+
+import String
+println (String.startsWith "he" "hello")
+println (String.startsWith "world" "hello")

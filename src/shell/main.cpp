@@ -70,6 +70,7 @@ struct ParsedArgs
     std::vector<std::string_view> scriptArgs;  ///< Arguments after script file ($1, $2, ...)
     std::optional<std::string> agentTracePath; ///< Agent trace file path (nullopt = disabled).
     std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
+    std::vector<std::string_view> modulePaths; ///< Additional module search paths (--module-path).
 };
 
 ParsedArgs parseArguments(std::span<char const* const> args)
@@ -123,6 +124,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg.starts_with("--log="))
         {
             result.logPatterns = arg.substr(6);
+        }
+        else if (arg == "--module-path" && i + 1 < args.size())
+        {
+            result.modulePaths.emplace_back(args[++i]);
         }
         else if (arg == "-c" && i + 1 < args.size())
         {
@@ -322,6 +327,9 @@ int main(int argc, char const* argv[])
     }
 
     auto shell = endo::Shell {};
+
+    for (auto const& mp: parsed.modulePaths)
+        shell.addModuleSearchPath(std::filesystem::path(mp));
 
     if (parsed.agentTracePath.has_value())
         shell.setAgentTracePath(*parsed.agentTracePath);

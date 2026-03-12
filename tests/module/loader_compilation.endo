@@ -1,0 +1,10 @@
+# description: Module loader compiles and imports file module
+# expect: 9
+# aux-file: Math.endo
+let square (x: int): int = x * x
+
+let cube (x: int): int = x * x * x
+
+# main-file:
+import Math
+print (Math.square 3)

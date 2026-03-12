@@ -94,6 +94,11 @@ struct UnionTypeDefStmt;
 struct UnionConstructorExpr;
 struct ExecPipelineExpr;
 
+// Module system
+struct ImportStmt;
+struct OpenStmt;
+struct ModuleDeclStmt;
+
 struct Visitor
 {
   public:
@@ -201,6 +206,11 @@ struct Visitor
 
     // Dynamic command execution
     virtual void visit(ExecPipelineExpr const&) = 0;
+
+    // Module system
+    virtual void visit(ImportStmt const&) = 0;
+    virtual void visit(OpenStmt const&) = 0;
+    virtual void visit(ModuleDeclStmt const&) = 0;
 };
 
 } // namespace endo::ast

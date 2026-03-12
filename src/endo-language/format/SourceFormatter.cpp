@@ -1475,9 +1475,11 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
 {
     emitLeadingComments(node);
     emit("let ");
-    if (node.isExported)
+    if (node.visibility == ast::Visibility::Exported)
         emit("export ");
-    if (node.isMutable)
+    if (node.visibility == ast::Visibility::Private)
+        emit("private ");
+    if (node.mutability == ast::Mutability::Mutable)
         emit("mut ");
     if (node.resourceMode == ast::ResourceMode::Use)
         emit("use ");
@@ -2577,6 +2579,57 @@ void SourceFormatter::visit(pattern::GuardedPattern const& pat)
         emit(" when ");
         pat.guard->accept(*this);
     }
+}
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+void SourceFormatter::visit(ast::ImportStmt const& node)
+{
+    emitLeadingComments(node);
+    emitIndent();
+    emit("import ");
+    emit(node.modulePath);
+    emitTrailingComment(node);
+}
+
+void SourceFormatter::visit(ast::OpenStmt const& node)
+{
+    emitLeadingComments(node);
+    emitIndent();
+    emit("open ");
+    emit(node.modulePath);
+    if (!node.selectiveNames.empty())
+    {
+        emit(" with (");
+        for (size_t i = 0; i < node.selectiveNames.size(); ++i)
+        {
+            if (i > 0)
+                emit(", ");
+            emit(node.selectiveNames[i]);
+        }
+        emit(")");
+    }
+    emitTrailingComment(node);
+}
+
+void SourceFormatter::visit(ast::ModuleDeclStmt const& node)
+{
+    emitLeadingComments(node);
+    emitIndent();
+    emit("module ");
+    emit(node.name);
+    emit(" =");
+    emitNewline();
+    indent();
+    for (auto const& stmt: node.body)
+    {
+        stmt->accept(*this);
+        emitNewline();
+    }
+    dedent();
+    emitTrailingComment(node);
 }
 
 } // namespace endo::format

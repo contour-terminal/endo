@@ -898,10 +898,25 @@ enum class ResourceMode : uint8_t
     Manual, ///< `let manual` — explicit manual resource management
 };
 
+/// Visibility of a let binding or type definition.
+enum class Visibility : uint8_t
+{
+    Default,  ///< Default visibility (public in modules)
+    Exported, ///< `let export` — exported from shell scope
+    Private,  ///< `let private` — module-internal, not exported
+};
+
+/// Mutability mode for a let binding.
+enum class Mutability : uint8_t
+{
+    Immutable, ///< Default: `let x = ...`
+    Mutable,   ///< `let mut x = ...`
+};
+
 struct LetBindingStmt final: public Statement
 {
-    bool isExported;                                ///< True for `let export`
-    bool isMutable;                                 ///< True for `let mut`
+    Visibility visibility;                          ///< Visibility modifier (default, export, private)
+    Mutability mutability;                          ///< Mutability modifier (immutable, mutable)
     bool isRecursive;                               ///< True for `let rec`
     ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
     std::string name;                               ///< Binding/function name
@@ -913,15 +928,15 @@ struct LetBindingStmt final: public Statement
     std::unique_ptr<PropertyAccessor> getter;             ///< `with get () = expr`
     std::unique_ptr<PropertyAccessor> setter;             ///< `and set (value) = expr`
 
-    LetBindingStmt(bool exported,
-                   bool mut,
+    LetBindingStmt(Visibility vis,
+                   Mutability mut,
                    bool rec,
                    std::string n,
                    std::vector<TypedParameter> params,
                    std::optional<TypePtr> retType,
                    std::unique_ptr<Expr> val):
-        isExported(exported),
-        isMutable(mut),
+        visibility(vis),
+        mutability(mut),
         isRecursive(rec),
         name(std::move(n)),
         parameters(std::move(params)),
@@ -931,9 +946,9 @@ struct LetBindingStmt final: public Statement
     }
 
     /// Constructor for destructuring let bindings: `let (x, y) = expr`
-    LetBindingStmt(bool mut, std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val):
-        isExported(false),
-        isMutable(mut),
+    LetBindingStmt(Mutability mut, std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val):
+        visibility(Visibility::Default),
+        mutability(mut),
         isRecursive(false),
 
         returnType(std::nullopt),
@@ -1875,6 +1890,55 @@ struct ExecPipelineExpr final: public Expr
     std::vector<Command> commands; ///< Commands in the pipeline (connected by OS-level pipes)
 
     explicit ExecPipelineExpr(std::vector<Command> cmds): commands(std::move(cmds)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+// ============================================================================
+// Module System
+// ============================================================================
+
+/// Import statement: `import Math` or `import Geometry.Circle`
+///
+/// Loads a module and makes its public members accessible via qualified access (`Module.member`).
+struct ImportStmt final: public Statement
+{
+    std::string modulePath; ///< Dotted module path (e.g., "Math" or "Geometry.Circle")
+
+    explicit ImportStmt(std::string path): modulePath(std::move(path)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Open statement: `open Math` or `open Math with (square, cube)`
+///
+/// Loads a module and brings its public names into the current scope.
+/// Qualified access also works after open. Selective open restricts which names are imported.
+struct OpenStmt final: public Statement
+{
+    std::string modulePath;                  ///< Dotted module path (e.g., "Math")
+    std::vector<std::string> selectiveNames; ///< Empty = open all; non-empty = selective open
+
+    explicit OpenStmt(std::string path, std::vector<std::string> selective = {}):
+        modulePath(std::move(path)), selectiveNames(std::move(selective))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Inline module declaration: `module Helpers = ... end`
+///
+/// Defines a named module inline with a body of statements (let, type, import, open, module).
+struct ModuleDeclStmt final: public Statement
+{
+    std::string name;                             ///< Module name (PascalCase)
+    std::vector<std::unique_ptr<Statement>> body; ///< Module body statements
+
+    ModuleDeclStmt(std::string n, std::vector<std::unique_ptr<Statement>> b):
+        name(std::move(n)), body(std::move(b))
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

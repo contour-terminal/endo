@@ -1,0 +1,4 @@
+# description: let export private is a parser error
+# mode: parse-only
+# expect-error:
+let export private x = 1

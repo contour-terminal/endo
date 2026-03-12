@@ -1,0 +1,7 @@
+# description: Private value cannot be accessed via qualified path
+# expect-error: private
+module Secret =
+    let private hidden = 42
+    let visible = 1
+
+print (Secret.hidden)
