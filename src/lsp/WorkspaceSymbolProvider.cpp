@@ -11,23 +11,6 @@ namespace endo::lsp
 
 namespace
 {
-    /// Maps a SymbolCategory to the corresponding LSP SymbolKind.
-    [[nodiscard]] SymbolKind categoryToSymbolKind(SymbolCategory category)
-    {
-        switch (category)
-        {
-            case SymbolCategory::Variable: return SymbolKind::Variable;
-            case SymbolCategory::Function: return SymbolKind::Function;
-            case SymbolCategory::Parameter: return SymbolKind::Variable;
-            case SymbolCategory::RecordType: return SymbolKind::Struct;
-            case SymbolCategory::RecordField: return SymbolKind::Field;
-            case SymbolCategory::UnionType: return SymbolKind::Enum;
-            case SymbolCategory::UnionVariant: return SymbolKind::EnumMember;
-            case SymbolCategory::Property: return SymbolKind::Property;
-        }
-        return SymbolKind::Variable;
-    }
-
     /// Case-insensitive substring match.
     [[nodiscard]] bool containsIgnoreCase(std::string const& haystack, std::string const& needle)
     {
