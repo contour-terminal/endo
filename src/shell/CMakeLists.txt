@@ -292,6 +292,8 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/definitions/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/definitions)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/completers)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/stdlib/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/stdlib)
 
 # Enable sanitizers and clang-tidy for all targets
 enable_sanitizers(endo-shell)
