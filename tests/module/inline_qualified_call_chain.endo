@@ -3,7 +3,9 @@
 module Math =
     let square (x: int): int = x * x
 
+
 module Utils =
     let inc (x: int): int = x + 1
+
 
 print (Utils.inc (Math.square 5))

@@ -3,7 +3,9 @@
 module A =
     let f (x: int): int = x + 1
 
+
 module B =
     let g (x: int): int = x * 10
+
 
 print (A.f (B.g 3))
