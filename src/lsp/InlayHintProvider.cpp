@@ -42,38 +42,8 @@ namespace
     {
         if (!type)
             return true;
-        if (type->isTypeVar())
-            return true;
-        if (auto const* fn = type->asFunction())
-            return containsTypeVar(fn->paramType) || containsTypeVar(fn->returnType);
-        if (auto const* lst = type->asList())
-            return containsTypeVar(lst->elementType);
-        if (auto const* tup = type->asTuple())
-        {
-            for (auto const& elem: tup->elementTypes)
-                if (containsTypeVar(elem))
-                    return true;
-            return false;
-        }
-        if (auto const* opt = type->asOption())
-            return containsTypeVar(opt->innerType);
-        if (auto const* res = type->asResult())
-            return containsTypeVar(res->okType) || containsTypeVar(res->errorType);
-        if (auto const* rec = type->asRecord())
-        {
-            for (auto const& field: rec->fields)
-                if (containsTypeVar(field.type))
-                    return true;
-            return false;
-        }
-        if (auto const* un = type->asUnion())
-        {
-            for (auto const& c: un->cases)
-                if (c.payloadType && containsTypeVar(*c.payloadType))
-                    return true;
-            return false;
-        }
-        return false;
+        return foldType<bool>(
+            type, false, [](bool found, TypePtr const& t) { return found || t->isTypeVar(); });
     }
 
     /// Token entry for position lookup.

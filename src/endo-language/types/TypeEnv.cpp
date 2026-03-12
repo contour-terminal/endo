@@ -77,54 +77,14 @@ TypePtr TypeEnv::freshTypeVarType()
 
 void TypeEnv::collectFreeVars(TypePtr const& type, std::vector<TypeVarId>& vars)
 {
-    if (auto* tv = type->asTypeVar())
-    {
-        // Add if not already present
-        if (std::ranges::find(vars, tv->id) == vars.end())
-            vars.push_back(tv->id);
-    }
-    else if (auto* fn = type->asFunction())
-    {
-        collectFreeVars(fn->paramType, vars);
-        collectFreeVars(fn->returnType, vars);
-    }
-    else if (auto* lst = type->asList())
-    {
-        collectFreeVars(lst->elementType, vars);
-    }
-    else if (auto* tup = type->asTuple())
-    {
-        for (auto const& elem: tup->elementTypes)
-            collectFreeVars(elem, vars);
-    }
-    else if (auto* opt = type->asOption())
-    {
-        collectFreeVars(opt->innerType, vars);
-    }
-    else if (auto* res = type->asResult())
-    {
-        collectFreeVars(res->okType, vars);
-        collectFreeVars(res->errorType, vars);
-    }
-    else if (auto* rec = type->asRecord())
-    {
-        for (auto const& field: rec->fields)
-            collectFreeVars(field.type, vars);
-    }
-    else if (auto* un = type->asUnion())
-    {
-        for (auto const& c: un->cases)
+    foldType<bool>(type, false, [&vars](bool /*unused*/, TypePtr const& t) {
+        if (auto const* tv = t->asTypeVar())
         {
-            if (c.payloadType)
-                collectFreeVars(*c.payloadType, vars);
+            if (std::ranges::find(vars, tv->id) == vars.end())
+                vars.push_back(tv->id);
         }
-    }
-    else if (auto* app = type->asTypeApp())
-    {
-        for (auto const& arg: app->args)
-            collectFreeVars(arg, vars);
-    }
-    // Primitives have no free type variables
+        return false;
+    });
 }
 
 void TypeEnv::collectFreeVars(TypeScheme const& scheme, std::vector<TypeVarId>& vars)
