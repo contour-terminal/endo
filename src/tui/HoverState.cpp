@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HoverState.hpp"
 
+#include "TimerUtils.hpp"
+
 namespace tui
 {
 
@@ -72,16 +74,8 @@ void HoverState::setOnHoverLeave(LeaveCallback callback)
 int HoverState::timeoutMs() const
 {
     if (!_hover || _confirmed)
-        return -1; // No timeout needed
-
-    auto const now = std::chrono::steady_clock::now();
-    auto const elapsed = now - _hoverStart;
-    auto const remaining = _delay - elapsed;
-
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0; // Already expired
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+        return -1;
+    return remainingMs(_hoverStart, _delay);
 }
 
 std::optional<HoverInfo> HoverState::currentHover() const

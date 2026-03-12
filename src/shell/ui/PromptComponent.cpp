@@ -13,6 +13,7 @@
 #include <tui/Screen.hpp>
 #include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
+#include <tui/TimerUtils.hpp>
 #include <tui/Unicode.hpp>
 #include <tui/completer/Completer.hpp>
 
@@ -1431,42 +1432,19 @@ void PromptComponent::updateDiagnostics()
 
 int PromptComponent::diagnosticsTimeoutMs() const
 {
-    if (!_diagnosticsPendingSince)
-        return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - *_diagnosticsPendingSince;
-    auto const remaining = DiagnosticsDebounceMs - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_diagnosticsPendingSince, DiagnosticsDebounceMs);
 }
 
 int PromptComponent::ghostTextTimeoutMs() const
 {
-    if (!_ghostTextPendingSince)
-        return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
-    auto const remaining = GhostTextDebounceMs - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
 }
 
 int PromptComponent::exitHintTimeoutMs() const
 {
     if (!_exitHintVisible)
         return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - _lastCtrlDTime;
-    auto const timeout = std::chrono::milliseconds(_config.exitConfirmTimeoutMs);
-    auto const remaining = timeout - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_lastCtrlDTime, std::chrono::milliseconds(_config.exitConfirmTimeoutMs));
 }
 
 std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, int character) const

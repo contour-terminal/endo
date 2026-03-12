@@ -4,6 +4,7 @@
 #include <tui/ImageLoader.hpp>
 #include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
+#include <tui/TimerUtils.hpp>
 #include <tui/completer/CompletionProvider.hpp>
 
 #include <format>
@@ -657,28 +658,14 @@ void AgentInputComponent::flushDeferredUpdates()
 
 int AgentInputComponent::ghostTextTimeoutMs() const
 {
-    if (!_ghostTextPendingSince)
-        return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
-    auto const remaining = GhostTextDebounceMs - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
 }
 
 int AgentInputComponent::escapeHintTimeoutMs() const
 {
     if (!_escapeHintVisible)
         return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - _lastEscapeTime;
-    auto const remaining = EscapeHintTimeout - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_lastEscapeTime, EscapeHintTimeout);
 }
 
 void AgentInputComponent::restoreFromEscapeHint()
