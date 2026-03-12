@@ -2,7 +2,6 @@
 #include "InlayHintProvider.hpp"
 
 #include <endo-language/ast/AST.hpp>
-#include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 #include <endo-language/types/TypeEnv.hpp>
@@ -13,6 +12,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "LspUtils.hpp"
 
 namespace endo::lsp
 {
@@ -44,32 +45,6 @@ namespace
             return true;
         return foldType<bool>(
             type, false, [](bool found, TypePtr const& t) { return found || t->isTypeVar(); });
-    }
-
-    /// Token entry for position lookup.
-    struct TokenEntry
-    {
-        Token token;
-        std::string literal;
-        SourceLocationRange range;
-    };
-
-    /// Tokenizes the source and returns all tokens.
-    [[nodiscard]] std::vector<TokenEntry> tokenize(std::string const& source)
-    {
-        std::vector<TokenEntry> tokens;
-        auto lexer = Lexer { std::make_unique<StringSource>(source) };
-        lexer.enterFSharpExpr();
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.push_back(TokenEntry {
-                .token = lexer.currentToken(),
-                .literal = lexer.currentLiteral(),
-                .range = lexer.currentRange(),
-            });
-            lexer.nextToken();
-        }
-        return tokens;
     }
 
     /// Returns a short display string for a type, using just the type name for named records/unions.

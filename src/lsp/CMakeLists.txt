@@ -6,8 +6,9 @@ add_library(endo-lsp STATIC
     # LSP protocol types
     LspTypes.hpp
 
-    # Shared AST walker for providers
+    # Shared utilities
     AstWalker.hpp
+    LspUtils.hpp
 
     # Language intelligence providers
     SymbolCollector.hpp

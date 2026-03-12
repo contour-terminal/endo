@@ -3,7 +3,6 @@
 
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/Pattern.hpp>
-#include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 
 #include <editor-protocol/StubRuntime.hpp>
@@ -12,6 +11,8 @@
 #include <ranges>
 #include <unordered_map>
 #include <utility>
+
+#include "LspUtils.hpp"
 
 namespace endo::lsp
 {
@@ -576,32 +577,6 @@ namespace
         std::vector<int> _enclosingFunctionStack;
         int _nextScopeId = 0;
     };
-
-    /// Builds a token index from the source for fast position lookups.
-    struct TokenEntry
-    {
-        Token token;
-        std::string literal;
-        SourceLocationRange range;
-    };
-
-    /// Tokenizes the source and returns all tokens.
-    [[nodiscard]] std::vector<TokenEntry> tokenize(std::string const& source)
-    {
-        std::vector<TokenEntry> tokens;
-        auto lexer = Lexer { std::make_unique<StringSource>(source) };
-        lexer.enterFSharpExpr();
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.push_back(TokenEntry {
-                .token = lexer.currentToken(),
-                .literal = lexer.currentLiteral(),
-                .range = lexer.currentRange(),
-            });
-            lexer.nextToken();
-        }
-        return tokens;
-    }
 
     /// Checks if a 0-based LSP position falls within a token's range.
     /// Uses the token literal length to compute the end column, which handles
