@@ -167,8 +167,8 @@ def _validate_module_filename(filename: str) -> None:
         raise ValueError(f"invalid virtual module filename (.. not allowed): {filename!r}")
     if len(p.parts) != 1:
         raise ValueError(f"invalid virtual module filename (directories not allowed): {filename!r}")
-    if p.suffix != ".endo":
-        raise ValueError(f"invalid virtual module filename (must end with .endo): {filename!r}")
+    if p.suffix not in (".endo", ".endoi"):
+        raise ValueError(f"invalid virtual module filename (must end with .endo or .endoi): {filename!r}")
 
 
 def write_virtual_modules(virtual_modules: dict[str, str], module_dir: Path) -> None:

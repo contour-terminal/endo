@@ -307,6 +307,7 @@ void printHelp()
     h.option("--lsp", "Launch Language Server Protocol server");
     h.option("--dap", "Launch Debug Adapter Protocol server");
     h.option("--log-file=FILE", "Log protocol messages to FILE");
+    h.option("--module-path DIR", "Add DIR to module search path");
     h.option("--log=PATTERNS", "Enable logging for matching categories (comma-separated)");
     h.option("--log-list", "List all available log categories and exit");
 

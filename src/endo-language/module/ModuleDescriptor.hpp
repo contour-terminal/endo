@@ -60,9 +60,6 @@ struct ModuleDescriptor
     /// AST nodes retained to keep function body pointers valid for inlining.
     std::vector<std::unique_ptr<ast::Statement>> retainedASTs;
 
-    /// Nested submodules (for inline `module` declarations within this module).
-    std::unordered_map<std::string, std::unique_ptr<ModuleDescriptor>> submodules;
-
     /// Returns true if the given name is private (not accessible from outside).
     [[nodiscard]] bool isPrivate(std::string const& memberName) const
     {

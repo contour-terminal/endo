@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 
@@ -186,7 +187,10 @@ struct TempModuleDir
 {
     std::filesystem::path dir;
 
-    TempModuleDir(): dir(std::filesystem::temp_directory_path() / "endo_module_test")
+    TempModuleDir():
+        dir(std::filesystem::temp_directory_path()
+            / ("endo_module_test_"
+               + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))
     {
         std::filesystem::create_directories(dir);
     }

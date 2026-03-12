@@ -362,20 +362,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             if (auto const* desc = persistentState->moduleLoader->findModule(moduleName))
             {
                 generator._loadedModules[moduleName] = desc;
-
-                // Re-evaluate value bindings into allocas
-                for (auto const& vb: desc->valueBindings)
-                {
-                    if (desc->isPrivate(vb.name))
-                        continue;
-                    auto* val = generator.codegen(vb.value);
-                    if (!val)
-                        continue;
-                    auto* storage =
-                        generator.createAllocaInEntryBlock(val->type(), moduleName + "." + vb.name);
-                    generator._builder.createStore(storage, val, vb.name);
-                    generator._moduleValueAllocas[moduleName][vb.name] = storage;
-                }
+                generator.codegenModuleValueBindings(desc, moduleName, /*force=*/true);
             }
         }
 
@@ -11490,21 +11477,14 @@ void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
     // Register ALL module functions temporarily so intra-module calls
     // resolve during AST inlining (e.g., cube calls private sq).
     auto tempRegistered = std::vector<std::string> {};
+    auto savedFunctions = std::vector<std::pair<std::string, FSharpFunction>> {};
     for (auto const& [fnName, fnPersisted]: descriptor->functions)
     {
-        if (!lookupFSharpFunction(fnName))
-        {
-            FSharpFunction tempFunc;
-            tempFunc.parameters = fnPersisted.parameters;
-            tempFunc.parameterTypes = fnPersisted.parameterTypes;
-            tempFunc.returnType = fnPersisted.returnType;
-            tempFunc.body = fnPersisted.body;
-            tempFunc.returnKind = fnPersisted.returnKind;
-            tempFunc.isRecursive = fnPersisted.isRecursive;
-            tempFunc.hasVariadicParam = fnPersisted.hasVariadicParam;
-            registerFSharpFunction(fnName, std::move(tempFunc));
-            tempRegistered.push_back(fnName);
-        }
+        const auto* existing = lookupFSharpFunction(fnName);
+        if (existing)
+            savedFunctions.emplace_back(fnName, *existing);
+        registerFSharpFunction(fnName, toFSharpFunction(fnPersisted));
+        tempRegistered.push_back(fnName);
     }
     // Bind module value allocas into scope so function bodies
     // can reference value bindings from the same module.
@@ -11518,9 +11498,11 @@ void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
     if (registeredFunc)
         generateFSharpCall(registeredFunc, memberName, args);
     popFSharpScope();
-    // Remove temporary registrations to avoid polluting the outer scope
+    // Restore outer-scope function registrations (or remove temporary ones)
     for (auto const& name: tempRegistered)
         _fsharpFunctions.erase(name);
+    for (auto& [name, func]: savedFunctions)
+        _fsharpFunctions[name] = std::move(func);
 }
 
 IRGenerator::FSharpFunction IRGenerator::toFSharpFunction(

@@ -4,6 +4,7 @@
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -19,7 +20,10 @@ namespace
     {
         std::filesystem::path dir;
 
-        TempTestDir(): dir(std::filesystem::temp_directory_path() / "endo_test_aux")
+        TempTestDir():
+            dir(std::filesystem::temp_directory_path()
+                / ("endo_test_aux_"
+                   + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))
         {
             std::filesystem::create_directories(dir);
         }

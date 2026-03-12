@@ -1462,6 +1462,11 @@ int Shell::execute(std::string const& lineBuffer,
         auto irProgram =
             IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState, _unusedValueDetection);
 
+        // Forward any module-load diagnostics into the execution report
+        for (auto const& msg: _moduleReport)
+            report.push_back(msg);
+        _moduleReport.clear();
+
         // Check for IR generation errors
         if (report.containsFailures())
             return EXIT_FAILURE;
