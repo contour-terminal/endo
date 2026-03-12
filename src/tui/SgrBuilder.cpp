@@ -11,9 +11,9 @@ namespace tui
 std::string buildSgrSequence(Style const& style)
 {
     // Compute effective underline style
-    auto const effectiveUnderline = style.underlineStyle != UnderlineStyle::None
-                                        ? style.underlineStyle
-                                        : (style.underline ? UnderlineStyle::Single : UnderlineStyle::None);
+    auto const underlineFromFlag = style.underline ? UnderlineStyle::Single : UnderlineStyle::None;
+    auto const effectiveUnderline =
+        style.underlineStyle != UnderlineStyle::None ? style.underlineStyle : underlineFromFlag;
     auto const isDefaultUlColor = std::holds_alternative<std::monostate>(style.underlineColor);
 
     // Check if style is default (no attributes set)
