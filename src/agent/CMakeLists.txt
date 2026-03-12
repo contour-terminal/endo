@@ -62,6 +62,7 @@ add_library(endo-agent STATIC
     providers/OpenAiProvider.hpp providers/OpenAiProvider.cpp
     providers/GeminiProvider.hpp providers/GeminiProvider.cpp
     providers/CopilotProvider.hpp providers/CopilotProvider.cpp
+    providers/ProviderUtils.hpp providers/ProviderUtils.cpp
     providers/ProviderFactory.hpp providers/ProviderFactory.cpp
 
     # Tools

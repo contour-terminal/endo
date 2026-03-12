@@ -8,6 +8,8 @@
 #include <format>
 #include <ranges>
 
+#include <agent/providers/ProviderUtils.hpp>
+
 namespace endo::agent
 {
 
@@ -93,24 +95,8 @@ auto GeminiProvider::buildAuthHeaders() const -> std::vector<std::string>
 
 auto GeminiProvider::mapHttpError(long statusCode, std::string const& body) -> ProviderError
 {
-    auto message = std::format("HTTP {}", statusCode);
-
-    // Try to extract error message from response body.
-    auto const parsed = nlohmann::json::parse(body, nullptr, false);
-    if (!parsed.is_discarded() && parsed.contains("error") && parsed["error"].contains("message"))
-        message = parsed["error"]["message"].get<std::string>();
-
-    auto code = ProviderErrorCode::Unknown;
-    if (statusCode == 401 || statusCode == 403)
-        code = ProviderErrorCode::AuthenticationError;
-    else if (statusCode == 429)
-        code = ProviderErrorCode::RateLimitError;
-    else if (statusCode >= 500)
-        code = ProviderErrorCode::ServerError;
-
-    return ProviderError { .code = code,
-                           .message = std::move(message),
-                           .httpStatus = static_cast<int>(statusCode) };
+    return mapHttpStatusToProviderError(
+        statusCode, extractJsonErrorMessage(statusCode, body), /*treat403AsAuth=*/true);
 }
 
 auto GeminiProvider::findToolName(std::span<ChatMessage const> messages, std::string_view toolUseId)
