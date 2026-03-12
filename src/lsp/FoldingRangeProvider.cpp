@@ -52,7 +52,7 @@ std::vector<FoldingRange> computeFoldingRanges(std::string const& source)
 
     // Walk AST to collect folding ranges
     auto ranges = std::vector<FoldingRange> {};
-    walkStatement(*astRoot, [&](std::optional<SourceLocationRange> const& loc) {
+    walkStatement<WalkMode::FoldableOnly>(*astRoot, [&](std::optional<SourceLocationRange> const& loc) {
         if (loc && isMultiLine(*loc))
             ranges.push_back(makeFold(*loc));
     });
