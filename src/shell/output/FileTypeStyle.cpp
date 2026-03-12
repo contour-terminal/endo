@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FileTypeStyle.hpp"
 
+#include <tui/SgrBuilder.hpp>
+
 #include <algorithm>
 #include <array>
-#include <format>
 #include <string>
 #include <string_view>
-#include <variant>
 
 using tui::RgbColor;
 using tui::Style;
@@ -282,83 +282,7 @@ FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode
 
 std::string sgrSequence(tui::Style const& style)
 {
-    // Compute effective underline style
-    auto effectiveUnderline = style.underlineStyle;
-    if (effectiveUnderline == tui::UnderlineStyle::None && style.underline)
-        effectiveUnderline = tui::UnderlineStyle::Single;
-
-    // Check if style is default (no attributes set)
-    auto const isDefaultFg = std::holds_alternative<std::monostate>(style.fg);
-    auto const isDefaultBg = std::holds_alternative<std::monostate>(style.bg);
-    if (isDefaultFg && isDefaultBg && !style.bold && !style.italic && !style.strikethrough && !style.dim
-        && !style.inverse && effectiveUnderline == tui::UnderlineStyle::None)
-        return {};
-
-    std::string result = "\033[";
-    auto needSemicolon = false;
-    auto const appendSep = [&]() {
-        if (needSemicolon)
-            result += ';';
-        needSemicolon = true;
-    };
-
-    if (style.bold)
-    {
-        appendSep();
-        result += '1';
-    }
-    if (style.dim)
-    {
-        appendSep();
-        result += '2';
-    }
-    if (style.italic)
-    {
-        appendSep();
-        result += '3';
-    }
-    if (effectiveUnderline != tui::UnderlineStyle::None)
-    {
-        appendSep();
-        result += std::format("4:{}", static_cast<int>(effectiveUnderline));
-    }
-    if (style.inverse)
-    {
-        appendSep();
-        result += '7';
-    }
-    if (style.strikethrough)
-    {
-        appendSep();
-        result += '9';
-    }
-
-    // Foreground color
-    if (auto const* idx = std::get_if<std::uint8_t>(&style.fg))
-    {
-        appendSep();
-        result += std::format("38;5;{}", *idx);
-    }
-    else if (auto const* rgb = std::get_if<tui::RgbColor>(&style.fg))
-    {
-        appendSep();
-        result += std::format("38;2;{};{};{}", rgb->r, rgb->g, rgb->b);
-    }
-
-    // Background color
-    if (auto const* idx = std::get_if<std::uint8_t>(&style.bg))
-    {
-        appendSep();
-        result += std::format("48;5;{}", *idx);
-    }
-    else if (auto const* rgb = std::get_if<tui::RgbColor>(&style.bg))
-    {
-        appendSep();
-        result += std::format("48;2;{};{};{}", rgb->r, rgb->g, rgb->b);
-    }
-
-    result += 'm';
-    return result;
+    return tui::buildSgrSequence(style);
 }
 
 std::string colorizePermissions(std::string_view perms)

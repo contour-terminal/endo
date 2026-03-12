@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/SgrBuilder.hpp>
 #include <tui/TerminalOutput.hpp>
 
 #if defined(_WIN32)
@@ -505,87 +506,7 @@ void TerminalOutput::detectCapabilities()
 
 void TerminalOutput::appendSgr(Style const& style)
 {
-    auto const effectiveUnderline = style.underlineStyle != UnderlineStyle::None
-                                        ? style.underlineStyle
-                                        : (style.underline ? UnderlineStyle::Single : UnderlineStyle::None);
-    auto const isDefaultUlColor = std::holds_alternative<std::monostate>(style.underlineColor);
-
-    auto const isDefaultFg = std::holds_alternative<std::monostate>(style.fg);
-    auto const isDefaultBg = std::holds_alternative<std::monostate>(style.bg);
-    if (isDefaultFg && isDefaultBg && !style.bold && !style.italic && !style.strikethrough && !style.dim
-        && !style.inverse && effectiveUnderline == UnderlineStyle::None)
-        return;
-
-    _buffer += "\033[";
-    auto needSemicolon = false;
-    auto const appendSep = [&]() {
-        if (needSemicolon)
-            _buffer += ';';
-        needSemicolon = true;
-    };
-
-    if (style.bold)
-    {
-        appendSep();
-        _buffer += '1';
-    }
-    if (style.dim)
-    {
-        appendSep();
-        _buffer += '2';
-    }
-    if (style.italic)
-    {
-        appendSep();
-        _buffer += '3';
-    }
-    if (effectiveUnderline != UnderlineStyle::None)
-    {
-        appendSep();
-        _buffer += std::format("4:{}", static_cast<int>(effectiveUnderline));
-    }
-    if (style.inverse)
-    {
-        appendSep();
-        _buffer += '7';
-    }
-    if (style.strikethrough)
-    {
-        appendSep();
-        _buffer += '9';
-    }
-
-    if (auto const* idx = std::get_if<std::uint8_t>(&style.fg))
-    {
-        appendSep();
-        _buffer += std::format("38;5;{}", *idx);
-    }
-    else if (auto const* rgb = std::get_if<RgbColor>(&style.fg))
-    {
-        appendSep();
-        _buffer += std::format("38;2;{};{};{}", rgb->r, rgb->g, rgb->b);
-    }
-
-    if (auto const* idx = std::get_if<std::uint8_t>(&style.bg))
-    {
-        appendSep();
-        _buffer += std::format("48;5;{}", *idx);
-    }
-    else if (auto const* rgb = std::get_if<RgbColor>(&style.bg))
-    {
-        appendSep();
-        _buffer += std::format("48;2;{};{};{}", rgb->r, rgb->g, rgb->b);
-    }
-
-    _buffer += 'm';
-
-    if (!isDefaultUlColor)
-    {
-        if (auto const* idx = std::get_if<std::uint8_t>(&style.underlineColor))
-            _buffer += std::format("\033[58:5:{}m", *idx);
-        else if (auto const* rgb = std::get_if<RgbColor>(&style.underlineColor))
-            _buffer += std::format("\033[58:2:{}:{}:{}m", rgb->r, rgb->g, rgb->b);
-    }
+    _buffer += buildSgrSequence(style);
 }
 
 void TerminalOutput::appendSgrReset()
