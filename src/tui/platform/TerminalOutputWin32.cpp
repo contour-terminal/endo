@@ -4,6 +4,8 @@
 
 #if defined(_WIN32)
 
+    #include <tui/platform/Win32Utf.hpp>
+
     #include <array>
     #include <cctype>
     #include <cstdlib>
@@ -19,27 +21,6 @@ namespace tui
 
 namespace
 {
-    /// @brief Appends a UTF-16 code unit as UTF-8 bytes to a string.
-    void appendUtf16AsUtf8(std::string& output, wchar_t codeUnit)
-    {
-        auto const cp = static_cast<uint32_t>(codeUnit);
-        if (cp < 0x80)
-        {
-            output += static_cast<char>(cp);
-        }
-        else if (cp < 0x800)
-        {
-            output += static_cast<char>(0xC0 | (cp >> 6));
-            output += static_cast<char>(0x80 | (cp & 0x3F));
-        }
-        else
-        {
-            output += static_cast<char>(0xE0 | (cp >> 12));
-            output += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            output += static_cast<char>(0x80 | (cp & 0x3F));
-        }
-    }
-
     /// @brief Queries the terminal for XTVERSION and returns the response.
     ///
     /// Sends CSI > q and reads the DCS response with a short timeout.
