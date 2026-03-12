@@ -491,6 +491,7 @@ class Shell final: public SignalCallback
     int _exitCode = -1;
     std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
     bool _interactive = true;                             ///< Whether running in interactive mode
+    unsigned _configScriptDepth = 0;                      ///< Nesting depth of config script / command substitution execution
     bool _unusedValueDetection = false;                   ///< Detect unused F# bindings (script mode only)
     bool _lsIcons = true;                                 ///< Show Nerd Font icons in ls output
     bool _lsDirectorySlash = true;                        ///< Append trailing '/' to directory names

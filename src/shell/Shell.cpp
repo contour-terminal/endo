@@ -908,9 +908,8 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
     auto savedProgram = std::move(_currentProgram);
     auto* const savedRunner = _runner;
 
-    auto const savedInteractive = _interactive;
     auto const savedUnusedDetection = _unusedValueDetection;
-    _interactive = false;
+    ++_configScriptDepth;
     _unusedValueDetection = false;
     int result = 0;
     try
@@ -922,7 +921,7 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
         _tty.writeToStderr(std::format("endo: warning: error executing {}: {}\n", sourceName, e.what()));
         result = 1;
     }
-    _interactive = savedInteractive;
+    --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
     // Restore outer program and runner so the calling VM can resume safely
@@ -1052,12 +1051,11 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     BufferingConsoleReport bufferingReport;
     bufferingReport.setSourceText(expr);
 
-    auto const savedInteractive = _interactive;
     auto const savedUnusedDetection = _unusedValueDetection;
-    _interactive = false;
+    ++_configScriptDepth;
     _unusedValueDetection = false;
     (void) execute(expr, bufferingReport);
-    _interactive = savedInteractive;
+    --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
     _currentPipelineBuilder.defaultStdoutFd = savedStdout;
@@ -1447,7 +1445,7 @@ int Shell::execute(std::string const& lineBuffer,
             parser.setKnownFSharpFunctions(std::move(names));
             parser.setKnownVariadicFunctions(std::move(variadicNames));
         }
-        parser.setAutoDisplay(_interactive);
+        parser.setAutoDisplay(_interactive && _configScriptDepth == 0);
         auto rootNode = parser.parse();
 
         // Check for parser errors

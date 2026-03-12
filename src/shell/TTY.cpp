@@ -274,7 +274,7 @@ void TestPTY::writeToStderr(std::string_view str) const
 
 bool TestPTY::isStderrTerminal() const noexcept
 {
-    return isatty(_ptySlave) != 0;
+    return false;
 }
 
 void TestPTY::writeToStdin(std::string_view str) const
