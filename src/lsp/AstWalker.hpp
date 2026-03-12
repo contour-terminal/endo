@@ -3,25 +3,27 @@
 
 #include <endo-language/ast/AST.hpp>
 
+#include <cstdint>
+
 namespace endo::lsp
 {
 
 /// Controls which AST nodes the visitor is invoked on.
-enum class WalkMode
+enum class WalkMode : std::uint8_t
 {
     All,          ///< Visit every node (for selection ranges).
     FoldableOnly, ///< Skip pass-through and leaf-only nodes (for folding ranges).
 };
 
 template <WalkMode Mode = WalkMode::All, typename Visitor>
-void walkExpr(ast::Expr const& expr, Visitor&& visitor);
+void walkExpr(ast::Expr const& expr, Visitor const& visitor);
 
 /// Walks an AST statement tree, calling visitor(node.location) at each node.
 /// In FoldableOnly mode, only foldable constructs (LetBinding, ForIn, While, type defs) are visited.
 /// @param node    The statement node to walk.
 /// @param visitor Callable accepting std::optional<SourceLocationRange> const&.
 template <WalkMode Mode = WalkMode::All, typename Visitor>
-void walkStatement(ast::Node const& node, Visitor&& visitor)
+void walkStatement(ast::Node const& node, Visitor const& visitor)
 {
     if constexpr (Mode == WalkMode::All)
         visitor(node.location);
@@ -74,7 +76,7 @@ void walkStatement(ast::Node const& node, Visitor&& visitor)
 /// @param expr    The expression node to walk.
 /// @param visitor Callable accepting std::optional<SourceLocationRange> const&.
 template <WalkMode Mode, typename Visitor>
-void walkExpr(ast::Expr const& expr, Visitor&& visitor)
+void walkExpr(ast::Expr const& expr, Visitor const& visitor)
 {
     if constexpr (Mode == WalkMode::All)
         visitor(expr.location);
