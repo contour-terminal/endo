@@ -1,4 +1,5 @@
 add_library(tui
+    SgrBuilder.hpp SgrBuilder.cpp
     Box.cpp
     Buffer.cpp
     Canvas.cpp

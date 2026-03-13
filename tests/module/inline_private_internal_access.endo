@@ -4,4 +4,5 @@ module Math =
     let private sq (x: int): int = x * x
     let cube (x: int): int = (sq x) * x
 
+
 print (Math.cube 3)

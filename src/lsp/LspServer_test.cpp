@@ -2852,6 +2852,27 @@ TEST_CASE("FoldingRange.multi_line_comment", "[lsp][folding]")
     CHECK(found);
 }
 
+TEST_CASE("FoldingRange.no_spurious_fold_for_passthrough_nodes", "[lsp][folding]")
+{
+    auto countRegionFolds = [](std::string const& src) {
+        auto ranges = computeFoldingRanges(src);
+        auto regionCount = 0;
+        for (auto const& r: ranges)
+        {
+            if (r.kind == "region")
+                regionCount++;
+        }
+        return regionCount;
+    };
+
+    // Multi-line function: only LetBindingStmt should fold
+    CHECK(countRegionFolds("let f x =\n  x + 1") == 1);
+    // Nested: LetBindingStmt + MatchExpr
+    CHECK(countRegionFolds("let f x =\n  match x with\n  | 0 -> 1\n  | _ -> 2") == 2);
+    // Two functions: two LetBindingStmts
+    CHECK(countRegionFolds("let f x =\n  x + 1\nlet g y =\n  y + 2") == 2);
+}
+
 TEST_CASE("E2E.foldingRange request returns array", "[lsp][e2e][folding]")
 {
     auto responses = runSession({

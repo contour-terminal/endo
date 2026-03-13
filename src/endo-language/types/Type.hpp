@@ -282,6 +282,68 @@ namespace types
 
 } // namespace types
 
+/// Recursively transforms a type tree. The visitor is called for each node;
+/// if it returns a non-null TypePtr, that replaces the subtree (no further recursion).
+/// Otherwise the node is reconstructed with transformed children.
+/// @param type    The type tree to transform.
+/// @param visitor Function called on each node. Returns replacement or nullptr to recurse.
+/// @return The transformed type tree.
+TypePtr transformType(TypePtr const& type, std::function<TypePtr(TypePtr const&)> const& visitor);
+
+/// Folds over all nodes in a type tree, accumulating a result.
+/// The fold function is called on the current node first, then children are recursed into.
+/// @param type The type tree to fold over.
+/// @param init Initial accumulator value.
+/// @param f    Fold function: (accumulator, current node) -> new accumulator.
+/// @return The final accumulator value.
+template <typename Acc, typename F>
+Acc foldType(TypePtr const& type, Acc init, F const& f)
+{
+    auto acc = f(std::move(init), type);
+
+    if (auto const* fn = type->asFunction())
+    {
+        acc = foldType<Acc>(fn->paramType, std::move(acc), f);
+        acc = foldType<Acc>(fn->returnType, std::move(acc), f);
+    }
+    else if (auto const* lst = type->asList())
+    {
+        acc = foldType<Acc>(lst->elementType, std::move(acc), f);
+    }
+    else if (auto const* tup = type->asTuple())
+    {
+        for (auto const& elem: tup->elementTypes)
+            acc = foldType<Acc>(elem, std::move(acc), f);
+    }
+    else if (auto const* opt = type->asOption())
+    {
+        acc = foldType<Acc>(opt->innerType, std::move(acc), f);
+    }
+    else if (auto const* res = type->asResult())
+    {
+        acc = foldType<Acc>(res->okType, std::move(acc), f);
+        acc = foldType<Acc>(res->errorType, std::move(acc), f);
+    }
+    else if (auto const* rec = type->asRecord())
+    {
+        for (auto const& field: rec->fields)
+            acc = foldType<Acc>(field.type, std::move(acc), f);
+    }
+    else if (auto const* un = type->asUnion())
+    {
+        for (auto const& c: un->cases)
+            if (c.payloadType)
+                acc = foldType<Acc>(*c.payloadType, std::move(acc), f);
+    }
+    else if (auto const* app = type->asTypeApp())
+    {
+        for (auto const& arg: app->args)
+            acc = foldType<Acc>(arg, std::move(acc), f);
+    }
+
+    return acc;
+}
+
 /// Map from TypeVarId to display name (e.g., for parser-assigned type variables).
 using TypeVarNameMap = std::unordered_map<TypeVarId, std::string>;
 

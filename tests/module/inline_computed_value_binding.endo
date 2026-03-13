@@ -3,4 +3,5 @@
 module Config =
     let value = 2 + 3
 
+
 print (Config.value + Config.value)

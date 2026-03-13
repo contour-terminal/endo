@@ -6,6 +6,7 @@
 #include <optional>
 
 #include <agent/providers/OpenAiProvider.hpp>
+#include <agent/providers/ProviderUtils.hpp>
 
 using namespace std::string_view_literals;
 
@@ -218,31 +219,7 @@ auto OpenAiProvider::parseSseData(std::string_view data) -> std::optional<nlohma
 
 auto OpenAiProvider::mapHttpError(long statusCode, std::string const& body) -> ProviderError
 {
-    auto message = std::format("HTTP {}", statusCode);
-
-    // Try to extract error message from response body.
-    auto const parsed = nlohmann::json::parse(body, nullptr, false);
-    if (!parsed.is_discarded() && parsed.contains("error") && parsed["error"].contains("message"))
-        message = parsed["error"]["message"].get<std::string>();
-
-    if (statusCode == 401)
-        return ProviderError { .code = ProviderErrorCode::AuthenticationError,
-                               .message = std::move(message),
-                               .httpStatus = static_cast<int>(statusCode) };
-
-    if (statusCode == 429)
-        return ProviderError { .code = ProviderErrorCode::RateLimitError,
-                               .message = std::move(message),
-                               .httpStatus = static_cast<int>(statusCode) };
-
-    if (statusCode >= 500)
-        return ProviderError { .code = ProviderErrorCode::ServerError,
-                               .message = std::move(message),
-                               .httpStatus = static_cast<int>(statusCode) };
-
-    return ProviderError { .code = ProviderErrorCode::Unknown,
-                           .message = std::move(message),
-                           .httpStatus = static_cast<int>(statusCode) };
+    return mapHttpStatusToProviderError(statusCode, extractJsonErrorMessage(statusCode, body));
 }
 
 auto OpenAiProvider::generate(std::span<ChatMessage const> messages,

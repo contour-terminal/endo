@@ -40,72 +40,14 @@ TypePtr Substitution::apply(TypePtr const& type) const
     if (_mappings.empty())
         return type;
 
-    if (auto* tv = type->asTypeVar())
-    {
-        auto it = _mappings.find(tv->id);
-        if (it != _mappings.end())
+    return transformType(type, [this](TypePtr const& t) -> TypePtr {
+        if (auto const* tv = t->asTypeVar())
         {
-            // Apply recursively in case the result contains more type variables
-            return apply(it->second);
+            if (auto it = _mappings.find(tv->id); it != _mappings.end())
+                return apply(it->second);
         }
-        return type;
-    }
-    else if (auto* fn = type->asFunction())
-    {
-        return types::function(apply(fn->paramType), apply(fn->returnType));
-    }
-    else if (auto* lst = type->asList())
-    {
-        return types::list(apply(lst->elementType));
-    }
-    else if (auto* tup = type->asTuple())
-    {
-        std::vector<TypePtr> newElements;
-        newElements.reserve(tup->elementTypes.size());
-        for (auto const& elem: tup->elementTypes)
-            newElements.push_back(apply(elem));
-        return types::tuple(std::move(newElements));
-    }
-    else if (auto* opt = type->asOption())
-    {
-        return types::option(apply(opt->innerType));
-    }
-    else if (auto* res = type->asResult())
-    {
-        return types::result(apply(res->okType), apply(res->errorType));
-    }
-    else if (auto* rec = type->asRecord())
-    {
-        std::vector<RecordField> newFields;
-        newFields.reserve(rec->fields.size());
-        for (auto const& field: rec->fields)
-            newFields.push_back({ field.name, apply(field.type) });
-        return types::record(rec->name, std::move(newFields));
-    }
-    else if (auto* un = type->asUnion())
-    {
-        std::vector<UnionCase> newCases;
-        newCases.reserve(un->cases.size());
-        for (auto const& c: un->cases)
-        {
-            if (c.payloadType)
-                newCases.push_back({ c.name, apply(*c.payloadType) });
-            else
-                newCases.push_back({ c.name, std::nullopt });
-        }
-        return types::unionType(un->name, std::move(newCases));
-    }
-    else if (auto* app = type->asTypeApp())
-    {
-        std::vector<TypePtr> newArgs;
-        newArgs.reserve(app->args.size());
-        for (auto const& arg: app->args)
-            newArgs.push_back(apply(arg));
-        return types::typeApp(app->name, std::move(newArgs));
-    }
-
-    // Primitives are unchanged
-    return type;
+        return nullptr;
+    });
 }
 
 TypeScheme Substitution::apply(TypeScheme const& scheme) const
@@ -225,111 +167,21 @@ TypeError TypeError::unboundTypeVar(TypeVarId varId)
 
 bool occursIn(TypeVarId varId, TypePtr const& type)
 {
-    if (auto* tv = type->asTypeVar())
-    {
-        return tv->id == varId;
-    }
-    else if (auto* fn = type->asFunction())
-    {
-        return occursIn(varId, fn->paramType) || occursIn(varId, fn->returnType);
-    }
-    else if (auto* lst = type->asList())
-    {
-        return occursIn(varId, lst->elementType);
-    }
-    else if (auto* tup = type->asTuple())
-    {
-        for (auto const& elem: tup->elementTypes)
-            if (occursIn(varId, elem))
-                return true;
-        return false;
-    }
-    else if (auto* opt = type->asOption())
-    {
-        return occursIn(varId, opt->innerType);
-    }
-    else if (auto* res = type->asResult())
-    {
-        return occursIn(varId, res->okType) || occursIn(varId, res->errorType);
-    }
-    else if (auto* rec = type->asRecord())
-    {
-        for (auto const& field: rec->fields)
-            if (occursIn(varId, field.type))
-                return true;
-        return false;
-    }
-    else if (auto* un = type->asUnion())
-    {
-        for (auto const& c: un->cases)
-            if (c.payloadType && occursIn(varId, *c.payloadType))
-                return true;
-        return false;
-    }
-    else if (auto* app = type->asTypeApp())
-    {
-        for (auto const& arg: app->args)
-            if (occursIn(varId, arg))
-                return true;
-        return false;
-    }
-
-    return false;
+    return foldType<bool>(type, false, [varId](bool found, TypePtr const& t) {
+        return found || (t->isTypeVar() && t->asTypeVar()->id == varId);
+    });
 }
 
 std::vector<TypeVarId> collectTypeVars(TypePtr const& type)
 {
-    std::vector<TypeVarId> result;
-
-    std::function<void(TypePtr const&)> collect = [&](TypePtr const& t) {
-        if (auto* tv = t->asTypeVar())
+    return foldType<std::vector<TypeVarId>>(type, {}, [](std::vector<TypeVarId> acc, TypePtr const& t) {
+        if (auto const* tv = t->asTypeVar())
         {
-            if (std::ranges::find(result, tv->id) == result.end())
-                result.push_back(tv->id);
+            if (std::ranges::find(acc, tv->id) == acc.end())
+                acc.push_back(tv->id);
         }
-        else if (auto* fn = t->asFunction())
-        {
-            collect(fn->paramType);
-            collect(fn->returnType);
-        }
-        else if (auto* lst = t->asList())
-        {
-            collect(lst->elementType);
-        }
-        else if (auto* tup = t->asTuple())
-        {
-            for (auto const& elem: tup->elementTypes)
-                collect(elem);
-        }
-        else if (auto* opt = t->asOption())
-        {
-            collect(opt->innerType);
-        }
-        else if (auto* res = t->asResult())
-        {
-            collect(res->okType);
-            collect(res->errorType);
-        }
-        else if (auto* rec = t->asRecord())
-        {
-            for (auto const& field: rec->fields)
-                collect(field.type);
-        }
-        else if (auto* un = t->asUnion())
-        {
-            for (auto const& c: un->cases)
-                if (c.payloadType)
-                    collect(*c.payloadType);
-        }
-        else if (auto* app = t->asTypeApp())
-        {
-            for (auto const& arg: app->args)
-                collect(arg);
-        }
-    };
-
-    collect(type);
-    return result;
+        return acc;
+    });
 }
 
 // Helper for unifying type variables

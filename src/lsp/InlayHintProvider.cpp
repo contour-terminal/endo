@@ -2,7 +2,6 @@
 #include "InlayHintProvider.hpp"
 
 #include <endo-language/ast/AST.hpp>
-#include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 #include <endo-language/types/TypeEnv.hpp>
@@ -13,6 +12,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include "LspUtils.hpp"
 
 namespace endo::lsp
 {
@@ -42,64 +43,8 @@ namespace
     {
         if (!type)
             return true;
-        if (type->isTypeVar())
-            return true;
-        if (auto const* fn = type->asFunction())
-            return containsTypeVar(fn->paramType) || containsTypeVar(fn->returnType);
-        if (auto const* lst = type->asList())
-            return containsTypeVar(lst->elementType);
-        if (auto const* tup = type->asTuple())
-        {
-            for (auto const& elem: tup->elementTypes)
-                if (containsTypeVar(elem))
-                    return true;
-            return false;
-        }
-        if (auto const* opt = type->asOption())
-            return containsTypeVar(opt->innerType);
-        if (auto const* res = type->asResult())
-            return containsTypeVar(res->okType) || containsTypeVar(res->errorType);
-        if (auto const* rec = type->asRecord())
-        {
-            for (auto const& field: rec->fields)
-                if (containsTypeVar(field.type))
-                    return true;
-            return false;
-        }
-        if (auto const* un = type->asUnion())
-        {
-            for (auto const& c: un->cases)
-                if (c.payloadType && containsTypeVar(*c.payloadType))
-                    return true;
-            return false;
-        }
-        return false;
-    }
-
-    /// Token entry for position lookup.
-    struct TokenEntry
-    {
-        Token token;
-        std::string literal;
-        SourceLocationRange range;
-    };
-
-    /// Tokenizes the source and returns all tokens.
-    [[nodiscard]] std::vector<TokenEntry> tokenize(std::string const& source)
-    {
-        std::vector<TokenEntry> tokens;
-        auto lexer = Lexer { std::make_unique<StringSource>(source) };
-        lexer.enterFSharpExpr();
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.push_back(TokenEntry {
-                .token = lexer.currentToken(),
-                .literal = lexer.currentLiteral(),
-                .range = lexer.currentRange(),
-            });
-            lexer.nextToken();
-        }
-        return tokens;
+        return foldType<bool>(
+            type, false, [](bool found, TypePtr const& t) { return found || t->isTypeVar(); });
     }
 
     /// Returns a short display string for a type, using just the type name for named records/unions.

@@ -10016,54 +10016,12 @@ void IRGenerator::visit(ast::OptionDefaultExpr const& node)
 {
     TRACE_SCOPE("visit(OptionDefaultExpr)");
 
-    // The ?| operator unwraps an Option value with a fallback:
-    // - If the value is Some (tag=1), extract and return the inner value
-    // - If the value is None (tag=0), evaluate and return the default expression
-
-    // Evaluate the option operand
-    CoreVM::Value* obj = codegen(node.option.get());
+    // The ?| operator unwraps an Option value with a fallback — same pattern
+    // as Option.defaultValue, so delegate to the shared implementation.
+    auto* obj = codegen(node.option.get());
     if (!obj)
         return;
-
-    // Store the object in an alloca so we can reload it in successor blocks.
-    auto* objStorage = createAllocaInEntryBlock(obj->type(), "optdefault.obj");
-    _builder.createStore(objStorage, obj, "optdefault.obj.store");
-
-    // Extract tag using OGETTAG
-    auto* tag = _builder.createObjGetTag(obj, "optdefault.tag");
-
-    // Check if Some (tag == 1)
-    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optdefault.is_some");
-
-    // Create blocks
-    auto* someBlock = _builder.createBlock("optdefault.some");
-    auto* noneBlock = _builder.createBlock("optdefault.none");
-    auto* continueBlock = _builder.createBlock("optdefault.continue");
-
-    _builder.createCondBr(isSome, someBlock, noneBlock);
-
-    // None path first: evaluate default expression to get concrete type for deferred alloca
-    _builder.setInsertPoint(noneBlock);
-    auto* defaultVal = codegen(node.defaultValue.get());
-    if (!defaultVal)
-        return;
-
-    // Create result storage with default expression's concrete type (deferred alloca pattern)
-    auto* resultStorage = createAllocaInEntryBlock(defaultVal->type(), "optdefault.result");
-    _builder.createStore(resultStorage, defaultVal, "optdefault.none.store");
-    _builder.createBr(continueBlock);
-
-    // Some path: reload object and extract inner value using OGETSLOT
-    _builder.setInsertPoint(someBlock);
-    auto* objReload = _builder.createLoad(objStorage, "optdefault.obj.reload");
-    auto* innerValue =
-        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optdefault.inner");
-    _builder.createStore(resultStorage, innerValue, "optdefault.some.store");
-    _builder.createBr(continueBlock);
-
-    // Continue with result
-    _builder.setInsertPoint(continueBlock);
-    _result = _builder.createLoad(resultStorage, "optdefault.result.load");
+    generateOptionDefaultValueWithValue(node.defaultValue.get(), obj);
 }
 
 void IRGenerator::visit(ast::TryWithExpr const& node)

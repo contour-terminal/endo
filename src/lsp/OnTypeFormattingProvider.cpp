@@ -2,8 +2,9 @@
 #include "OnTypeFormattingProvider.hpp"
 
 #include <algorithm>
-#include <sstream>
 #include <string>
+
+#include "LspUtils.hpp"
 
 namespace endo::lsp
 {
@@ -49,18 +50,6 @@ namespace
         return false;
     }
 
-    /// Splits source into lines.
-    [[nodiscard]] std::vector<std::string> splitLines(std::string const& text)
-    {
-        std::vector<std::string> lines;
-        std::istringstream stream(text);
-        std::string line;
-        while (std::getline(stream, line))
-            lines.push_back(line);
-        if (lines.empty())
-            lines.emplace_back();
-        return lines;
-    }
 } // namespace
 
 std::vector<TextEdit> computeOnTypeFormatting(std::string const& source,

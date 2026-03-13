@@ -11,6 +11,7 @@
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tracing/AgentTracer.hpp>
 #include <agent/tracing/TraceEvent.hpp>
+#include <platform/StringUtils.hpp>
 
 namespace endo::agent
 {
@@ -26,15 +27,6 @@ namespace
         auto const omitted = result.content.size() - maxSize;
         result.content.resize(maxSize);
         result.content += std::format("\n\n[truncated -- {} bytes omitted]", omitted);
-    }
-
-    /// @brief Trims leading and trailing whitespace from @p str in place.
-    void trimInPlace(std::string& str)
-    {
-        if (auto const start = str.find_first_not_of(" \t\n\r"); start != std::string::npos)
-            str = str.substr(start, str.find_last_not_of(" \t\n\r") - start + 1);
-        else
-            str.clear();
     }
 
     /// Returns the current UTC time as an ISO 8601 timestamp string.
@@ -68,7 +60,7 @@ auto AgentSession::processMessage(std::string_view userMessage,
     -> std::expected<std::string, AgentError>
 {
     auto trimmedMessage = std::string(userMessage);
-    trimInPlace(trimmedMessage);
+    endo::platform::trimInPlace(trimmedMessage);
     if (trimmedMessage.empty())
         return std::unexpected(AgentError {
             .code = AgentErrorCode::ProviderError,
@@ -313,7 +305,7 @@ auto AgentSession::processMessageForPlan(
     submitPlanTool->clearParsedPlan();
 
     auto trimmedPlanMessage = std::string(userMessage);
-    trimInPlace(trimmedPlanMessage);
+    endo::platform::trimInPlace(trimmedPlanMessage);
     if (trimmedPlanMessage.empty())
         return std::unexpected(AgentError {
             .code = AgentErrorCode::ProviderError,

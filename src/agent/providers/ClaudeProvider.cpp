@@ -6,6 +6,7 @@
 #include <format>
 
 #include <agent/auth/OAuthFlow.hpp>
+#include <agent/providers/ProviderUtils.hpp>
 
 namespace endo::agent
 {
@@ -540,22 +541,7 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
 auto ClaudeProvider::mapHttpError(long statusCode, std::string message) -> ProviderError
 {
-    if (statusCode == 401)
-        return ProviderError { .code = ProviderErrorCode::AuthenticationError,
-                               .message = std::move(message),
-                               .httpStatus = 401 };
-    if (statusCode == 429)
-        return ProviderError { .code = ProviderErrorCode::RateLimitError,
-                               .message = std::move(message),
-                               .httpStatus = 429 };
-    if (statusCode >= 500)
-        return ProviderError { .code = ProviderErrorCode::ServerError,
-                               .message = std::move(message),
-                               .httpStatus = static_cast<int>(statusCode) };
-
-    return ProviderError { .code = ProviderErrorCode::Unknown,
-                           .message = std::move(message),
-                           .httpStatus = static_cast<int>(statusCode) };
+    return mapHttpStatusToProviderError(statusCode, std::move(message));
 }
 
 } // namespace endo::agent

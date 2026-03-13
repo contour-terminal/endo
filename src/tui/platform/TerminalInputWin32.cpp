@@ -4,6 +4,8 @@
 
 #if defined(_WIN32)
 
+    #include <tui/platform/Win32Utf.hpp>
+
     #include <array>
     #include <string_view>
 
@@ -13,33 +15,6 @@
 
 namespace tui
 {
-
-namespace
-{
-    /// @brief Appends a UTF-16 code unit as UTF-8 bytes to a string.
-    ///
-    /// Handles BMP characters (U+0000..U+FFFF). Surrogate pairs are not handled
-    /// here since Windows console input events deliver one code unit at a time.
-    void appendUtf16AsUtf8(std::string& output, wchar_t codeUnit)
-    {
-        auto const cp = static_cast<uint32_t>(codeUnit);
-        if (cp < 0x80)
-        {
-            output += static_cast<char>(cp);
-        }
-        else if (cp < 0x800)
-        {
-            output += static_cast<char>(0xC0 | (cp >> 6));
-            output += static_cast<char>(0x80 | (cp & 0x3F));
-        }
-        else
-        {
-            output += static_cast<char>(0xE0 | (cp >> 12));
-            output += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            output += static_cast<char>(0x80 | (cp & 0x3F));
-        }
-    }
-} // namespace
 
 TerminalInput::TerminalInput() = default;
 

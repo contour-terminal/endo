@@ -4,6 +4,7 @@
 module Math =
     let square (x: int): int = x * x
 
+
 open Math
 open Math
 print (square 4)

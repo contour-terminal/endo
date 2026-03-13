@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/Canvas.hpp>
+#include <tui/GhostTextHelper.hpp>
 #include <tui/ImageLoader.hpp>
 #include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
+#include <tui/TimerUtils.hpp>
 #include <tui/completer/CompletionProvider.hpp>
 
 #include <format>
@@ -622,35 +624,10 @@ void AgentInputComponent::updateGhostText()
         return;
     }
 
-    auto const text = _inputField.text();
-    auto const cursor = _inputField.cursor();
-
-    // Only show ghost text when cursor is at end of input.
-    if (cursor != text.size())
-    {
-        _inputField.clearGhostText();
-        return;
-    }
-
-    // Check suggest cache — skip expensive completer call if text unchanged.
-    if (text == _suggestCacheText)
-    {
-        if (_suggestCacheResult)
-            _inputField.setGhostText(*_suggestCacheResult);
-        else
-            _inputField.clearGhostText();
-        return;
-    }
-
-    // Cache miss — call completer and store result.
-    auto suggestion = _completer.suggest(text, cursor);
-    _suggestCacheText = std::string(text);
-    _suggestCacheResult = suggestion;
-
-    if (suggestion)
-        _inputField.setGhostText(*suggestion);
-    else
-        _inputField.clearGhostText();
+    tui::updateGhostText(_inputField,
+                         _suggestCacheText,
+                         _suggestCacheResult,
+                         [this](auto const& text, auto cursor) { return _completer.suggest(text, cursor); });
 }
 
 void AgentInputComponent::flushDeferredUpdates()
@@ -681,28 +658,14 @@ void AgentInputComponent::flushDeferredUpdates()
 
 int AgentInputComponent::ghostTextTimeoutMs() const
 {
-    if (!_ghostTextPendingSince)
-        return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
-    auto const remaining = GhostTextDebounceMs - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
 }
 
 int AgentInputComponent::escapeHintTimeoutMs() const
 {
     if (!_escapeHintVisible)
         return -1;
-
-    auto const elapsed = std::chrono::steady_clock::now() - _lastEscapeTime;
-    auto const remaining = EscapeHintTimeout - elapsed;
-    if (remaining <= std::chrono::milliseconds::zero())
-        return 0;
-
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+    return tui::remainingMs(_lastEscapeTime, EscapeHintTimeout);
 }
 
 void AgentInputComponent::restoreFromEscapeHint()

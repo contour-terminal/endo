@@ -133,76 +133,70 @@ TypePtr TypeScheme::instantiate(std::function<TypeVarId()> const& freshVarGen) c
     // Create a mapping from old type variable IDs to fresh ones
     std::unordered_map<TypeVarId, TypeVarId> substitution;
     for (auto varId: quantifiedVars)
-    {
         substitution[varId] = freshVarGen();
+
+    return transformType(type, [&](TypePtr const& t) -> TypePtr {
+        if (auto const* tv = t->asTypeVar())
+        {
+            if (auto it = substitution.find(tv->id); it != substitution.end())
+                return types::typeVar(it->second);
+        }
+        return nullptr;
+    });
+}
+
+TypePtr transformType(TypePtr const& type, std::function<TypePtr(TypePtr const&)> const& visitor)
+{
+    if (auto result = visitor(type))
+        return result;
+
+    if (auto const* fn = type->asFunction())
+        return types::function(transformType(fn->paramType, visitor), transformType(fn->returnType, visitor));
+    if (auto const* lst = type->asList())
+        return types::list(transformType(lst->elementType, visitor));
+    if (auto const* tup = type->asTuple())
+    {
+        std::vector<TypePtr> newElements;
+        newElements.reserve(tup->elementTypes.size());
+        for (auto const& elem: tup->elementTypes)
+            newElements.push_back(transformType(elem, visitor));
+        return types::tuple(std::move(newElements));
+    }
+    if (auto const* opt = type->asOption())
+        return types::option(transformType(opt->innerType, visitor));
+    if (auto const* res = type->asResult())
+        return types::result(transformType(res->okType, visitor), transformType(res->errorType, visitor));
+    if (auto const* rec = type->asRecord())
+    {
+        std::vector<RecordField> newFields;
+        newFields.reserve(rec->fields.size());
+        for (auto const& field: rec->fields)
+            newFields.push_back({ field.name, transformType(field.type, visitor) });
+        return types::record(rec->name, std::move(newFields));
+    }
+    if (auto const* un = type->asUnion())
+    {
+        std::vector<UnionCase> newCases;
+        newCases.reserve(un->cases.size());
+        for (auto const& c: un->cases)
+        {
+            if (c.payloadType)
+                newCases.push_back({ c.name, transformType(*c.payloadType, visitor) });
+            else
+                newCases.push_back({ c.name, std::nullopt });
+        }
+        return types::unionType(un->name, std::move(newCases));
+    }
+    if (auto const* app = type->asTypeApp())
+    {
+        std::vector<TypePtr> newArgs;
+        newArgs.reserve(app->args.size());
+        for (auto const& arg: app->args)
+            newArgs.push_back(transformType(arg, visitor));
+        return types::typeApp(app->name, std::move(newArgs));
     }
 
-    // Helper to substitute type variables recursively
-    std::function<TypePtr(TypePtr const&)> substitute = [&](TypePtr const& t) -> TypePtr {
-        if (auto* tv = t->asTypeVar())
-        {
-            auto it = substitution.find(tv->id);
-            if (it != substitution.end())
-                return types::typeVar(it->second);
-            return t;
-        }
-        else if (auto* fn = t->asFunction())
-        {
-            return types::function(substitute(fn->paramType), substitute(fn->returnType));
-        }
-        else if (auto* lst = t->asList())
-        {
-            return types::list(substitute(lst->elementType));
-        }
-        else if (auto* tup = t->asTuple())
-        {
-            std::vector<TypePtr> newElements;
-            newElements.reserve(tup->elementTypes.size());
-            for (auto const& elem: tup->elementTypes)
-                newElements.push_back(substitute(elem));
-            return types::tuple(std::move(newElements));
-        }
-        else if (auto* opt = t->asOption())
-        {
-            return types::option(substitute(opt->innerType));
-        }
-        else if (auto* res = t->asResult())
-        {
-            return types::result(substitute(res->okType), substitute(res->errorType));
-        }
-        else if (auto* rec = t->asRecord())
-        {
-            std::vector<RecordField> newFields;
-            newFields.reserve(rec->fields.size());
-            for (auto const& field: rec->fields)
-                newFields.push_back({ field.name, substitute(field.type) });
-            return types::record(rec->name, std::move(newFields));
-        }
-        else if (auto* un = t->asUnion())
-        {
-            std::vector<UnionCase> newCases;
-            for (auto const& c: un->cases)
-            {
-                if (c.payloadType)
-                    newCases.push_back({ c.name, substitute(*c.payloadType) });
-                else
-                    newCases.push_back({ c.name, std::nullopt });
-            }
-            return types::unionType(un->name, std::move(newCases));
-        }
-        else if (auto* app = t->asTypeApp())
-        {
-            std::vector<TypePtr> newArgs;
-            newArgs.reserve(app->args.size());
-            for (auto const& arg: app->args)
-                newArgs.push_back(substitute(arg));
-            return types::typeApp(app->name, std::move(newArgs));
-        }
-        // Primitive types don't contain type variables
-        return t;
-    };
-
-    return substitute(type);
+    return type; // Primitives and TypeVars unchanged
 }
 
 // Factory functions
@@ -318,8 +312,7 @@ namespace types
 
     TypePtr typeApp(std::string name, std::vector<TypePtr> args)
     {
-        return std::make_shared<Type>(
-            Type { TypeApp { .name = std::move(name), .args = std::move(args) } });
+        return std::make_shared<Type>(Type { TypeApp { .name = std::move(name), .args = std::move(args) } });
     }
 
     TypeScheme scheme(std::vector<TypeVarId> quantified, TypePtr type)

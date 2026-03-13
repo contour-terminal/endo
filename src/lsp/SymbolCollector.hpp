@@ -109,4 +109,21 @@ struct HighlightEntry
 /// @return Vector of highlight entries (may be empty)
 [[nodiscard]] std::vector<HighlightEntry> findHighlights(std::string const& source, Position position);
 
+/// Maps a SymbolCategory to the corresponding LSP SymbolKind.
+[[nodiscard]] inline SymbolKind categoryToSymbolKind(SymbolCategory category)
+{
+    switch (category)
+    {
+        case SymbolCategory::Variable: return SymbolKind::Variable;
+        case SymbolCategory::Function: return SymbolKind::Function;
+        case SymbolCategory::Parameter: return SymbolKind::Variable;
+        case SymbolCategory::RecordType: return SymbolKind::Struct;
+        case SymbolCategory::RecordField: return SymbolKind::Field;
+        case SymbolCategory::UnionType: return SymbolKind::Enum;
+        case SymbolCategory::UnionVariant: return SymbolKind::EnumMember;
+        case SymbolCategory::Property: return SymbolKind::Property;
+    }
+    return SymbolKind::Variable; // unreachable
+}
+
 } // namespace endo::lsp

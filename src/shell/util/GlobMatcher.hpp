@@ -19,7 +19,43 @@ namespace endo
 [[nodiscard]] std::vector<std::string> expandRecursiveGlob(std::string_view pattern);
 
 /// Matches text against a shell glob pattern (for parameter expansion).
-[[nodiscard]] bool globMatch(std::string_view text, std::string_view pattern);
+[[nodiscard]] inline bool globMatch(std::string_view text, std::string_view pattern)
+{
+    auto ti = size_t { 0 };
+    auto pi = size_t { 0 };
+    auto starIdx = std::string_view::npos;
+    auto matchIdx = size_t { 0 };
+
+    while (ti < text.size())
+    {
+        if (pi < pattern.size() && (pattern[pi] == '?' || pattern[pi] == text[ti]))
+        {
+            ++ti;
+            ++pi;
+        }
+        else if (pi < pattern.size() && pattern[pi] == '*')
+        {
+            starIdx = pi;
+            matchIdx = ti;
+            ++pi;
+        }
+        else if (starIdx != std::string_view::npos)
+        {
+            pi = starIdx + 1;
+            ++matchIdx;
+            ti = matchIdx;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    while (pi < pattern.size() && pattern[pi] == '*')
+        ++pi;
+
+    return pi == pattern.size();
+}
 
 /// Finds all prefix lengths of text that match the pattern.
 [[nodiscard]] std::vector<size_t> findPrefixMatches(std::string_view text, std::string_view pattern);
