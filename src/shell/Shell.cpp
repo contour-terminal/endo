@@ -615,8 +615,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         // Add search paths: user modules, then system stdlib
         if (auto const home = _env.get("HOME"); home && !home->empty())
         {
-            auto const userModulesDir =
-                std::filesystem::path(*home) / ".config" / "endo" / "modules";
+            auto const userModulesDir = std::filesystem::path(*home) / ".config" / "endo" / "modules";
             if (std::filesystem::exists(userModulesDir))
                 _fsharpState.moduleLoader->addSearchPath(userModulesDir);
         }
@@ -1106,7 +1105,8 @@ int Shell::run()
         return EXIT_FAILURE;
     }
 
-    loadInitScript();
+    if (!_noProfile)
+        loadInitScript();
     loadCompleters();
     onDirectoryChanged();
 

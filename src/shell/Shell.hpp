@@ -101,6 +101,9 @@ class Shell final: public SignalCallback
     /// Adds an additional module search path (for --module-path CLI option).
     void addModuleSearchPath(std::filesystem::path path);
 
+    /// Disables loading of init.endo profile on startup.
+    void setNoProfile(bool noProfile) noexcept { _noProfile = noProfile; }
+
     /// Set interactive mode (controls prompts, job notifications, etc.)
     void setInteractive(bool interactive);
 
@@ -458,6 +461,7 @@ class Shell final: public SignalCallback
 
     bool _optimize = false;
     bool _checkOnly = false;
+    bool _noProfile = false;
 
     struct PipelineBuilder
     {
@@ -491,10 +495,10 @@ class Shell final: public SignalCallback
     int _exitCode = -1;
     std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
     bool _interactive = true;                             ///< Whether running in interactive mode
-    unsigned _configScriptDepth = 0;                      ///< Nesting depth of config script / command substitution execution
-    bool _unusedValueDetection = false;                   ///< Detect unused F# bindings (script mode only)
-    bool _lsIcons = true;                                 ///< Show Nerd Font icons in ls output
-    bool _lsDirectorySlash = true;                        ///< Append trailing '/' to directory names
+    unsigned _configScriptDepth = 0;    ///< Nesting depth of config script / command substitution execution
+    bool _unusedValueDetection = false; ///< Detect unused F# bindings (script mode only)
+    bool _lsIcons = true;               ///< Show Nerd Font icons in ls output
+    bool _lsDirectorySlash = true;      ///< Append trailing '/' to directory names
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID
     int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise

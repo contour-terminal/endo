@@ -71,6 +71,7 @@ struct ParsedArgs
     std::optional<std::string> agentTracePath; ///< Agent trace file path (nullopt = disabled).
     std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
     std::vector<std::string_view> modulePaths; ///< Additional module search paths (--module-path).
+    bool noProfile = false;                    ///< Skip loading init.endo profile.
 };
 
 ParsedArgs parseArguments(std::span<char const* const> args)
@@ -124,6 +125,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg.starts_with("--log="))
         {
             result.logPatterns = arg.substr(6);
+        }
+        else if (arg == "--no-profile")
+        {
+            result.noProfile = true;
         }
         else if (arg == "--module-path" && i + 1 < args.size())
         {
@@ -339,6 +344,9 @@ int main(int argc, char const* argv[])
 
     if (parsed.unusedDetection)
         shell.setUnusedValueDetection(true);
+
+    if (parsed.noProfile)
+        shell.setNoProfile(true);
 
     // Handle -c command with optional arguments
     if (!parsed.command.empty())

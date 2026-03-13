@@ -612,19 +612,53 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             else if (_knownVariadicFunctions.contains(_lexer.currentLiteral()))
             {
                 // Variadic function at statement level: parse args as shell tokens
-                auto funcName = _lexer.currentLiteral();
+                auto const funcName = _lexer.currentLiteral();
+                auto const funcLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume function name
 
-                std::unique_ptr<ast::Expr> result = std::make_unique<ast::IdentifierExpr>(funcName);
-
-                // Collect arguments in shell tokenization mode (identifiers, flags, paths, etc.)
+                // Collect arguments into a vector first (defer ApplicationExpr construction)
+                std::vector<std::unique_ptr<ast::Expr>> argList;
                 while (isParameterToken())
                 {
                     auto arg = parseParameter();
                     if (!arg)
                         break;
-                    result = std::make_unique<ast::ApplicationExpr>(std::move(result), std::move(arg));
+                    argList.emplace_back(std::move(arg));
                 }
+
+                // Handle shell pipe: fall back to raw command execution in a CallPipeline
+                if (_lexer.currentToken() == Token::Pipe)
+                {
+                    auto* builtinCallProcess = _runtime.find("callproc(Bs)I");
+                    assert(builtinCallProcess != nullptr);
+                    auto call = std::make_unique<ast::ProgramCall>(
+                        *builtinCallProcess,
+                        std::string(funcName),
+                        std::move(argList),
+                        std::vector<std::unique_ptr<ast::InputRedirect>> {},
+                        std::vector<std::unique_ptr<ast::OutputRedirect>> {},
+                        std::vector<std::unique_ptr<ast::HereDocument>> {},
+                        std::vector<std::unique_ptr<ast::HereString>> {});
+                    call->programLocation = funcLoc;
+
+                    std::vector<std::unique_ptr<ast::ProgramCall>> calls;
+                    calls.emplace_back(std::move(call));
+                    while (_lexer.currentToken() == Token::Pipe)
+                    {
+                        _lexer.nextToken();
+                        if (auto nextCall = parseCall(true))
+                            calls.emplace_back(std::move(nextCall));
+                    }
+                    bool const background = _lexer.currentToken() == Token::Ampersand;
+                    if (background)
+                        _lexer.nextToken();
+                    return std::make_unique<ast::CallPipeline>(std::move(calls), background);
+                }
+
+                // No pipe — build ApplicationExpr chain for F# function call (existing behavior)
+                std::unique_ptr<ast::Expr> result = std::make_unique<ast::IdentifierExpr>(funcName);
+                for (auto& arg: argList)
+                    result = std::make_unique<ast::ApplicationExpr>(std::move(result), std::move(arg));
 
                 // Handle trailing |> pipeline
                 if (_lexer.currentToken() == Token::ForwardPipe)

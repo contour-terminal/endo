@@ -33,6 +33,16 @@ export PAGER=less
 !!! tip
     Changes to `init.endo` take effect the next time you start a new Endo session.
 
+To skip loading the startup file entirely, pass `--no-profile` on the command line:
+
+```bash
+endo --no-profile
+endo --no-profile -c 'echo "no init.endo loaded"'
+```
+
+This is useful for debugging, benchmarking, or when a broken `init.endo` prevents the
+shell from starting.
+
 ## Environment Variables
 
 ### Setting Variables
