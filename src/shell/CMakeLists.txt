@@ -170,6 +170,8 @@ add_library(endo-shell STATIC
     commands/JobProvider.hpp
     commands/JobsCommand.hpp
     commands/JobsCommand.cpp
+    commands/BindCommand.hpp
+    commands/BindCommand.cpp
 )
 
 # Platform-specific implementations

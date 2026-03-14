@@ -225,6 +225,8 @@ TEST_CASE("TypeRegistryAdapter.builtinCommandOutputTypes.returns_expected_mappin
     CHECK(types.at("ps") == "ProcessInfo");
     REQUIRE(types.contains("jobs"));
     CHECK(types.at("jobs") == "JobInfo");
+    REQUIRE(types.contains("bind"));
+    CHECK(types.at("bind") == "KeyBindingInfo");
 }
 
 TEST_CASE("TypeRegistryAdapter.builtinCommandOutputTypes.no_spurious_entries", "[completion][adapter]")
@@ -232,7 +234,7 @@ TEST_CASE("TypeRegistryAdapter.builtinCommandOutputTypes.no_spurious_entries", "
     CoreVM::TypeRegistry registry;
     auto types = builtinCommandOutputTypes(registry);
     // Only types with producingCommand should appear
-    CHECK(types.size() == 3);
+    CHECK(types.size() == 4);
     CHECK(!types.contains("DateTime"));
     CHECK(!types.contains("Size"));
     CHECK(!types.contains("Option"));

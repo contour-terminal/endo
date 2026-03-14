@@ -606,6 +606,22 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         _fsharpState.recordTypeFields = endo::builtinRecordFields(registry);
         _fsharpState.moduleFunctions = endo::builtinModuleFunctions(registry);
         _fsharpState.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
+
+        // Auto-register builtin structured commands from TypeRegistry producingCommand
+        for (auto const& type: registry.allTypes())
+        {
+            if (!type->producingCommand.empty())
+            {
+                _fsharpState.structuredCommands[type->producingCommand] = {
+                    .builtinCallbackName = "structured_" + type->producingCommand,
+                    .recordTypeId = type->id,
+                    .recordTypeName = type->name,
+                };
+            }
+        }
+        // ls accepts optional directory argument with default "."
+        if (auto it = _fsharpState.structuredCommands.find("ls"); it != _fsharpState.structuredCommands.end())
+            it->second.defaultStringArg = ".";
     }
 
     // Initialize module loader for import/open support

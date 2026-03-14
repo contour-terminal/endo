@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/commands/BindCommand.hpp>
+#include <shell/output/TableFormatter.hpp>
 #include <shell/util/CommandResolver.hpp>
 
 #include <tui/MarkdownRenderer.hpp>
@@ -27,14 +29,18 @@ void Shell::builtinBind(CoreVM::Params& context)
             args.push_back(i);
     }
 
-    // No arguments: list all bindings
+    // No arguments: list all bindings as structured table
     if (args.empty())
     {
-        auto const& bindings = prompt.keyBindings().bindings();
-        for (auto const& [chord, action]: bindings)
-        {
-            _tty.writeToStdout(std::format("{}\t{}\n", chord.toString(), tui::editActionToString(action)));
-        }
+        BindCommand cmd(prompt.keyBindings());
+        auto* list = cmd.execute(*_runner);
+
+        auto const useColor = _tty.isTerminal();
+        TableConfig config;
+        config.style = useColor ? TableStyle::Bordered : TableStyle::Plain;
+        config.useColor = useColor;
+        _tty.writeToStdout(formatRecordTable(list, _runner, config));
+
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;
@@ -79,11 +85,15 @@ void Shell::builtinBind(CoreVM::Params& context)
     if (args[0] == "-l" || args[0] == "--list")
     {
         // List bindings (same as no arguments)
-        auto const& bindings = prompt.keyBindings().bindings();
-        for (auto const& [chord, action]: bindings)
-        {
-            _tty.writeToStdout(std::format("{}\t{}\n", chord.toString(), tui::editActionToString(action)));
-        }
+        BindCommand cmd(prompt.keyBindings());
+        auto* list = cmd.execute(*_runner);
+
+        auto const useColor = _tty.isTerminal();
+        TableConfig config;
+        config.style = useColor ? TableStyle::Bordered : TableStyle::Plain;
+        config.useColor = useColor;
+        _tty.writeToStdout(formatRecordTable(list, _runner, config));
+
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;

@@ -204,8 +204,9 @@ namespace BuiltinTypeId
     constexpr uint16_t FileHandle = 16;
     constexpr uint16_t Callable = 17;
     constexpr uint16_t Path = 18;
+    constexpr uint16_t KeyBindingInfo = 19;
     constexpr uint16_t LastBuiltin =
-        Path; ///< Highest sequential builtin type ID; update when adding new builtins.
+        KeyBindingInfo; ///< Highest sequential builtin type ID; update when adding new builtins.
     constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 
