@@ -1675,6 +1675,13 @@ void IRGenerator::visit(ast::CallPipeline const& node)
                 _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
         }
     }
+
+    // Cleanup process substitution exposed fds and wait for children.
+    // Must happen AFTER redirect_end so that redirect fds are closed first,
+    // ensuring pipe writer refcount reaches 0 and child processes receive EOF.
+    auto* cleanupCb = findCallback("internal.procsubst_cleanup()V");
+    if (cleanupCb)
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "procsubst_cleanup");
 }
 
 void IRGenerator::visit(ast::CommandFileSubst const& node)
@@ -2438,6 +2445,13 @@ void IRGenerator::visit(ast::ProgramCall const& node)
         if (endCallback)
             _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
     }
+
+    // Cleanup process substitution exposed fds and wait for children.
+    // Must happen AFTER redirect_end so that redirect fds are closed first,
+    // ensuring pipe writer refcount reaches 0 and child processes receive EOF.
+    auto* cleanupCb = findCallback("internal.procsubst_cleanup()V");
+    if (cleanupCb)
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "procsubst_cleanup");
 }
 
 namespace

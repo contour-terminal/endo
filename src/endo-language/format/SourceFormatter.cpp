@@ -727,6 +727,7 @@ void SourceFormatter::visit(ast::OutputRedirect const& node)
         else
             emit(" ");
         emit(node.append ? ">>" : ">");
+        emitSpace();
         std::get<std::unique_ptr<ast::Expr>>(node.target)->accept(*this);
     }
 }

@@ -119,8 +119,6 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     else
         debugLog()()("child process exited with code {}\n", _exitCode);
 
-    cleanupProcSubst();
-
     if (!_cmdBuilderStack.empty())
         _cmdBuilderStack.pop_back();
     context.setResult(CoreVM::CoreNumber(_exitCode));
@@ -280,8 +278,6 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
         _currentProcessGroupPids.clear();
         _leftPid = std::nullopt;
         _rightPid = std::nullopt;
-
-        cleanupProcSubst();
     }
 
     if (!_cmdBuilderStack.empty())
@@ -299,13 +295,9 @@ std::vector<std::string>& Shell::cmdBuilderArgs()
 void Shell::cleanupProcSubst()
 {
 #if !defined(_WIN32)
-    for (ProcessId childPid: _procSubstChildPids)
-    {
-        int status = 0;
-        waitpid(static_cast<pid_t>(childPid), &status, 0);
-    }
-    _procSubstChildPids.clear();
-
+    // Close exposed fds FIRST so child processes receive EOF and can exit.
+    // For write-mode process substitution (>(cmd)), the child reads from the pipe
+    // until EOF, which requires all pipe writer fds to be closed before waitpid.
     for (NativeHandle fd: _procSubstExposedFds)
     {
         if (fd >= 0)
@@ -313,19 +305,26 @@ void Shell::cleanupProcSubst()
     }
     _procSubstExposedFds.clear();
 
-    _procSubstFdPath.clear();
-#else
-    // Windows: wait for process substitution children and close handles
     for (ProcessId childPid: _procSubstChildPids)
-        (void) _processManager.wait(childPid);
+    {
+        int status = 0;
+        waitpid(static_cast<pid_t>(childPid), &status, 0);
+    }
     _procSubstChildPids.clear();
 
+    _procSubstFdPath.clear();
+#else
+    // Windows: close handles first, then wait for children (same ordering rationale)
     for (NativeHandle handle: _procSubstExposedFds)
     {
         if (handle != InvalidHandle)
             _processManager.closeHandle(handle);
     }
     _procSubstExposedFds.clear();
+
+    for (ProcessId childPid: _procSubstChildPids)
+        (void) _processManager.wait(childPid);
+    _procSubstChildPids.clear();
 
     _procSubstFdPath.clear();
 #endif
