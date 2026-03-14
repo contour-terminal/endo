@@ -258,7 +258,7 @@ void TypeRegistry::registerBuiltins()
     // Json: Stateless module providing JSON query functions (no instance fields)
     auto jsonType = std::make_unique<TypeDescriptor>();
     jsonType->kind = TypeKind::Product;
-    jsonType->id = 0; // No instances — module namespace only
+    jsonType->id = BuiltinTypeId::Json;
     jsonType->name = "Json";
     jsonType->slotCount = 0;
     jsonType->moduleFunctions = {
@@ -269,7 +269,7 @@ void TypeRegistry::registerBuiltins()
     // Process: Stateless module providing process signal functions (no instance fields)
     auto processType = std::make_unique<TypeDescriptor>();
     processType->kind = TypeKind::Product;
-    processType->id = 0; // No instances — module namespace only
+    processType->id = BuiltinTypeId::Process;
     processType->name = "Process";
     processType->slotCount = 0;
     processType->moduleFunctions = {

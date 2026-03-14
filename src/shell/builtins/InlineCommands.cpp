@@ -23,6 +23,7 @@
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <utility>
 #include <thread>
 
 #include <fcntl.h>
@@ -2806,10 +2807,17 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
             }
             auto const epochTime = static_cast<time_t>(epochVal);
             std::tm timeBuf {};
+#if defined(_WIN32)
+            if (useUtc)
+                gmtime_s(&timeBuf, &epochTime);
+            else
+                localtime_s(&timeBuf, &epochTime);
+#else
             if (useUtc)
                 gmtime_r(&epochTime, &timeBuf);
             else
                 localtime_r(&epochTime, &timeBuf);
+#endif
 
             std::array<char, 256> buf {};
             auto const fmt = formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
@@ -2831,10 +2839,17 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     std::tm timeBuf {};
+#if defined(_WIN32)
+    if (useUtc)
+        gmtime_s(&timeBuf, &timeT);
+    else
+        localtime_s(&timeBuf, &timeT);
+#else
     if (useUtc)
         gmtime_r(&timeT, &timeBuf);
     else
         localtime_r(&timeT, &timeBuf);
+#endif
 
     if (showIso)
     {
@@ -3145,7 +3160,7 @@ int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle 
                 files.push_back(args.at(j));
             break;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     if (files.empty())
@@ -3237,7 +3252,7 @@ int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle out
             }
             continue;
         }
-        operands.push_back(std::string(arg));
+        operands.emplace_back(arg);
     }
 
     if (operands.size() < 2)
@@ -3480,7 +3495,7 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
             }
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     auto const errorFn = [this](std::string const& msg) { error("head: {}", msg); };
@@ -3547,7 +3562,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
             // Follow mode not yet implemented — just ignore for now
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     auto const errorFn = [this](std::string const& msg) { error("tail: {}", msg); };
@@ -3614,7 +3629,7 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
             }
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     // Default: show all
@@ -3736,7 +3751,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
         next_arg:
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     auto const errorFn = [this](std::string const& msg) { error("sort: {}", msg); };
@@ -3768,7 +3783,8 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
         std::ranges::sort(lines, [&](auto const& a, auto const& b) {
             auto const ka = getKey(a);
             auto const kb = getKey(b);
-            double va = 0, vb = 0;
+            double va = 0;
+            double vb = 0;
             std::from_chars(ka.data(), ka.data() + ka.size(), va);
             std::from_chars(kb.data(), kb.data() + kb.size(), vb);
             return reverse ? va > vb : va < vb;
@@ -3845,7 +3861,7 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
             }
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     auto const errorFn = [this](std::string const& msg) { error("uniq: {}", msg); };
@@ -3949,7 +3965,7 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
             charSpec = args.at(++i);
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     if (fieldSpec.empty() && charSpec.empty())
@@ -3975,11 +3991,18 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
             }
             else
             {
-                int start = 1, end = 999999;
+                int start = 1;
+                int end = 999999;
                 if (dash > 0)
-                    std::from_chars(part.data(), part.data() + dash, start);
+                {
+                    auto const startPart = part.substr(0, dash);
+                    std::from_chars(startPart.data(), startPart.data() + startPart.size(), start);
+                }
                 if (dash + 1 < part.size())
-                    std::from_chars(part.data() + dash + 1, part.data() + part.size(), end);
+                {
+                    auto const endPart = part.substr(dash + 1);
+                    std::from_chars(endPart.data(), endPart.data() + endPart.size(), end);
+                }
                 ranges.emplace_back(start, end);
             }
             pos = comma == std::string_view::npos ? spec.size() : comma + 1;
@@ -4011,7 +4034,7 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
             bool first = true;
             for (auto const& [lo, hi]: ranges)
             {
-                for (int f = lo; f <= hi && f <= static_cast<int>(fields.size()); ++f)
+                for (int f = lo; f <= hi && std::cmp_less_equal(f, fields.size()); ++f)
                 {
                     if (!first)
                         output += delimiter;
@@ -4031,7 +4054,7 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
             std::string output;
             for (auto const& [lo, hi]: ranges)
             {
-                for (int c = lo; c <= hi && c <= static_cast<int>(line.size()); ++c)
+                for (int c = lo; c <= hi && std::cmp_less_equal(c, line.size()); ++c)
                     output += line[static_cast<size_t>(c - 1)];
             }
             output += '\n';
@@ -4231,7 +4254,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle ou
             appendMode = true;
             continue;
         }
-        files.push_back(std::string(arg));
+        files.emplace_back(arg);
     }
 
     // Open output files

@@ -132,6 +132,10 @@ add_library(endo-shell STATIC
     DirectoryConfig.cpp
 
     # Builtins
+    builtins/InlineCommandDescriptor.hpp
+    builtins/InlineCommandDescriptors.cpp
+    builtins/InlineArgParser.hpp
+    builtins/InlineArgParser.cpp
     builtins/InlineCommands.cpp
     builtins/Registration.cpp
     builtins/ProcessExecution.cpp
@@ -242,6 +246,7 @@ add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
     DirectoryConfig_test.cpp
+    builtins/InlineArgParser_test.cpp
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp
     commands/TimeoutCommand_test.cpp

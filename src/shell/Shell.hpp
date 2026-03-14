@@ -226,41 +226,19 @@ class Shell final: public SignalCallback
                                                                     std::vector<std::string> const& args,
                                                                     std::string_view prefix);
 
+    // --- Data-driven inline builtin dispatch (builtins/InlineCommandDescriptors.cpp) ---
+  public:
+    /// @brief Returns the sorted descriptor table of all inline builtins.
+    [[nodiscard]] static std::span<struct InlineCommandDescriptor const> inlineCommandDescriptors();
+
+    /// @brief Looks up an inline builtin by name (binary search on sorted table).
+    /// @return Pointer to the descriptor, or nullptr if not found.
+    [[nodiscard]] static InlineCommandDescriptor const* findInlineBuiltin(std::string_view name);
+
+  private:
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
-
-    // --- Data-driven inline builtin dispatch (builtins/ProcessExecution.cpp) ---
-
-    /// @brief Dispatch entry for an inline builtin command.
-    ///
-    /// Exactly one of noStdinFn / withStdinFn must be non-null.
-    /// This is the fundamental record that drives both tryExecuteInlineBuiltin()
-    /// and builtinCallProcessShellPiped() dispatch — one sorted table, two callers.
-    struct InlineBuiltinEntry
-    {
-        using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle);
-        using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle, NativeHandle);
-
-        std::string_view name;
-        NoStdinFn noStdinFn = nullptr;
-        WithStdinFn withStdinFn = nullptr;
-
-        /// @brief Calls the appropriate function variant.
-        [[nodiscard]] int execute(Shell& shell,
-                                  CoreVM::CoreStringArray const& args,
-                                  NativeHandle outputFd,
-                                  NativeHandle stdinFd) const
-        {
-            if (withStdinFn)
-                return (shell.*withStdinFn)(args, outputFd, stdinFd);
-            return (shell.*noStdinFn)(args, outputFd);
-        }
-    };
-
-    /// @brief Looks up an inline builtin by name (binary search on sorted table).
-    /// @return Pointer to the entry, or nullptr if not found.
-    [[nodiscard]] static InlineBuiltinEntry const* findInlineBuiltin(std::string_view name);
     /// Executes the cat builtin, writing to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineCat(CoreVM::CoreStringArray const& args,
                                        NativeHandle outputFd,

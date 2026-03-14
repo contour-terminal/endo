@@ -1523,7 +1523,12 @@ namespace
 void processKill(CoreVM::Params& args)
 {
     auto const pid = static_cast<int>(args.getInt(1));
-    auto const err = platformSendSignal(pid, SIGTERM);
+#if defined(_WIN32)
+    constexpr auto defaultSignal = 0; // Windows uses TerminateProcess(), signal number is ignored
+#else
+    constexpr auto defaultSignal = SIGTERM;
+#endif
+    auto const err = platformSendSignal(pid, defaultSignal);
     if (!err.empty())
     {
         auto* errStr = args.caller()->newString(err);
