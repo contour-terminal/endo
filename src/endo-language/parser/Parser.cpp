@@ -986,7 +986,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     }
 
                     _lexer.leaveFSharpExpr();
-                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                           /*displayResult=*/_autoDisplay);
                 }
                 return stmt;
             }
@@ -1094,7 +1095,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
 
                 _lexer.leaveFSharpExpr();
-                return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                       /*displayResult=*/_autoDisplay);
             }
             return stmt;
         }
