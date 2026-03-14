@@ -25,8 +25,13 @@
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    #include <io.h>
+    #define isatty    _isatty
+    #define STDOUT_FD 1
+#else
     #include <unistd.h>
+    #define STDOUT_FD STDOUT_FILENO
 #endif
 
 namespace
@@ -191,16 +196,16 @@ namespace endo
 
 int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent)
 {
-#if !defined(_WIN32)
-    if (isatty(outputFd) != 0 && outputFd == standardOutput())
+    if (outputFd == standardOutput() && isatty(STDOUT_FD) != 0)
     {
         tui::TerminalOutput termOutput;
+        termOutput.updateDimensions();
         tui::MarkdownRenderer renderer(termOutput);
+        renderer.setMaxWidth(termOutput.columns());
         renderer.render(markdownContent);
         termOutput.flush();
         return 0;
     }
-#endif
     [[maybe_unused]] auto written = platformWrite(outputFd, markdownContent.data(), markdownContent.size());
     written = platformWrite(outputFd, "\n", 1);
     return 0;

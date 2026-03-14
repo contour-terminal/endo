@@ -32,6 +32,37 @@ int Shell::executeInlineDirConfig(CoreVM::CoreStringArray const& args, NativeHan
 
     auto const& subcmd = args.at(1);
 
+    if (subcmd == "-h" || subcmd == "--help")
+    {
+        return renderMarkdownHelp(
+            outputFd,
+            "# dirconfig\n"
+            "\n"
+            "Manage directory configuration trust entries.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`dirconfig <subcommand> [path]`\n"
+            "\n"
+            "## Subcommands\n"
+            "\n"
+            "| Subcommand | Description |\n"
+            "|---|---|\n"
+            "| `allow [path]` | Trust and allow a directory config |\n"
+            "| `deny [path]` | Deny a directory config |\n"
+            "| `revoke [path]` | Remove trust entry for a directory config |\n"
+            "| `list` | List all registered directory config trust entries |\n"
+            "| `reload` | Reload all directory configs |\n"
+            "\n"
+            "If no path is given, defaults to `.local-env.endo` in the current directory.\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|---|---|\n"
+            "| `-h`, `--help` | Show this help message |\n");
+    }
+
     if (subcmd == "list")
     {
         auto const& entries = _dirConfigManager->trustEntries();
