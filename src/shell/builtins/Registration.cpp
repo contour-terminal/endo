@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/commands/BindCommand.hpp>
 #include <shell/commands/FindCommand.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/JobsCommand.hpp>
@@ -601,6 +602,15 @@ void Shell::registerStructuredBuiltins()
 
             ShellJobProvider provider(jobTable);
             JobsCommand cmd(provider);
+            auto* result = cmd.execute(*_runner);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    // F# structured_bind builtin: returns list<KeyBindingInfo> from keybindings
+    _runtime.registerFunction("structured_bind")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            BindCommand cmd(prompt.keyBindings());
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });

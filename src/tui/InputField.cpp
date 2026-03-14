@@ -461,6 +461,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::CycleThinkingMode:
         case InputFieldAction::CycleModel:
         case InputFieldAction::CommandPalette:
+        case InputFieldAction::NewPrompt:
             // These need special handling by the parent
             return EventResult::Handled;
         case InputFieldAction::None: return EventResult::Ignored;
@@ -706,6 +707,12 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             _lastWasKill = false;
             return InputFieldAction::Changed;
 
+        case EditAction::ClearBuffer:
+            clearGhostText();
+            _lastWasKill = false;
+            clear();
+            return InputFieldAction::Changed;
+
         // Undo/Redo
         case EditAction::Undo:
             _lastWasKill = false;
@@ -769,6 +776,11 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             return InputFieldAction::Submit;
 
         case EditAction::Abort: _lastWasKill = false; return InputFieldAction::Abort;
+
+        case EditAction::NewPrompt:
+            clearSelection();
+            _lastWasKill = false;
+            return InputFieldAction::NewPrompt;
 
         case EditAction::InsertNewline:
             if (_multiline)
@@ -914,13 +926,6 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
 
     // Plain Tab: Not handled yet, ignore (modified Tab like Shift+Tab goes to keybinding lookup)
     if (key.key == KeyCode::Tab && !shift && !ctrl && !alt)
-    {
-        _lastWasKill = false;
-        return InputFieldAction::None;
-    }
-
-    // Escape: Ignore
-    if (key.key == KeyCode::Escape)
     {
         _lastWasKill = false;
         return InputFieldAction::None;

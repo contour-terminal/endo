@@ -20,6 +20,7 @@ class BuiltinArgumentCompleter: public CompletionProvider
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
 
     [[nodiscard]] int priority() const override { return 92; }
+    [[nodiscard]] bool isExclusiveFor(CompletionContext const& context) const override;
 };
 
 } // namespace endo

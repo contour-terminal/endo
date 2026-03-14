@@ -1,0 +1,5 @@
+# description: Write-mode process substitution as redirect target with builtin cat
+# expect: hi
+# expect:
+
+echo hi > >(cat)

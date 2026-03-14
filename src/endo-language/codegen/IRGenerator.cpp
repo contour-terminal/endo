@@ -1675,6 +1675,13 @@ void IRGenerator::visit(ast::CallPipeline const& node)
                 _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
         }
     }
+
+    // Cleanup process substitution exposed fds and wait for children.
+    // Must happen AFTER redirect_end so that redirect fds are closed first,
+    // ensuring pipe writer refcount reaches 0 and child processes receive EOF.
+    auto* cleanupCb = findCallback("internal.procsubst_cleanup()V");
+    if (cleanupCb)
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "procsubst_cleanup");
 }
 
 void IRGenerator::visit(ast::CommandFileSubst const& node)
@@ -2438,6 +2445,13 @@ void IRGenerator::visit(ast::ProgramCall const& node)
         if (endCallback)
             _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
     }
+
+    // Cleanup process substitution exposed fds and wait for children.
+    // Must happen AFTER redirect_end so that redirect fds are closed first,
+    // ensuring pipe writer refcount reaches 0 and child processes receive EOF.
+    auto* cleanupCb = findCallback("internal.procsubst_cleanup()V");
+    if (cleanupCb)
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "procsubst_cleanup");
 }
 
 namespace
@@ -3985,78 +3999,55 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
-    // ps: zero-arg builtin returning list<ProcessInfo>
-    if (name == "ps")
+    // Data-driven structured command dispatch (ps, jobs, ls, bind, etc.)
+    if (_persistentState)
     {
-        if (!argExprs.empty())
+        if (auto it = _persistentState->structuredCommands.find(std::string(name));
+            it != _persistentState->structuredCommands.end())
         {
-            reportTypeError("ps takes no arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* callback = findCallback("structured_ps()I");
-        if (!callback)
-        {
-            reportTypeError("structured_ps builtin not registered");
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "ps");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::ProcessInfo);
-        return true;
-    }
+            auto const& info = it->second;
+            auto const hasOptionalArg = info.defaultStringArg.has_value();
+            auto const maxArgs = hasOptionalArg ? 1u : 0u;
 
-    // jobs: zero-arg builtin returning list<JobInfo>
-    if (name == "jobs")
-    {
-        if (!argExprs.empty())
-        {
-            reportTypeError("jobs takes no arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* callback = findCallback("structured_jobs()I");
-        if (!callback)
-        {
-            reportTypeError("structured_jobs builtin not registered");
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "jobs");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::JobInfo);
-        return true;
-    }
-
-    // ls: zero-or-one-arg builtin returning list<FileInfo>
-    if (name == "ls")
-    {
-        if (argExprs.size() > 1)
-        {
-            reportTypeError("ls takes 0 or 1 arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* callback = findCallback("structured_ls(S)I");
-        if (!callback)
-        {
-            reportTypeError("structured_ls builtin not registered");
-            return true;
-        }
-        CoreVM::Value* pathArg = nullptr;
-        if (argExprs.empty())
-        {
-            pathArg = _builder.get(".");
-        }
-        else
-        {
-            pathArg = codegen(argExprs[0]);
-            if (!pathArg)
+            if (argExprs.size() > maxArgs)
             {
-                reportTypeError("Failed to evaluate ls path argument");
+                reportTypeError("{} takes at most {} argument(s), got {}", name, maxArgs, argExprs.size());
                 return true;
             }
+
+            auto const sig = info.builtinCallbackName + (hasOptionalArg ? "(S)I" : "()I");
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not registered", info.builtinCallbackName);
+                return true;
+            }
+
+            std::vector<CoreVM::Value*> callArgs;
+            if (hasOptionalArg)
+            {
+                if (argExprs.empty())
+                {
+                    callArgs.push_back(_builder.get(*info.defaultStringArg));
+                }
+                else
+                {
+                    auto* arg = codegen(argExprs[0]);
+                    if (!arg)
+                    {
+                        reportTypeError("Failed to evaluate {} argument", name);
+                        return true;
+                    }
+                    callArgs.push_back(arg);
+                }
+            }
+
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), callArgs, std::string(name));
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementTypeId(_result, info.recordTypeId);
+            return true;
         }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { pathArg }, "ls");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::FileInfo);
-        return true;
     }
 
     // formatDateTime: int -> string (format epoch seconds as UTC datetime string)
@@ -8503,8 +8494,9 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(node.name);
             return;
         }
-        // Zero-argument builtins (e.g., ps, ls, rand) invoked as bare identifiers in F# context
-        if ((node.name == "ps" || node.name == "ls" || node.name == "jobs" || node.name == "rand")
+        // Zero-argument builtins invoked as bare identifiers in F# context
+        if ((node.name == "rand"
+             || (_persistentState && _persistentState->structuredCommands.contains(node.name)))
             && tryGenerateBuiltinCall(node.name, {}))
             return;
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));

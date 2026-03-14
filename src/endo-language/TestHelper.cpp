@@ -132,6 +132,34 @@ namespace
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
 
+    void mockStructuredBind(CoreVM::Params& args)
+    {
+        auto* runner = args.caller();
+
+        struct MockBinding
+        {
+            char const* key;
+            char const* action;
+        };
+
+        constexpr MockBinding bindings[] = {
+            { .key = "ctrl+z", .action = "undo" },
+            { .key = "ctrl+y", .action = "redo" },
+            { .key = "ctrl+a", .action = "select-all" },
+        };
+        auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
+        for (int i = 2; i >= 0; --i)
+        {
+            auto const& b = bindings[i];
+            auto* record = runner->allocObject(CoreVM::BuiltinTypeId::KeyBindingInfo);
+            record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(b.key)));
+            record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(b.action)));
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+        }
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+    }
+
     void mockStructuredDockerPs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
@@ -468,6 +496,8 @@ TestRuntime::TestRuntime()
             return Functor(mockStructuredLs);
         if (name == "structured_jobs" && arity == 0)
             return Functor(mockStructuredJobs);
+        if (name == "structured_bind" && arity == 0)
+            return Functor(mockStructuredBind);
         if (name == "structured_docker_ps" && arity == 0)
             return Functor(mockStructuredDockerPs);
         if (name == "structured_docker_images" && arity == 0)
@@ -625,6 +655,27 @@ std::unique_ptr<ast::Statement> parse(std::string const& source)
     return result;
 }
 
+/// Creates a minimal FSharpPersistentState with builtin structured commands registered.
+FSharpPersistentState createDefaultPersistentState()
+{
+    FSharpPersistentState state;
+    CoreVM::TypeRegistry registry;
+    for (auto const& type: registry.allTypes())
+    {
+        if (!type->producingCommand.empty())
+        {
+            state.structuredCommands[type->producingCommand] = {
+                .builtinCallbackName = "structured_" + type->producingCommand,
+                .recordTypeId = type->id,
+                .recordTypeName = type->name,
+            };
+        }
+    }
+    if (auto it = state.structuredCommands.find("ls"); it != state.structuredCommands.end())
+        it->second.defaultStringArg = ".";
+    return state;
+}
+
 std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source, bool unusedValueDetection)
 {
     auto& testRuntime = TestRuntime::instance();
@@ -638,8 +689,9 @@ std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source, bool un
         return nullptr;
     }
 
-    auto ir =
-        IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime, nullptr, unusedValueDetection);
+    auto defaultState = createDefaultPersistentState();
+    auto ir = IRGenerator::generate(
+        *ast, testRuntime.report, testRuntime.runtime, &defaultState, unusedValueDetection);
 
     if (!ir || testRuntime.hasErrors())
     {
@@ -1157,6 +1209,25 @@ FSharpPersistentState createMockStructuredState()
             { "status", "string" },
             { "path", "string" },
         };
+    }
+
+    // Register builtin structured commands from TypeRegistry (data-driven, same as Shell.cpp)
+    {
+        CoreVM::TypeRegistry registry;
+        for (auto const& type: registry.allTypes())
+        {
+            if (!type->producingCommand.empty())
+            {
+                state.structuredCommands[type->producingCommand] = {
+                    .builtinCallbackName = "structured_" + type->producingCommand,
+                    .recordTypeId = type->id,
+                    .recordTypeName = type->name,
+                };
+            }
+        }
+        // ls accepts optional directory argument with default "."
+        if (auto it = state.structuredCommands.find("ls"); it != state.structuredCommands.end())
+            it->second.defaultStringArg = ".";
     }
 
     return state;

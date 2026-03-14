@@ -176,6 +176,19 @@ void TypeRegistry::registerBuiltins()
     jobInfoType->producingCommand = "jobs";
     addType(std::move(jobInfoType));
 
+    // KeyBindingInfo: Product type with 2 fields for key binding information
+    auto keyBindingInfoType = std::make_unique<TypeDescriptor>();
+    keyBindingInfoType->kind = TypeKind::Product;
+    keyBindingInfoType->id = BuiltinTypeId::KeyBindingInfo;
+    keyBindingInfoType->name = "KeyBindingInfo";
+    keyBindingInfoType->slotCount = 2;
+    keyBindingInfoType->fields = {
+        { "key", 0, LiteralType::String },
+        { "action", 1, LiteralType::String },
+    };
+    keyBindingInfoType->producingCommand = "bind";
+    addType(std::move(keyBindingInfoType));
+
     // Size: Product type with 1 field for byte count
     auto sizeType = std::make_unique<TypeDescriptor>();
     sizeType->kind = TypeKind::Product;

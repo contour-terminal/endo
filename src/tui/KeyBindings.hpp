@@ -84,6 +84,19 @@ struct KeyChord
 /// @return The action name (e.g., "redo", "move-forward-char").
 [[nodiscard]] std::string_view editActionToString(EditAction action) noexcept;
 
+/// Info about a bindable edit action (name + short description).
+struct EditActionInfo
+{
+    std::string_view name;
+    std::string_view description;
+};
+
+/// Returns all bindable edit actions with their descriptions.
+[[nodiscard]] std::vector<EditActionInfo> allEditActionNames();
+
+/// Returns all recognized key names (enter, escape, tab, up, f1, etc.).
+[[nodiscard]] std::vector<std::string_view> allKeyNames();
+
 /// Configurable keybinding system for InputField.
 ///
 /// KeyBindings maps KeyChords to EditActions. Multiple keys can be bound

@@ -171,8 +171,6 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     else
         debugLog()()("child process exited with code {}\n", _exitCode);
 
-    cleanupProcSubst();
-
     context.setResult(CoreVM::CoreNumber(_exitCode));
 }
 
@@ -408,8 +406,6 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         _currentProcessGroupPids.clear();
         _leftPid = std::nullopt;
         _rightPid = std::nullopt;
-
-        cleanupProcSubst();
     }
 
     context.setResult(CoreVM::CoreNumber(_exitCode));

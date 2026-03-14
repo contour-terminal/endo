@@ -96,6 +96,7 @@ struct FSharpPersistentState
         std::string builtinCallbackName; ///< e.g., "structured_docker_ps"
         uint16_t recordTypeId = 0;       ///< List element type ID
         std::string recordTypeName;      ///< For _recordTypes lookup
+        std::optional<std::string> defaultStringArg; ///< If set, command accepts 0 or 1 string args
     };
 
     /// Key format: "docker\0ps" (command + NUL + args joined by NUL)

@@ -1,0 +1,6 @@
+# description: Write-mode process substitution as redirect target with external cat
+# expect: hi
+# expect:
+# mock-which: cat=/usr/bin/cat
+
+echo hi > >(/usr/bin/cat)
