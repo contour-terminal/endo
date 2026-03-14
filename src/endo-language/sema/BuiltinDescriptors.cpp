@@ -118,6 +118,12 @@ BuiltinDescriptorRegistry::BuiltinDescriptorRegistry()
         desc.returnListElementTypeId = BT::FileInfo;
         registerCall(desc);
     }
+    {
+        auto desc = fixedArity("bind", 0);
+        desc.returnObjectTypeId = BT::List;
+        desc.returnListElementTypeId = BT::KeyBindingInfo;
+        registerCall(desc);
+    }
 
     // --- Formatting builtins ---
     registerCall(fixedArity("formatDateTime", 1));

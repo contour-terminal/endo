@@ -2505,6 +2505,39 @@ void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
         }
     }
 
+    // Handle builtin shell commands (bind, jobs, etc.) that are registered as structured commands
+    if (_persistentState && node.command)
+    {
+        auto tryBuiltinStructured = [&](std::string const& name) -> bool {
+            if (auto it = _persistentState->structuredCommands.find(name);
+                it != _persistentState->structuredCommands.end())
+            {
+                auto const& info = it->second;
+                auto const sig = info.builtinCallbackName + "()I";
+                if (auto* cb = findCallback(sig))
+                {
+                    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, name);
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                    annotateListElementTypeId(_result, info.recordTypeId);
+                    annotateListElementLiteralType(_result, CoreVM::LiteralType::Object);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        if (dynamic_cast<ast::BuiltinBindStmt const*>(node.command.get()))
+        {
+            if (tryBuiltinStructured("bind"))
+                return;
+        }
+        else if (dynamic_cast<ast::BuiltinJobsStmt const*>(node.command.get()))
+        {
+            if (tryBuiltinStructured("jobs"))
+                return;
+        }
+    }
+
     // Try to match against output definitions from persistent state
     if (_persistentState && node.command)
     {

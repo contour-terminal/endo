@@ -110,6 +110,20 @@ void TypeDefinitionRegistry::registerBuiltins()
             jobInfoType.fieldTypes[f.name] = f.type;
         _recordTypes["JobInfo"] = std::move(jobInfoType);
     }
+
+    // KeyBindingInfo: keybinding metadata from the bind builtin
+    {
+        RecordTypeInfo keyBindingInfoType;
+        keyBindingInfoType.typeId = CoreVM::BuiltinTypeId::KeyBindingInfo;
+        keyBindingInfoType.name = "KeyBindingInfo";
+        keyBindingInfoType.fields = {
+            { "key", 0, CoreVM::LiteralType::String },
+            { "action", 1, CoreVM::LiteralType::String },
+        };
+        for (auto const& f: keyBindingInfoType.fields)
+            keyBindingInfoType.fieldTypes[f.name] = f.type;
+        _recordTypes["KeyBindingInfo"] = std::move(keyBindingInfoType);
+    }
 }
 
 void TypeDefinitionRegistry::registerRecord(std::string name, RecordTypeInfo info)
