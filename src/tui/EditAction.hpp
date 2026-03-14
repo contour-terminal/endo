@@ -75,6 +75,9 @@ enum class EditAction : std::uint8_t
 
     // === Command Palette ===
     CommandPalette, ///< Open the command palette (Ctrl+Shift+P)
+
+    // === Prompt Control ===
+    NewPrompt, ///< Abandon current input and start a fresh prompt
 };
 
 } // namespace tui

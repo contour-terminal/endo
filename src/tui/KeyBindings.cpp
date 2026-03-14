@@ -95,7 +95,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 38> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 39> actionNameMappings = { {
         // Movement
         { .name = "move-forward-char", .description = "Move cursor forward one character", .action = EditAction::MoveForwardChar },
         { .name = "move-backward-char", .description = "Move cursor backward one character", .action = EditAction::MoveBackwardChar },
@@ -143,6 +143,8 @@ namespace
         { .name = "history-next", .description = "Next history entry", .action = EditAction::HistoryNext },
         // Command Palette
         { .name = "command-palette", .description = "Open the command palette", .action = EditAction::CommandPalette },
+        // Prompt Control
+        { .name = "new-prompt", .description = "Abandon input and start a fresh prompt", .action = EditAction::NewPrompt },
     } };
 } // namespace
 

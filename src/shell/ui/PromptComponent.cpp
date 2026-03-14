@@ -947,6 +947,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             resetHistoryCycling();
             _exitHintVisible = false;
             return Action::Abort;
+        case tui::InputFieldAction::NewPrompt:
+            _inputField.clearGhostText();
+            dismissPopup();
+            resetHistoryCycling();
+            _exitHintVisible = false;
+            return Action::NewPrompt;
         case tui::InputFieldAction::Eof: {
             _inputField.clearGhostText();
             dismissPopup();

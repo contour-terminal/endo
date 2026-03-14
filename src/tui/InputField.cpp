@@ -461,6 +461,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::CycleThinkingMode:
         case InputFieldAction::CycleModel:
         case InputFieldAction::CommandPalette:
+        case InputFieldAction::NewPrompt:
             // These need special handling by the parent
             return EventResult::Handled;
         case InputFieldAction::None: return EventResult::Ignored;
@@ -775,6 +776,11 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             return InputFieldAction::Submit;
 
         case EditAction::Abort: _lastWasKill = false; return InputFieldAction::Abort;
+
+        case EditAction::NewPrompt:
+            clearSelection();
+            _lastWasKill = false;
+            return InputFieldAction::NewPrompt;
 
         case EditAction::InsertNewline:
             if (_multiline)

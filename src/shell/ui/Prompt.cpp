@@ -239,6 +239,31 @@ std::string Prompt::read()
                     _lastAction = PromptComponent::Action::Submit;
                     return inputText;
                 }
+                case PromptComponent::Action::NewPrompt: {
+                    // Abandon current input and start a fresh prompt
+                    _screen->draw();
+                    auto& out = _terminal.output();
+                    auto const inputText = std::string(_promptComponent->text());
+                    if (_promptConfig.transient != TransientMode::Off)
+                    {
+                        emitTransientPrompt(inputText);
+                    }
+                    else
+                    {
+                        auto const totalLines = _promptComponent->inputField().lineCount();
+                        auto const cursorLine = _promptComponent->inputField().cursorLine();
+                        auto const linesToMoveDown =
+                            totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
+                        if (linesToMoveDown > 0)
+                            out.moveDown(linesToMoveDown);
+                    }
+                    out.carriageReturn();
+                    out.linefeed();
+                    out.enableReflow();
+                    out.flush();
+                    _lastAction = PromptComponent::Action::NewPrompt;
+                    return {};
+                }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
                     _terminal.output().writeText("^C", {});
@@ -399,6 +424,29 @@ std::optional<std::string> Prompt::processInput()
                 out.flush();
                 _promptComponent->clear();
                 return result;
+            }
+            case PromptComponent::Action::NewPrompt: {
+                auto& out = _terminal.output();
+                auto const inputText = std::string(_promptComponent->text());
+                if (_promptConfig.transient != TransientMode::Off)
+                {
+                    emitTransientPrompt(inputText);
+                }
+                else
+                {
+                    auto const totalLines = _promptComponent->inputField().lineCount();
+                    auto const cursorLine = _promptComponent->inputField().cursorLine();
+                    auto const linesToMoveDown =
+                        totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
+                    if (linesToMoveDown > 0)
+                        out.moveDown(linesToMoveDown);
+                }
+                out.carriageReturn();
+                out.linefeed();
+                out.enableReflow();
+                out.flush();
+                _promptComponent->clear();
+                return std::string {};
             }
             case PromptComponent::Action::Abort:
                 _terminal.output().writeText("^C", {});
