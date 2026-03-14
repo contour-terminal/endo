@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: tee --help shows usage
+# expect-nonempty
+
+tee --help

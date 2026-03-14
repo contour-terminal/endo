@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
+#include <shell/completion/BuiltinSpecs.hpp>
 #include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
@@ -25,6 +26,8 @@ Completer::Completer(EnvironmentProvider const& env,
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
+    for (auto& spec : createBuiltinSpecs())
+        specCompleter->registerCommand(std::move(spec), nullptr);
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));

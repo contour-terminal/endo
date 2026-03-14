@@ -228,7 +228,39 @@ class Shell final: public SignalCallback
 
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
-    [[nodiscard]] static int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+
+    // --- Data-driven inline builtin dispatch (builtins/ProcessExecution.cpp) ---
+
+    /// @brief Dispatch entry for an inline builtin command.
+    ///
+    /// Exactly one of noStdinFn / withStdinFn must be non-null.
+    /// This is the fundamental record that drives both tryExecuteInlineBuiltin()
+    /// and builtinCallProcessShellPiped() dispatch — one sorted table, two callers.
+    struct InlineBuiltinEntry
+    {
+        using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle);
+        using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle, NativeHandle);
+
+        std::string_view name;
+        NoStdinFn noStdinFn = nullptr;
+        WithStdinFn withStdinFn = nullptr;
+
+        /// @brief Calls the appropriate function variant.
+        [[nodiscard]] int execute(Shell& shell,
+                                  CoreVM::CoreStringArray const& args,
+                                  NativeHandle outputFd,
+                                  NativeHandle stdinFd) const
+        {
+            if (withStdinFn)
+                return (shell.*withStdinFn)(args, outputFd, stdinFd);
+            return (shell.*noStdinFn)(args, outputFd);
+        }
+    };
+
+    /// @brief Looks up an inline builtin by name (binary search on sorted table).
+    /// @return Pointer to the entry, or nullptr if not found.
+    [[nodiscard]] static InlineBuiltinEntry const* findInlineBuiltin(std::string_view name);
     /// Executes the cat builtin, writing to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineCat(CoreVM::CoreStringArray const& args,
                                        NativeHandle outputFd,
@@ -253,6 +285,58 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the kill builtin, sending signals to processes or jobs. Returns exit code.
     [[nodiscard]] int executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the whoami builtin. Returns exit code.
+    [[nodiscard]] int executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the hostname builtin. Returns exit code.
+    [[nodiscard]] int executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the date builtin. Returns exit code.
+    [[nodiscard]] int executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the uname builtin. Returns exit code.
+    [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the basename builtin. Returns exit code.
+    [[nodiscard]] int executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the dirname builtin. Returns exit code.
+    [[nodiscard]] int executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the realpath builtin. Returns exit code.
+    [[nodiscard]] int executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the touch builtin. Returns exit code.
+    [[nodiscard]] int executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the ln builtin. Returns exit code.
+    [[nodiscard]] int executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the mktemp builtin. Returns exit code.
+    [[nodiscard]] int executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the head builtin. Returns exit code.
+    [[nodiscard]] int executeInlineHead(CoreVM::CoreStringArray const& args,
+                                        NativeHandle outputFd,
+                                        NativeHandle stdinFd);
+    /// Executes the tail builtin. Returns exit code.
+    [[nodiscard]] int executeInlineTail(CoreVM::CoreStringArray const& args,
+                                        NativeHandle outputFd,
+                                        NativeHandle stdinFd);
+    /// Executes the wc builtin. Returns exit code.
+    [[nodiscard]] int executeInlineWc(CoreVM::CoreStringArray const& args,
+                                      NativeHandle outputFd,
+                                      NativeHandle stdinFd);
+    /// Executes the sort builtin. Returns exit code.
+    [[nodiscard]] int executeInlineSort(CoreVM::CoreStringArray const& args,
+                                        NativeHandle outputFd,
+                                        NativeHandle stdinFd);
+    /// Executes the uniq builtin. Returns exit code.
+    [[nodiscard]] int executeInlineUniq(CoreVM::CoreStringArray const& args,
+                                        NativeHandle outputFd,
+                                        NativeHandle stdinFd);
+    /// Executes the cut builtin. Returns exit code.
+    [[nodiscard]] int executeInlineCut(CoreVM::CoreStringArray const& args,
+                                       NativeHandle outputFd,
+                                       NativeHandle stdinFd);
+    /// Executes the tr builtin. Returns exit code.
+    [[nodiscard]] int executeInlineTr(CoreVM::CoreStringArray const& args,
+                                      NativeHandle outputFd,
+                                      NativeHandle stdinFd);
+    /// Executes the tee builtin. Returns exit code.
+    [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
+                                       NativeHandle outputFd,
+                                       NativeHandle stdinFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
     void finalizePipelineBuiltin(bool lastInChain,
                                  CoreVM::CoreStringArray const& args,

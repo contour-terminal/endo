@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: dirname strips last component from path
+# skip: inline builtin not available in test runtime
+# expect: /usr/local
+
+dirname /usr/local/file.txt

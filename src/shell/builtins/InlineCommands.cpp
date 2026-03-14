@@ -12,13 +12,17 @@
 #include <tui/TerminalOutput.hpp>
 #include <tui/Theme.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
+#include <random>
 #include <ranges>
 #include <span>
+#include <sstream>
 #include <thread>
 
 #include <fcntl.h>
@@ -29,9 +33,12 @@
 
 #if defined(_WIN32)
     #include <io.h>
+    #include <windows.h>
     #define isatty    _isatty
     #define STDOUT_FD 1
 #else
+    #include <pwd.h>
+    #include <sys/utsname.h>
     #include <unistd.h>
     #define STDOUT_FD STDOUT_FILENO
 #endif
@@ -2588,6 +2595,1676 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     return exitCode;
+}
+
+// ---------------------------------------------------------------------------
+// whoami
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# whoami\n"
+                                      "\n"
+                                      "Print the current username.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`whoami`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+    }
+
+#if defined(_WIN32)
+    char username[256];
+    DWORD size = sizeof(username);
+    if (GetUserNameA(username, &size))
+    {
+        auto output = std::format("{}\n", username);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+    error("whoami: cannot determine username");
+    return 1;
+#else
+    if (auto const* pw = getpwuid(geteuid()))
+    {
+        auto output = std::format("{}\n", pw->pw_name);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+    error("whoami: cannot determine username");
+    return 1;
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// hostname
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# hostname\n"
+                                      "\n"
+                                      "Print the system hostname.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`hostname`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+    }
+
+    std::array<char, 256> hostbuf {};
+#if defined(_WIN32)
+    DWORD size = static_cast<DWORD>(hostbuf.size());
+    if (GetComputerNameA(hostbuf.data(), &size))
+    {
+        auto output = std::format("{}\n", hostbuf.data());
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+#else
+    if (gethostname(hostbuf.data(), hostbuf.size()) == 0)
+    {
+        auto output = std::format("{}\n", hostbuf.data());
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+#endif
+    error("hostname: cannot determine hostname");
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// date
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool useUtc = false;
+    bool showEpoch = false;
+    bool showIso = false;
+    std::string formatStr;
+    std::string dateStr;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# date\n"
+                                      "\n"
+                                      "Print or format the current date and time.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`date [OPTIONS]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-u`, `--utc` | Use UTC instead of local time |\n"
+                                      "| `--epoch` | Print seconds since Unix epoch |\n"
+                                      "| `--iso` | Print in ISO 8601 format |\n"
+                                      "| `-f`, `--format FMT` | Use custom format (strftime) |\n"
+                                      "| `-d`, `--date STRING` | Display given date instead of now |\n"
+                                      "| `-h`, `--help` | Display this help |\n"
+                                      "\n"
+                                      "## Format Specifiers\n"
+                                      "\n"
+                                      "| Specifier | Description |\n"
+                                      "|-----------|-------------|\n"
+                                      "| `%Y` | Year (4 digits) |\n"
+                                      "| `%m` | Month (01-12) |\n"
+                                      "| `%d` | Day of month (01-31) |\n"
+                                      "| `%H` | Hour (00-23) |\n"
+                                      "| `%M` | Minute (00-59) |\n"
+                                      "| `%S` | Second (00-59) |\n"
+                                      "| `%A` | Full weekday name |\n"
+                                      "| `%B` | Full month name |\n"
+                                      "| `%Z` | Timezone abbreviation |\n");
+        if (arg == "-u" || arg == "--utc")
+        {
+            useUtc = true;
+            continue;
+        }
+        if (arg == "--epoch")
+        {
+            showEpoch = true;
+            continue;
+        }
+        if (arg == "--iso")
+        {
+            showIso = true;
+            continue;
+        }
+        if (arg == "-f" || arg == "--format")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("date: --format requires an argument");
+                return 1;
+            }
+            formatStr = args.at(++i);
+            continue;
+        }
+        if (arg == "-d" || arg == "--date")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("date: --date requires an argument");
+                return 1;
+            }
+            dateStr = args.at(++i);
+            continue;
+        }
+        // Support +FORMAT (like GNU date)
+        if (arg.starts_with("+"))
+        {
+            formatStr = std::string(arg.substr(1));
+            continue;
+        }
+        error("date: unrecognized option '{}'", arg);
+        return 1;
+    }
+
+    // Get time point
+    auto const now = std::chrono::system_clock::now();
+    auto const timeT = std::chrono::system_clock::to_time_t(now);
+
+    if (!dateStr.empty())
+    {
+        // Parse @EPOCH format
+        if (dateStr.starts_with("@"))
+        {
+            auto const epochStr = dateStr.substr(1);
+            long long epochVal = 0;
+            auto const [ptr, ec] = std::from_chars(epochStr.data(), epochStr.data() + epochStr.size(), epochVal);
+            if (ec != std::errc {} || ptr != epochStr.data() + epochStr.size())
+            {
+                error("date: invalid date '{}'", dateStr);
+                return 1;
+            }
+            auto const epochTime = static_cast<time_t>(epochVal);
+            std::tm timeBuf {};
+            if (useUtc)
+                gmtime_r(&epochTime, &timeBuf);
+            else
+                localtime_r(&epochTime, &timeBuf);
+
+            std::array<char, 256> buf {};
+            auto const fmt = formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
+            auto const len = strftime(buf.data(), buf.size(), std::string(fmt).c_str(), &timeBuf);
+            auto output = std::format("{}\n", std::string_view(buf.data(), len));
+            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+            return 0;
+        }
+        error("date: unsupported date string '{}' (use @EPOCH)", dateStr);
+        return 1;
+    }
+
+    if (showEpoch)
+    {
+        auto const epoch = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        auto output = std::format("{}\n", epoch);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+
+    std::tm timeBuf {};
+    if (useUtc)
+        gmtime_r(&timeT, &timeBuf);
+    else
+        localtime_r(&timeT, &timeBuf);
+
+    if (showIso)
+    {
+        std::array<char, 64> buf {};
+        auto const len = strftime(buf.data(), buf.size(), "%Y-%m-%dT%H:%M:%S%z", &timeBuf);
+        auto output = std::format("{}\n", std::string_view(buf.data(), len));
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+
+    std::array<char, 256> buf {};
+    auto const fmt =
+        formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
+    auto const len = strftime(buf.data(), buf.size(), std::string(fmt).c_str(), &timeBuf);
+    auto output = std::format("{}\n", std::string_view(buf.data(), len));
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// uname
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool showAll = false;
+    bool showSysname = false;
+    bool showNodename = false;
+    bool showRelease = false;
+    bool showMachine = false;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# uname\n"
+                                      "\n"
+                                      "Print system information.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`uname [OPTIONS]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-s` | Print kernel name |\n"
+                                      "| `-n` | Print network node hostname |\n"
+                                      "| `-r` | Print kernel release |\n"
+                                      "| `-m` | Print machine hardware name |\n"
+                                      "| `-a` | Print all information |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg == "-a")
+        {
+            showAll = true;
+            continue;
+        }
+
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 's': showSysname = true; break;
+                    case 'n': showNodename = true; break;
+                    case 'r': showRelease = true; break;
+                    case 'm': showMachine = true; break;
+                    case 'a': showAll = true; break;
+                    default:
+                        error("uname: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+            continue;
+        }
+
+        error("uname: extra operand '{}'", arg);
+        return 1;
+    }
+
+    // Default: show sysname only
+    if (!showAll && !showSysname && !showNodename && !showRelease && !showMachine)
+        showSysname = true;
+
+#if defined(_WIN32)
+    auto const sysname = std::string_view("Windows");
+    std::array<char, 256> nodebuf {};
+    DWORD nodeSize = static_cast<DWORD>(nodebuf.size());
+    GetComputerNameA(nodebuf.data(), &nodeSize);
+    auto const nodename = std::string_view(nodebuf.data());
+    auto const release = std::string_view("10.0");
+    #if defined(_M_X64) || defined(_M_AMD64)
+    auto const machine = std::string_view("x86_64");
+    #elif defined(_M_ARM64)
+    auto const machine = std::string_view("aarch64");
+    #else
+    auto const machine = std::string_view("unknown");
+    #endif
+#else
+    struct utsname unameData {};
+    if (uname(&unameData) != 0)
+    {
+        error("uname: cannot get system information");
+        return 1;
+    }
+    auto const sysname = std::string_view(unameData.sysname);
+    auto const nodename = std::string_view(unameData.nodename);
+    auto const release = std::string_view(unameData.release);
+    auto const machine = std::string_view(unameData.machine);
+#endif
+
+    std::string result;
+    auto const append = [&](std::string_view val) {
+        if (!result.empty())
+            result += ' ';
+        result += val;
+    };
+
+    if (showAll || showSysname)
+        append(sysname);
+    if (showAll || showNodename)
+        append(nodename);
+    if (showAll || showRelease)
+        append(release);
+    if (showAll || showMachine)
+        append(machine);
+
+    result += '\n';
+    [[maybe_unused]] auto written = platformWrite(outputFd, result.data(), result.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// basename
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    if (args.size() < 2)
+    {
+        error("basename: missing operand");
+        return 1;
+    }
+
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        if (args.at(i) == "--help" || args.at(i) == "-h")
+            return renderMarkdownHelp(outputFd,
+                                      "# basename\n"
+                                      "\n"
+                                      "Strip directory and optional suffix from path.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`basename PATH [SUFFIX]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `--help` | Display this help |\n");
+    }
+
+    auto name = std::filesystem::path(args.at(1)).filename().string();
+    if (name.empty())
+        name = "/";
+
+    // Remove suffix if given
+    if (args.size() >= 3)
+    {
+        auto const suffix = std::string_view(args.at(2));
+        if (!suffix.empty() && name.size() > suffix.size() && name.ends_with(suffix))
+            name = name.substr(0, name.size() - suffix.size());
+    }
+
+    auto output = std::format("{}\n", name);
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// dirname
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    if (args.size() < 2)
+    {
+        error("dirname: missing operand");
+        return 1;
+    }
+
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        if (args.at(i) == "--help" || args.at(i) == "-h")
+            return renderMarkdownHelp(outputFd,
+                                      "# dirname\n"
+                                      "\n"
+                                      "Strip last component from path.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`dirname PATH`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `--help` | Display this help |\n");
+    }
+
+    auto parent = std::filesystem::path(args.at(1)).parent_path().string();
+    if (parent.empty())
+        parent = ".";
+
+    auto output = std::format("{}\n", parent);
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// realpath
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    if (args.size() < 2)
+    {
+        error("realpath: missing operand");
+        return 1;
+    }
+
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        if (args.at(i) == "-h" || args.at(i) == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# realpath\n"
+                                      "\n"
+                                      "Resolve path to absolute canonical form.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`realpath PATH...`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+    }
+
+    auto exitCode = 0;
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        std::error_code ec;
+        auto const canonical = std::filesystem::canonical(args.at(i), ec);
+        if (ec)
+        {
+            error("realpath: {}: {}", args.at(i), ec.message());
+            exitCode = 1;
+            continue;
+        }
+        auto output = std::format("{}\n", canonical.string());
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    }
+    return exitCode;
+}
+
+// ---------------------------------------------------------------------------
+// touch
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool noCreate = false;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# touch\n"
+                                      "\n"
+                                      "Create file or update timestamps.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`touch [OPTIONS] FILE...`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-c`, `--no-create` | Do not create files |\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+        if (arg == "-c" || arg == "--no-create")
+        {
+            noCreate = true;
+            continue;
+        }
+        if (arg == "--")
+        {
+            for (auto const j: std::views::iota(i + 1, args.size()))
+                files.push_back(args.at(j));
+            break;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    if (files.empty())
+    {
+        error("touch: missing file operand");
+        return 1;
+    }
+
+    auto exitCode = 0;
+    for (auto const& file: files)
+    {
+        auto const path = std::filesystem::path(file);
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec))
+        {
+            // Update timestamp
+            std::filesystem::last_write_time(path, std::filesystem::file_time_type::clock::now(), ec);
+            if (ec)
+            {
+                error("touch: cannot touch '{}': {}", file, ec.message());
+                exitCode = 1;
+            }
+        }
+        else if (!noCreate)
+        {
+            // Create file
+            std::ofstream ofs(path);
+            if (!ofs)
+            {
+                error("touch: cannot touch '{}': Permission denied", file);
+                exitCode = 1;
+            }
+        }
+    }
+    return exitCode;
+}
+
+// ---------------------------------------------------------------------------
+// ln
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool symbolic = false;
+    bool force = false;
+    bool verbose = false;
+    std::vector<std::string> operands;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# ln\n"
+                                      "\n"
+                                      "Create hard or symbolic links.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`ln [OPTIONS] TARGET LINK_NAME`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-s` | Create symbolic link |\n"
+                                      "| `-f` | Remove existing destination files |\n"
+                                      "| `-v` | Explain what is being done |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg == "--")
+        {
+            for (auto const j: std::views::iota(i + 1, args.size()))
+                operands.push_back(args.at(j));
+            break;
+        }
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 's': symbolic = true; break;
+                    case 'f': force = true; break;
+                    case 'v': verbose = true; break;
+                    default:
+                        error("ln: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+            continue;
+        }
+        operands.push_back(std::string(arg));
+    }
+
+    if (operands.size() < 2)
+    {
+        error("ln: missing operand");
+        return 1;
+    }
+
+    auto const& target = operands[0];
+    auto const& linkName = operands[1];
+
+    std::error_code ec;
+    if (force && std::filesystem::exists(linkName, ec))
+        std::filesystem::remove(linkName, ec);
+
+    if (symbolic)
+        std::filesystem::create_symlink(target, linkName, ec);
+    else
+        std::filesystem::create_hard_link(target, linkName, ec);
+
+    if (ec)
+    {
+        error("ln: failed to create link '{}' -> '{}': {}", linkName, target, ec.message());
+        return 1;
+    }
+
+    if (verbose)
+    {
+        auto msg = std::format("'{}' -> '{}'\n", linkName, target);
+        [[maybe_unused]] auto written = platformWrite(outputFd, msg.data(), msg.size());
+    }
+
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// mktemp
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool createDir = false;
+    std::string basedir;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# mktemp\n"
+                                      "\n"
+                                      "Create a temporary file or directory.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`mktemp [OPTIONS]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-d` | Create a directory instead of a file |\n"
+                                      "| `-p DIR` | Use DIR as the base directory |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg == "-d")
+        {
+            createDir = true;
+            continue;
+        }
+        if (arg == "-p")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("mktemp: -p requires an argument");
+                return 1;
+            }
+            basedir = args.at(++i);
+            continue;
+        }
+        error("mktemp: unrecognized option '{}'", arg);
+        return 1;
+    }
+
+    auto const tmpdir =
+        basedir.empty() ? std::filesystem::temp_directory_path() : std::filesystem::path(basedir);
+
+    // Generate random suffix
+    static constexpr std::string_view chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::string suffix = "tmp.";
+    std::mt19937 rng(static_cast<unsigned>(
+        std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
+    for (auto const _: std::views::iota(0, 10))
+    {
+        (void) _;
+        suffix += chars[dist(rng)];
+    }
+
+    auto const path = tmpdir / suffix;
+
+    std::error_code ec;
+    if (createDir)
+    {
+        std::filesystem::create_directories(path, ec);
+        if (ec)
+        {
+            error("mktemp: failed to create directory '{}': {}", path.string(), ec.message());
+            return 1;
+        }
+    }
+    else
+    {
+        std::ofstream ofs(path);
+        if (!ofs)
+        {
+            error("mktemp: failed to create file '{}'", path.string());
+            return 1;
+        }
+    }
+
+    auto output = std::format("{}\n", path.string());
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: read all lines from stdin or files
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+std::vector<std::string> readLinesFromInput(NativeHandle stdinFd,
+                                            std::span<std::string const> files,
+                                            auto const& errorFn)
+{
+    std::vector<std::string> lines;
+
+    auto const readFromStream = [&](std::istream& stream) {
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            lines.push_back(std::move(line));
+        }
+    };
+
+    if (files.empty())
+    {
+        // Read from stdin
+        std::string stdinData;
+        std::array<char, 4096> buffer {};
+        while (true)
+        {
+            auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+            if (bytesRead <= 0)
+                break;
+            stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
+        }
+        std::istringstream iss(stdinData);
+        readFromStream(iss);
+    }
+    else
+    {
+        for (auto const& file: files)
+        {
+            if (file == "-")
+            {
+                std::string stdinData;
+                std::array<char, 4096> buffer {};
+                while (true)
+                {
+                    auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+                    if (bytesRead <= 0)
+                        break;
+                    stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
+                }
+                std::istringstream iss(stdinData);
+                readFromStream(iss);
+            }
+            else
+            {
+                std::ifstream ifs(file);
+                if (!ifs)
+                {
+                    errorFn(std::format("{}: No such file or directory", file));
+                    continue;
+                }
+                readFromStream(ifs);
+            }
+        }
+    }
+    return lines;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// head
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    int numLines = 10;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# head\n"
+                                      "\n"
+                                      "Output the first lines of files.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`head [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-n NUM` | Output the first NUM lines (default: 10) |\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+        if (arg == "-n")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("head: option requires an argument -- 'n'");
+                return 1;
+            }
+            auto const val = std::string_view(args.at(++i));
+            auto const [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), numLines);
+            if (ec != std::errc {} || ptr != val.data() + val.size())
+            {
+                error("head: invalid number of lines: '{}'", val);
+                return 1;
+            }
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    auto const errorFn = [this](std::string const& msg) { error("head: {}", msg); };
+    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    auto const count = std::min(static_cast<size_t>(numLines), lines.size());
+    for (auto const i: std::views::iota(0uz, count))
+    {
+        auto output = std::format("{}\n", lines[i]);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// tail
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    int numLines = 10;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# tail\n"
+                                      "\n"
+                                      "Output the last lines of files.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`tail [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-n NUM` | Output the last NUM lines (default: 10) |\n"
+                                      "| `-f` | Follow: output appended data as file grows |\n"
+                                      "| `-h`, `--help` | Display this help |\n"
+                                      "\n"
+                                      "**Note:** `-f` (follow) is not yet implemented.\n");
+        if (arg == "-n")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("tail: option requires an argument -- 'n'");
+                return 1;
+            }
+            auto const val = std::string_view(args.at(++i));
+            auto const [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), numLines);
+            if (ec != std::errc {} || ptr != val.data() + val.size())
+            {
+                error("tail: invalid number of lines: '{}'", val);
+                return 1;
+            }
+            continue;
+        }
+        if (arg == "-f")
+        {
+            // Follow mode not yet implemented — just ignore for now
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    auto const errorFn = [this](std::string const& msg) { error("tail: {}", msg); };
+    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    auto const start = lines.size() > static_cast<size_t>(numLines)
+                           ? lines.size() - static_cast<size_t>(numLines)
+                           : 0uz;
+    for (auto const i: std::views::iota(start, lines.size()))
+    {
+        auto output = std::format("{}\n", lines[i]);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// wc
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    bool countLines = false;
+    bool countWords = false;
+    bool countChars = false;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# wc\n"
+                                      "\n"
+                                      "Count lines, words, and characters.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`wc [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-l` | Print line count |\n"
+                                      "| `-w` | Print word count |\n"
+                                      "| `-c` | Print character count |\n"
+                                      "| `--help` | Display this help |\n"
+                                      "\n"
+                                      "With no options, prints lines, words, and characters.\n");
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 'l': countLines = true; break;
+                    case 'w': countWords = true; break;
+                    case 'c': countChars = true; break;
+                    default:
+                        error("wc: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    // Default: show all
+    if (!countLines && !countWords && !countChars)
+    {
+        countLines = true;
+        countWords = true;
+        countChars = true;
+    }
+
+    auto const errorFn = [this](std::string const& msg) { error("wc: {}", msg); };
+    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    size_t totalLines = lines.size();
+    size_t totalWords = 0;
+    size_t totalChars = 0;
+
+    for (auto const& line: lines)
+    {
+        totalChars += line.size() + 1; // +1 for newline
+        bool inWord = false;
+        for (auto const ch: line)
+        {
+            if (std::isspace(static_cast<unsigned char>(ch)))
+                inWord = false;
+            else if (!inWord)
+            {
+                ++totalWords;
+                inWord = true;
+            }
+        }
+    }
+
+    std::string output;
+    if (countLines)
+        output += std::format("{}", totalLines);
+    if (countWords)
+    {
+        if (!output.empty())
+            output += ' ';
+        output += std::format("{}", totalWords);
+    }
+    if (countChars)
+    {
+        if (!output.empty())
+            output += ' ';
+        output += std::format("{}", totalChars);
+    }
+    output += '\n';
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// sort
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    bool reverse = false;
+    bool numeric = false;
+    bool unique = false;
+    int keyField = 0; // 0 = whole line
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# sort\n"
+                                      "\n"
+                                      "Sort lines of text.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`sort [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-r` | Reverse sort order |\n"
+                                      "| `-n` | Compare according to string numerical value |\n"
+                                      "| `-u` | Output only unique lines |\n"
+                                      "| `-k FIELD` | Sort by key field number |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 'r': reverse = true; break;
+                    case 'n': numeric = true; break;
+                    case 'u': unique = true; break;
+                    case 'k':
+                        if (i + 1 >= args.size())
+                        {
+                            error("sort: option requires an argument -- 'k'");
+                            return 1;
+                        }
+                        {
+                            auto const val = std::string_view(args.at(++i));
+                            auto const [ptr, ec] =
+                                std::from_chars(val.data(), val.data() + val.size(), keyField);
+                            if (ec != std::errc {})
+                            {
+                                error("sort: invalid key: '{}'", val);
+                                return 1;
+                            }
+                        }
+                        goto next_arg; // NOLINT
+                    default:
+                        error("sort: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+        next_arg:
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    auto const errorFn = [this](std::string const& msg) { error("sort: {}", msg); };
+    auto lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    // Extract key field helper
+    auto const getKey = [keyField](std::string_view line) -> std::string_view {
+        if (keyField <= 0)
+            return line;
+        size_t pos = 0;
+        int field = 1;
+        // Skip to the right field (whitespace-delimited)
+        while (field < keyField && pos < line.size())
+        {
+            while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos])))
+                ++pos;
+            while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
+                ++pos;
+            ++field;
+        }
+        auto const start = pos;
+        while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos])))
+            ++pos;
+        return line.substr(start, pos - start);
+    };
+
+    if (numeric)
+    {
+        std::ranges::sort(lines, [&](auto const& a, auto const& b) {
+            auto const ka = getKey(a);
+            auto const kb = getKey(b);
+            double va = 0, vb = 0;
+            std::from_chars(ka.data(), ka.data() + ka.size(), va);
+            std::from_chars(kb.data(), kb.data() + kb.size(), vb);
+            return reverse ? va > vb : va < vb;
+        });
+    }
+    else
+    {
+        std::ranges::sort(lines, [&](auto const& a, auto const& b) {
+            auto const ka = getKey(a);
+            auto const kb = getKey(b);
+            return reverse ? ka > kb : ka < kb;
+        });
+    }
+
+    if (unique)
+    {
+        auto const [first, last] = std::ranges::unique(lines);
+        lines.erase(first, last);
+    }
+
+    for (auto const& line: lines)
+    {
+        auto output = std::format("{}\n", line);
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// uniq
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    bool showCount = false;
+    bool duplicatesOnly = false;
+    bool ignoreCase = false;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# uniq\n"
+                                      "\n"
+                                      "Filter adjacent duplicate lines.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`uniq [OPTIONS] [FILE]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-c` | Prefix lines with occurrence count |\n"
+                                      "| `-d` | Only print duplicate lines |\n"
+                                      "| `-i` | Ignore case when comparing |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 'c': showCount = true; break;
+                    case 'd': duplicatesOnly = true; break;
+                    case 'i': ignoreCase = true; break;
+                    default:
+                        error("uniq: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    auto const errorFn = [this](std::string const& msg) { error("uniq: {}", msg); };
+    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    auto const compareEqual = [ignoreCase](std::string_view a, std::string_view b) {
+        if (!ignoreCase)
+            return a == b;
+        if (a.size() != b.size())
+            return false;
+        for (size_t i = 0; i < a.size(); ++i)
+        {
+            if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                std::tolower(static_cast<unsigned char>(b[i])))
+                return false;
+        }
+        return true;
+    };
+
+    size_t i = 0;
+    while (i < lines.size())
+    {
+        size_t count = 1;
+        while (i + count < lines.size() && compareEqual(lines[i], lines[i + count]))
+            ++count;
+
+        if (!duplicatesOnly || count > 1)
+        {
+            std::string output;
+            if (showCount)
+                output = std::format("{:>7} {}\n", count, lines[i]);
+            else
+                output = std::format("{}\n", lines[i]);
+            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        }
+        i += count;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// cut
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    char delimiter = '\t';
+    std::string fieldSpec;
+    std::string charSpec;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# cut\n"
+                                      "\n"
+                                      "Extract fields or characters from lines.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`cut [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-d DELIM` | Use DELIM as field delimiter (default: tab) |\n"
+                                      "| `-f FIELDS` | Select fields (e.g. `1`, `1,3`, `1-3`) |\n"
+                                      "| `-c CHARS` | Select characters (e.g. `1-5`, `3`) |\n"
+                                      "| `--help` | Display this help |\n");
+        if (arg == "-d")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("cut: option requires an argument -- 'd'");
+                return 1;
+            }
+            auto const delVal = std::string_view(args.at(++i));
+            delimiter = delVal.empty() ? '\t' : delVal[0];
+            continue;
+        }
+        if (arg == "-f")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("cut: option requires an argument -- 'f'");
+                return 1;
+            }
+            fieldSpec = args.at(++i);
+            continue;
+        }
+        if (arg == "-c")
+        {
+            if (i + 1 >= args.size())
+            {
+                error("cut: option requires an argument -- 'c'");
+                return 1;
+            }
+            charSpec = args.at(++i);
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    if (fieldSpec.empty() && charSpec.empty())
+    {
+        error("cut: you must specify a list of bytes, characters, or fields");
+        return 1;
+    }
+
+    // Parse range spec (e.g., "1", "1,3", "1-3")
+    auto const parseRangeSpec = [](std::string_view spec) -> std::vector<std::pair<int, int>> {
+        std::vector<std::pair<int, int>> ranges;
+        size_t pos = 0;
+        while (pos < spec.size())
+        {
+            auto const comma = spec.find(',', pos);
+            auto const part = spec.substr(pos, comma == std::string_view::npos ? comma : comma - pos);
+            auto const dash = part.find('-');
+            if (dash == std::string_view::npos)
+            {
+                int val = 0;
+                std::from_chars(part.data(), part.data() + part.size(), val);
+                ranges.emplace_back(val, val);
+            }
+            else
+            {
+                int start = 1, end = 999999;
+                if (dash > 0)
+                    std::from_chars(part.data(), part.data() + dash, start);
+                if (dash + 1 < part.size())
+                    std::from_chars(part.data() + dash + 1, part.data() + part.size(), end);
+                ranges.emplace_back(start, end);
+            }
+            pos = comma == std::string_view::npos ? spec.size() : comma + 1;
+        }
+        return ranges;
+    };
+
+    auto const errorFn = [this](std::string const& msg) { error("cut: {}", msg); };
+    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+
+    if (!fieldSpec.empty())
+    {
+        auto const ranges = parseRangeSpec(fieldSpec);
+        for (auto const& line: lines)
+        {
+            // Split by delimiter
+            std::vector<std::string_view> fields;
+            size_t start = 0;
+            for (size_t p = 0; p <= line.size(); ++p)
+            {
+                if (p == line.size() || line[p] == delimiter)
+                {
+                    fields.push_back(std::string_view(line).substr(start, p - start));
+                    start = p + 1;
+                }
+            }
+
+            std::string output;
+            bool first = true;
+            for (auto const& [lo, hi]: ranges)
+            {
+                for (int f = lo; f <= hi && f <= static_cast<int>(fields.size()); ++f)
+                {
+                    if (!first)
+                        output += delimiter;
+                    first = false;
+                    output += fields[static_cast<size_t>(f - 1)];
+                }
+            }
+            output += '\n';
+            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        }
+    }
+    else
+    {
+        auto const ranges = parseRangeSpec(charSpec);
+        for (auto const& line: lines)
+        {
+            std::string output;
+            for (auto const& [lo, hi]: ranges)
+            {
+                for (int c = lo; c <= hi && c <= static_cast<int>(line.size()); ++c)
+                    output += line[static_cast<size_t>(c - 1)];
+            }
+            output += '\n';
+            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        }
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// tr
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    bool deleteMode = false;
+    bool squeezeMode = false;
+    std::string set1;
+    std::string set2;
+
+    size_t i = 1;
+    for (; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# tr\n"
+                                      "\n"
+                                      "Translate or delete characters.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`tr [OPTIONS] SET1 [SET2]`\n"
+                                      "\n"
+                                      "Reads from standard input and writes to standard output.\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-d` | Delete characters in SET1 |\n"
+                                      "| `-s` | Squeeze repeated output characters in SET2 |\n"
+                                      "| `--help` | Display this help |\n"
+                                      "\n"
+                                      "## Character Classes\n"
+                                      "\n"
+                                      "`a-z`, `A-Z`, `0-9` are expanded as character ranges.\n");
+        if (arg == "-d")
+        {
+            deleteMode = true;
+            continue;
+        }
+        if (arg == "-s")
+        {
+            squeezeMode = true;
+            continue;
+        }
+        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+        {
+            for (auto const j: std::views::iota(1uz, arg.size()))
+            {
+                switch (arg[j])
+                {
+                    case 'd': deleteMode = true; break;
+                    case 's': squeezeMode = true; break;
+                    default:
+                        error("tr: invalid option -- '{}'", arg[j]);
+                        return 1;
+                }
+            }
+            continue;
+        }
+        break;
+    }
+
+    // Remaining args are SET1 and SET2
+    if (i < args.size())
+        set1 = args.at(i++);
+    if (i < args.size())
+        set2 = args.at(i++);
+
+    if (set1.empty())
+    {
+        error("tr: missing operand");
+        return 1;
+    }
+
+    // Expand character ranges like a-z, A-Z, 0-9
+    auto const expandRange = [](std::string_view s) -> std::string {
+        std::string result;
+        for (size_t p = 0; p < s.size(); ++p)
+        {
+            if (p + 2 < s.size() && s[p + 1] == '-')
+            {
+                auto const from = s[p];
+                auto const to = s[p + 2];
+                if (from <= to)
+                {
+                    for (char c = from; c <= to; ++c)
+                        result += c;
+                }
+                else
+                {
+                    for (char c = from; c >= to; --c)
+                        result += c;
+                }
+                p += 2;
+            }
+            else
+            {
+                result += s[p];
+            }
+        }
+        return result;
+    };
+
+    auto const expandedSet1 = expandRange(set1);
+    auto const expandedSet2 = expandRange(set2);
+
+    // Read stdin
+    std::string inputData;
+    std::array<char, 4096> buffer {};
+    while (true)
+    {
+        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+        if (bytesRead <= 0)
+            break;
+        inputData.append(buffer.data(), static_cast<size_t>(bytesRead));
+    }
+
+    std::string output;
+    output.reserve(inputData.size());
+
+    if (deleteMode)
+    {
+        for (auto const ch: inputData)
+        {
+            if (expandedSet1.find(ch) == std::string::npos)
+                output += ch;
+        }
+    }
+    else if (!expandedSet2.empty())
+    {
+        // Translate
+        char lastOutput = '\0';
+        for (auto const ch: inputData)
+        {
+            auto const pos = expandedSet1.find(ch);
+            auto const mapped = pos != std::string::npos
+                                    ? expandedSet2[std::min(pos, expandedSet2.size() - 1)]
+                                    : ch;
+            if (squeezeMode && mapped == lastOutput && pos != std::string::npos)
+                continue;
+            output += mapped;
+            lastOutput = mapped;
+        }
+    }
+    else
+    {
+        output = inputData;
+    }
+
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// tee
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+{
+    bool appendMode = false;
+    std::vector<std::string> files;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# tee\n"
+                                      "\n"
+                                      "Read stdin, write to stdout and files.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`tee [OPTIONS] [FILE...]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-a` | Append to files instead of overwriting |\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+        if (arg == "-a" || arg == "--append")
+        {
+            appendMode = true;
+            continue;
+        }
+        files.push_back(std::string(arg));
+    }
+
+    // Open output files
+    std::vector<std::ofstream> outStreams;
+    for (auto const& file: files)
+    {
+        auto mode = std::ios::out;
+        if (appendMode)
+            mode |= std::ios::app;
+        outStreams.emplace_back(file, mode);
+        if (!outStreams.back())
+        {
+            error("tee: {}: Permission denied", file);
+            return 1;
+        }
+    }
+
+    // Read from stdin, write to stdout + files
+    std::array<char, 4096> buffer {};
+    while (true)
+    {
+        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+        if (bytesRead <= 0)
+            break;
+
+        auto const data = std::string_view(buffer.data(), static_cast<size_t>(bytesRead));
+        [[maybe_unused]] auto written = platformWrite(outputFd, data.data(), data.size());
+
+        for (auto& ofs: outStreams)
+            ofs.write(data.data(), static_cast<std::streamsize>(data.size()));
+    }
+
+    return 0;
 }
 
 } // namespace endo

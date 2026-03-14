@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: sort sorts lines from pipe
+# skip: inline builtin not available in test runtime
+# expect: apple
+# expect: banana
+# expect: cherry
+
+echo "cherry\napple\nbanana" | sort

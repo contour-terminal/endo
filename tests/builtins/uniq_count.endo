@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: uniq -c counts occurrences
+# skip: inline builtin not available in test runtime
+# expect:       2 a
+# expect:       1 b
+# expect:       1 a
+
+echo "a\na\nb\na" | uniq -c

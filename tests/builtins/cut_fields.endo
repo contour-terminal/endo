@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cut extracts fields
+# skip: inline builtin not available in test runtime
+# expect: hello
+# expect: foo
+
+echo "hello:world\nfoo:bar" | cut -d : -f 1
