@@ -416,6 +416,8 @@ std::vector<CompletionCandidate> dotAccessCandidates(
 
 bool isBuiltinWithArgumentCompletion(std::string const& commandName)
 {
+    if (commandName == "bind")
+        return true;
     for (auto const& desc: allPropertyDescriptors())
         if (desc.name == commandName && !desc.enumValues.empty())
             return true;

@@ -643,7 +643,28 @@ namespace
         ShellBuiltinDescriptor { .name="fg", .description="builtin", .detail="**fg** -- builtin\n\nBrings a background job to the foreground." },
         ShellBuiltinDescriptor { .name="bg", .description="builtin", .detail="**bg** -- builtin\n\nResumes a suspended job in the background." },
         ShellBuiltinDescriptor { .name="wait", .description="builtin", .detail="**wait** -- builtin\n\nWaits for background jobs to complete." },
-        ShellBuiltinDescriptor { .name="bind", .description="builtin", .detail="**bind** -- builtin\n\nBinds a key sequence to a command." },
+        ShellBuiltinDescriptor { .name="bind", .description="builtin", .detail=
+            "**bind** -- builtin\n\n"
+            "Manage key bindings for the line editor.\n\n"
+            "**Usage:** `bind [OPTIONS] [KEY ACTION]`\n\n"
+            "**Options:**\n"
+            "- `-l`, `--list` — List all keybindings\n"
+            "- `-r KEY`, `--remove KEY` — Remove a keybinding\n"
+            "- `--reset` — Reset all keybindings to defaults\n"
+            "- `-h`, `--help` — Show help message\n\n"
+            "**Key format:** `[modifier+]...key`\n\n"
+            "Modifiers: `ctrl`, `alt`, `shift`, `super`\n\n"
+            "Keys: `a`-`z`, `enter`, `backspace`, `delete`, `tab`, `escape`, "
+            "`up`, `down`, `left`, `right`, `home`, `end`, `f1`-`f12`\n\n"
+            "**Examples:**\n"
+            "```\n"
+            "bind                       # List all bindings\n"
+            "bind ctrl+y redo           # Bind Ctrl+Y to redo\n"
+            "bind escape clear-buffer   # Bind Escape to clear buffer\n"
+            "bind -r ctrl+y             # Remove Ctrl+Y binding\n"
+            "bind --reset               # Reset to defaults\n"
+            "```"
+        },
         ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
         ShellBuiltinDescriptor { .name="echo", .description="builtin", .detail="**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
         ShellBuiltinDescriptor { .name="grep", .description="builtin", .detail="**grep** -- builtin\n\nSearches for patterns in files.\n\n```\ngrep -rn TODO src/\n```" },

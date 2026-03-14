@@ -91,57 +91,58 @@ namespace
     struct ActionNameMapping
     {
         std::string_view name;
+        std::string_view description;
         EditAction action;
     };
 
     constexpr std::array<ActionNameMapping, 38> actionNameMappings = { {
         // Movement
-        { .name = "move-forward-char", .action = EditAction::MoveForwardChar },
-        { .name = "move-backward-char", .action = EditAction::MoveBackwardChar },
-        { .name = "move-forward-word", .action = EditAction::MoveForwardWord },
-        { .name = "move-backward-word", .action = EditAction::MoveBackwardWord },
-        { .name = "move-to-line-start", .action = EditAction::MoveToLineStart },
-        { .name = "move-to-line-end", .action = EditAction::MoveToLineEnd },
-        { .name = "move-to-buffer-start", .action = EditAction::MoveToBufferStart },
-        { .name = "move-to-buffer-end", .action = EditAction::MoveToBufferEnd },
-        { .name = "move-up", .action = EditAction::MoveUp },
-        { .name = "move-down", .action = EditAction::MoveDown },
-        { .name = "smart-move-to-line-start", .action = EditAction::SmartMoveToLineStart },
-        { .name = "smart-move-to-line-end", .action = EditAction::SmartMoveToLineEnd },
+        { .name = "move-forward-char", .description = "Move cursor forward one character", .action = EditAction::MoveForwardChar },
+        { .name = "move-backward-char", .description = "Move cursor backward one character", .action = EditAction::MoveBackwardChar },
+        { .name = "move-forward-word", .description = "Move cursor forward one word", .action = EditAction::MoveForwardWord },
+        { .name = "move-backward-word", .description = "Move cursor backward one word", .action = EditAction::MoveBackwardWord },
+        { .name = "move-to-line-start", .description = "Move to start of line", .action = EditAction::MoveToLineStart },
+        { .name = "move-to-line-end", .description = "Move to end of line", .action = EditAction::MoveToLineEnd },
+        { .name = "move-to-buffer-start", .description = "Move to start of buffer", .action = EditAction::MoveToBufferStart },
+        { .name = "move-to-buffer-end", .description = "Move to end of buffer", .action = EditAction::MoveToBufferEnd },
+        { .name = "move-up", .description = "Move up one line or history prev", .action = EditAction::MoveUp },
+        { .name = "move-down", .description = "Move down one line or history next", .action = EditAction::MoveDown },
+        { .name = "smart-move-to-line-start", .description = "Smart move to line start", .action = EditAction::SmartMoveToLineStart },
+        { .name = "smart-move-to-line-end", .description = "Smart move to line end", .action = EditAction::SmartMoveToLineEnd },
         // Editing
-        { .name = "delete-char-backward", .action = EditAction::DeleteCharBackward },
-        { .name = "delete-char-forward", .action = EditAction::DeleteCharForward },
-        { .name = "delete-word", .action = EditAction::DeleteWord },
-        { .name = "delete-word-backward", .action = EditAction::DeleteWordBackward },
-        { .name = "kill-to-end", .action = EditAction::KillToEnd },
-        { .name = "kill-to-start", .action = EditAction::KillToStart },
-        { .name = "transpose", .action = EditAction::Transpose },
-        { .name = "clear-buffer", .action = EditAction::ClearBuffer },
+        { .name = "delete-char-backward", .description = "Delete character before cursor", .action = EditAction::DeleteCharBackward },
+        { .name = "delete-char-forward", .description = "Delete character at cursor", .action = EditAction::DeleteCharForward },
+        { .name = "delete-word", .description = "Delete word after cursor", .action = EditAction::DeleteWord },
+        { .name = "delete-word-backward", .description = "Delete word before cursor", .action = EditAction::DeleteWordBackward },
+        { .name = "kill-to-end", .description = "Kill from cursor to end of line", .action = EditAction::KillToEnd },
+        { .name = "kill-to-start", .description = "Kill from cursor to start of line", .action = EditAction::KillToStart },
+        { .name = "transpose", .description = "Transpose characters around cursor", .action = EditAction::Transpose },
+        { .name = "clear-buffer", .description = "Clear the entire input buffer", .action = EditAction::ClearBuffer },
         // Undo/Redo
-        { .name = "undo", .action = EditAction::Undo },
-        { .name = "redo", .action = EditAction::Redo },
+        { .name = "undo", .description = "Undo last edit", .action = EditAction::Undo },
+        { .name = "redo", .description = "Redo last undone edit", .action = EditAction::Redo },
         // Kill Ring
-        { .name = "yank", .action = EditAction::Yank },
-        { .name = "yank-pop", .action = EditAction::YankPop },
+        { .name = "yank", .description = "Paste from kill ring", .action = EditAction::Yank },
+        { .name = "yank-pop", .description = "Cycle through kill ring entries", .action = EditAction::YankPop },
         // Selection
-        { .name = "select-all", .action = EditAction::SelectAll },
+        { .name = "select-all", .description = "Select all text", .action = EditAction::SelectAll },
         // Clipboard
-        { .name = "cut", .action = EditAction::Cut },
-        { .name = "copy", .action = EditAction::Copy },
-        { .name = "paste", .action = EditAction::Paste },
+        { .name = "cut", .description = "Cut selection to clipboard", .action = EditAction::Cut },
+        { .name = "copy", .description = "Copy selection to clipboard", .action = EditAction::Copy },
+        { .name = "paste", .description = "Paste from clipboard", .action = EditAction::Paste },
         // Control
-        { .name = "submit", .action = EditAction::Submit },
-        { .name = "abort", .action = EditAction::Abort },
-        { .name = "insert-newline", .action = EditAction::InsertNewline },
-        { .name = "agent-mode", .action = EditAction::AgentMode },
-        { .name = "cycle-agent-mode", .action = EditAction::CycleAgentMode },
-        { .name = "cycle-thinking-mode", .action = EditAction::CycleThinkingMode },
-        { .name = "cycle-model", .action = EditAction::CycleModel },
+        { .name = "submit", .description = "Submit input", .action = EditAction::Submit },
+        { .name = "abort", .description = "Abort input", .action = EditAction::Abort },
+        { .name = "insert-newline", .description = "Insert newline in multiline mode", .action = EditAction::InsertNewline },
+        { .name = "agent-mode", .description = "Enter agent mode", .action = EditAction::AgentMode },
+        { .name = "cycle-agent-mode", .description = "Cycle between agent sub-modes", .action = EditAction::CycleAgentMode },
+        { .name = "cycle-thinking-mode", .description = "Cycle through thinking modes", .action = EditAction::CycleThinkingMode },
+        { .name = "cycle-model", .description = "Cycle through available models", .action = EditAction::CycleModel },
         // History
-        { .name = "history-prev", .action = EditAction::HistoryPrev },
-        { .name = "history-next", .action = EditAction::HistoryNext },
+        { .name = "history-prev", .description = "Previous history entry", .action = EditAction::HistoryPrev },
+        { .name = "history-next", .description = "Next history entry", .action = EditAction::HistoryNext },
         // Command Palette
-        { .name = "command-palette", .action = EditAction::CommandPalette },
+        { .name = "command-palette", .description = "Open the command palette", .action = EditAction::CommandPalette },
     } };
 } // namespace
 
@@ -281,6 +282,26 @@ std::string_view editActionToString(EditAction action) noexcept
             return mapping.name;
     }
     return "none";
+}
+
+std::vector<EditActionInfo> allEditActionNames()
+{
+    std::vector<EditActionInfo> infos;
+    infos.reserve(actionNameMappings.size());
+    for (auto const& mapping: actionNameMappings)
+        infos.push_back({ .name = mapping.name, .description = mapping.description });
+    return infos;
+}
+
+std::vector<std::string_view> allKeyNames()
+{
+    std::vector<std::string_view> names;
+    names.reserve(keyNameMappings.size() + moreKeyNameMappings.size());
+    for (auto const& mapping: keyNameMappings)
+        names.push_back(mapping.name);
+    for (auto const& mapping: moreKeyNameMappings)
+        names.push_back(mapping.name);
+    return names;
 }
 
 void KeyBindings::bind(KeyChord chord, EditAction action)

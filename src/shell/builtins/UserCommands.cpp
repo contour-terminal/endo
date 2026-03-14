@@ -140,14 +140,15 @@ void Shell::builtinBind(CoreVM::Params& context)
             "`move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, "
             "`smart-move-to-line-start`, `smart-move-to-line-end` |\n"
             "| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, "
-            "`delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |\n"
+            "`delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose`, `clear-buffer` |\n"
             "| Undo | `undo`, `redo` |\n"
             "| Kill Ring | `yank`, `yank-pop` |\n"
             "| Selection | `select-all` |\n"
             "| Clipboard | `cut`, `copy`, `paste` |\n"
             "| Control | `submit`, `abort`, `insert-newline`, `agent-mode`, "
             "`cycle-agent-mode`, `cycle-thinking-mode`, `cycle-model` |\n"
-            "| History | `history-prev`, `history-next` |\n");
+            "| History | `history-prev`, `history-next` |\n"
+            "| Command Palette | `command-palette` |\n");
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;
