@@ -666,6 +666,7 @@ namespace
             "```"
         },
         ShellBuiltinDescriptor { .name="dirconfig", .description="builtin", .detail="**dirconfig** -- builtin\n\nManage directory configuration trust entries.\n\n```\ndirconfig allow\ndirconfig list\n```" },
+        ShellBuiltinDescriptor { .name="kill", .description="builtin", .detail="**kill** -- builtin\n\nSend signals to processes or jobs.\n\n```\nkill 1234\nkill -9 %1\nkill -l\n```" },
         ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
         ShellBuiltinDescriptor { .name="echo", .description="builtin", .detail="**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
         ShellBuiltinDescriptor { .name="grep", .description="builtin", .detail="**grep** -- builtin\n\nSearches for patterns in files.\n\n```\ngrep -rn TODO src/\n```" },

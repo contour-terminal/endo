@@ -2,6 +2,7 @@
 #include <shell/Shell.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
+#include <shell/commands/KillCommand.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
@@ -2440,6 +2441,136 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandl
     }
 
     return timedOut ? 124 : finalResult->exitCode;
+}
+
+int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    // Parse arguments (skip args[0] which is "kill")
+    auto killArgs = std::vector<std::string>();
+    for (auto const i: std::views::iota(1uz, args.size()))
+        killArgs.push_back(args.at(i));
+
+    auto parsed = kill_cmd::parseKillArgs(killArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 1;
+    }
+
+    auto const& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(outputFd,
+                                  "# kill\n"
+                                  "\n"
+                                  "Send signals to processes or jobs.\n"
+                                  "\n"
+                                  "## Usage\n"
+                                  "\n"
+                                  "`kill [-SIGNAL | -s SIGNAL] PID|%JOB ...`\n"
+                                  "`kill -l`\n"
+                                  "\n"
+                                  "## Options\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|---|---|\n"
+                                  "| `-SIGNAL` | Signal to send by name or number (default: `TERM`) |\n"
+                                  "| `-s SIGNAL` | Signal to send (POSIX style) |\n"
+                                  "| `-l` | List available signal names |\n"
+                                  "| `-h`, `--help` | Show this help message |\n"
+                                  "\n"
+                                  "## Signals\n"
+                                  "\n"
+                                  "| # | Name | # | Name | # | Name |\n"
+                                  "|---|---|---|---|---|---|\n"
+                                  "| 1 | `HUP` | 2 | `INT` | 3 | `QUIT` |\n"
+                                  "| 4 | `ILL` | 5 | `TRAP` | 6 | `ABRT` |\n"
+                                  "| 7 | `BUS` | 8 | `FPE` | 9 | `KILL` |\n"
+                                  "| 10 | `USR1` | 11 | `SEGV` | 12 | `USR2` |\n"
+                                  "| 13 | `PIPE` | 14 | `ALRM` | 15 | `TERM` |\n"
+                                  "\n"
+                                  "## Examples\n"
+                                  "\n"
+                                  "| Example | Description |\n"
+                                  "|---|---|\n"
+                                  "| `kill 1234` | Send `SIGTERM` to process 1234 |\n"
+                                  "| `kill -9 1234` | Send `SIGKILL` to process 1234 |\n"
+                                  "| `kill -TERM 1234` | Send `SIGTERM` by name |\n"
+                                  "| `kill %1` | Send `SIGTERM` to job 1 |\n"
+                                  "| `kill -s USR1 5678` | Send `SIGUSR1` (POSIX style) |\n"
+                                  "| `kill -l` | List all signal names |\n");
+
+    if (opts.listSignals)
+    {
+        // clang-format off
+        static constexpr std::pair<int, std::string_view> signals[] = {
+            {  1, "HUP" }, {  2, "INT"  }, {  3, "QUIT" }, {  4, "ILL"  }, {  5, "TRAP" },
+            {  6, "ABRT"}, {  7, "BUS"  }, {  8, "FPE"  }, {  9, "KILL" }, { 10, "USR1" },
+            { 11, "SEGV"}, { 12, "USR2" }, { 13, "PIPE" }, { 14, "ALRM" }, { 15, "TERM" },
+        };
+        // clang-format on
+        std::string output;
+        for (auto const& [num, name]: signals)
+            output += std::format("{:2}) {:<8}", num, name);
+
+        output += '\n';
+        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+
+    auto exitCode = 0;
+    for (auto const& target: opts.targets)
+    {
+        if (target.starts_with("%"))
+        {
+            // Job ID
+            auto const jobIdStr = std::string_view(target).substr(1);
+            int jobId = 0;
+            auto const [ptr, ec] = std::from_chars(jobIdStr.data(), jobIdStr.data() + jobIdStr.size(), jobId);
+            if (ec != std::errc {} || ptr != jobIdStr.data() + jobIdStr.size() || jobId <= 0)
+            {
+                error("kill: {}: invalid job specification", target);
+                exitCode = 1;
+                continue;
+            }
+
+            auto* job = jobTable.getJob(jobId);
+            if (!job)
+            {
+                error("kill: {}: no such job", target);
+                exitCode = 1;
+                continue;
+            }
+
+            auto const result = _processManager.sendSignal(-static_cast<int>(job->pgid), opts.signal);
+            if (!result.has_value())
+            {
+                error("kill: {}: {}", target, toString(result.error()));
+                exitCode = 1;
+            }
+        }
+        else
+        {
+            // PID
+            int pid = 0;
+            auto const [ptr, ec] = std::from_chars(target.data(), target.data() + target.size(), pid);
+            if (ec != std::errc {} || ptr != target.data() + target.size())
+            {
+                error("kill: {}: invalid process id", target);
+                exitCode = 1;
+                continue;
+            }
+
+            auto const result = _processManager.sendSignal(static_cast<ProcessId>(pid), opts.signal);
+            if (!result.has_value())
+            {
+                error("kill: ({}) - No such process", pid);
+                exitCode = 1;
+            }
+        }
+    }
+
+    return exitCode;
 }
 
 } // namespace endo

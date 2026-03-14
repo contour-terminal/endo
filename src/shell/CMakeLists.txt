@@ -172,6 +172,8 @@ add_library(endo-shell STATIC
     commands/JobsCommand.cpp
     commands/BindCommand.hpp
     commands/BindCommand.cpp
+    commands/KillCommand.hpp
+    commands/KillCommand.cpp
 )
 
 # Platform-specific implementations

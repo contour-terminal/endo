@@ -251,6 +251,8 @@ class Shell final: public SignalCallback
                                         NativeHandle stdinFd);
     /// Executes the timeout builtin, running a command with a time limit. Returns exit code.
     [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the kill builtin, sending signals to processes or jobs. Returns exit code.
+    [[nodiscard]] int executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
     void finalizePipelineBuiltin(bool lastInChain,
                                  CoreVM::CoreStringArray const& args,

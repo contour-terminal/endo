@@ -61,6 +61,8 @@ std::optional<int> Shell::tryExecuteInlineBuiltin(std::string_view program,
         return executeInlineTimeout(args, outputFd);
     if (program == "dirconfig")
         return executeInlineDirConfig(args, outputFd);
+    if (program == "kill")
+        return executeInlineKill(args, outputFd);
     return std::nullopt;
 }
 
@@ -259,6 +261,14 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
         _exitCode = executeInlineTimeout(args, stdoutFd);
         finalizePipelineBuiltin(lastInChain, args, "timeout", context);
+        return;
+    }
+
+    if (program == "kill")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+        _exitCode = executeInlineKill(args, stdoutFd);
+        finalizePipelineBuiltin(lastInChain, args, "kill", context);
         return;
     }
 

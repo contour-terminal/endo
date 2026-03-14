@@ -57,6 +57,10 @@ static constexpr ParamDescriptor fdNumberParam[] = { { .name="fd", .type=LT::Num
 static constexpr ParamDescriptor pathStringParam[] = { { .name="path", .type=LT::String } };
 static constexpr ParamDescriptor fileWriteParams[] = { { .name="path", .type=LT::String }, { .name="content", .type=LT::String } };
 
+// Process signal params
+static constexpr ParamDescriptor processPidParam[] = { { .name="pid", .type=LT::Number } };
+static constexpr ParamDescriptor processSignalParams[] = { { .name="signum", .type=LT::Number }, { .name="pid", .type=LT::Number } };
+
 // ---------------------------------------------------------------------------
 // Unified descriptor table
 // ---------------------------------------------------------------------------
@@ -375,6 +379,10 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="", .vmName="file_size", .returnType=LT::Number, .params=pathStringParam, .sharedImpl=&builtins::fileSize, .description="", .detail="" },
     StdlibDescriptor { .userFacingName="", .vmName="file_exists", .returnType=LT::Boolean, .params=pathStringParam, .sharedImpl=&builtins::fileExists, .description="", .detail="" },
     StdlibDescriptor { .userFacingName="", .vmName="file_delete", .returnType=LT::Number, .params=pathStringParam, .sharedImpl=&builtins::fileDelete, .description="", .detail="" },
+
+    // Process signal operations
+    StdlibDescriptor { .userFacingName="", .vmName="process_kill", .returnType=LT::Number, .params=processPidParam, .sharedImpl=&builtins::processKill, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="process_signal", .returnType=LT::Number, .params=processSignalParams, .sharedImpl=&builtins::processSignal, .description="", .detail="" },
 };
 // clang-format on
 
