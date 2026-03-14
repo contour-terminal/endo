@@ -4574,3 +4574,25 @@ TEST_CASE("shell.builtin.grep_pipe_chain")
                      .output())
           == escape("2\n"));
 }
+
+// =============================================================================
+// Variadic function + shell pipe tests
+// =============================================================================
+
+TEST_CASE("shell.variadic_function_pipe", "[variadic]")
+{
+    TestShell shell;
+    // Define a variadic function that wraps echo (the wrapper adds --color=auto
+    // but for piping, the parser falls back to raw command execution).
+    // Use 'echo' directly as the variadic name so it resolves as a real program.
+    shell("let echo ...xs = & echo ...xs");
+    shell("echo hello world | grep --color=never hello");
+    CHECK(escape(shell.output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.pipe_with_flags", "[pipe]")
+{
+    // Verify that basic pipes with flags work as expected (regression guard)
+    CHECK(escape(TestShell()("echo -e \"foo\\nbar\" | grep --color=never -w foo").output())
+          == escape("foo\n"));
+}

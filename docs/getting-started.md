@@ -133,6 +133,12 @@ let ll ...args = & exa -l ...args
 let gs ...args = & git status ...args
 ```
 
+To start Endo without loading this file, use `--no-profile`:
+
+```bash
+endo --no-profile
+```
+
 ## Next Steps
 
 - [Shell Features](shell/index.md) -- Learn about interactive features, builtins, and

@@ -2,6 +2,8 @@
 
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -2577,4 +2579,77 @@ TEST_CASE("Parser.FSharp.generic_record_ir_generation", "[parser][generic]")
 {
     CHECK(generatesIRSuccessfully("type Pair<'a, 'b> = { first: 'a; second: 'b }\n"
                                   "let p = { first = 1; second = \"hello\" }"));
+}
+
+// =============================================================================
+// Variadic Function + Shell Pipe Tests
+// =============================================================================
+
+namespace
+{
+
+/// Parses source with the given variadic function names registered.
+std::unique_ptr<endo::ast::Statement> parseWithVariadics(std::string const& source,
+                                                         std::unordered_set<std::string> variadics)
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearErrors();
+
+    endo::Parser parser(rt.runtime, rt.report, std::make_unique<endo::StringSource>(source));
+    parser.setKnownVariadicFunctions(std::move(variadics));
+    auto result = parser.parse();
+
+    if (rt.hasErrors())
+        return nullptr;
+
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("Parser.Shell.variadic_function_with_pipe", "[parser][variadic]")
+{
+    auto ast = parseWithVariadics("ip addr show | grep -w inet", { "ip" });
+    REQUIRE(ast != nullptr);
+
+    auto* stmt = getFirstStatement(ast.get());
+    REQUIRE(stmt != nullptr);
+
+    auto* pipeline = dynamic_cast<endo::ast::CallPipeline*>(stmt);
+    REQUIRE(pipeline != nullptr);
+    CHECK(pipeline->calls.size() == 2);
+    CHECK(pipeline->calls[0]->program == "ip");
+    CHECK(pipeline->calls[1]->program == "grep");
+}
+
+TEST_CASE("Parser.Shell.variadic_function_without_pipe", "[parser][variadic]")
+{
+    auto ast = parseWithVariadics("ip addr show", { "ip" });
+    REQUIRE(ast != nullptr);
+
+    auto* stmt = getFirstStatement(ast.get());
+    REQUIRE(stmt != nullptr);
+
+    // Without pipe, should be an ExprStmt containing an ApplicationExpr chain
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(stmt);
+    REQUIRE(exprStmt != nullptr);
+
+    auto* app = dynamic_cast<endo::ast::ApplicationExpr*>(exprStmt->expr.get());
+    REQUIRE(app != nullptr);
+}
+
+TEST_CASE("Parser.Shell.variadic_function_with_multi_pipe", "[parser][variadic]")
+{
+    auto ast = parseWithVariadics("ip addr show | grep -w inet | head -5", { "ip" });
+    REQUIRE(ast != nullptr);
+
+    auto* stmt = getFirstStatement(ast.get());
+    REQUIRE(stmt != nullptr);
+
+    auto* pipeline = dynamic_cast<endo::ast::CallPipeline*>(stmt);
+    REQUIRE(pipeline != nullptr);
+    CHECK(pipeline->calls.size() == 3);
+    CHECK(pipeline->calls[0]->program == "ip");
+    CHECK(pipeline->calls[1]->program == "grep");
+    CHECK(pipeline->calls[2]->program == "head");
 }
