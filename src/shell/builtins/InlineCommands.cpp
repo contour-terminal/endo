@@ -24,6 +24,7 @@
 #include <fcntl.h>
 
 #include <platform/Process.hpp>
+#include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
 
 #if defined(_WIN32)
@@ -983,11 +984,27 @@ int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle 
         }
     }
 
-    // Sleep
+    // Sleep in short intervals to allow Ctrl+C (SIGINT) interruption
     if (totalSeconds > 0)
     {
-        auto const duration = std::chrono::duration<double>(totalSeconds);
-        std::this_thread::sleep_for(duration);
+        SignalHandler::clearPendingSigint();
+        auto const deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>(totalSeconds);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            // Drain any pending signals from signalfd (Linux) so SIGINT flag gets set
+            SignalHandler::processSignalFd();
+            if (SignalHandler::hasPendingSigint())
+            {
+                SignalHandler::clearPendingSigint();
+                return 130; // 128 + SIGINT(2)
+            }
+            auto const remaining = deadline - std::chrono::steady_clock::now();
+            auto const maxInterval = std::chrono::milliseconds(100);
+            if (remaining > maxInterval)
+                std::this_thread::sleep_for(maxInterval);
+            else if (remaining > std::chrono::steady_clock::duration::zero())
+                std::this_thread::sleep_for(remaining);
+        }
     }
 
     return 0;

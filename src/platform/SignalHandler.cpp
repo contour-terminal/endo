@@ -15,6 +15,7 @@ namespace endo::platform
 
 SignalCallback* SignalHandler::_callback = nullptr;
 int SignalHandler::_signalFd = -1;
+std::atomic<bool> SignalHandler::_sigintPending { false };
 
 #if !defined(__linux__) && !defined(_WIN32)
 std::atomic<bool> SignalHandler::_sigchldPending { false };
@@ -66,13 +67,15 @@ int SignalHandler::initialize(SignalCallback* callback)
     // Ignore SIGTTOU so tcsetpgrp() doesn't stop the shell when transferring terminal control
     signal(SIGTTOU, SIG_IGN);
 
-    // Ignore SIGINT - the shell doesn't need it (child processes reset to SIG_DFL)
-    // At the prompt, terminal is in raw mode so Ctrl+C is a keypress, not a signal
-    signal(SIGINT, SIG_IGN);
+    // Handle SIGINT via flag — builtins (like sleep) poll this to support Ctrl+C interruption.
+    // At the prompt, terminal is in raw mode so Ctrl+C is a keypress, not a signal.
+    sa.sa_handler = sigintHandler;
+    sigaction(SIGINT, &sa, nullptr);
 
     _sigchldPending.store(false);
     _sigtstpPending.store(false);
     _sigcontPending.store(false);
+    _sigintPending.store(false);
     return -1;
 #endif
 }
@@ -113,6 +116,7 @@ void SignalHandler::restore()
     _sigchldPending.store(false);
     _sigtstpPending.store(false);
     _sigcontPending.store(false);
+    _sigintPending.store(false);
 #endif
 
     _callback = nullptr;
@@ -147,6 +151,10 @@ bool SignalHandler::processSignalFd()
                 break;
             case SIGCONT:
                 _callback->onSigcont();
+                processed = true;
+                break;
+            case SIGINT:
+                _sigintPending.store(true);
                 processed = true;
                 break;
             default: break;
@@ -268,6 +276,21 @@ void SignalHandler::sigcontHandler(int /*sig*/)
 {
     _sigcontPending.store(true);
 }
+
+void SignalHandler::sigintHandler(int /*sig*/)
+{
+    _sigintPending.store(true);
+}
 #endif
+
+bool SignalHandler::hasPendingSigint() noexcept
+{
+    return _sigintPending.load();
+}
+
+void SignalHandler::clearPendingSigint() noexcept
+{
+    _sigintPending.store(false);
+}
 
 } // namespace endo::platform

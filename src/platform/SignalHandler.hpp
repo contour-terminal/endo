@@ -81,6 +81,12 @@ class SignalHandler
     /// Clears the pending SIGCONT flag.
     static void clearPendingSigcont() noexcept;
 
+    /// Checks if SIGINT was received (works on all platforms).
+    [[nodiscard]] static bool hasPendingSigint() noexcept;
+
+    /// Clears the pending SIGINT flag.
+    static void clearPendingSigint() noexcept;
+
     /// Temporarily restores default SIGTSTP handling and re-raises the signal.
     ///
     /// This is called during shell suspend to actually stop the process.
@@ -88,14 +94,16 @@ class SignalHandler
     static void suspendSelf();
 
   private:
-    static SignalCallback* _callback; // NOLINT(readability-identifier-naming)
-    static int _signalFd;             // NOLINT(readability-identifier-naming)
+    static SignalCallback* _callback;        // NOLINT(readability-identifier-naming)
+    static int _signalFd;                    // NOLINT(readability-identifier-naming)
+    static std::atomic<bool> _sigintPending; // NOLINT(readability-identifier-naming)
 
 #if !defined(__linux__)
     /// Traditional signal handlers for non-Linux platforms.
     static void sigchldHandler(int sig);
     static void sigtstpHandler(int sig);
     static void sigcontHandler(int sig);
+    static void sigintHandler(int sig);
     static std::atomic<bool> _sigchldPending;
     static std::atomic<bool> _sigtstpPending;
     static std::atomic<bool> _sigcontPending;
