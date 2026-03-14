@@ -685,6 +685,17 @@ namespace
         ShellBuiltinDescriptor { .name="cut", .description="builtin", .detail="**cut** -- builtin\n\nExtract fields or characters.\n\n```\ncut -d : -f 1 /etc/passwd\necho \"hello\" | cut -c 1-3\n```" },
         ShellBuiltinDescriptor { .name="tr", .description="builtin", .detail="**tr** -- builtin\n\nTranslate or delete characters.\n\n```\necho \"hello\" | tr a-z A-Z\necho \"hello\" | tr -d l\n```" },
         ShellBuiltinDescriptor { .name="tee", .description="builtin", .detail="**tee** -- builtin\n\nRead stdin, write to stdout and files.\n\n```\necho \"hello\" | tee output.txt\necho \"data\" | tee -a log.txt\n```" },
+        ShellBuiltinDescriptor { .name="source-env", .description="builtin", .detail=
+            "**source-env** -- builtin\n\n"
+            "Import environment variables from an external script.\n\n"
+            "Runs a script in its native interpreter, captures the resulting environment,\n"
+            "and imports new or changed variables into the current Endo shell session.\n\n"
+            "**Supported extensions:** `.bat`/`.cmd` (Windows), `.ps1` (cross-platform), `.sh` (bash)\n\n"
+            "```\n"
+            "source-env path/to/setup.ps1\n"
+            "source-env vcvarsall.bat x64\n"
+            "```"
+        },
         ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
         ShellBuiltinDescriptor { .name="echo", .description="builtin", .detail="**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
         ShellBuiltinDescriptor { .name="grep", .description="builtin", .detail="**grep** -- builtin\n\nSearches for patterns in files.\n\n```\ngrep -rn TODO src/\n```" },
