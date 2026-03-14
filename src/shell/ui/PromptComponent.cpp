@@ -806,7 +806,14 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 updateGhostText(); // Clear/update ghost text after completion
                 return Action::Changed;
             case tui::CompletionAction::Dismissed:
-                // Don't hide yet - let event pass through and potentially re-filter
+                // Escape should just close the popup without passing through to InputField
+                if (auto const* key = std::get_if<tui::KeyEvent>(&event);
+                    key && key->key == tui::KeyCode::Escape)
+                {
+                    dismissPopup();
+                    return Action::Changed;
+                }
+                // Other keys (typed characters): let event pass through and re-filter
                 popupDismissedByTyping = true;
                 break;
         }
