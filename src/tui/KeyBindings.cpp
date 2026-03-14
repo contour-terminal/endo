@@ -94,7 +94,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 37> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 38> actionNameMappings = { {
         // Movement
         { .name = "move-forward-char", .action = EditAction::MoveForwardChar },
         { .name = "move-backward-char", .action = EditAction::MoveBackwardChar },
@@ -116,6 +116,7 @@ namespace
         { .name = "kill-to-end", .action = EditAction::KillToEnd },
         { .name = "kill-to-start", .action = EditAction::KillToStart },
         { .name = "transpose", .action = EditAction::Transpose },
+        { .name = "clear-buffer", .action = EditAction::ClearBuffer },
         // Undo/Redo
         { .name = "undo", .action = EditAction::Undo },
         { .name = "redo", .action = EditAction::Redo },
@@ -376,6 +377,7 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromChar('d', M::Alt), A::DeleteWord);
     bindings.bind(K::fromChar('k', M::Ctrl), A::KillToEnd);
     bindings.bind(K::fromChar('u', M::Ctrl), A::KillToStart);
+    bindings.bind(K::fromKey(KeyCode::Escape), A::ClearBuffer);
     // Note: Transpose has no default binding, users can reconfigure
     bindings.bind(K::fromChar('t', M::Ctrl), A::AgentMode);
     bindings.bind(K::fromKey(KeyCode::Tab, M::Shift), A::CycleAgentMode);

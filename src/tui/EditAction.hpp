@@ -42,6 +42,7 @@ enum class EditAction : std::uint8_t
     KillToEnd,          ///< Kill (cut to kill ring) from cursor to end of line
     KillToStart,        ///< Kill from cursor to start of line
     Transpose,          ///< Transpose characters around cursor
+    ClearBuffer,        ///< Clear the entire input buffer
 
     // === Undo/Redo ===
     Undo, ///< Undo last edit

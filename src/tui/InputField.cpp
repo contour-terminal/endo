@@ -706,6 +706,12 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             _lastWasKill = false;
             return InputFieldAction::Changed;
 
+        case EditAction::ClearBuffer:
+            clearGhostText();
+            _lastWasKill = false;
+            clear();
+            return InputFieldAction::Changed;
+
         // Undo/Redo
         case EditAction::Undo:
             _lastWasKill = false;
@@ -914,13 +920,6 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
 
     // Plain Tab: Not handled yet, ignore (modified Tab like Shift+Tab goes to keybinding lookup)
     if (key.key == KeyCode::Tab && !shift && !ctrl && !alt)
-    {
-        _lastWasKill = false;
-        return InputFieldAction::None;
-    }
-
-    // Escape: Ignore
-    if (key.key == KeyCode::Escape)
     {
         _lastWasKill = false;
         return InputFieldAction::None;
