@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: tr -d deletes characters
+# skip: inline builtin not available in test runtime
+# expect: hll wrld
+
+echo "hello world" | tr -d "eo"

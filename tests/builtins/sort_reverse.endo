@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: sort -r reverses sort order
+# skip: inline builtin not available in test runtime
+# expect: cherry
+# expect: banana
+# expect: apple
+
+echo "cherry\napple\nbanana" | sort -r

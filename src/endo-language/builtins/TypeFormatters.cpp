@@ -206,7 +206,7 @@ std::string formatSum(CoreVM::TypedObject const& obj, CoreVM::Runner* runner)
 void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
 {
     // Compile-time check: update this when adding new builtin type IDs
-    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 19,
+    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 21,
                   "New BuiltinTypeId added — update registerBuiltinFormatters() with a formatter");
 
     // Helper to set formatFn on a builtin type descriptor
@@ -235,6 +235,8 @@ void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
     setFormatter(CoreVM::BuiltinTypeId::Callable, formatCallable);
     setFormatter(CoreVM::BuiltinTypeId::Path, formatProduct);
     setFormatter(CoreVM::BuiltinTypeId::KeyBindingInfo, formatProduct);
+    setFormatter(CoreVM::BuiltinTypeId::Json, formatProduct);
+    setFormatter(CoreVM::BuiltinTypeId::Process, formatProduct);
 
     // Runtime assertion: all builtins 1..LastBuiltin must have a formatter
     for (uint16_t id = 1; id <= CoreVM::BuiltinTypeId::LastBuiltin; ++id)

@@ -24,6 +24,14 @@
 
 #include <nlohmann/json.hpp>
 
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <cerrno>
+    #include <csignal>
+    #include <cstring>
+#endif
+
 namespace endo::builtins
 {
 
@@ -1480,6 +1488,72 @@ void fileDelete(CoreVM::Params& args)
         return;
     }
 
+    auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+// ---------------------------------------------------------------------------
+// Process signal operations
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+    /// Sends a signal to a process, returning an error string on failure or empty on success.
+    std::string platformSendSignal(int pid, int sig)
+    {
+#if defined(_WIN32)
+        HANDLE const hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
+        if (hProcess == nullptr)
+            return std::format("No such process: {}", pid);
+        auto const ok = TerminateProcess(hProcess, 1);
+        CloseHandle(hProcess);
+        if (!ok)
+            return std::format("Failed to terminate process {}", pid);
+        return {};
+#else
+        if (::kill(static_cast<pid_t>(pid), sig) == -1)
+            return std::format("{}: {}", pid, std::strerror(errno));
+        return {};
+#endif
+    }
+
+} // namespace
+
+void processKill(CoreVM::Params& args)
+{
+    auto const pid = static_cast<int>(args.getInt(1));
+#if defined(_WIN32)
+    constexpr auto defaultSignal = 0; // Windows uses TerminateProcess(), signal number is ignored
+#else
+    constexpr auto defaultSignal = SIGTERM;
+#endif
+    auto const err = platformSendSignal(pid, defaultSignal);
+    if (!err.empty())
+    {
+        auto* errStr = args.caller()->newString(err);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+    auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+void processSignal(CoreVM::Params& args)
+{
+    auto const sig = static_cast<int>(args.getInt(1));
+    auto const pid = static_cast<int>(args.getInt(2));
+    auto const err = platformSendSignal(pid, sig);
+    if (!err.empty())
+    {
+        auto* errStr = args.caller()->newString(err);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
     auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
 }

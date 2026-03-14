@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: uniq removes adjacent duplicates
+# skip: inline builtin not available in test runtime
+# expect: a
+# expect: b
+# expect: a
+
+echo "a\na\nb\na" | uniq

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
 #include <shell/Shell.hpp>
+#include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/util/CommandResolver.hpp>
 #include <shell/util/Suggestions.hpp>
 
@@ -9,7 +10,6 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <format>
-#include <print>
 #include <ranges>
 
 #include <platform/Process.hpp>
@@ -34,34 +34,19 @@ auto& debugLog()
 namespace endo
 {
 
+// ---------------------------------------------------------------------------
+// Dispatch: non-piped commands
+// ---------------------------------------------------------------------------
+
 std::optional<int> Shell::tryExecuteInlineBuiltin(std::string_view program,
                                                   CoreVM::CoreStringArray const& args,
                                                   NativeHandle outputFd,
                                                   NativeHandle inputFd)
 {
-    if (program == "echo")
-        return executeInlineEcho(args, outputFd);
-    if (program == "cat")
-        return executeInlineCat(args, outputFd, inputFd);
-    if (program == "sleep")
-        return executeInlineSleep(args, outputFd);
-    if (program == "rm")
-        return executeInlineRm(args, outputFd);
-    if (program == "mkdir")
-        return executeInlineMkdir(args, outputFd);
-    if (program == "cp")
-        return executeInlineCp(args, outputFd);
-    if (program == "mv")
-        return executeInlineMv(args, outputFd);
-    if (program == "find")
-        return executeInlineFind(args, outputFd);
-    if (program == "grep")
-        return executeInlineGrep(args, outputFd, inputFd);
-    if (program == "timeout")
-        return executeInlineTimeout(args, outputFd);
-    if (program == "dirconfig")
-        return executeInlineDirConfig(args, outputFd);
-    return std::nullopt;
+    auto const* desc = findInlineBuiltin(program);
+    if (!desc)
+        return std::nullopt;
+    return desc->execute(*this, args, outputFd, inputFd);
 }
 
 void Shell::builtinCallProcess(CoreVM::Params& context)
@@ -174,6 +159,10 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     context.setResult(CoreVM::CoreNumber(_exitCode));
 }
 
+// ---------------------------------------------------------------------------
+// Dispatch: piped commands
+// ---------------------------------------------------------------------------
+
 void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 {
     bool const lastInChain = context.getBool(1);
@@ -181,84 +170,12 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
     std::string const& program = args.at(0);
 
-    // Handle inline builtins in pipeline
-    if (program == "echo")
+    // Handle inline builtins in pipeline — single table-driven dispatch
+    if (auto const* desc = findInlineBuiltin(program))
     {
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineEcho(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "echo", context);
-        return;
-    }
-
-    if (program == "cat")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineCat(args, stdoutFd, stdinFd);
-        finalizePipelineBuiltin(lastInChain, args, "cat", context);
-        return;
-    }
-
-    if (program == "sleep")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineSleep(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "sleep", context);
-        return;
-    }
-
-    if (program == "rm")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineRm(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "rm", context);
-        return;
-    }
-
-    if (program == "mkdir")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineMkdir(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "mkdir", context);
-        return;
-    }
-
-    if (program == "cp")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineCp(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "cp", context);
-        return;
-    }
-
-    if (program == "mv")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineMv(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "mv", context);
-        return;
-    }
-
-    if (program == "find")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineFind(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "find", context);
-        return;
-    }
-
-    if (program == "grep")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineGrep(args, stdoutFd, stdinFd);
-        finalizePipelineBuiltin(lastInChain, args, "grep", context);
-        return;
-    }
-
-    if (program == "timeout")
-    {
-        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
-        _exitCode = executeInlineTimeout(args, stdoutFd);
-        finalizePipelineBuiltin(lastInChain, args, "timeout", context);
+        _exitCode = desc->execute(*this, args, stdoutFd, stdinFd);
+        finalizePipelineBuiltin(lastInChain, args, program, context);
         return;
     }
 

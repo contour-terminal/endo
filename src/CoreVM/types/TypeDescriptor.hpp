@@ -205,8 +205,10 @@ namespace BuiltinTypeId
     constexpr uint16_t Callable = 17;
     constexpr uint16_t Path = 18;
     constexpr uint16_t KeyBindingInfo = 19;
+    constexpr uint16_t Json = 20;
+    constexpr uint16_t Process = 21;
     constexpr uint16_t LastBuiltin =
-        KeyBindingInfo; ///< Highest sequential builtin type ID; update when adding new builtins.
+        Process; ///< Highest sequential builtin type ID; update when adding new builtins.
     constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 

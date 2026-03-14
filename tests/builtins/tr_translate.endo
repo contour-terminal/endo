@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: tr translates characters
+# skip: inline builtin not available in test runtime
+# expect: HELLO WORLD
+
+echo "hello world" | tr a-z A-Z

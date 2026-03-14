@@ -97,6 +97,8 @@ add_library(endo-shell STATIC
     completion/ScriptedCompleter.cpp
     completion/DirconfigSpec.hpp
     completion/DirconfigSpec.cpp
+    completion/BuiltinSpecs.hpp
+    completion/BuiltinSpecs.cpp
     completion/GitSpec.hpp
     completion/GitSpec.cpp
 
@@ -130,6 +132,10 @@ add_library(endo-shell STATIC
     DirectoryConfig.cpp
 
     # Builtins
+    builtins/InlineCommandDescriptor.hpp
+    builtins/InlineCommandDescriptors.cpp
+    builtins/InlineArgParser.hpp
+    builtins/InlineArgParser.cpp
     builtins/InlineCommands.cpp
     builtins/Registration.cpp
     builtins/ProcessExecution.cpp
@@ -172,6 +178,8 @@ add_library(endo-shell STATIC
     commands/JobsCommand.cpp
     commands/BindCommand.hpp
     commands/BindCommand.cpp
+    commands/KillCommand.hpp
+    commands/KillCommand.cpp
 )
 
 # Platform-specific implementations
@@ -238,6 +246,7 @@ add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
     DirectoryConfig_test.cpp
+    builtins/InlineArgParser_test.cpp
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp
     commands/TimeoutCommand_test.cpp

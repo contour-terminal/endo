@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: basename removes suffix
+# skip: inline builtin not available in test runtime
+# expect: file
+
+basename /usr/local/file.txt .txt

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: sort -n sorts numerically
+# skip: inline builtin not available in test runtime
+# expect: 2
+# expect: 10
+# expect: 100
+
+echo "100\n2\n10" | sort -n

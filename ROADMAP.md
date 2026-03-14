@@ -45,7 +45,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd` (incl. `cd -`), `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat` (-n/-b/-s/-E/-T/-A/-r/--range/-c/--columns/-R/--rows/--raw, inline image rendering via Sixel, binary data detection), `sleep`, `fetch`, `rm` (-r/-R/-f/-d/-v/-i/--recursive/--force/--dir/--verbose/--help/--), `mkdir` (-p/-v/--parents/--verbose/--help/--), `cp` (-r/-R/-f/-n/-v/--recursive/--force/--no-clobber/--verbose/--help/--) | ✅ |
+| Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd` (incl. `cd -`), `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat` (-n/-b/-s/-E/-T/-A/-r/--range/-c/--columns/-R/--rows/--raw, inline image rendering via Sixel, binary data detection), `sleep`, `fetch`, `rm` (-r/-R/-f/-d/-v/-i/--recursive/--force/--dir/--verbose/--help/--), `mkdir` (-p/-v/--parents/--verbose/--help/--), `cp` (-r/-R/-f/-n/-v/--recursive/--force/--no-clobber/--verbose/--help/--), `whoami`, `hostname`, `date` (--epoch/--iso/--utc/+FORMAT/-d), `uname` (-s/-n/-r/-m/-a), `basename`, `dirname`, `realpath`, `touch` (-c), `ln` (-s/-f/-v), `mktemp` (-d/-p), `head` (-n), `tail` (-n/-f), `wc` (-l/-w/-c), `sort` (-r/-n/-u/-k), `uniq` (-c/-d/-i), `cut` (-d/-f/-c), `tr` (-d/-s), `tee` (-a) | ✅ |
 | Environment variables (set/get/export, LINES/COLUMNS from TTY) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | String interpolation in double-quoted strings (`"hello $USER"`) | ✅ |

@@ -32,7 +32,7 @@ void TypeRegistry::registerBuiltins()
     // SlotTraceInfo: None has no slots; Some's slot 0 is dynamic (check type tag in slot 1)
     optionType->traceInfo.variantFixedSlots = { {}, {} };
     optionType->traceInfo.variantDynamicSlots = {
-        {},                                                      // None: no payload
+        {}, // None: no payload
         { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 1, .tagPosition = 0 } }, // Some
     };
     addType(std::move(optionType));
@@ -104,7 +104,7 @@ void TypeRegistry::registerBuiltins()
     // SlotTraceInfo: Cons slot 1 (tail) is always an object; slot 0 (head) is dynamic
     listType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Nil={}, Cons={slot 1}
     listType->traceInfo.variantDynamicSlots = {
-        {},                                                                                     // Nil
+        {},                                                                                    // Nil
         { SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 2, .tagPosition = 0 } }, // Cons head
     };
     addType(std::move(listType));
@@ -258,13 +258,25 @@ void TypeRegistry::registerBuiltins()
     // Json: Stateless module providing JSON query functions (no instance fields)
     auto jsonType = std::make_unique<TypeDescriptor>();
     jsonType->kind = TypeKind::Product;
-    jsonType->id = 0; // No instances — module namespace only
+    jsonType->id = BuiltinTypeId::Json;
     jsonType->name = "Json";
     jsonType->slotCount = 0;
     jsonType->moduleFunctions = {
         { "query", "Json.query path json -> list<string>" },
     };
     addType(std::move(jsonType));
+
+    // Process: Stateless module providing process signal functions (no instance fields)
+    auto processType = std::make_unique<TypeDescriptor>();
+    processType->kind = TypeKind::Product;
+    processType->id = BuiltinTypeId::Process;
+    processType->name = "Process";
+    processType->slotCount = 0;
+    processType->moduleFunctions = {
+        { "kill", "Process.kill pid -> result<unit, str>" },
+        { "signal", "Process.signal signum pid -> result<unit, str>" },
+    };
+    addType(std::move(processType));
 
     // Lazy<T>: Unevaluated (tag=0, N+2 slots: funcId + cached + captures) | Evaluated (tag=1, cached value)
     // Note: slotCount is set to 2 as base (funcId + cached result); captures vary per lazy expression
@@ -292,7 +304,7 @@ void TypeRegistry::registerBuiltins()
     };
     // SlotTraceInfo: Cons slot 1 (lazy tail) is always an object
     seqType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Empty={}, Cons={slot 1}
-    seqType->traceInfo.variantDynamicSlots = { {}, {} };   // head type unknown at trace level
+    seqType->traceInfo.variantDynamicSlots = { {}, {} };  // head type unknown at trace level
     addType(std::move(seqType));
 
     // FileHandle: Product type with 1 field for the handle index

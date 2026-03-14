@@ -7504,6 +7504,45 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 }
             }
 
+            if (modIdent->name == "Process")
+            {
+                // Process.kill pid → process_kill(pid) → result<unit, str>
+                if (method == "kill" && argExprs.size() == 1)
+                {
+                    auto* pidArg = codegen(argExprs[0]);
+                    if (pidArg)
+                    {
+                        if (tryGenerateNativeCall("process_kill", { pidArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Void);
+                            return;
+                        }
+                    }
+                }
+                // Process.signal signum pid → process_signal(signum, pid) → result<unit, str>
+                else if (method == "signal" && argExprs.size() == 2)
+                {
+                    auto* sigArg = codegen(argExprs[0]);
+                    auto* pidArg = codegen(argExprs[1]);
+                    if (sigArg && pidArg)
+                    {
+                        if (tryGenerateNativeCall("process_signal", { sigArg, pidArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Void);
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    reportTypeError("Process.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
+                }
+            }
+
             // User-defined module function call: Module.func args
             if (auto modIt = _loadedModules.find(modIdent->name); modIt != _loadedModules.end())
             {
@@ -10819,6 +10858,20 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 }
             }
             reportTypeError("File has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "Process")
+        {
+            static constexpr std::string_view processMethods[] = { "kill", "signal" };
+            for (auto const& m: processMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    reportTypeError("Process.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
+            }
+            reportTypeError("Process has no member '{}'", std::string_view(node.fieldName));
             return;
         }
 

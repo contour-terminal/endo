@@ -345,6 +345,16 @@ void fileDelete(CoreVM::Params& args);
 void pathTemporaryDirectory(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Process signal operations
+// ---------------------------------------------------------------------------
+
+/// process_kill(pid) -> result<unit, str>: Sends SIGTERM to a process.
+void processKill(CoreVM::Params& args);
+
+/// process_signal(signum, pid) -> result<unit, str>: Sends a specified signal to a process.
+void processSignal(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cut extracts characters
+# skip: inline builtin not available in test runtime
+# expect: hel
+# expect: foo
+
+echo "hello\nfoobar" | cut -c 1-3

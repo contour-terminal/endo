@@ -498,6 +498,178 @@ mv a.txt b.txt c.txt target-directory/
 
 ---
 
+## rm
+
+Remove files and directories.
+
+**Syntax:**
+
+```
+rm [OPTIONS] FILE...
+```
+
+**Description:** Remove (unlink) the specified files. By default, does not remove directories.
+Use `-r` to remove directories and their contents recursively. Refuses to recursively remove
+`/`, `.`, or `..` as a safety measure.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-f`, `--force` | Ignore nonexistent files, never prompt |
+| `-i` | Prompt before every removal |
+| `-r`, `-R`, `--recursive` | Remove directories and their contents recursively |
+| `-d`, `--dir` | Remove empty directories |
+| `-v`, `--verbose` | Explain what is being done |
+| `--` | End of options |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+```endo
+rm file.txt
+rm -f nonexistent.txt
+rm -rf build/
+rm -rv old-project/
+rm -- -starts-with-dash.txt
+```
+
+---
+
+## find
+
+Search for files in a directory hierarchy.
+
+**Syntax:**
+
+```
+find [PATH...] [EXPRESSION]
+```
+
+**Description:** Recursively searches for files and directories matching the given criteria.
+If no path is given, the current directory is used. If no expression is given, all files are
+matched.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-maxdepth N` | Descend at most N levels |
+| `-mindepth N` | Do not apply tests at levels less than N |
+| `-print0` | Print entries separated by null instead of newline |
+| `-h`, `--help` | Display help |
+
+**Predicates:**
+
+| Predicate | Description |
+|---|---|
+| `-name PATTERN` | Match filename against glob pattern |
+| `-iname PATTERN` | Like `-name` but case-insensitive |
+| `-path PATTERN` | Match full path against glob pattern |
+| `-ipath PATTERN` | Like `-path` but case-insensitive |
+| `-type TYPE` | Match file type: `f` (file), `d` (directory), `l` (symlink) |
+| `-size [+\|-]N[c\|k\|M\|G]` | Match file size (c=bytes, k=KiB, M=MiB, G=GiB) |
+| `-mtime [+\|-]N` | Match modification time in 24-hour periods |
+| `-newer FILE` | Match files newer than FILE |
+| `-empty` | Match empty files or directories |
+
+**Operators:**
+
+| Operator | Description |
+|---|---|
+| `-a`, `-and` | Logical AND (implicit between predicates) |
+| `-o`, `-or` | Logical OR |
+| `-not`, `!` | Logical NOT |
+| `( expr )` | Group expressions |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+find . -name "*.cpp"
+find src -type f -name "*.hpp"
+find . -type f -size +1M
+find . -name "*.o" -o -name "*.tmp"
+find /tmp -maxdepth 2 -empty
+```
+
+---
+
+## grep
+
+Search for patterns in files.
+
+**Syntax:**
+
+```
+grep [OPTIONS] PATTERN [FILE...]
+```
+
+**Description:** Searches for lines matching a regular expression pattern. If no files are
+specified, reads from standard input. Returns exit code 0 if matches are found, 1 if no
+matches are found, and 2 if errors occurred.
+
+**Pattern options:**
+
+| Option | Description |
+|---|---|
+| `-e PATTERN` | Use PATTERN for matching (repeatable for multiple patterns) |
+| `-F` | Interpret PATTERN as fixed strings, not regex |
+| `-E` | Interpret PATTERN as extended regex (default) |
+| `-i` | Ignore case distinctions |
+| `-w` | Match whole words only |
+| `-x` | Match whole lines only |
+
+**Output options:**
+
+| Option | Description |
+|---|---|
+| `-c` | Print only a count of matching lines per file |
+| `-l` | Print only names of files with matches |
+| `-L` | Print only names of files without matches |
+| `-n` | Prefix each line with its line number |
+| `-H` | Print the filename for each match |
+| `-h` | Suppress the filename prefix |
+| `-o` | Print only the matching parts of lines |
+| `-v` | Invert match — select non-matching lines |
+| `-q` | Quiet mode — no output, exit code only |
+| `-s` | Suppress error messages about missing files |
+
+**Context options:**
+
+| Option | Description |
+|---|---|
+| `-A NUM` | Print NUM lines of trailing context after each match |
+| `-B NUM` | Print NUM lines of leading context before each match |
+| `-C NUM` | Print NUM lines of context (before and after) |
+
+**File selection:**
+
+| Option | Description |
+|---|---|
+| `-r`, `-R` | Recurse into directories |
+| `-m NUM` | Stop after NUM matches per file |
+| `-I` | Skip binary files |
+| `--include=GLOB` | Search only files matching GLOB |
+| `--exclude=GLOB` | Skip files matching GLOB |
+| `--exclude-dir=DIR` | Skip directories matching DIR |
+| `--color=MODE` | Colorize output (`auto`, `always`, `never`) |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+grep "TODO" src/*.cpp
+grep -rn "error" src/
+grep -i "pattern" file.txt
+grep -c "match" *.log
+grep -rl "deprecated" --include="*.hpp" src/
+grep -v "^#" config.txt
+```
+
+---
+
 ## sleep
 
 Wait for a specified duration.
@@ -516,6 +688,217 @@ sleep seconds
 sleep 1
 sleep 0.5
 echo "done"
+```
+
+---
+
+## timeout
+
+Run a command with a time limit.
+
+**Syntax:**
+
+```
+timeout [OPTIONS] DURATION COMMAND [ARG...]
+```
+
+**Description:** Runs a command and terminates it if it does not complete within the given
+duration. By default, sends `SIGTERM` on timeout. Use `-k` to send `SIGKILL` after a grace
+period if the command does not respond to the initial signal.
+
+**Duration format:** A number with optional suffix: `s` (seconds, default), `m` (minutes),
+`h` (hours), `d` (days). Decimal values are supported (e.g. `1.5m`).
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-s SIGNAL`, `--signal=SIGNAL` | Signal to send on timeout (default: `TERM`) |
+| `-k DURATION`, `--kill-after=DURATION` | Send `SIGKILL` after grace period if still running |
+| `--preserve-status` | Return the command's exit status instead of 124 on timeout |
+| `--foreground` | Don't create a separate process group |
+| `-v`, `--verbose` | Diagnose to stderr when signal is sent |
+| `-h`, `--help` | Show help |
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| 124 | Command timed out |
+| 125 | `timeout` itself failed |
+| 126 | Command found but not executable |
+| 127 | Command not found |
+| 128+N | Command was killed by signal N |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+timeout 5 sleep 100
+timeout 1.5m long-running-task
+timeout -s KILL 10 command
+timeout -k 2 30 long-running-cmd
+```
+
+---
+
+## kill
+
+Send signals to processes or jobs.
+
+**Syntax:**
+
+```
+kill [-SIGNAL | -s SIGNAL] PID|%JOB ...
+kill -l
+```
+
+**Description:** Sends a signal to one or more processes by PID, or to background jobs by
+job ID. The default signal is `SIGTERM` (15). Use `%N` to refer to job number N from the
+job table (see `jobs`).
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-SIGNAL` | Signal to send by name or number (e.g. `-9`, `-TERM`, `-SIGKILL`) |
+| `-s SIGNAL` | Signal to send (POSIX style) |
+| `-l` | List available signal names |
+| `-h`, `--help` | Show help |
+
+**Common signals:**
+
+| # | Name | Description |
+|---|---|---|
+| 1 | `HUP` | Hangup |
+| 2 | `INT` | Interrupt (Ctrl+C) |
+| 9 | `KILL` | Kill (cannot be caught) |
+| 15 | `TERM` | Terminate (default) |
+| 19 | `STOP` | Stop (cannot be caught) |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+kill 1234
+kill -9 1234
+kill -TERM 1234
+kill %1
+kill -s USR1 5678
+kill -l
+```
+
+---
+
+## jobs
+
+List background jobs.
+
+**Syntax:**
+
+```
+jobs
+```
+
+**Description:** Displays all background and stopped jobs with their job number, state, and
+command. The current job is marked with `+`, the previous job with `-`.
+
+**Job states:**
+
+| State | Description |
+|---|---|
+| Running | Job is currently executing |
+| Stopped | Job was suspended (e.g. by Ctrl+Z) |
+| Done | Job completed normally |
+| Terminated | Job was killed by a signal |
+
+**Example:**
+
+<!-- endo-no-check -->
+```endo
+sleep 100 &
+sleep 200 &
+jobs
+# [1]+ Running   sleep 100 &
+# [2]- Running   sleep 200 &
+```
+
+---
+
+## fg
+
+Bring a background job to the foreground.
+
+**Syntax:**
+
+```
+fg [job_id]
+```
+
+**Description:** Resumes a stopped or background job in the foreground and waits for it to
+complete. If no job ID is given, uses the current job (marked with `+` in `jobs` output).
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+sleep 100 &
+fg          # bring the current job to foreground
+fg 2        # bring job 2 to foreground
+```
+
+---
+
+## bg
+
+Resume a stopped job in the background.
+
+**Syntax:**
+
+```
+bg [job_id]
+```
+
+**Description:** Resumes a stopped job in the background without waiting for it to complete.
+The job must be in the Stopped state (e.g. suspended with Ctrl+Z). If no job ID is given,
+uses the current job.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+# After pressing Ctrl+Z to suspend a job:
+bg          # resume current job in background
+bg 1        # resume job 1 in background
+```
+
+---
+
+## wait
+
+Wait for background jobs to complete.
+
+**Syntax:**
+
+```
+wait [job_id]
+```
+
+**Description:** Waits for one or all background jobs to finish and returns their exit status.
+If a job ID is given, waits for that specific job. If no job ID is given, waits for all
+running background jobs.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+sleep 5 &
+wait        # wait for all background jobs
+echo "all done"
+
+sleep 10 &
+wait 1      # wait for job 1 specifically
+echo $?     # prints the job's exit code
 ```
 
 ---
@@ -672,4 +1055,621 @@ print $"You rolled a {roll}"
 
 # Use in a pipeline
 rand 1 100 |> fun n -> print $"Random: {n}"
+```
+
+---
+
+## dirconfig
+
+Manage directory configuration trust entries.
+
+**Syntax:**
+
+```
+dirconfig <subcommand> [path]
+```
+
+**Description:** Endo supports per-directory configuration files (`.local-env.endo`) that are
+sourced when you enter a directory. Because these files can execute arbitrary commands, they
+require explicit trust approval. The `dirconfig` command manages this trust database.
+
+If no path is given, defaults to `.local-env.endo` in the current directory.
+
+**Subcommands:**
+
+| Subcommand | Description |
+|---|---|
+| `allow [path]` | Trust and allow a directory config |
+| `deny [path]` | Deny a directory config |
+| `revoke [path]` | Remove the trust entry for a directory config |
+| `list` | List all registered directory config trust entries |
+| `reload` | Reload all directory configs |
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-h`, `--help` | Show help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+dirconfig allow                    # trust .local-env.endo in current dir
+dirconfig allow ~/project/.local-env.endo
+dirconfig deny /tmp/.local-env.endo
+dirconfig list
+dirconfig revoke ~/old-project/.local-env.endo
+dirconfig reload
+```
+
+---
+
+## whoami
+
+Print the current username.
+
+**Syntax:**
+
+```
+whoami
+```
+
+**Description:** Prints the effective username of the current user. Cross-platform: uses
+`getpwuid(geteuid())` on POSIX and `GetUserNameA()` on Windows.
+
+**Example:**
+
+<!-- endo-no-check -->
+```endo
+whoami
+# alice
+```
+
+---
+
+## hostname
+
+Print the system hostname.
+
+**Syntax:**
+
+```
+hostname
+```
+
+**Description:** Prints the network hostname of the current machine.
+
+**Example:**
+
+<!-- endo-no-check -->
+```endo
+hostname
+# my-laptop
+```
+
+---
+
+## date
+
+Print or format the current date and time.
+
+**Syntax:**
+
+```
+date [OPTIONS]
+date +FORMAT
+```
+
+**Description:** Displays the current date and time. Supports custom format strings
+(strftime syntax), epoch timestamps, ISO 8601 output, and UTC mode.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-u`, `--utc` | Use UTC instead of local time |
+| `--epoch` | Print seconds since Unix epoch |
+| `--iso` | Print in ISO 8601 format |
+| `-f FMT`, `--format FMT` | Use custom strftime format |
+| `-d STRING`, `--date STRING` | Display given date (supports `@EPOCH`) |
+| `-h`, `--help` | Display help |
+
+**Format specifiers:** `%Y` (year), `%m` (month), `%d` (day), `%H` (hour), `%M` (minute),
+`%S` (second), `%A` (weekday), `%B` (month name), `%Z` (timezone).
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+date
+date --epoch
+date --iso
+date +%Y-%m-%d
+date -u --iso
+date -d @1700000000
+```
+
+---
+
+## uname
+
+Print system information.
+
+**Syntax:**
+
+```
+uname [OPTIONS]
+```
+
+**Description:** Prints system information. With no options, prints the kernel name.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-s` | Print kernel name (default) |
+| `-n` | Print network node hostname |
+| `-r` | Print kernel release |
+| `-m` | Print machine hardware name |
+| `-a` | Print all information |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+uname
+# Linux
+uname -a
+# Linux my-laptop 6.8.0-generic x86_64
+uname -sm
+# Linux x86_64
+```
+
+---
+
+## basename
+
+Strip directory and suffix from pathnames.
+
+**Syntax:**
+
+```
+basename PATH [SUFFIX]
+```
+
+**Description:** Strips the directory portion from a pathname, leaving just the filename.
+If a SUFFIX is provided and the filename ends with it, the suffix is removed.
+
+**Examples:**
+
+```endo
+basename /usr/local/bin/endo
+# endo
+basename /usr/local/file.txt .txt
+# file
+basename /usr/local/
+# local
+```
+
+---
+
+## dirname
+
+Strip last component from pathname.
+
+**Syntax:**
+
+```
+dirname PATH
+```
+
+**Description:** Strips the last component from a pathname, returning the directory portion.
+Returns `.` if the path contains no directory separators.
+
+**Examples:**
+
+```endo
+dirname /usr/local/bin/endo
+# /usr/local/bin
+dirname file.txt
+# .
+dirname /file.txt
+# /
+```
+
+---
+
+## realpath
+
+Resolve to absolute canonical path.
+
+**Syntax:**
+
+```
+realpath PATH...
+```
+
+**Description:** Resolves each PATH to an absolute canonical path by expanding symlinks and
+removing `.` and `..` components. Fails if the path does not exist.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+realpath ./README.md
+# /home/alice/projects/endo/README.md
+realpath ../other-project
+```
+
+---
+
+## touch
+
+Create files or update timestamps.
+
+**Syntax:**
+
+```
+touch [OPTIONS] FILE...
+```
+
+**Description:** Updates the modification timestamp of each FILE. Creates the file if it
+does not exist (unless `-c` is given).
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-c`, `--no-create` | Do not create files that don't exist |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+touch newfile.txt
+touch -c existing-only.txt
+touch a.txt b.txt c.txt
+```
+
+---
+
+## ln
+
+Create links between files.
+
+**Syntax:**
+
+```
+ln [OPTIONS] TARGET LINK_NAME
+```
+
+**Description:** Creates a link from LINK_NAME to TARGET. By default, creates a hard link.
+Use `-s` for symbolic links.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-s` | Create a symbolic link |
+| `-f` | Remove existing destination file |
+| `-v` | Explain what is being done |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+ln -s /usr/bin/python3 python
+ln original.txt hardlink.txt
+ln -sf newtarget existing-link
+```
+
+---
+
+## mktemp
+
+Create a temporary file or directory.
+
+**Syntax:**
+
+```
+mktemp [OPTIONS]
+```
+
+**Description:** Creates a temporary file (or directory with `-d`) with a unique name in the
+system temp directory. Prints the path to stdout.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-d` | Create a directory instead of a file |
+| `-p DIR` | Use DIR as the base directory |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+mktemp
+# /tmp/tmp.a8Kx3mZq9p
+mktemp -d
+# /tmp/tmp.b7Lw2nYr8q
+mktemp -p /var/tmp
+```
+
+---
+
+## head
+
+Output the first lines of files.
+
+**Syntax:**
+
+```
+head [OPTIONS] [FILE...]
+```
+
+**Description:** Prints the first N lines of each FILE to stdout. If no FILE is given (or FILE
+is `-`), reads from standard input. Default is 10 lines.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-n NUM` | Output the first NUM lines (default: 10) |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+head file.txt
+head -n 5 file.txt
+echo "line1\nline2\nline3" | head -n 2
+```
+
+---
+
+## tail
+
+Output the last lines of files.
+
+**Syntax:**
+
+```
+tail [OPTIONS] [FILE...]
+```
+
+**Description:** Prints the last N lines of each FILE to stdout. If no FILE is given (or FILE
+is `-`), reads from standard input. Default is 10 lines.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-n NUM` | Output the last NUM lines (default: 10) |
+| `-f` | Follow: output appended data as the file grows (not yet implemented) |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+tail file.txt
+tail -n 5 file.txt
+echo "line1\nline2\nline3" | tail -n 2
+```
+
+---
+
+## wc
+
+Count lines, words, and characters.
+
+**Syntax:**
+
+```
+wc [OPTIONS] [FILE...]
+```
+
+**Description:** Counts lines, words, and characters in each FILE. If no FILE is given,
+reads from standard input. With no options, prints all three counts.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-l` | Print line count |
+| `-w` | Print word count |
+| `-c` | Print character count |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+wc file.txt
+echo "hello world" | wc -w
+# 2
+echo "one\ntwo\nthree" | wc -l
+# 3
+```
+
+---
+
+## sort
+
+Sort lines of text.
+
+**Syntax:**
+
+```
+sort [OPTIONS] [FILE...]
+```
+
+**Description:** Sorts lines from the given FILEs (or standard input) and writes the result
+to standard output.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-r` | Reverse the sort order |
+| `-n` | Compare according to string numerical value |
+| `-u` | Output only unique lines |
+| `-k FIELD` | Sort by field number (whitespace-delimited) |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+sort names.txt
+echo "cherry\napple\nbanana" | sort
+# apple
+# banana
+# cherry
+sort -rn scores.txt
+sort -k 2 data.txt
+```
+
+---
+
+## uniq
+
+Filter adjacent duplicate lines.
+
+**Syntax:**
+
+```
+uniq [OPTIONS] [FILE]
+```
+
+**Description:** Filters out adjacent duplicate lines from FILE (or standard input).
+Input should typically be sorted first for best results.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-c` | Prefix lines with occurrence count |
+| `-d` | Only print duplicate lines |
+| `-i` | Ignore case when comparing |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+sort names.txt | uniq
+sort names.txt | uniq -c
+echo "a\na\nb\na" | uniq
+# a
+# b
+# a
+```
+
+---
+
+## cut
+
+Extract fields or characters from lines.
+
+**Syntax:**
+
+```
+cut [OPTIONS] [FILE...]
+```
+
+**Description:** Extracts selected fields or character ranges from each line of FILE
+(or standard input).
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-d DELIM` | Use DELIM as the field delimiter (default: tab) |
+| `-f FIELDS` | Select fields (e.g. `1`, `1,3`, `1-3`) |
+| `-c CHARS` | Select characters (e.g. `1-5`, `3`) |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+echo "hello:world" | cut -d : -f 1
+# hello
+echo "abcdef" | cut -c 1-3
+# abc
+cut -d , -f 2,3 data.csv
+```
+
+---
+
+## tr
+
+Translate or delete characters.
+
+**Syntax:**
+
+```
+tr [OPTIONS] SET1 [SET2]
+```
+
+**Description:** Translates, squeezes, or deletes characters from standard input, writing
+to standard output. Character ranges like `a-z` and `A-Z` are expanded.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-d` | Delete characters in SET1 (no translation) |
+| `-s` | Squeeze repeated output characters in SET2 |
+| `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+echo "hello world" | tr a-z A-Z
+# HELLO WORLD
+echo "hello" | tr -d l
+# heo
+echo "aabbcc" | tr -s a-z
+# abc
+```
+
+---
+
+## tee
+
+Read from stdin, write to stdout and files.
+
+**Syntax:**
+
+```
+tee [OPTIONS] [FILE...]
+```
+
+**Description:** Reads from standard input and writes to both standard output and one or
+more files simultaneously. Useful for capturing pipeline output while still seeing it.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-a` | Append to files instead of overwriting |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+echo "hello" | tee output.txt
+echo "data" | tee -a log.txt
+echo "test" | tee file1.txt file2.txt
 ```

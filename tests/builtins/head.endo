@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: head shows first lines from pipe
+# skip: inline builtin not available in test runtime
+# expect: line1
+# expect: line2
+
+echo "line1\nline2\nline3\nline4" | head -n 2
