@@ -259,6 +259,19 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
                          std::function<size_t(size_t)> const& estimateItem,
                          bool forceOnePerLine = false);
 
+    /// Emits a flattened operator chain (e.g., `|>` pipelines or `@` concat) with adaptive formatting.
+    /// Keeps the chain inline if it fits within maxLineWidth; otherwise wraps with the operator
+    /// at the start of each continuation line.
+    ///
+    /// @param chain            Flattened chain of expressions (source first, then stages).
+    /// @param node             The original AST node (for width estimation).
+    /// @param inlineSeparator  Separator when inline (e.g., " |> ", " @ ").
+    /// @param wrappingPrefix   Operator prefix on continuation lines (e.g., "|> ", "@ ").
+    void emitChainFormatted(std::vector<ast::Expr const*> const& chain,
+                            ast::Node const& node,
+                            std::string_view inlineSeparator,
+                            std::string_view wrappingPrefix);
+
     /// Checks whether any element in the expression vector is complex (compound or multiline).
     [[nodiscard]] bool hasComplexElement(std::vector<std::unique_ptr<ast::Expr>> const& elements) const;
 
