@@ -1027,6 +1027,56 @@ let getHome () =
 
 ---
 
+## source-env
+
+Import environment variables from an external script.
+
+**Syntax:**
+
+```
+source-env <script-path>
+source-env <script-path> <args...>
+```
+
+**Description:** Runs an external script in its native interpreter, captures the resulting
+environment variables, and imports any new or changed variables into the current Endo shell
+session. The interpreter is selected based on the script's file extension.
+
+**Supported script types:**
+
+| Extension       | Interpreter                    | Platforms            |
+|-----------------|--------------------------------|----------------------|
+| `.bat`, `.cmd`  | `cmd.exe`                      | Windows              |
+| `.ps1`          | `pwsh` or `powershell.exe`     | All (cross-platform) |
+| `.sh`           | `bash`                         | All                  |
+
+For `.ps1` scripts, `pwsh` (PowerShell Core) is tried first. On Windows, `powershell.exe`
+(Windows PowerShell 5.x) is used as a fallback. On other platforms, `pwsh` must be installed.
+
+Only variables that are **new** or **changed** compared to the current environment are
+imported. Existing variables that the script does not modify are left unchanged.
+
+**Example:**
+
+<!-- endo-no-check -->
+```endo
+# Set up MSVC toolchain on Windows (PowerShell script)
+source-env "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\Launch-VsDevShell.ps1"
+
+# Set up MSVC toolchain on Windows (batch file with architecture)
+source-env "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat" "x64"
+
+# Source a bash environment script
+source-env /opt/tools/setup-env.sh
+
+# Source a PowerShell script on Linux (requires pwsh)
+source-env ./setup-toolchain.ps1
+```
+
+**Return value:** The exit code of the sourced script (0 on success).
+
+---
+
 ## rand
 
 Generate a random integer.

@@ -20,13 +20,13 @@ using crispy::escape;
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/TableFormatter.hpp>
 
-#include <platform/NativeFileSystem.hpp>
-
 #include <endo-language/ide/CompletionContext.hpp>
+
 #include <http/LocalTcpListener.hpp>
 
 #include "Shell.hpp"
 #include "TTY.hpp"
+#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
@@ -4595,4 +4595,170 @@ TEST_CASE("shell.pipe_with_flags", "[pipe]")
     // Verify that basic pipes with flags work as expected (regression guard)
     CHECK(escape(TestShell()("echo -e \"foo\\nbar\" | grep --color=never -w foo").output())
           == escape("foo\n"));
+}
+
+// ============================================================================
+// source-env builtin
+// ============================================================================
+
+#if defined(_WIN32)
+TEST_CASE("shell.builtin.source_env_bat", "[source-env][windows]")
+{
+    TestShell shell;
+
+    // Create a temp .bat script that sets an environment variable
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const batPath = tempDir / "endo_test_source_env.bat";
+    {
+        std::ofstream ofs(batPath);
+        ofs << "@echo off\r\n";
+        ofs << "set ENDO_TEST_SRCENV=hello_from_bat\r\n";
+    }
+
+    auto const cmd = std::format("source-env \"{}\"", batPath.string());
+    shell(cmd);
+    INFO("shell output: " << escape(shell.output()));
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("ENDO_TEST_SRCENV").value_or("") == "hello_from_bat");
+
+    std::filesystem::remove(batPath);
+}
+
+TEST_CASE("shell.builtin.source_env_bat_with_args", "[source-env][windows]")
+{
+    TestShell shell;
+
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const batPath = tempDir / "endo_test_source_env_args.bat";
+    {
+        std::ofstream ofs(batPath);
+        ofs << "@echo off\r\n";
+        ofs << "set ENDO_TEST_ARG=%1\r\n";
+    }
+
+    auto const cmd = std::format("source-env \"{}\" \"my_arg_value\"", batPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("ENDO_TEST_ARG").value_or("") == "my_arg_value");
+
+    std::filesystem::remove(batPath);
+}
+#endif
+
+#if !defined(_WIN32)
+TEST_CASE("shell.builtin.source_env_sh", "[source-env][posix]")
+{
+    TestShell shell;
+
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const shPath = tempDir / "endo_test_source_env.sh";
+    {
+        std::ofstream ofs(shPath);
+        ofs << "export ENDO_TEST_SRCENV=hello_from_sh\n";
+    }
+
+    auto const cmd = std::format("source-env \"{}\"", shPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("ENDO_TEST_SRCENV").value_or("") == "hello_from_sh");
+
+    std::filesystem::remove(shPath);
+}
+
+TEST_CASE("shell.builtin.source_env_sh_with_args", "[source-env][posix]")
+{
+    TestShell shell;
+
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const shPath = tempDir / "endo_test_source_env_args.sh";
+    {
+        std::ofstream ofs(shPath);
+        ofs << "export ENDO_TEST_ARG=$1\n";
+    }
+
+    auto const cmd = std::format(R"(source-env "{}" "my_arg_value")", shPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("ENDO_TEST_ARG").value_or("") == "my_arg_value");
+
+    std::filesystem::remove(shPath);
+}
+
+TEST_CASE("shell.builtin.source_env_bat_rejected_on_posix", "[source-env][posix]")
+{
+    TestShell shell;
+
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const batPath = tempDir / "endo_test_rejected.bat";
+    {
+        std::ofstream ofs(batPath);
+        ofs << "@echo off\r\n";
+    }
+
+    auto const cmd = std::format("source-env \"{}\"", batPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 1);
+
+    std::filesystem::remove(batPath);
+}
+#endif
+
+TEST_CASE("shell.builtin.source_env_nonexistent", "[source-env]")
+{
+    TestShell shell;
+    shell("source-env \"/nonexistent/path/to/script.sh\"");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
+{
+    TestShell shell;
+
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const unknownPath = tempDir / "endo_test_source_env.xyz";
+    {
+        std::ofstream ofs(unknownPath);
+        ofs << "# unknown\n";
+    }
+
+    auto const cmd = std::format("source-env \"{}\"", unknownPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 1);
+
+    std::filesystem::remove(unknownPath);
+}
+
+TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
+{
+    TestShell shell;
+    shell.env.set("ENDO_TEST_EXISTING", "original_value");
+
+#if defined(_WIN32)
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const scriptPath = tempDir / "endo_test_source_env_noop.bat";
+    {
+        std::ofstream ofs(scriptPath);
+        ofs << "@echo off\r\n";
+        ofs << "rem This script does not modify ENDO_TEST_EXISTING\r\n";
+        ofs << "set ENDO_TEST_NEW=new_value\r\n";
+    }
+#else
+    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const scriptPath = tempDir / "endo_test_source_env_noop.sh";
+    {
+        std::ofstream ofs(scriptPath);
+        ofs << "# This script does not modify ENDO_TEST_EXISTING\n";
+        ofs << "export ENDO_TEST_NEW=new_value\n";
+    }
+#endif
+
+    auto const cmd = std::format("source-env \"{}\"", scriptPath.string());
+    shell(cmd);
+    CHECK(shell.exitCode == 0);
+    // Original value should remain unchanged
+    CHECK(shell.env.get("ENDO_TEST_EXISTING").value_or("") == "original_value");
+    // New variable should be imported
+    CHECK(shell.env.get("ENDO_TEST_NEW").value_or("") == "new_value");
+
+    std::filesystem::remove(scriptPath);
 }

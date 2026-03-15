@@ -238,6 +238,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Statement-level `& cmd`: shell-first execution bypassing F# bindings
 - [x] Context-aware shell commands: capture mode in expression context, normal I/O at statement level
 - [x] `exec` keyword: dynamic command execution with F# expression arguments and OS-level pipe support
+- [x] `source-env` builtin: source external scripts (`.bat`/`.cmd`, `.ps1`, `.sh`) and import environment variable changes
 - [x] Fix `exec` with pattern-matched tuple variables: `ensureString()` bypasses `convertToString` N2S corruption for Object/Void-typed strings from `ObjGetSlot`
 - [x] Fix `TuplePattern` with `ConstructorPattern` sub-patterns: create scrutinee storage allocas so `ConstructorPattern` can reload across block boundaries
 - [x] Shell word splitting: adjacent tokens without whitespace form a single word (e.g., `echo $LINES:$COLUMNS` outputs `35:127` not `35 : 127`)
