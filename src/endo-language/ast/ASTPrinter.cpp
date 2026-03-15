@@ -5,6 +5,7 @@
 #include <crispy/assert.h>
 
 #include <format>
+#include <ranges>
 
 namespace endo::ast
 {
@@ -91,7 +92,7 @@ void ASTPrinter::visit(ProgramCall const& node)
 
 void ASTPrinter::visit(CallPipeline const& node)
 {
-    for (size_t i = 0; i < node.calls.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.calls.size()))
     {
         if (i > 0)
             _result += " | ";
@@ -153,7 +154,7 @@ void ASTPrinter::visit(BuiltinReadStmt const& node)
 
 void ASTPrinter::visit(CompoundStmt const& node)
 {
-    for (size_t i = 0; i < node.statements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.statements.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -260,7 +261,7 @@ void ASTPrinter::visit(DataSourceExpr const& node)
     else
     {
         _result += "{ ";
-        for (size_t i = 0; i < node.inlineFields.size(); ++i)
+        for (auto const i: std::views::iota(0uz, node.inlineFields.size()))
         {
             if (i > 0)
                 _result += "; ";
@@ -570,7 +571,7 @@ void ASTPrinter::printIfExpr(IfExpr const& node, std::string_view keyword)
 void ASTPrinter::visit(TupleExpr const& node)
 {
     _result += '(';
-    for (size_t i = 0; i < node.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.elements.size()))
     {
         if (i > 0)
             _result += ", ";
@@ -857,7 +858,7 @@ void ASTPrinter::visit(ParenExpr const& node)
 void ASTPrinter::visit(LambdaExpr const& node)
 {
     _result += "fun ";
-    for (size_t i = 0; i < node.parameters.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.parameters.size()))
     {
         if (i > 0)
             _result += ' ';
@@ -899,7 +900,7 @@ void ASTPrinter::visit(MatchExpr const& node)
 void ASTPrinter::visit(ListExpr const& node)
 {
     _result += '[';
-    for (size_t i = 0; i < node.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.elements.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -1076,7 +1077,7 @@ void ASTPrinter::visit(LazyExpr const& node)
 void ASTPrinter::visit(SeqExpr const& node)
 {
     _result += "seq { ";
-    for (auto i = 0u; i < node.yields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.yields.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -1111,7 +1112,7 @@ void ASTPrinter::visit(RecordTypeDefStmt const& node)
     if (!node.typeParams.empty())
     {
         _result += "<";
-        for (size_t i = 0; i < node.typeParams.size(); ++i)
+        for (auto const i: std::views::iota(0uz, node.typeParams.size()))
         {
             if (i > 0)
                 _result += ", ";
@@ -1121,11 +1122,11 @@ void ASTPrinter::visit(RecordTypeDefStmt const& node)
     }
     // Build TypeVarId → name map for printing field types with original param names
     endo::TypeVarNameMap nameMap;
-    for (size_t i = 0; i < node.typeParamIds.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.typeParamIds.size()))
         nameMap[node.typeParamIds[i]] = node.typeParams[i];
 
     _result += " = { ";
-    for (size_t i = 0; i < node.fields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.fields.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -1139,7 +1140,7 @@ void ASTPrinter::visit(RecordTypeDefStmt const& node)
 void ASTPrinter::visit(RecordExpr const& node)
 {
     _result += "{ ";
-    for (size_t i = 0; i < node.fields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.fields.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -1155,7 +1156,7 @@ void ASTPrinter::visit(RecordUpdateExpr const& node)
     _result += "{ ";
     node.base->accept(*this);
     _result += " with ";
-    for (size_t i = 0; i < node.updates.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.updates.size()))
     {
         if (i > 0)
             _result += "; ";
@@ -1186,7 +1187,7 @@ void ASTPrinter::visit(UnionTypeDefStmt const& node)
     if (!node.typeParams.empty())
     {
         _result += "<";
-        for (size_t i = 0; i < node.typeParams.size(); ++i)
+        for (auto const i: std::views::iota(0uz, node.typeParams.size()))
         {
             if (i > 0)
                 _result += ", ";
@@ -1196,7 +1197,7 @@ void ASTPrinter::visit(UnionTypeDefStmt const& node)
     }
     // Build TypeVarId → name map for printing payload types with original param names
     endo::TypeVarNameMap nameMap;
-    for (size_t i = 0; i < node.typeParamIds.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.typeParamIds.size()))
         nameMap[node.typeParamIds[i]] = node.typeParams[i];
 
     _result += " =";
@@ -1207,7 +1208,7 @@ void ASTPrinter::visit(UnionTypeDefStmt const& node)
         if (!variant.payloadTypes.empty())
         {
             _result += " of ";
-            for (size_t i = 0; i < variant.payloadTypes.size(); ++i)
+            for (auto const i: std::views::iota(0uz, variant.payloadTypes.size()))
             {
                 if (i > 0)
                     _result += " * ";
@@ -1229,7 +1230,7 @@ void ASTPrinter::visit(UnionConstructorExpr const& node)
 
 void ASTPrinter::visit(ExecPipelineExpr const& node)
 {
-    for (size_t i = 0; i < node.commands.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.commands.size()))
     {
         if (i > 0)
             _result += " | ";
@@ -1258,7 +1259,7 @@ void ASTPrinter::visit(OpenStmt const& node)
     if (!node.selectiveNames.empty())
     {
         _result += " with (";
-        for (size_t i = 0; i < node.selectiveNames.size(); ++i)
+        for (auto const i: std::views::iota(0uz, node.selectiveNames.size()))
         {
             if (i > 0)
                 _result += ", ";

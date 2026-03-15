@@ -2,6 +2,8 @@
 #include "CommandSpecCompleter.hpp"
 #include <shell/completion/CompletionAdapter.hpp>
 
+#include <endo-language/ide/CompletionContext.hpp>
+
 #include <algorithm>
 
 namespace endo
@@ -91,7 +93,7 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         return !optDef || optDef->valueKind != OptionValueKind::Path;
     }
 
-    // Exclusive when completing DynamicQuery positional arguments (no file paths)
+    // Exclusive when completing DynamicQuery positional arguments (unless prefix looks like a file path)
     if (state->phase == CompletionPhase::Argument)
     {
         auto const* sub = resolveSubcommand(cmd.spec, state->subcommandChain);
@@ -99,7 +101,10 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         {
             auto argIdx = std::min(state->positionalArgIndex, sub->positionalArgs.size() - 1);
             auto const& argDef = sub->positionalArgs[argIdx];
-            return argDef.kind == ArgKind::DynamicQuery || argDef.kind == ArgKind::Subcommand;
+            if (argDef.kind == ArgKind::Subcommand)
+                return true;
+            if (argDef.kind == ArgKind::DynamicQuery)
+                return !CompletionContextAnalyzer::looksLikeFilePath(context.prefix);
         }
     }
 

@@ -294,7 +294,7 @@ void TestPTY::setSize(uint16_t rows, uint16_t cols)
 std::string_view TestPTY::output() const noexcept
 {
     // Give the output thread time to read remaining data from the PTY
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     auto _ = std::scoped_lock { _outputMutex };
     return _output;
 }

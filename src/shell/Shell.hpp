@@ -195,6 +195,10 @@ class Shell final: public SignalCallback
     std::vector<agent::mcp::McpServerConfig> mcpServerConfigs;
 
   private:
+    /// @brief Lazily initializes interactive-mode subsystems (history, completer, directory config).
+    /// Called once before entering the REPL loop. Safe to call multiple times (guarded by _interactiveReady).
+    void ensureInteractiveReady();
+
     // --- Registration (builtins/Registration.cpp) ---
     void registerBuiltinFunctions();
     void registerEnvironmentBuiltins();
@@ -343,13 +347,14 @@ class Shell final: public SignalCallback
     void builtinExit(CoreVM::Params& context);
     void builtinChDir(CoreVM::Params& context);
     void builtinChDirHome(CoreVM::Params& context);
+    void applyDirectoryChange(std::filesystem::path const& path, CoreVM::Params& context);
     void builtinSet(CoreVM::Params& context);
     void builtinUnset(CoreVM::Params& context);
     void builtinGetVar(CoreVM::Params& context);
-    // NOLINTNEXTLINE(readability-make-member-function-const)
+    // NOLINTNEXTLINE(readability-make-member-function-const) -- NativeCallback::bind requires non-const
     void builtinGetExitStatus(CoreVM::Params& context);
     void builtinSetExitStatus(CoreVM::Params& context);
-    // NOLINTNEXTLINE(readability-make-member-function-const)
+    // NOLINTNEXTLINE(readability-make-member-function-const) -- NativeCallback::bind requires non-const
     void builtinGetProcessId(CoreVM::Params& context);
     void builtinGetBackgroundId(CoreVM::Params& context);
     void builtinGetPositional(CoreVM::Params& context);
@@ -571,6 +576,7 @@ class Shell final: public SignalCallback
     int _shellLevel = 0;      ///< Shell nesting depth (0 = outermost)
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
+    bool _interactiveReady = false; ///< Whether interactive subsystems (history, completer, dirconfig) are initialized
     std::vector<std::vector<std::string>> _cmdBuilderStack;
 
     struct RedirectState

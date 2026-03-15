@@ -45,6 +45,9 @@ class CompletionContextAnalyzer
     /// @return The completion context.
     [[nodiscard]] static CompletionContext analyze(std::string_view input, size_t cursorPosition);
 
+    /// @brief Checks if the prefix looks like a file path.
+    [[nodiscard]] static bool looksLikeFilePath(std::string_view prefix);
+
   private:
     /// @brief Finds word boundaries around the cursor.
     /// @param input The input string.
@@ -58,9 +61,6 @@ class CompletionContextAnalyzer
 
     /// @brief Checks if a character starts a variable reference.
     [[nodiscard]] static bool isVariableStart(std::string_view input, size_t pos);
-
-    /// @brief Checks if the prefix looks like a file path.
-    [[nodiscard]] static bool looksLikeFilePath(std::string_view prefix);
 
     /// @brief Checks if the prefix looks like an option.
     [[nodiscard]] static bool looksLikeOption(std::string_view prefix);

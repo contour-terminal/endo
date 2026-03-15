@@ -51,32 +51,20 @@ void Shell::builtinChDir(CoreVM::Params& context)
         path = std::string(*oldpwd);
     }
 
-    auto const result = _env.changeDirectory(path);
-    if (!result.has_value())
-    {
-        error("Failed to change directory to '{}': {}", path, toString(result.error()));
-        _exitCode = 1;
-    }
-    else
-    {
-        _env.set("OLDPWD", _env.get("PWD").value_or(""));
-        _env.set("PWD", _env.currentDirectory());
-        _exitCode = 0;
-        emitCurrentWorkingDirectory();
-        onDirectoryChanged();
-    }
-
-    context.setResult(result.has_value());
+    applyDirectoryChange(path, context);
 }
 
 void Shell::builtinChDirHome(CoreVM::Params& context)
 {
-    auto const path = _env.get("HOME").value_or("/");
+    applyDirectoryChange(_env.get("HOME").value_or("/"), context);
+}
 
-    auto const result = _env.changeDirectory(std::filesystem::path(path));
+void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Params& context)
+{
+    auto const result = _env.changeDirectory(path);
     if (!result.has_value())
     {
-        error("Failed to change directory to '{}': {}", path, toString(result.error()));
+        error("Failed to change directory to '{}': {}", path.string(), toString(result.error()));
         _exitCode = 1;
     }
     else
@@ -110,7 +98,7 @@ void Shell::builtinGetVar(CoreVM::Params& context)
     context.setResult(std::string(value.value_or("")));
 }
 
-// NOLINTNEXTLINE(readability-make-member-function-const)
+// NOLINTNEXTLINE(readability-make-member-function-const) -- NativeCallback::bind requires non-const
 void Shell::builtinGetExitStatus(CoreVM::Params& context)
 {
     context.setResult(std::to_string(_exitCode));
@@ -121,7 +109,7 @@ void Shell::builtinSetExitStatus(CoreVM::Params& context)
     _exitCode = static_cast<int>(context.getInt(1));
 }
 
-// NOLINTNEXTLINE(readability-make-member-function-const)
+// NOLINTNEXTLINE(readability-make-member-function-const) -- NativeCallback::bind requires non-const
 void Shell::builtinGetProcessId(CoreVM::Params& context)
 {
     context.setResult(std::to_string(_shellPid));
@@ -257,24 +245,24 @@ namespace
             {
                 // Continuation of previous value (multi-line env var)
                 result.back().second += '\n';
-                result.back().second += std::string(line);
+                result.back().second += line;
             }
         }
 
         return result;
     }
 
-#if defined(_WIN32)
-    /// @brief Case-insensitive string comparison for environment variable keys on Windows.
-    [[nodiscard]] auto keysEqualCaseInsensitive(std::string_view a, std::string_view b) -> bool
+    /// @brief Normalizes an environment variable key for map lookup.
+    /// On Windows, environment variable names are case-insensitive, so keys are lowercased.
+    /// On POSIX, keys are used as-is.
+    [[nodiscard]] auto normalizeKey(std::string key) -> std::string
     {
-        if (a.size() != b.size())
-            return false;
-        return std::equal(a.begin(), a.end(), b.begin(), [](unsigned char ac, unsigned char bc) {
-            return std::tolower(ac) == std::tolower(bc);
-        });
-    }
+#if defined(_WIN32)
+        std::ranges::transform(
+            key, key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 #endif
+        return key;
+    }
 
 } // anonymous namespace
 
@@ -307,9 +295,8 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
 
     // 2. Detect script type from extension
     auto ext = scriptPath.extension().string();
-    std::ranges::transform(ext, ext.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::ranges::transform(
+        ext, ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     auto const scriptType = detectScriptType(ext);
     if (!scriptType.has_value())
@@ -370,12 +357,12 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         }
     }
 
-    // 4. Snapshot current environment
+    // 4. Snapshot current environment (keys normalized for case-insensitive lookup on Windows)
     auto before = std::map<std::string, std::string> {};
     for (auto const& key: _env.keys())
     {
         if (auto val = _env.get(key))
-            before[key] = std::string(*val);
+            before[normalizeKey(key)] = std::string(*val);
     }
 
     // 5. Create temp wrapper script
@@ -462,24 +449,9 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         if (key.empty())
             continue;
 
-        // Check if this variable is new or changed
-        auto isNew = true;
-        for (auto const& [beforeKey, beforeValue]: before)
-        {
-#if defined(_WIN32)
-            if (keysEqualCaseInsensitive(beforeKey, key))
-#else
-            if (beforeKey == key)
-#endif
-            {
-                isNew = false;
-                if (beforeValue != value)
-                    _env.setAndExport(key, value);
-                break;
-            }
-        }
-
-        if (isNew)
+        // Check if this variable is new or changed (O(log n) lookup via normalized key)
+        auto const it = before.find(normalizeKey(key));
+        if (it == before.end() || it->second != value)
             _env.setAndExport(key, value);
     }
 

@@ -303,6 +303,27 @@ TEST_CASE("CommandSpecCompleter.commit_path_arg_not_exclusive_allows_files")
     CHECK_FALSE(completer.isExclusiveFor(ctx));
 }
 
+TEST_CASE("CommandSpecCompleter.diff_filepath_prefix_not_exclusive")
+{
+    auto completer = createMockGitCompleter();
+
+    // Plain prefix (no path separator) → exclusive (show branches only)
+    auto ctx1 = makeGitContext("git diff ma", "ma");
+    CHECK(completer.isExclusiveFor(ctx1));
+
+    // Prefix with '/' → not exclusive (allow FileCompleter to also contribute)
+    auto ctx2 = makeGitContext("git diff src/main", "src/main");
+    CHECK_FALSE(completer.isExclusiveFor(ctx2));
+
+    // Prefix starting with './' → not exclusive
+    auto ctx3 = makeGitContext("git diff ./src", "./src");
+    CHECK_FALSE(completer.isExclusiveFor(ctx3));
+
+    // Prefix starting with '~' → not exclusive
+    auto ctx4 = makeGitContext("git diff ~/proj", "~/proj");
+    CHECK_FALSE(completer.isExclusiveFor(ctx4));
+}
+
 // ============================================================================
 // Push: remote then branch
 // ============================================================================
