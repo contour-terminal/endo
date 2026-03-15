@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with a single file path returns one entry
+# mode: structured
+# expect: 1
+
+ls "hello.txt" |> length |> print

@@ -6,11 +6,10 @@
 #include <string_view>
 #include <vector>
 
+#include <platform/GlobMatch.hpp>
+
 namespace endo
 {
-
-/// Matches a filename against a shell glob pattern (supports *, ?, []).
-[[nodiscard]] bool globMatchFilename(std::string_view filename, std::string_view pattern);
 
 /// Expands a glob pattern to matching file paths. Returns empty if no matches.
 [[nodiscard]] std::vector<std::string> expandGlobPattern(std::string_view pattern);

@@ -16,6 +16,8 @@
 
 #include <bit>
 
+#include <platform/GlobMatch.hpp>
+
 namespace endo::test
 {
 
@@ -66,6 +68,7 @@ namespace
     void mockStructuredLs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+        auto const path = std::string(args.getString(1));
 
         struct MockFile
         {
@@ -76,15 +79,45 @@ namespace
             bool isDir;
         };
 
-        constexpr MockFile files[] = {
+        constexpr MockFile allFiles[] = {
             { .name = "docs", .size = 4096, .mode = 0755, .mtime = 1700000000, .isDir = true },
             { .name = "hello.txt", .size = 42, .mode = 0644, .mtime = 1700001000, .isDir = false },
             { .name = "script.sh", .size = 256, .mode = 0755, .mtime = 1700002000, .isDir = false },
         };
+
+        // Determine which entries to include based on the path argument.
+        auto const hasGlob = endo::containsGlobChars(path);
+
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& f = files[i];
+            auto const& f = allFiles[i];
+
+            // Filter: directory path returns all, glob filters by pattern, else exact name match.
+            if (!path.empty() && path != "." && path != "/tmp")
+            {
+                if (hasGlob)
+                {
+                    // Extract filename pattern from glob path (e.g., "*.txt" or "dir/*.txt" -> "*.txt").
+                    auto const lastSlash = path.find_last_of('/');
+                    auto const pattern = (lastSlash != std::string::npos)
+                                             ? std::string_view(path).substr(lastSlash + 1)
+                                             : std::string_view(path);
+                    if (!endo::globMatchFilename(f.name, pattern))
+                        continue;
+                }
+                else
+                {
+                    // Exact filename match (extract basename if path has directory component).
+                    auto const lastSlash = path.find_last_of('/');
+                    auto const basename = (lastSlash != std::string::npos)
+                                              ? std::string_view(path).substr(lastSlash + 1)
+                                              : std::string_view(path);
+                    if (basename != f.name)
+                        continue;
+                }
+            }
+
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
             auto* sizeObj = builtins::makeSizeFromBytes(runner, f.size);

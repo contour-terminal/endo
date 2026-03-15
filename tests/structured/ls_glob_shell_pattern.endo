@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with *.sh glob returns matching shell scripts
+# mode: structured
+# expect: 1
+
+ls "*.sh" |> length |> print

@@ -27,9 +27,10 @@ class FileInfoProvider
   public:
     virtual ~FileInfoProvider() = default;
 
-    /// Enumerates all entries in the given directory.
-    /// @param path The directory path to list.
-    /// @return A vector of FileEntry structs, one per entry.
+    /// Lists filesystem entries matching the given path.
+    /// @param path A directory path (lists contents), a single file path (returns one entry),
+    ///             or a glob pattern like "*.md" (returns matching entries in the parent directory).
+    /// @return A vector of FileEntry structs, sorted by name.
     [[nodiscard]] virtual std::vector<FileEntry> listDirectory(std::string const& path) const = 0;
 };
 
