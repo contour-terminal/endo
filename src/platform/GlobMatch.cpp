@@ -36,7 +36,6 @@ bool globMatchFilename(std::string_view filename, std::string_view pattern)
                 negate = true;
                 ++pi;
             }
-            [[maybe_unused]] auto const bracketStart = pi;
             while (pi < pattern.size() && pattern[pi] != ']')
             {
                 if (pi + 2 < pattern.size() && pattern[pi + 1] == '-' && pattern[pi + 2] != ']')

@@ -15,6 +15,7 @@
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <bit>
+#include <filesystem>
 
 #include <platform/GlobMatch.hpp>
 
@@ -96,24 +97,15 @@ namespace
             // Filter: directory path returns all, glob filters by pattern, else exact name match.
             if (!path.empty() && path != "." && path != "/tmp")
             {
+                auto const nameOrPattern = std::filesystem::path(path).filename().string();
                 if (hasGlob)
                 {
-                    // Extract filename pattern from glob path (e.g., "*.txt" or "dir/*.txt" -> "*.txt").
-                    auto const lastSlash = path.find_last_of('/');
-                    auto const pattern = (lastSlash != std::string::npos)
-                                             ? std::string_view(path).substr(lastSlash + 1)
-                                             : std::string_view(path);
-                    if (!endo::globMatchFilename(f.name, pattern))
+                    if (!endo::globMatchFilename(f.name, nameOrPattern))
                         continue;
                 }
                 else
                 {
-                    // Exact filename match (extract basename if path has directory component).
-                    auto const lastSlash = path.find_last_of('/');
-                    auto const basename = (lastSlash != std::string::npos)
-                                              ? std::string_view(path).substr(lastSlash + 1)
-                                              : std::string_view(path);
-                    if (basename != f.name)
+                    if (nameOrPattern != f.name)
                         continue;
                 }
             }

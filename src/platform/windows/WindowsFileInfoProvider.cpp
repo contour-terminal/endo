@@ -124,19 +124,13 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     }
 
     // Case 3: Single file path — stat and return one entry.
-    if (fs::exists(dir, ec) && !ec)
+    if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
     {
-        auto const dirEntry = fs::directory_entry(dir, ec);
-        if (!ec)
-        {
-            FileEntry fileEntry {};
-            if (statEntry(dirEntry, fileEntry))
-                result.push_back(std::move(fileEntry));
-        }
-        return result;
+        FileEntry fileEntry {};
+        if (statEntry(dirEntry, fileEntry))
+            result.push_back(std::move(fileEntry));
     }
 
-    // Case 4: Non-existent path without glob chars — return empty.
     return result;
 }
 

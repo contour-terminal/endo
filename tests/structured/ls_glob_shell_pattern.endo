@@ -4,4 +4,6 @@
 # mode: structured
 # expect: 1
 
-ls "*.sh" |> length |> print
+ls "*.sh"
+    |> length
+    |> print

@@ -109,20 +109,13 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
     }
 
     // Case 3: Single file path — stat and return one entry.
-    auto const filePath = fs::path(path);
-    if (fs::exists(filePath, ec) && !ec)
+    if (auto const dirEntry = fs::directory_entry(fs::path(path), ec); !ec)
     {
-        auto const dirEntry = fs::directory_entry(filePath, ec);
-        if (!ec)
-        {
-            FileEntry entry {};
-            if (statEntry(dirEntry, entry))
-                entries.push_back(std::move(entry));
-        }
-        return entries;
+        FileEntry entry {};
+        if (statEntry(dirEntry, entry))
+            entries.push_back(std::move(entry));
     }
 
-    // Case 4: Non-existent path without glob chars — return empty.
     return entries;
 }
 
