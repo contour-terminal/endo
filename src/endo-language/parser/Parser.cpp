@@ -221,9 +221,29 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
     TRACE_SCOPE("parseStmt");
     switch (_lexer.currentToken())
     {
-        case Token::Let:
+        case Token::Let: {
             // F# style let binding
-            return parseLet();
+            auto let = parseLet();
+            if (!let)
+                return nullptr;
+            // Check for 'in' keyword: transforms statement-level let into let-in expression
+            if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "in")
+            {
+                _lexer.enterFSharpExpr();
+                _lexer.nextToken(); // consume 'in'
+                consumeNewlines();
+                auto body = parseFSharpExpr();
+                if (!body)
+                {
+                    _lexer.leaveFSharpExpr();
+                    return nullptr;
+                }
+                auto letInExpr = convertToLetIn(std::move(let), std::move(body));
+                _lexer.leaveFSharpExpr();
+                return std::make_unique<ast::ExprStmt>(std::move(letInExpr), _autoDisplay);
+            }
+            return let;
+        }
         case Token::Ampersand: {
             // Shell-first execution: `& cmd args...` bypasses F# function bindings
             // Parse as a ShellCommandExpr wrapped in ExprStmt (statement-level = normal I/O)
@@ -3886,6 +3906,24 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     return result;
 }
 
+std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetBindingStmt> let,
+                                                       std::unique_ptr<ast::Expr> body)
+{
+    std::unique_ptr<ast::LetInExpr> result;
+    if (let->destructurePattern)
+        result = std::make_unique<ast::LetInExpr>(
+            std::move(let->destructurePattern), std::move(let->value), std::move(body));
+    else
+        result = std::make_unique<ast::LetInExpr>(let->isRecursive,
+                                                   std::move(let->name),
+                                                   std::move(let->parameters),
+                                                   std::move(let->returnType),
+                                                   std::move(let->value),
+                                                   std::move(body));
+    result->resourceMode = let->resourceMode;
+    return result;
+}
+
 std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(ast::Visibility visibility,
                                                                     ast::Mutability mutability,
                                                                     std::string name,
@@ -5943,22 +5981,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
             auto body = parseFSharpExpr();
             if (!body)
                 return nullptr;
-            if (let->destructurePattern)
-            {
-                lastExpr = std::make_unique<ast::LetInExpr>(
-                    std::move(let->destructurePattern), std::move(let->value), std::move(body));
-                static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
-            }
-            else
-            {
-                lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
-                                                            std::move(let->name),
-                                                            std::move(let->parameters),
-                                                            std::move(let->returnType),
-                                                            std::move(let->value),
-                                                            std::move(body));
-                static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
-            }
+            lastExpr = convertToLetIn(std::move(let), std::move(body));
         }
         else
         {
@@ -6039,22 +6062,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
                 auto body = parseFSharpExpr();
                 if (!body)
                     return nullptr;
-                if (let->destructurePattern)
-                {
-                    lastExpr = std::make_unique<ast::LetInExpr>(
-                        std::move(let->destructurePattern), std::move(let->value), std::move(body));
-                    static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
-                }
-                else
-                {
-                    lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
-                                                                std::move(let->name),
-                                                                std::move(let->parameters),
-                                                                std::move(let->returnType),
-                                                                std::move(let->value),
-                                                                std::move(body));
-                    static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
-                }
+                lastExpr = convertToLetIn(std::move(let), std::move(body));
             }
             else
             {
