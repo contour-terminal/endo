@@ -18,14 +18,21 @@ std::vector<ClassifiedToken> tokenizeWithContext(std::string_view source)
     // Track whether we're at the start of a new statement.
     auto atStatementStart = true;
     auto inFSharpStatement = false;
+    auto bracketDepth = 0; // Track [...] nesting so `;` inside lists isn't a statement boundary.
 
     while (lexer.currentToken() != Token::EndOfInput)
     {
         auto const token = lexer.currentToken();
         auto const& literal = lexer.currentLiteral();
 
-        // Statement boundary: newline or semicolon resets to statement start.
-        if (token == Token::LineFeed || token == Token::Semicolon)
+        // Track bracket depth for list literals.
+        if (token == Token::BracketOpen)
+            ++bracketDepth;
+        else if (token == Token::BracketClose && bracketDepth > 0)
+            --bracketDepth;
+
+        // Statement boundary: newline or semicolon (outside brackets) resets to statement start.
+        if (token == Token::LineFeed || (token == Token::Semicolon && bracketDepth == 0))
         {
             atStatementStart = true;
             // Leave F# mode at statement boundary so the next statement starts in shell mode.
