@@ -15,7 +15,7 @@ if(ENDO_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/../endo-language/TestHelper.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../endo-language/TestHelper.cpp
     )
-    target_link_libraries(endo-test PRIVATE endo CoreVM crispy::core)
+    target_link_libraries(endo-test PRIVATE endo endo-platform CoreVM crispy::core)
     target_include_directories(endo-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_compile_definitions(endo-test PRIVATE
         ENDO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests"

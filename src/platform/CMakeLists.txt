@@ -20,6 +20,8 @@ add_library(endo-platform STATIC
     NativeFileSystem.hpp
     NativeFileSystem.cpp
     FileInfoProvider.hpp
+    GlobMatch.hpp
+    GlobMatch.cpp
     SignalHandler.hpp
     SignalHandler.cpp
     InstallPaths.hpp
@@ -86,6 +88,7 @@ add_executable(test-endo-platform
     Process_test.cpp
     Pipe_test.cpp
     EnvironmentProvider_test.cpp
+    FileInfoProvider_test.cpp
     Wakeup_test.cpp
     MessageQueue_test.cpp
     WindowsPlatform_test.cpp

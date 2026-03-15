@@ -3,60 +3,132 @@
 
 #if defined(_WIN32)
 
+    #include <algorithm>
     #include <chrono>
     #include <filesystem>
     #include <string>
     #include <vector>
 
+    #include <platform/GlobMatch.hpp>
+
 namespace endo::platform
 {
 
-std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const& path) const
+namespace
 {
-    std::vector<FileEntry> result;
-    std::error_code ec;
 
-    auto const dir = std::filesystem::path(path);
-    if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
-        return result;
+    namespace fs = std::filesystem;
 
-    for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
+    /// Populates a FileEntry from a filesystem directory_entry.
+    /// @return true on success, false if the entry could not be stat'd.
+    [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry, FileEntry& fileEntry)
     {
-        if (ec)
-            break;
+        std::error_code ec;
 
-        FileEntry fileEntry {};
-        fileEntry.name = entry.path().filename().string();
-        fileEntry.isDir = entry.is_directory(ec);
+        fileEntry.name = dirEntry.path().filename().string();
+
+        auto const status = dirEntry.status(ec);
+        if (ec)
+            return false;
+
+        fileEntry.isDir = fs::is_directory(status);
+        fileEntry.size = 0;
 
         if (!fileEntry.isDir)
-            fileEntry.size = static_cast<int64_t>(entry.file_size(ec));
-
-        auto const status = entry.status(ec);
-        if (!ec)
         {
-            auto const perms = status.permissions();
-            int mode = 0;
-            if ((perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
-                mode |= 0444;
-            if ((perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none)
-                mode |= 0222;
-            if ((perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none)
-                mode |= 0111;
-            if (fileEntry.isDir)
-                mode |= 0111;
-            fileEntry.mode = mode;
+            auto const fileSize = dirEntry.file_size(ec);
+            if (!ec)
+                fileEntry.size = static_cast<int64_t>(fileSize);
+            else
+                ec.clear();
         }
 
-        auto const lastWrite = entry.last_write_time(ec);
+        auto const perms = status.permissions();
+        int mode = 0;
+        if ((perms & fs::perms::owner_read) != fs::perms::none)
+            mode |= 0444;
+        if ((perms & fs::perms::owner_write) != fs::perms::none)
+            mode |= 0222;
+        if ((perms & fs::perms::owner_exec) != fs::perms::none)
+            mode |= 0111;
+        if (fileEntry.isDir)
+            mode |= 0111;
+        fileEntry.mode = mode;
+
+        auto const lastWrite = dirEntry.last_write_time(ec);
         if (!ec)
         {
             auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lastWrite);
             fileEntry.mtime =
                 std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
         }
+        else
+        {
+            fileEntry.mtime = 0;
+        }
 
-        result.push_back(std::move(fileEntry));
+        return true;
+    }
+
+} // namespace
+
+std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const& path) const
+{
+    std::vector<FileEntry> result;
+    std::error_code ec;
+
+    // Case 1: Glob pattern — check first (pure string scan, avoids unnecessary syscalls).
+    if (endo::containsGlobChars(path))
+    {
+        auto const patternPath = fs::path(path);
+        auto parentDir = patternPath.parent_path();
+        auto const filePattern = patternPath.filename().string();
+
+        if (parentDir.empty())
+            parentDir = ".";
+
+        for (auto const& entry: fs::directory_iterator(parentDir, ec))
+        {
+            if (ec)
+                break;
+
+            auto const filename = entry.path().filename().string();
+            if (endo::globMatchFilename(filename, filePattern))
+            {
+                FileEntry fileEntry {};
+                if (statEntry(entry, fileEntry))
+                    result.push_back(std::move(fileEntry));
+            }
+        }
+
+        std::ranges::sort(result, {}, &FileEntry::name);
+        return result;
+    }
+
+    // Case 2: Directory path — enumerate contents.
+    auto const dir = fs::path(path);
+    if (fs::is_directory(dir, ec) && !ec)
+    {
+        for (auto const& entry: fs::directory_iterator(dir, ec))
+        {
+            if (ec)
+                break;
+
+            FileEntry fileEntry {};
+            if (statEntry(entry, fileEntry))
+                result.push_back(std::move(fileEntry));
+        }
+
+        std::ranges::sort(result, {}, &FileEntry::name);
+        return result;
+    }
+
+    // Case 3: Single file path — stat and return one entry.
+    if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
+    {
+        FileEntry fileEntry {};
+        if (statEntry(dirEntry, fileEntry))
+            result.push_back(std::move(fileEntry));
     }
 
     return result;

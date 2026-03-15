@@ -15,6 +15,9 @@
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <bit>
+#include <filesystem>
+
+#include <platform/GlobMatch.hpp>
 
 namespace endo::test
 {
@@ -66,6 +69,7 @@ namespace
     void mockStructuredLs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+        auto const path = std::string(args.getString(1));
 
         struct MockFile
         {
@@ -76,15 +80,36 @@ namespace
             bool isDir;
         };
 
-        constexpr MockFile files[] = {
+        constexpr MockFile allFiles[] = {
             { .name = "docs", .size = 4096, .mode = 0755, .mtime = 1700000000, .isDir = true },
             { .name = "hello.txt", .size = 42, .mode = 0644, .mtime = 1700001000, .isDir = false },
             { .name = "script.sh", .size = 256, .mode = 0755, .mtime = 1700002000, .isDir = false },
         };
+
+        // Determine which entries to include based on the path argument.
+        auto const hasGlob = endo::containsGlobChars(path);
+
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& f = files[i];
+            auto const& f = allFiles[i];
+
+            // Filter: directory path returns all, glob filters by pattern, else exact name match.
+            if (!path.empty() && path != "." && path != "/tmp")
+            {
+                auto const nameOrPattern = std::filesystem::path(path).filename().string();
+                if (hasGlob)
+                {
+                    if (!endo::globMatchFilename(f.name, nameOrPattern))
+                        continue;
+                }
+                else
+                {
+                    if (nameOrPattern != f.name)
+                        continue;
+                }
+            }
+
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
             auto* sizeObj = builtins::makeSizeFromBytes(runner, f.size);

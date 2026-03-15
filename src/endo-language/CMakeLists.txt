@@ -146,7 +146,7 @@ if(ENDO_TESTING)
 
         format/SourceFormatter_test.cpp
     )
-    target_link_libraries(test-endo-language endo Catch2::Catch2)
+    target_link_libraries(test-endo-language endo endo-platform Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
         ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"

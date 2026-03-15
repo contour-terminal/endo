@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with glob pattern filters entries by pattern
+# mode: structured
+# expect: 1
+
+ls "*.txt"
+    |> length
+    |> print

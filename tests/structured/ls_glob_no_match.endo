@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with non-matching glob returns empty list
+# mode: structured
+# expect: 0
+
+ls "*.xyz"
+    |> length
+    |> print
