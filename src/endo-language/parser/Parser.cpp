@@ -3909,6 +3909,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetBindingStmt> let,
                                                        std::unique_ptr<ast::Expr> body)
 {
+    auto const bodyLocation = body ? body->location : std::nullopt;
     std::unique_ptr<ast::LetInExpr> result;
     if (let->destructurePattern)
         result = std::make_unique<ast::LetInExpr>(
@@ -3925,7 +3926,7 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
     // Propagate location: span from 'let' keyword to end of body expression
     if (let->location)
     {
-        auto const endLoc = body ? body->location : std::nullopt;
+        auto const endLoc = bodyLocation;
         result->location = endLoc ? SourceLocationRange { .begin = let->location->begin, .end = endLoc->end }
                                   : *let->location;
     }

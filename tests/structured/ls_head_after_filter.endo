@@ -4,7 +4,6 @@
 # mode: structured
 # expect: hello.txt
 
-match ls |> filter (fun f -> f.size < 300)
-    |> head with
+match ls |> filter (fun f -> f.size < 300) |> head with
 | Some f -> print f.name
 | None -> print "none"

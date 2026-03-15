@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [2]
 
-let ids =
-    jobs |> filter (_.state == "Stopped")
-        |> map _.id
+let ids = jobs |> filter (_.state == "Stopped") |> map _.id
 
 print ids

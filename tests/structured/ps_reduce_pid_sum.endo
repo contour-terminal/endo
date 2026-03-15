@@ -4,7 +4,6 @@
 # mode: structured
 # expect: 143
 
-match ps |> map (fun p -> p.pid)
-    |> reduce (fun a b -> a + b) with
+match ps |> map (fun p -> p.pid) |> reduce (fun a b -> a + b) with
 | Some v -> print v
 | None -> print "none"

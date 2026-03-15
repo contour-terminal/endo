@@ -4,6 +4,4 @@
 # mode: structured
 # expect: 0
 
-ls "*.xyz"
-    |> length
-    |> print
+ls "*.xyz" |> length |> print

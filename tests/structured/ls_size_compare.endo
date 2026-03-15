@@ -4,5 +4,4 @@
 # mode: structured
 # expect: [docs; script.sh]
 
-print (ls |> filter (fun f -> f.size > 100B)
-    |> map (fun f -> f.name))
+print (ls |> filter (fun f -> f.size > 100B) |> map (fun f -> f.name))

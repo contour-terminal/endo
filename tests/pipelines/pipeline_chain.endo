@@ -8,6 +8,4 @@ let double x = x * 2
 
 let inc x = x + 1
 
-5 |> inc
-    |> double
-    |> println
+5 |> inc |> double |> println

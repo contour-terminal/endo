@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [make build]
 
-let cmds =
-    jobs |> filter (_.state == "Done")
-        |> map _.command
+let cmds = jobs |> filter (_.state == "Done") |> map _.command
 
 print cmds

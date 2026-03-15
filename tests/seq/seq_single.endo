@@ -6,5 +6,4 @@
 
 let s = seq { yield 42 }
 
-s |> toList
-    |> println
+s |> toList |> println

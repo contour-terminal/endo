@@ -3,6 +3,4 @@
 # description: Pipeline: value |> Option.map f |> Option.defaultValue def
 # expect: 42
 
-print (Some 21
-    |> Option.map (fun x -> x * 2)
-    |> Option.defaultValue 0)
+print (Some 21 |> Option.map (fun x -> x * 2) |> Option.defaultValue 0)

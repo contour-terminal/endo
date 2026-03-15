@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [docs; hello.txt; script.sh]
 
-let names =
-    ls |> filter (fun f -> f.mtime.month == 11)
-        |> map (fun f -> f.name)
+let names = ls |> filter (fun f -> f.mtime.month == 11) |> map (fun f -> f.name)
 
 print names

@@ -72,8 +72,7 @@ println result
 // Pipelines with annotated functions
 let negate (x: int): int = 0 - x
 
-println (5 |> double
-    |> negate)
+println (5 |> double |> negate)
 
 // Option and result type annotations
 let maybe: option<int> = Some 42

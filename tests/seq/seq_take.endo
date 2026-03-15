@@ -12,5 +12,4 @@ let s = seq {
     yield 5
 }
 
-s |> take 3
-    |> println
+s |> take 3 |> println

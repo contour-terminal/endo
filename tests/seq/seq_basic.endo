@@ -10,5 +10,4 @@ let s = seq {
     yield 3
 }
 
-s |> toList
-    |> println
+s |> toList |> println

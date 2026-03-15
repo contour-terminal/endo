@@ -4,5 +4,4 @@
 # mode: structured
 # expect: 2
 
-print (ls |> filter (fun f -> f.size <= 256)
-    |> length)
+print (ls |> filter (fun f -> f.size <= 256) |> length)

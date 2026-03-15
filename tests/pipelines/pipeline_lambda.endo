@@ -4,5 +4,4 @@
 # expect: 9
 # expect:
 
-3 |> (fun x -> x * x)
-    |> println
+3 |> (fun x -> x * x) |> println

@@ -3,6 +3,4 @@
 # description: List filter then sort
 # expect: [3; 4; 5; 8]
 
-print ([5; 3; 8; 1; 4]
-    |> filter (fun x -> x > 2)
-    |> sort)
+print ([5; 3; 8; 1; 4] |> filter (fun x -> x > 2) |> sort)

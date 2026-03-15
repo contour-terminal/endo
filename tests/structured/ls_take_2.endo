@@ -4,5 +4,4 @@
 # mode: structured
 # expect: [docs; hello.txt]
 
-print (ls |> take 2
-    |> map (fun f -> f.name))
+print (ls |> take 2 |> map (fun f -> f.name))

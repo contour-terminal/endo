@@ -3,6 +3,4 @@
 # description: [1;2;3] |> tail |> length → 2
 # expect: 2
 
-print ([1; 2; 3]
-    |> tail
-    |> length)
+print ([1; 2; 3] |> tail |> length)

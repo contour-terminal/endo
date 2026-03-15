@@ -4,5 +4,4 @@
 # mode: structured
 # expect: true
 
-print (ls |> filter (fun f -> f.size > 10000)
-    |> isEmpty)
+print (ls |> filter (fun f -> f.size > 10000) |> isEmpty)

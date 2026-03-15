@@ -12,7 +12,4 @@ let s = seq {
     yield 5
 }
 
-s |> take 3
-    |> toList
-    |> map (fun x -> x * 2)
-    |> println
+s |> take 3 |> toList |> map (fun x -> x * 2) |> println
