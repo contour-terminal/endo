@@ -193,6 +193,10 @@ class IRGenerator final: public ast::Visitor
                                         std::format_string<Args...> f,
                                         Args&&... args);
 
+    /// Returns a user-facing type name for an Option/Result value, using annotations as fallback.
+    /// The value must already be known to be Option or Result (via getObjectTypeId).
+    [[nodiscard]] std::string wrappedTypeName(CoreVM::Value* value, uint16_t typeId);
+
     void visit(ast::BuiltinExitStmt const& node) override;
     void visit(ast::BuiltinExportStmt const& node) override;
     void visit(ast::BuiltinChDirStmt const& node) override;

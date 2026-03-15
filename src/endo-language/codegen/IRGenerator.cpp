@@ -1500,6 +1500,32 @@ void IRGenerator::reportTypeErrorWithSuggestions(std::vector<std::string> sugges
     _hasErrors = true;
 }
 
+std::string IRGenerator::wrappedTypeName(CoreVM::Value* value, uint16_t typeId)
+{
+    auto tn = typeName(value);
+    if (tn == "object")
+    {
+        auto const* const baseName = typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
+        if (auto const innerType = getInnerType(value); innerType && *innerType != CoreVM::LiteralType::Void)
+        {
+            auto const innerName = [&]() -> std::string_view {
+                switch (*innerType)
+                {
+                    case CoreVM::LiteralType::Number: return "int";
+                    case CoreVM::LiteralType::Float: return "float";
+                    case CoreVM::LiteralType::String: return "string";
+                    case CoreVM::LiteralType::Boolean: return "bool";
+                    default: return "unknown";
+                }
+            }();
+            tn = std::format("{}<{}>", baseName, innerName);
+        }
+        else
+            tn = baseName;
+    }
+    return tn;
+}
+
 void IRGenerator::visit(ast::BuiltinExitStmt const& node)
 {
     CoreVM::Value* exitCode = nullptr;
@@ -4748,6 +4774,19 @@ bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<Cor
                 else if (expectedType == CoreVM::LiteralType::Number
                          && arg->type() == CoreVM::LiteralType::String)
                     arg = _builder.createS2N(arg, "s2n");
+                // Check if argument is a wrapped type (Option/Result) that needs unwrapping
+                else if (auto const typeId = getObjectTypeId(arg);
+                         typeId
+                         && (*typeId == CoreVM::BuiltinTypeId::Option
+                             || *typeId == CoreVM::BuiltinTypeId::Result))
+                {
+                    reportTypeErrorWithSuggestions(
+                        { "Use '?' to unwrap the argument first, e.g.: expr?" },
+                        "Cannot pass '{}' value to '{}'; it must be unwrapped first",
+                        wrappedTypeName(arg, *typeId),
+                        name);
+                    return true;
+                }
             }
             convertedArgs.push_back(arg);
         }
@@ -6006,38 +6045,10 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         {
             if (*typeId == CoreVM::BuiltinTypeId::Option || *typeId == CoreVM::BuiltinTypeId::Result)
             {
-                // Build a readable type name — typeName() may return "object" for loaded values
-                // since SSA chain walking doesn't traverse through loads, so fall back to
-                // annotation-based naming when possible.
-                auto tn = typeName(operand);
-                if (tn == "object")
-                {
-                    const auto* const baseName =
-                        *typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
-                    if (auto const innerType = getInnerType(operand);
-                        innerType && *innerType != CoreVM::LiteralType::Void)
-                    {
-                        auto const innerName = [&]() -> std::string_view {
-                            switch (*innerType)
-                            {
-                                case CoreVM::LiteralType::Number: return "int";
-                                case CoreVM::LiteralType::Float: return "float";
-                                case CoreVM::LiteralType::String: return "string";
-                                case CoreVM::LiteralType::Boolean: return "bool";
-                                default: return "unknown";
-                            }
-                        }();
-                        tn = std::format("{}<{}>", baseName, innerName);
-                    }
-                    else
-                        tn = baseName;
-                }
-                auto suggestions = std::vector<std::string> { std::format(
-                    "Use '?' to unwrap the {} operand, e.g.: expr?", side) };
                 reportTypeErrorWithSuggestions(
-                    std::move(suggestions),
+                    { std::format("Use '?' to unwrap the {} operand, e.g.: expr?", side) },
                     "Cannot use '{}' value directly in binary operation; it must be unwrapped first",
-                    tn);
+                    wrappedTypeName(operand, *typeId));
                 return true;
             }
         }
