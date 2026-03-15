@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Tuple with env calls — each creates control-flow blocks
+# mock-env: HOME=/home/user
+# mock-env: PATH=/usr/bin
+# expect: (Some "/home/user", Some "/usr/bin")
 
 let t = ((env "HOME"), (env "PATH"))
 
-print "ok"
+print t

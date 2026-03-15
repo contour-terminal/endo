@@ -5030,8 +5030,13 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         elemAllocas.push_back(alloca);
     }
 
-    // Resolve semantic type from annotations, falling back to IR type
-    auto resolveType = [this](CoreVM::AllocaInstr* a) {
+    // Resolve semantic type from annotations, falling back to IR type.
+    // If the value IS a typed object (Option, Result, List, etc.), use Object
+    // so the formatter dispatches through the type registry instead of
+    // misinterpreting the object pointer as a primitive value.
+    auto resolveType = [this](CoreVM::AllocaInstr* a) -> CoreVM::LiteralType {
+        if (getObjectTypeId(a).has_value())
+            return CoreVM::LiteralType::Object;
         return getInnerType(a).value_or(a->type());
     };
 
