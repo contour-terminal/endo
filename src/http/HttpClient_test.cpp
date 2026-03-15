@@ -49,8 +49,12 @@ TEST_CASE("http.client.invalid_url")
 TEST_CASE("http.client.connection_refused")
 {
     HttpClient client;
-    // Port 1 is unlikely to have a listener
-    auto result = client.get("http://localhost:1");
+    // Port 1 is unlikely to have a listener; timeout as safety net.
+    HttpRequest request {
+        .url = "http://localhost:1",
+        .timeout = std::chrono::seconds(2),
+    };
+    auto result = client.execute(request);
     REQUIRE(!result.has_value());
     CHECK(result.error().curlCode != 0);
 }
@@ -58,7 +62,12 @@ TEST_CASE("http.client.connection_refused")
 TEST_CASE("http.client.dns_failure")
 {
     HttpClient client;
-    auto result = client.get("http://this-domain-does-not-exist-at-all.invalid");
+    // DNS for nonexistent domains can take several seconds; cap with timeout.
+    HttpRequest request {
+        .url = "http://this-domain-does-not-exist-at-all.invalid",
+        .timeout = std::chrono::seconds(2),
+    };
+    auto result = client.execute(request);
     REQUIRE(!result.has_value());
     CHECK(result.error().curlCode != 0);
 }

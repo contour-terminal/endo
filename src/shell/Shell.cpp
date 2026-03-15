@@ -537,6 +537,53 @@ void Shell::SubstitutionCapture::clear()
 }
 
 // ========================================================================
+// TypeRegistry cache (computed once, reused for all Shell instances)
+// ========================================================================
+
+namespace
+{
+
+/// Cached data derived from CoreVM::TypeRegistry (immutable after construction).
+struct TypeRegistryCachedData
+{
+    std::unordered_map<std::string, std::vector<endo::RecordFieldInfo>> recordTypeFields;
+    endo::ModuleFunctionMap moduleFunctions;
+    std::unordered_map<std::string, std::string> commandOutputTypes;
+    std::unordered_map<std::string, endo::FSharpPersistentState::StructuredCommandInfo> structuredCommands;
+};
+
+/// Returns cached TypeRegistry-derived data (computed once, reused for all Shell instances).
+TypeRegistryCachedData const& cachedTypeRegistryData()
+{
+    static auto const instance = [] {
+        CoreVM::TypeRegistry registry;
+        TypeRegistryCachedData data;
+        data.recordTypeFields = endo::builtinRecordFields(registry);
+        data.moduleFunctions = endo::builtinModuleFunctions(registry);
+        data.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
+
+        for (auto const& type: registry.allTypes())
+        {
+            if (!type->producingCommand.empty())
+            {
+                data.structuredCommands[type->producingCommand] = {
+                    .builtinCallbackName = "structured_" + type->producingCommand,
+                    .recordTypeId = type->id,
+                    .recordTypeName = type->name,
+                };
+            }
+        }
+        if (auto it = data.structuredCommands.find("ls"); it != data.structuredCommands.end())
+            it->second.defaultStringArg = ".";
+
+        return data;
+    }();
+    return instance;
+}
+
+} // namespace
+
+// ========================================================================
 // Shell implementation
 // ========================================================================
 
@@ -600,28 +647,13 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
 
-    // Seed built-in record type fields, module functions, and command output types from TypeRegistry
+    // Seed built-in record type fields, module functions, and command output types from TypeRegistry (cached)
     {
-        CoreVM::TypeRegistry registry;
-        _fsharpState.recordTypeFields = endo::builtinRecordFields(registry);
-        _fsharpState.moduleFunctions = endo::builtinModuleFunctions(registry);
-        _fsharpState.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
-
-        // Auto-register builtin structured commands from TypeRegistry producingCommand
-        for (auto const& type: registry.allTypes())
-        {
-            if (!type->producingCommand.empty())
-            {
-                _fsharpState.structuredCommands[type->producingCommand] = {
-                    .builtinCallbackName = "structured_" + type->producingCommand,
-                    .recordTypeId = type->id,
-                    .recordTypeName = type->name,
-                };
-            }
-        }
-        // ls accepts optional directory argument with default "."
-        if (auto it = _fsharpState.structuredCommands.find("ls"); it != _fsharpState.structuredCommands.end())
-            it->second.defaultStringArg = ".";
+        auto const& cached = cachedTypeRegistryData();
+        _fsharpState.recordTypeFields = cached.recordTypeFields;
+        _fsharpState.moduleFunctions = cached.moduleFunctions;
+        _fsharpState.commandOutputTypes = cached.commandOutputTypes;
+        _fsharpState.structuredCommands = cached.structuredCommands;
     }
 
     // Initialize module loader for import/open support
@@ -725,15 +757,6 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
             }
         }
     }
-
-    // Load persistent history and auto-import from other shells on first run
-    history.load();
-    history.autoImportIfEmpty();
-
-    // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history, _fsharpState);
-    prompt.setCompleter(completer.get());
-    prompt.setHistory(&history);
 
     // Register Endo syntax highlighter for agent-mode code blocks and diffs
     tui::registerEndoHighlighter(
@@ -1113,6 +1136,22 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     return result;
 }
 
+void Shell::ensureInteractiveReady()
+{
+    if (_interactiveReady)
+        return;
+    _interactiveReady = true;
+
+    // Load persistent history and auto-import from other shells on first run
+    history.load();
+    history.autoImportIfEmpty();
+
+    // Initialize completion system
+    completer = std::make_unique<Completer>(_env, history, _fsharpState);
+    prompt.setCompleter(completer.get());
+    prompt.setHistory(&history);
+}
+
 int Shell::run()
 {
     if (_interactive && !_tty.isTerminal())
@@ -1120,6 +1159,8 @@ int Shell::run()
         _tty.writeToStderr("endo: interactive mode requires a terminal.\n");
         return EXIT_FAILURE;
     }
+
+    ensureInteractiveReady();
 
     if (!_noProfile)
         loadInitScript();
