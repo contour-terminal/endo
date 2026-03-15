@@ -3916,11 +3916,11 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
             std::move(let->destructurePattern), std::move(let->value), std::move(body));
     else
         result = std::make_unique<ast::LetInExpr>(let->isRecursive,
-                                                   std::move(let->name),
-                                                   std::move(let->parameters),
-                                                   std::move(let->returnType),
-                                                   std::move(let->value),
-                                                   std::move(body));
+                                                  std::move(let->name),
+                                                  std::move(let->parameters),
+                                                  std::move(let->returnType),
+                                                  std::move(let->value),
+                                                  std::move(body));
     result->resourceMode = let->resourceMode;
 
     // Propagate location: span from 'let' keyword to end of body expression
@@ -4409,7 +4409,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
     {
         // Don't wrap bare _ (identity function) — preserve existing behavior
         auto* ident = dynamic_cast<ast::IdentifierExpr*>(left.get());
-        if (!ident || ident->name != "__x")
+        if (!ident || ident->name != ast::PlaceholderParamName)
         {
             _placeholderCount = savedPlaceholderCount;
             left = std::make_unique<ast::PlaceholderLambdaExpr>(std::move(left), false);
@@ -6408,13 +6408,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return parseListLiteral();
             }
 
-            // Placeholder lambda sugar: _ → IdentifierExpr("__x")
+            // Placeholder lambda sugar: _ → IdentifierExpr(PlaceholderParamName)
             if (lit == "_")
             {
                 auto const loc = _lexer.currentRange();
                 _lexer.nextToken();
                 ++_placeholderCount;
-                auto node = std::make_unique<ast::IdentifierExpr>("__x");
+                auto node = std::make_unique<ast::IdentifierExpr>(ast::PlaceholderParamName);
                 node->location = loc;
                 return node;
             }

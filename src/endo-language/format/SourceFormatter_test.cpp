@@ -384,11 +384,11 @@ TEST_CASE("SourceFormatter.match_simple_if_arm_inline", "[format]")
 
 TEST_CASE("SourceFormatter.lambda_pipeline_body_inline", "[format]")
 {
-    // Pipeline body that fits within maxLineWidth stays inline with lambda
+    // Pipeline body that fits within maxLineWidth stays inline — lambdas simplified to placeholders
     auto const result = SourceFormatter::format(
         "let f = fun xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum");
     INFO("Result: [" << result << "]");
-    CHECK(result.find("fun xs -> xs |> map") != std::string::npos);
+    CHECK(result.find("_ |> map (_ + 1) |> filter (_ > 0) |> sum") != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.lambda_pipeline_body_wraps_when_exceeds_width", "[format]")
@@ -451,8 +451,8 @@ TEST_CASE("SourceFormatter.try_with_pipeline_handler_wraps_when_exceeds_width", 
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 40;
-    auto const result =
-        SourceFormatter::format("let f x = try x? with | Error e -> e |> toString |> print |> ignore", config);
+    auto const result = SourceFormatter::format(
+        "let f x = try x? with | Error e -> e |> toString |> print |> ignore", config);
     INFO("Result: [" << result << "]");
     // Pipeline wraps, but short source "e" keeps first |> inline
     CHECK(result.find("e |> toString\n") != std::string::npos);
@@ -496,7 +496,7 @@ TEST_CASE("SourceFormatter.lambda_simple_inline", "[format]")
 {
     auto const result = SourceFormatter::format("let f = fun x -> (x + 1)");
     INFO("Result: [" << result << "]");
-    CHECK(result.find("fun x -> (x + 1)") != std::string::npos);
+    CHECK(result.find("(_ + 1)") != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.lambda_compound_body_multiline", "[format]")
@@ -515,6 +515,84 @@ TEST_CASE("SourceFormatter.lambda_idempotency", "[format]")
     INFO("First: [" << first << "]");
     INFO("Second: [" << second << "]");
     CHECK(first == second);
+}
+
+// --- Lambda-to-placeholder simplification ---
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_binary", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun x -> x + 1");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let f = _ + 1\n");
+}
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_same_param_twice", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun x -> x * x");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let f = _ * _\n");
+}
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_field_access", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun x -> x.name");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let f = _.name\n");
+}
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_comparison", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun x -> x > 0");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let f = _ > 0\n");
+}
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_idempotency", "[format]")
+{
+    const auto* const source = "let f = fun x -> x + 1";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.lambda_to_placeholder_in_pipeline", "[format]")
+{
+    auto const result =
+        SourceFormatter::format("let r = data |> map (fun x -> x + 1) |> filter (fun x -> x > 5)");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("map (_ + 1)") != std::string::npos);
+    CHECK(result.find("filter (_ > 5)") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_unused_param", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun x -> 42");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun x -> 42") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_multi_param", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun a b -> a + b");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun a b -> a + b") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_typed_param", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun (x: int) -> x + 1");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun (x: int) -> x + 1") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_compound_body", "[format]")
+{
+    auto const result =
+        SourceFormatter::format(R"(let f = fun x -> (match x with | 0 -> "zero" | _ -> "other"))");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun x ->") != std::string::npos);
 }
 
 // --- LetInExpr ---
@@ -1080,7 +1158,7 @@ TEST_CASE("SourceFormatter.pipeline_chain_fits_inline", "[format]")
     // Multi-stage pipeline that fits within maxLineWidth stays on one line
     auto const result = SourceFormatter::format("let x = data |> List.filter (fun x -> x > 5) |> List.sum");
     INFO("Result: [" << result << "]");
-    CHECK(result == "let x = data |> List.filter (fun x -> x > 5) |> List.sum\n");
+    CHECK(result == "let x = data |> List.filter (_ > 5) |> List.sum\n");
 }
 
 TEST_CASE("SourceFormatter.pipeline_chain_fits_inline_idempotency", "[format]")
@@ -1097,8 +1175,8 @@ TEST_CASE("SourceFormatter.pipeline_chain_wraps_when_exceeds_width", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 40;
-    auto const result = SourceFormatter::format(
-        "let x = data |> List.filter (fun x -> x > 5) |> List.sum", config);
+    auto const result =
+        SourceFormatter::format("let x = data |> List.filter (fun x -> x > 5) |> List.sum", config);
     INFO("Result: [" << result << "]");
     CHECK(result.find("|> List.filter") != std::string::npos);
     CHECK(result.find("|> List.sum") != std::string::npos);
@@ -1143,8 +1221,7 @@ TEST_CASE("SourceFormatter.pipeline_short_source_keeps_first_inline", "[format]"
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 30;
-    auto const result =
-        SourceFormatter::format("let f raw = raw |> split x |> filter g |> sum", config);
+    auto const result = SourceFormatter::format("let f raw = raw |> split x |> filter g |> sum", config);
     INFO("Result: [" << result << "]");
     // "raw" (3 chars) <= maxLineWidth/3 (10), so first |> stays on same line
     CHECK(result.find("raw |> split x\n") != std::string::npos);
@@ -1168,8 +1245,8 @@ TEST_CASE("SourceFormatter.pipeline_long_source_wraps_all", "[format]")
 {
     auto config = FormatConfig {};
     config.maxLineWidth = 40;
-    auto const result = SourceFormatter::format(
-        "let x = some_long_source_name |> filter g |> map h |> sum", config);
+    auto const result =
+        SourceFormatter::format("let x = some_long_source_name |> filter g |> map h |> sum", config);
     INFO("Result: [" << result << "]");
     // "some_long_source_name" (21 chars) > maxLineWidth/3 (13), so source gets its own line
     CHECK(result.find("some_long_source_name\n") != std::string::npos);
@@ -1191,8 +1268,7 @@ TEST_CASE("SourceFormatter.pipeline_long_source_wraps_all_idempotency", "[format
 TEST_CASE("SourceFormatter.pipeline_chain_fits_inline_4_stages", "[format]")
 {
     // 4-stage pipeline that fits stays on one line
-    auto const result =
-        SourceFormatter::format("let f items = items |> split x |> filter g |> sum");
+    auto const result = SourceFormatter::format("let f items = items |> split x |> filter g |> sum");
     INFO("Result: [" << result << "]");
     CHECK(result == "let f items = items |> split x |> filter g |> sum\n");
 }

@@ -4933,15 +4933,10 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
     _syntheticAST.push_back(std::move(lambda));
 }
 
-void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
+IRGenerator::FSharpFunction IRGenerator::createFunctionFromPlaceholder(ast::PlaceholderLambdaExpr const& node)
 {
-    // Desugar: PlaceholderLambdaExpr(body) → equivalent of LambdaExpr(params=[__x], body)
-    // The body already uses IdentifierExpr("__x") for the placeholder.
-    // Register directly as a FSharpFunction since body is owned by the PlaceholderLambdaExpr node.
-
-    auto const lambdaName = generateLambdaName();
     FSharpFunction func;
-    func.parameters = { "__x" };
+    func.parameters = { ast::PlaceholderParamName };
     func.parameterTypes = { std::nullopt };
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
@@ -4953,7 +4948,13 @@ void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
             func.capturedFunctionRefs[capName] = *ref;
     }
 
-    registerFSharpFunction(lambdaName, std::move(func));
+    return func;
+}
+
+void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
+{
+    auto const lambdaName = generateLambdaName();
+    registerFSharpFunction(lambdaName, createFunctionFromPlaceholder(node));
     _result = _builder.get(lambdaName);
 }
 
@@ -5592,6 +5593,30 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         registerFSharpFunction(node.name, std::move(func));
 
         // Compile lambda-as-variable as separate IRFunction (with captures as extra params)
+        if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+            compileFunctionBody(node.name, *registered);
+
+        _result = nullptr;
+        return;
+    }
+
+    if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(node.value.get()))
+    {
+        if (node.visibility == ast::Visibility::Exported)
+        {
+            reportTypeError("'let export' cannot be used with lambda expressions");
+            return;
+        }
+
+        auto func = createFunctionFromPlaceholder(*placeholder);
+        applyInferredTypes(node.name, func);
+        func.definitionLocation = node.location;
+
+        for (auto const& [capName, capVal]: func.capturedBindings)
+            _sema.scopes().markUsed(capName);
+
+        registerFSharpFunction(node.name, std::move(func));
+
         if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
             compileFunctionBody(node.name, *registered);
 
@@ -6555,20 +6580,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
     else if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(funcExpr))
     {
-        // Placeholder lambda: (_ + 1) → equivalent to fun __x -> __x + 1
         funcName = generateLambdaName();
-        FSharpFunction lambdaFunc;
-        lambdaFunc.parameters = { "__x" };
-        lambdaFunc.parameterTypes = { std::nullopt };
-        lambdaFunc.body = placeholder->body.get();
-        lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
-        lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
-        for (auto const& [capName, _]: lambdaFunc.capturedBindings)
-        {
-            if (auto ref = lookupFSharpFunctionRef(capName))
-                lambdaFunc.capturedFunctionRefs[capName] = *ref;
-        }
-        registerFSharpFunction(funcName, std::move(lambdaFunc));
+        registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
         func = lookupFSharpFunction(funcName);
     }
     else if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(funcExpr))
@@ -7692,6 +7705,12 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
+        func = lookupFSharpFunction(funcName);
+    }
+    else if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(current))
+    {
+        funcName = generateLambdaName();
+        registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
         func = lookupFSharpFunction(funcName);
     }
     else

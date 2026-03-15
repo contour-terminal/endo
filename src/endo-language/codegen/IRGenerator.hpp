@@ -93,9 +93,9 @@ struct FSharpPersistentState
     /// Structured command name -> metadata (for IRGenerator lookup).
     struct StructuredCommandInfo
     {
-        std::string builtinCallbackName; ///< e.g., "structured_docker_ps"
-        uint16_t recordTypeId = 0;       ///< List element type ID
-        std::string recordTypeName;      ///< For _recordTypes lookup
+        std::string builtinCallbackName;             ///< e.g., "structured_docker_ps"
+        uint16_t recordTypeId = 0;                   ///< List element type ID
+        std::string recordTypeName;                  ///< For _recordTypes lookup
         std::optional<std::string> defaultStringArg; ///< If set, command accepts 0 or 1 string args
     };
 
@@ -791,6 +791,9 @@ class IRGenerator final: public ast::Visitor
     // Lambda counter for generating unique anonymous function names
     size_t _lambdaCounter = 0;
     [[nodiscard]] std::string generateLambdaName();
+
+    /// Creates an FSharpFunction from a PlaceholderLambdaExpr (desugars `_` to single-parameter function).
+    [[nodiscard]] FSharpFunction createFunctionFromPlaceholder(ast::PlaceholderLambdaExpr const& node);
 
     size_t _lazyCounter = 0;
     size_t _seqCounter = 0;
