@@ -123,3 +123,5 @@ if(NOT EMSCRIPTEN)
     message(STATUS "Thread Sanitizer    ${ENABLE_TSAN}")
 endif()
 message(STATUS "------------------------------------------------------------------------------")
+
+include(Packaging)

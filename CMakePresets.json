@@ -344,5 +344,27 @@
                 "outputOnFailure": true
             }
         }
+    ],
+    "packagePresets": [
+        {
+            "name": "cl-release-package",
+            "configurePreset": "cl-release",
+            "displayName": "MSVC Release Installer"
+        },
+        {
+            "name": "clangcl-release-package",
+            "configurePreset": "clangcl-release",
+            "displayName": "Clang-CL Release Installer"
+        },
+        {
+            "name": "clang-release-package",
+            "configurePreset": "clang-release",
+            "displayName": "Clang Release Package"
+        },
+        {
+            "name": "clang-release-static-package",
+            "configurePreset": "clang-release-static",
+            "displayName": "Clang Release Static Package"
+        }
     ]
 }

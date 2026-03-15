@@ -203,11 +203,22 @@ jobs:
       run: ctest --output-on-failure --build-config Release
       timeout-minutes: 5
 
+    - name: Build MSI installer
+      working-directory: build/clangcl-release
+      run: cpack -G WIX
+
     - name: Upload Windows binary
       uses: actions/upload-artifact@v4
       with:
         name: endo-windows-x86_64
         path: build/clangcl-release/src/shell/endo.exe
+        retention-days: 30
+
+    - name: Upload MSI installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-windows-x86_64-msi
+        path: build/clangcl-release/endo-*.msi
         retention-days: 30
 
   vscode-extension:
