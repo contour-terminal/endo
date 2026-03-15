@@ -3921,6 +3921,15 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
                                                    std::move(let->value),
                                                    std::move(body));
     result->resourceMode = let->resourceMode;
+
+    // Propagate location: span from 'let' keyword to end of body expression
+    if (let->location)
+    {
+        auto const endLoc = body ? body->location : std::nullopt;
+        result->location = endLoc ? SourceLocationRange { .begin = let->location->begin, .end = endLoc->end }
+                                  : *let->location;
+    }
+
     return result;
 }
 
