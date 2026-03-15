@@ -299,6 +299,12 @@ endif()
 
 # Installation
 install(TARGETS endo-bin RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Install runtime DLL dependencies alongside the executable (Windows/vcpkg).
+# TARGET_RUNTIME_DLLS collects all DLLs from imported targets (e.g. vcpkg).
+if(WIN32)
+    install(FILES $<TARGET_RUNTIME_DLLS:endo-bin> DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/definitions/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/definitions)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/

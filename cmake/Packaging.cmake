@@ -70,4 +70,8 @@ endif()
 # with embedded quotes and backslashes in NSIS commands.
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/CPackOptions.cmake")
 
+# Bundle MSVC runtime DLLs (vcruntime140.dll, msvcp140.dll, etc.) so the
+# installer works on machines without the Visual C++ Redistributable.
+include(InstallRequiredSystemLibraries)
+
 include(CPack)
