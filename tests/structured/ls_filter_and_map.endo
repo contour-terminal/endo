@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [docs; script.sh]
 
-let names =
-    ls |> filter (fun f -> f.size > 100)
-        |> map (fun f -> f.name)
+let names = ls |> filter (_.size > 100) |> map (_.name)
 
 print names

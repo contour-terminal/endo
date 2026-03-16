@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [1; 2]
 
-let ids =
-    jobs |> take 2
-        |> map _.id
+let ids = jobs |> take 2 |> map _.id
 
 print ids

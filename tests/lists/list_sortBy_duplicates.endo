@@ -3,4 +3,4 @@
 # description: List sortBy duplicates
 # expect: [1; 1; 2; 3; 3]
 
-print (sortBy (fun x -> x) [3; 1; 2; 1; 3])
+print (sortBy (_) [3; 1; 2; 1; 3])

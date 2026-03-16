@@ -4,5 +4,4 @@
 # mode: structured
 # expect: false
 
-print (ps |> filter (fun p -> p.pid > 0)
-    |> isEmpty)
+print (ps |> filter (_.pid > 0) |> isEmpty)

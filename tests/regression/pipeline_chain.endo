@@ -7,6 +7,4 @@ let double x = x * 2
 
 let inc x = x + 1
 
-let result =
-    5 |> double
-        |> inc
+let result = 5 |> double |> inc

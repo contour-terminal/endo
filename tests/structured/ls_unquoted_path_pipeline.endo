@@ -4,6 +4,4 @@
 # mode: structured
 # expect: 3
 
-ls "/tmp"
-    |> length
-    |> print
+ls "/tmp" |> length |> print

@@ -4,7 +4,6 @@
 # mode: structured
 # expect: firefox
 
-match ps |> filter (fun p -> p.pid > 10)
-    |> head with
+match ps |> filter (_.pid > 10) |> head with
 | Some p -> print p.command
 | None -> print "none"

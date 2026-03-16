@@ -3,4 +3,4 @@
 # description: List map negate
 # expect: [-1; -2; -3]
 
-print (map (fun x -> 0 - x) [1; 2; 3])
+print (map (0 - _) [1; 2; 3])

@@ -3,6 +3,4 @@
 # description: Chained lambdas in pipeline
 # mode: ir-only
 
-let result =
-    5 |> (fun x -> x * 2)
-        |> (fun x -> x + 1)
+let result = 5 |> (_ * 2) |> (_ + 1)

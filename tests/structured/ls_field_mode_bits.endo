@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [493; 420; 493]
 
-let modes = ls |> map (fun f -> f.mode.bits)
+let modes = ls |> map (_.mode.bits)
 
 print modes

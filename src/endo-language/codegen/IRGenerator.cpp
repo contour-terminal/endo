@@ -1500,6 +1500,32 @@ void IRGenerator::reportTypeErrorWithSuggestions(std::vector<std::string> sugges
     _hasErrors = true;
 }
 
+std::string IRGenerator::wrappedTypeName(CoreVM::Value* value, uint16_t typeId)
+{
+    auto tn = typeName(value);
+    if (tn == "object")
+    {
+        auto const* const baseName = typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
+        if (auto const innerType = getInnerType(value); innerType && *innerType != CoreVM::LiteralType::Void)
+        {
+            auto const innerName = [&]() -> std::string_view {
+                switch (*innerType)
+                {
+                    case CoreVM::LiteralType::Number: return "int";
+                    case CoreVM::LiteralType::Float: return "float";
+                    case CoreVM::LiteralType::String: return "string";
+                    case CoreVM::LiteralType::Boolean: return "bool";
+                    default: return "unknown";
+                }
+            }();
+            tn = std::format("{}<{}>", baseName, innerName);
+        }
+        else
+            tn = baseName;
+    }
+    return tn;
+}
+
 void IRGenerator::visit(ast::BuiltinExitStmt const& node)
 {
     CoreVM::Value* exitCode = nullptr;
@@ -4748,6 +4774,19 @@ bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<Cor
                 else if (expectedType == CoreVM::LiteralType::Number
                          && arg->type() == CoreVM::LiteralType::String)
                     arg = _builder.createS2N(arg, "s2n");
+                // Check if argument is a wrapped type (Option/Result) that needs unwrapping
+                else if (auto const typeId = getObjectTypeId(arg);
+                         typeId
+                         && (*typeId == CoreVM::BuiltinTypeId::Option
+                             || *typeId == CoreVM::BuiltinTypeId::Result))
+                {
+                    reportTypeErrorWithSuggestions(
+                        { "Use '?' to unwrap the argument first, e.g.: expr?" },
+                        "Cannot pass '{}' value to '{}'; it must be unwrapped first",
+                        wrappedTypeName(arg, *typeId),
+                        name);
+                    return true;
+                }
             }
             convertedArgs.push_back(arg);
         }
@@ -4894,15 +4933,10 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
     _syntheticAST.push_back(std::move(lambda));
 }
 
-void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
+IRGenerator::FSharpFunction IRGenerator::createFunctionFromPlaceholder(ast::PlaceholderLambdaExpr const& node)
 {
-    // Desugar: PlaceholderLambdaExpr(body) → equivalent of LambdaExpr(params=[__x], body)
-    // The body already uses IdentifierExpr("__x") for the placeholder.
-    // Register directly as a FSharpFunction since body is owned by the PlaceholderLambdaExpr node.
-
-    auto const lambdaName = generateLambdaName();
     FSharpFunction func;
-    func.parameters = { "__x" };
+    func.parameters = { ast::PlaceholderParamName };
     func.parameterTypes = { std::nullopt };
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
@@ -4914,7 +4948,13 @@ void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
             func.capturedFunctionRefs[capName] = *ref;
     }
 
-    registerFSharpFunction(lambdaName, std::move(func));
+    return func;
+}
+
+void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
+{
+    auto const lambdaName = generateLambdaName();
+    registerFSharpFunction(lambdaName, createFunctionFromPlaceholder(node));
     _result = _builder.get(lambdaName);
 }
 
@@ -5030,8 +5070,13 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         elemAllocas.push_back(alloca);
     }
 
-    // Resolve semantic type from annotations, falling back to IR type
-    auto resolveType = [this](CoreVM::AllocaInstr* a) {
+    // Resolve semantic type from annotations, falling back to IR type.
+    // If the value IS a typed object (Option, Result, List, etc.), use Object
+    // so the formatter dispatches through the type registry instead of
+    // misinterpreting the object pointer as a primitive value.
+    auto resolveType = [this](CoreVM::AllocaInstr* a) -> CoreVM::LiteralType {
+        if (getObjectTypeId(a).has_value())
+            return CoreVM::LiteralType::Object;
         return getInnerType(a).value_or(a->type());
     };
 
@@ -5555,6 +5600,30 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
+    if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(node.value.get()))
+    {
+        if (node.visibility == ast::Visibility::Exported)
+        {
+            reportTypeError("'let export' cannot be used with lambda expressions");
+            return;
+        }
+
+        auto func = createFunctionFromPlaceholder(*placeholder);
+        applyInferredTypes(node.name, func);
+        func.definitionLocation = node.location;
+
+        for (auto const& [capName, capVal]: func.capturedBindings)
+            _sema.scopes().markUsed(capName);
+
+        registerFSharpFunction(node.name, std::move(func));
+
+        if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+            compileFunctionBody(node.name, *registered);
+
+        _result = nullptr;
+        return;
+    }
+
     // Check if the expression produces an object (Option/Result/Tuple)
     // These need special tracking for reference counting.
     // NOTE: TryExpr (?) is NOT included — it unwraps the inner value, which is a primitive,
@@ -6001,38 +6070,10 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         {
             if (*typeId == CoreVM::BuiltinTypeId::Option || *typeId == CoreVM::BuiltinTypeId::Result)
             {
-                // Build a readable type name — typeName() may return "object" for loaded values
-                // since SSA chain walking doesn't traverse through loads, so fall back to
-                // annotation-based naming when possible.
-                auto tn = typeName(operand);
-                if (tn == "object")
-                {
-                    const auto* const baseName =
-                        *typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
-                    if (auto const innerType = getInnerType(operand);
-                        innerType && *innerType != CoreVM::LiteralType::Void)
-                    {
-                        auto const innerName = [&]() -> std::string_view {
-                            switch (*innerType)
-                            {
-                                case CoreVM::LiteralType::Number: return "int";
-                                case CoreVM::LiteralType::Float: return "float";
-                                case CoreVM::LiteralType::String: return "string";
-                                case CoreVM::LiteralType::Boolean: return "bool";
-                                default: return "unknown";
-                            }
-                        }();
-                        tn = std::format("{}<{}>", baseName, innerName);
-                    }
-                    else
-                        tn = baseName;
-                }
-                auto suggestions = std::vector<std::string> { std::format(
-                    "Use '?' to unwrap the {} operand, e.g.: expr?", side) };
                 reportTypeErrorWithSuggestions(
-                    std::move(suggestions),
+                    { std::format("Use '?' to unwrap the {} operand, e.g.: expr?", side) },
                     "Cannot use '{}' value directly in binary operation; it must be unwrapped first",
-                    tn);
+                    wrappedTypeName(operand, *typeId));
                 return true;
             }
         }
@@ -6539,20 +6580,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
     else if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(funcExpr))
     {
-        // Placeholder lambda: (_ + 1) → equivalent to fun __x -> __x + 1
         funcName = generateLambdaName();
-        FSharpFunction lambdaFunc;
-        lambdaFunc.parameters = { "__x" };
-        lambdaFunc.parameterTypes = { std::nullopt };
-        lambdaFunc.body = placeholder->body.get();
-        lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
-        lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
-        for (auto const& [capName, _]: lambdaFunc.capturedBindings)
-        {
-            if (auto ref = lookupFSharpFunctionRef(capName))
-                lambdaFunc.capturedFunctionRefs[capName] = *ref;
-        }
-        registerFSharpFunction(funcName, std::move(lambdaFunc));
+        registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
         func = lookupFSharpFunction(funcName);
     }
     else if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(funcExpr))
@@ -7676,6 +7705,12 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
+        func = lookupFSharpFunction(funcName);
+    }
+    else if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(current))
+    {
+        funcName = generateLambdaName();
+        registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
         func = lookupFSharpFunction(funcName);
     }
     else

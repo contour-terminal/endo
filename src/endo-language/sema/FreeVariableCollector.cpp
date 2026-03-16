@@ -233,7 +233,7 @@ std::unordered_set<std::string> collectFreeVariableNames(ast::Expr const* body,
             {
                 // __x is the placeholder parameter — bound within the body
                 auto innerBound = bound;
-                innerBound.emplace_back("__x");
+                innerBound.emplace_back(ast::PlaceholderParamName);
                 walk(placeholder->body.get(), innerBound);
                 return;
             }

@@ -3,6 +3,4 @@
 # description: List map chained
 # expect: [4; 6; 8]
 
-print ([1; 2; 3]
-    |> map (fun x -> x + 1)
-    |> map (fun x -> x * 2))
+print ([1; 2; 3] |> map (_ + 1) |> map (_ * 2))

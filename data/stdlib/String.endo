@@ -10,10 +10,7 @@ let upper (value: string): string = toUpper value
 let lower (value: string): string = toLower value
 
 /// Returns the string reversed.
-let rev (value: string): string =
-    split "" value
-        |> reverse
-        |> join ""
+let rev (value: string): string = split "" value |> reverse |> join ""
 
 /// Trims leading and trailing whitespace from a string.
 let trim (value: string): string = trim value
@@ -28,7 +25,4 @@ let endsWith (suffix: string) (value: string): bool = value |> endsWith suffix
 let contains (sub: string) (value: string): bool = value |> contains sub
 
 /// Repeats a string n times.
-let repeat (n: int) (value: string): string =
-    value
-        |> replicate n
-        |> join ""
+let repeat (n: int) (value: string): string = value |> replicate n |> join ""

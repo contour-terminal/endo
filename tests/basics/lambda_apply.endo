@@ -4,4 +4,4 @@
 # expect: 6
 # expect: 
 
-(fun x -> x + 1) 5
+(_ + 1) 5

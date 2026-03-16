@@ -3,4 +3,4 @@
 # description: stable_sort preserves relative order for equal keys
 # expect: [3; 6; 1; 4; 5; 2]
 
-print (sortBy (fun x -> x % 3) [5; 3; 1; 4; 2; 6])
+print (sortBy (_ % 3) [5; 3; 1; 4; 2; 6])

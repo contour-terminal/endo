@@ -6,5 +6,4 @@
 
 let x = lazy 42
 
-x |> force
-    |> println
+x |> force |> println

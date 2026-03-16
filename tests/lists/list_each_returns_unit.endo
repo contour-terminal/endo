@@ -3,6 +3,6 @@
 # description: List each returns unit
 # expect: 120
 
-let r = each (fun x -> print x) [1; 2]
+let r = each (print _) [1; 2]
 
 print r

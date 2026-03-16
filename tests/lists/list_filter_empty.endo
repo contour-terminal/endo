@@ -3,4 +3,4 @@
 # description: List filter empty
 # expect: []
 
-print (filter (fun x -> x > 0) [])
+print (filter (_ > 0) [])

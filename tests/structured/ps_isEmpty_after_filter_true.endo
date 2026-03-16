@@ -4,5 +4,4 @@
 # mode: structured
 # expect: true
 
-print (ps |> filter (fun p -> p.pid > 1000)
-    |> isEmpty)
+print (ps |> filter (_.pid > 1000) |> isEmpty)

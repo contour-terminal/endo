@@ -4,6 +4,6 @@
 # mode: structured
 # expect: 1
 
-let dirs = ls |> filter (fun f -> f.isDir == true)
+let dirs = ls |> filter (_.isDir == true)
 
 print (length dirs)

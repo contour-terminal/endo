@@ -5,8 +5,7 @@
 
 let a = 1
 
-let f =
-    fun x -> (fun y -> x + y + a)
+let f = fun x -> (x + _ + a)
 
 let g = f 10
 

@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [src/main.cpp]
 
-git status |> filter (fun e -> e.status |> contains "M") |> map (fun e -> e.path) |> print
+git status |> filter (_.status |> contains "M") |> map (_.path) |> print

@@ -10,6 +10,4 @@ let s = seq {
     yield 3
 }
 
-s |> toList
-    |> map (fun x -> x * 2)
-    |> println
+s |> toList |> map (_ * 2) |> println

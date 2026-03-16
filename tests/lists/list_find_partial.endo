@@ -3,7 +3,7 @@
 # description: List find partial
 # expect: 4
 
-let findBig = find (fun x -> x > 3)
+let findBig = find (_ > 3)
 
 match findBig [1; 2; 3; 4; 5] with
 | Some v -> print v

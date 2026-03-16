@@ -221,6 +221,26 @@ TEST_CASE("SyntaxHighlighter.function_color_distinct", "[SyntaxHighlighter]")
     CHECK(fnColor.r != defColor.r); // Function vs default
 }
 
+TEST_CASE("SyntaxHighlighter.list_literal", "[SyntaxHighlighter]")
+{
+    // "let xs = [1; 2; 3]" — semicolons inside brackets are list separators,
+    // not statement boundaries. Each element and bracket must be a separate token.
+    //  0123456789012345678
+    //  let xs = [1; 2; 3]
+    auto const map = computeHighlightMap("let xs = [1; 2; 3]");
+    REQUIRE(map.size() == 18);
+    expectRange(map, 0, 3, Keyword);      // "let"
+    expectRange(map, 4, 2, Variable);     // "xs"
+    expectRange(map, 7, 1, Operator);     // "="
+    expectRange(map, 9, 1, Punctuation);  // "["
+    expectRange(map, 10, 1, Number);      // "1"
+    expectRange(map, 11, 1, Punctuation); // ";"
+    expectRange(map, 13, 1, Number);      // "2"
+    expectRange(map, 14, 1, Punctuation); // ";"
+    expectRange(map, 16, 1, Number);      // "3"
+    expectRange(map, 17, 1, Punctuation); // "]"
+}
+
 TEST_CASE("SyntaxHighlighter.categoryColor_returns_distinct_colors", "[SyntaxHighlighter]")
 {
     auto const kwColor = categoryColor(Keyword);

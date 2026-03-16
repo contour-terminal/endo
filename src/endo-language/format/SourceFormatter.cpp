@@ -483,6 +483,24 @@ bool SourceFormatter::isCompoundExpr(ast::Expr const& expr)
            || dynamic_cast<ast::TryFinallyExpr const*>(&expr);
 }
 
+bool SourceFormatter::canSimplifyToPlaceholder(ast::LambdaExpr const& node)
+{
+    if (node.parameters.size() != 1)
+        return false;
+    auto const& param = node.parameters[0];
+    if (param.isUnit || param.isVariadic || param.typeAnnotation.has_value())
+        return false;
+    if (param.name == "_" || param.name == ast::PlaceholderParamName)
+        return false;
+    if (node.returnType.has_value())
+        return false;
+    if (!node.body)
+        return false;
+    if (isCompoundExpr(*node.body))
+        return false;
+    return true;
+}
+
 bool SourceFormatter::wouldFormatMultiline(ast::Expr const& expr) const
 {
     if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(&expr))
@@ -513,23 +531,13 @@ bool SourceFormatter::wouldFormatMultiline(ast::Expr const& expr) const
     if (auto const* letIn = dynamic_cast<ast::LetInExpr const*>(&expr))
         return letIn->body && isCompoundExpr(*letIn->body);
 
-    // Pipeline with 2+ operators always wraps
-    if (auto const* pipeline = dynamic_cast<ast::PipelineExpr const*>(&expr))
-    {
-        auto const chain = collectPipelineChain(*pipeline);
-        if (chain.size() > 2)
-            return true;
+    // Pipeline: multiline only when it exceeds line width
+    if (dynamic_cast<ast::PipelineExpr const*>(&expr))
         return estimateWidth(expr) > _config.maxLineWidth;
-    }
 
-    // ConcatList with 2+ operators always wraps
-    if (auto const* concat = dynamic_cast<ast::ConcatListExpr const*>(&expr))
-    {
-        auto const chain = collectConcatChain(*concat);
-        if (chain.size() > 2)
-            return true;
+    // ConcatList: multiline only when it exceeds line width
+    if (dynamic_cast<ast::ConcatListExpr const*>(&expr))
         return estimateWidth(expr) > _config.maxLineWidth;
-    }
 
     // List/Tuple that would exceed line width
     if (dynamic_cast<ast::ListExpr const*>(&expr) || dynamic_cast<ast::TupleExpr const*>(&expr))
@@ -597,7 +605,13 @@ std::vector<ast::Expr const*> SourceFormatter::collectConcatChain(ast::ConcatLis
 bool SourceFormatter::hasComplexElement(std::vector<std::unique_ptr<ast::Expr>> const& elements) const
 {
     return std::ranges::any_of(elements, [this](auto const& elem) {
-        return elem && (isCompoundExpr(*elem) || wouldFormatMultiline(*elem));
+        if (!elem)
+            return false;
+        // A lambda that will be simplified to placeholder syntax is not complex
+        if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(elem.get()))
+            if (canSimplifyToPlaceholder(*lambda))
+                return false;
+        return isCompoundExpr(*elem) || wouldFormatMultiline(*elem);
     });
 }
 
@@ -1292,35 +1306,17 @@ void SourceFormatter::visit(ast::CompositionExpr const& node)
 
 void SourceFormatter::visit(ast::PlaceholderLambdaExpr const& node)
 {
-    // Reconstruct the placeholder syntax by formatting body and replacing __x with _
     if (node.parenthesized)
         emit("(");
 
-    // Format body with empty comments to avoid re-emitting file-level comments
-    std::vector<CommentTrivia> const noComments;
-    auto bodyStr = format(*node.body, noComments, _config);
-    // Trim trailing newline from format()
-    while (!bodyStr.empty() && bodyStr.back() == '\n')
-        bodyStr.pop_back();
+    auto const savedName = std::exchange(_placeholderParamName, std::string(ast::PlaceholderParamName));
+    auto const savedCount = std::exchange(_placeholderReplacementCount, 0);
 
-    // Replace all __x occurrences with _
-    std::string const placeholder = "__x";
-    std::string const replacement = "_";
-    size_t pos = 0;
-    while ((pos = bodyStr.find(placeholder, pos)) != std::string::npos)
-    {
-        // Don't replace if it's part of a longer identifier
-        auto const after = pos + placeholder.size();
-        if (after < bodyStr.size() && (std::isalnum(bodyStr[after]) || bodyStr[after] == '_'))
-        {
-            pos = after;
-            continue;
-        }
-        bodyStr.replace(pos, placeholder.size(), replacement);
-        pos += replacement.size();
-    }
+    if (node.body)
+        node.body->accept(*this);
 
-    emit(bodyStr);
+    _placeholderParamName = savedName;
+    _placeholderReplacementCount = savedCount;
 
     if (node.parenthesized)
         emit(")");
@@ -1685,6 +1681,46 @@ void SourceFormatter::visit(ast::UnaryExpr const& node)
         node.operand->accept(*this);
 }
 
+void SourceFormatter::emitChainFormatted(std::vector<ast::Expr const*> const& chain,
+                                         ast::Node const& node,
+                                         std::string_view inlineSeparator,
+                                         std::string_view wrappingPrefix)
+{
+    // Chain that fits inline: keep on one line regardless of element count
+    auto const inlineWidth = currentColumn() + estimateWidth(node);
+    if (inlineWidth <= _config.maxLineWidth)
+    {
+        for (auto const i: std::views::iota(0uz, chain.size()))
+        {
+            if (i > 0)
+                emit(inlineSeparator);
+            if (chain[i])
+                chain[i]->accept(*this);
+        }
+        return;
+    }
+
+    // Exceeds width: wrap with operator at start of continuation lines
+    if (chain[0])
+        chain[0]->accept(*this);
+
+    auto const firstExprWidth = chain[0] ? estimateWidth(*chain[0]) : 0uz;
+    auto const keepFirstInline = firstExprWidth <= 2 * _config.indentWidth;
+
+    indent();
+    for (auto const i: std::views::iota(1uz, chain.size()))
+    {
+        if (i == 1 && keepFirstInline)
+            emit(" ");
+        else
+            emitNewline();
+        emit(wrappingPrefix);
+        if (chain[i])
+            chain[i]->accept(*this);
+    }
+    dedent();
+}
+
 void SourceFormatter::visit(ast::PipelineExpr const& node)
 {
     auto const chain = collectPipelineChain(node);
@@ -1704,40 +1740,7 @@ void SourceFormatter::visit(ast::PipelineExpr const& node)
         return;
     }
 
-    // Single pipe that fits inline: keep on one line
-    if (chain.size() <= 2)
-    {
-        auto const inlineWidth = currentColumn() + estimateWidth(node);
-        if (inlineWidth <= _config.maxLineWidth)
-        {
-            if (chain[0])
-                chain[0]->accept(*this);
-            emit(" |> ");
-            if (chain.size() > 1 && chain[1])
-                chain[1]->accept(*this);
-            return;
-        }
-    }
-
-    // Multi-pipe or exceeds width: wrap with |> at start of continuation lines
-    if (chain[0])
-        chain[0]->accept(*this);
-
-    auto const firstExprWidth = chain[0] ? estimateWidth(*chain[0]) : 0uz;
-    auto const keepFirstInline = firstExprWidth <= _config.indentWidth;
-
-    indent();
-    for (auto const i: std::views::iota(1uz, chain.size()))
-    {
-        if (i == 1 && keepFirstInline)
-            emit(" ");
-        else
-            emitNewline();
-        emit("|> ");
-        if (chain[i])
-            chain[i]->accept(*this);
-    }
-    dedent();
+    emitChainFormatted(chain, node, " |> ", "|> ");
 }
 
 void SourceFormatter::visit(ast::ApplicationExpr const& node)
@@ -1751,8 +1754,21 @@ void SourceFormatter::visit(ast::ApplicationExpr const& node)
 
 void SourceFormatter::visit(ast::IdentifierExpr const& node)
 {
-    if (_inPlaceholderLambda && node.name == "__x")
-        emit("_");
+    if (!_placeholderParamName.empty() && node.name == _placeholderParamName)
+    {
+        if (_placeholderParenDepth > 0)
+        {
+            // Parameter found inside nested parens — `_` would create a new
+            // PlaceholderLambdaExpr scope boundary, so simplification is unsafe.
+            emit(node.name);
+            _placeholderUnsafe = true;
+        }
+        else
+        {
+            emit("_");
+            ++_placeholderReplacementCount;
+        }
+    }
     else
         emit(node.name);
 }
@@ -1825,14 +1841,65 @@ void SourceFormatter::visit(ast::ContinueExpr const& /*node*/)
 
 void SourceFormatter::visit(ast::ParenExpr const& node)
 {
+    // Track paren nesting during placeholder simplification. Depth 0 is the top-level body scope
+    // (where `_` replacement is valid); depth > 0 means nested parens (where `_` would create a
+    // new PlaceholderLambdaExpr scope boundary in the parser, making replacement unsafe).
+    // The asymmetric guards (>= 0 to increment, > 0 to decrement) ensure depth never goes below 0.
+    if (_placeholderParenDepth >= 0)
+        ++_placeholderParenDepth;
+
     emit("(");
     if (node.inner)
         node.inner->accept(*this);
     emit(")");
+
+    if (_placeholderParenDepth > 0)
+        --_placeholderParenDepth;
 }
 
 void SourceFormatter::visit(ast::LambdaExpr const& node)
 {
+    // Attempt placeholder simplification for eligible single-parameter lambdas
+    if (canSimplifyToPlaceholder(node) && !wouldFormatMultiline(*node.body))
+    {
+        auto const savedResultSize = _result.size();
+        auto const savedAtLineStart = _atLineStart;
+        auto const savedCommentIndex = _nextCommentIndex;
+        auto const savedName = std::exchange(_placeholderParamName, node.parameters[0].name);
+        auto const savedCount = std::exchange(_placeholderReplacementCount, 0);
+        auto const savedDepth = std::exchange(_placeholderParenDepth, 0);
+        auto const savedUnsafe = std::exchange(_placeholderUnsafe, false);
+
+        // If the body is a ParenExpr, the paren boundary IS the top-level scope for
+        // the placeholder lambda. Visit the inner expression at depth 0 and emit parens manually.
+        if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(node.body.get()))
+        {
+            emit("(");
+            if (paren->inner)
+                paren->inner->accept(*this);
+            emit(")");
+        }
+        else
+        {
+            node.body->accept(*this);
+        }
+
+        auto const success = _placeholderReplacementCount > 0 && !_placeholderUnsafe;
+        _placeholderParamName = savedName;
+        _placeholderReplacementCount = savedCount;
+        _placeholderParenDepth = savedDepth;
+        _placeholderUnsafe = savedUnsafe;
+
+        if (success)
+            return;
+
+        // Revert — either no replacements or param found inside nested parens
+        _result.resize(savedResultSize);
+        _atLineStart = savedAtLineStart;
+        _nextCommentIndex = savedCommentIndex;
+    }
+
+    // Standard lambda formatting
     emit("fun");
     for (auto const i: std::views::iota(0uz, node.parameters.size()))
     {
@@ -1915,41 +1982,7 @@ void SourceFormatter::visit(ast::ConsExpr const& node)
 void SourceFormatter::visit(ast::ConcatListExpr const& node)
 {
     auto const chain = collectConcatChain(node);
-
-    // Single concat that fits inline: keep on one line
-    if (chain.size() <= 2)
-    {
-        auto const inlineWidth = currentColumn() + estimateWidth(node);
-        if (inlineWidth <= _config.maxLineWidth)
-        {
-            if (chain[0])
-                chain[0]->accept(*this);
-            emit(" @ ");
-            if (chain.size() > 1 && chain[1])
-                chain[1]->accept(*this);
-            return;
-        }
-    }
-
-    // Multi-concat or exceeds width: wrap with @ at start of continuation lines
-    if (chain[0])
-        chain[0]->accept(*this);
-
-    auto const firstExprWidth = chain[0] ? estimateWidth(*chain[0]) : 0uz;
-    auto const keepFirstInline = firstExprWidth <= _config.indentWidth;
-
-    indent();
-    for (auto const i: std::views::iota(1uz, chain.size()))
-    {
-        if (i == 1 && keepFirstInline)
-            emit(" ");
-        else
-            emitNewline();
-        emit("@ ");
-        if (chain[i])
-            chain[i]->accept(*this);
-    }
-    dedent();
+    emitChainFormatted(chain, node, " @ ", "@ ");
 }
 
 void SourceFormatter::visit(ast::ListRangeExpr const& node)

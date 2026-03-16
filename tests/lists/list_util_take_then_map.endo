@@ -3,6 +3,4 @@
 # description: List util take then map
 # expect: [10; 20; 30]
 
-print ([1; 2; 3; 4; 5]
-    |> take 3
-    |> map (fun x -> x * 10))
+print ([1; 2; 3; 4; 5] |> take 3 |> map (_ * 10))

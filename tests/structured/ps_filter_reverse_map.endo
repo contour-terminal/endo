@@ -4,6 +4,4 @@
 # mode: structured
 # expect: [bob; alice]
 
-print (ps |> filter (fun p -> p.ppid == 1)
-    |> reverse
-    |> map (fun p -> p.user))
+print (ps |> filter (_.ppid == 1) |> reverse |> map (_.user))

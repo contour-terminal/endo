@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [14; 14; 14]
 
-let days = ls |> map (fun f -> f.mtime.day)
+let days = ls |> map (_.mtime.day)
 
 print days

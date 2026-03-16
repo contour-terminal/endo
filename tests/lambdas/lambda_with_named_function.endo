@@ -5,6 +5,4 @@
 
 let double x = x * 2
 
-let result =
-    5 |> double
-        |> (fun x -> x + 1)
+let result = 5 |> double |> (_ + 1)

@@ -3,4 +3,4 @@
 # description: List sortBy descending
 # expect: [3; 2; 1]
 
-print (sortBy (fun x -> 0 - x) [3; 1; 2])
+print (sortBy (0 - _) [3; 1; 2])

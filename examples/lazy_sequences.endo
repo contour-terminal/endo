@@ -13,10 +13,7 @@ let numbers = seq {
 }
 
 println "First 3 numbers:"
-numbers
-    |> take 3
-    |> toList
-    |> each println
+numbers |> take 3 |> toList |> each println
 
 # --- Infinite-style sequence with yield! ---
 # Build a longer sequence by splicing
@@ -36,13 +33,8 @@ let all = seq {
 }
 
 println "All numbers:"
-all |> toList
-    |> each println
+all |> toList |> each println
 
 # --- Pipeline operations on sequences ---
 println "Doubled and taken:"
-numbers
-    |> take 3
-    |> toList
-    |> map (fun x -> x * 2)
-    |> each println
+numbers |> take 3 |> toList |> map (_ * 2) |> each println

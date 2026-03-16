@@ -47,7 +47,7 @@ let mul = fun (x: int) (y: int) -> x * y
 println (mul 4 5)
 
 // Function type annotation on binding
-let inc: int -> int = fun x -> x + 1
+let inc: int -> int = _ + 1
 
 println (inc 9)
 
@@ -72,8 +72,7 @@ println result
 // Pipelines with annotated functions
 let negate (x: int): int = 0 - x
 
-println (5 |> double
-    |> negate)
+println (5 |> double |> negate)
 
 // Option and result type annotations
 let maybe: option<int> = Some 42

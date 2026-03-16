@@ -3,4 +3,4 @@
 # description: List map empty
 # expect: []
 
-print (map (fun x -> x * 2) [])
+print (map (_ * 2) [])

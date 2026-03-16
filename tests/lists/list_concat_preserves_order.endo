@@ -8,9 +8,6 @@ let rec sumAcc acc xs =
     | [] -> acc
     | h :: t -> sumAcc (acc + h) t
 
-let xs =
-    [1; 2]
-        @ [3; 4]
-        @ [5; 6]
+let xs = [1; 2] @ [3; 4] @ [5; 6]
 
 print (sumAcc 0 xs)

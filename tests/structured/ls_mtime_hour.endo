@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [22; 22; 22]
 
-let hours = ls |> map (fun f -> f.mtime.hour)
+let hours = ls |> map (_.mtime.hour)
 
 print hours

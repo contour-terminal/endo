@@ -3,4 +3,4 @@
 # description: List hof filter length
 # expect: 2
 
-print (length (filter (fun x -> x > 3) [1; 2; 3; 4; 5]))
+print (length (filter (_ > 3) [1; 2; 3; 4; 5]))

@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [2023; 2023; 2023]
 
-let years = ls |> map (fun f -> f.mtime.year)
+let years = ls |> map (_.mtime.year)
 
 print years

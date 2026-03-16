@@ -4,6 +4,6 @@
 # mode: structured
 # expect: true
 
-let r = ps |> exists (fun p -> p.pid > 50)
+let r = ps |> exists (_.pid > 50)
 
 print r

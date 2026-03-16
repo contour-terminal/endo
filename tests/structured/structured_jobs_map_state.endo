@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [Running; Stopped; Done]
 
-let states = jobs |> map (fun j -> j.state)
+let states = jobs |> map (_.state)
 
 print states

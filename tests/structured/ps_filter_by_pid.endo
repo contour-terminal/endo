@@ -4,6 +4,6 @@
 # mode: structured
 # expect: 2
 
-let filtered = ps |> filter (fun p -> p.pid > 10)
+let filtered = ps |> filter (_.pid > 10)
 
 print (length filtered)

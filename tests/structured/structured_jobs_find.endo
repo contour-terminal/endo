@@ -4,6 +4,6 @@
 # mode: structured
 # expect: vim
 
-match jobs |> find (fun j -> j.id == 2) with
+match jobs |> find (_.id == 2) with
 | Some j -> print j.command
 | None -> print "none"

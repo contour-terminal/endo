@@ -4,6 +4,4 @@
 # mode: structured
 # expect: 1
 
-ls "hello.txt"
-    |> length
-    |> print
+ls "hello.txt" |> length |> print

@@ -4,5 +4,4 @@
 # expect: 42
 # expect: 
 
-42 |> string
-    |> println
+42 |> string |> println

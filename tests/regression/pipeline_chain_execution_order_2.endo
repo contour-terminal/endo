@@ -9,7 +9,4 @@ let g (s: string) = s + "-g"
 
 let h (s: string) = s + "-h"
 
-print ("start"
-    |> f
-    |> g
-    |> h)
+print ("start" |> f |> g |> h)

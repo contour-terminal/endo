@@ -3,6 +3,6 @@
 # description: List filter partial
 # expect: [2; 4]
 
-let getEvens = filter (fun x -> x % 2 == 0)
+let getEvens = filter (_ % 2 == 0)
 
 print (getEvens [1; 2; 3; 4])

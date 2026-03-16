@@ -3,6 +3,6 @@
 # description: Function type as binding annotation
 # expect: 6
 
-let f: int -> int = fun x -> x + 1
+let f: int -> int = _ + 1
 
 print (f 5)

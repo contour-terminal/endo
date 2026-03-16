@@ -5,7 +5,7 @@
 
 let double x = x * 2
 
-let make_caller f = fun x -> f x
+let make_caller f = f _
 
 let g = make_caller double
 

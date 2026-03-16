@@ -4,6 +4,6 @@
 # mode: structured
 # expect: firefox
 
-match ps |> find (fun p -> p.pid == 42) with
+match ps |> find (_.pid == 42) with
 | Some p -> print p.command
 | None -> print "none"

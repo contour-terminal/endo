@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [nginx; postgres; redis]
 
-docker images |> map (fun i -> i.repository) |> print
+docker images |> map (_.repository) |> print

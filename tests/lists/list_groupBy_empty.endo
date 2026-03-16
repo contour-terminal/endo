@@ -3,4 +3,4 @@
 # description: List groupBy empty
 # expect: []
 
-print (groupBy (fun x -> x) [])
+print (groupBy (_) [])

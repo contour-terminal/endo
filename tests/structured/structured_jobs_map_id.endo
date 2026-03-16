@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [1; 2; 3]
 
-let ids = jobs |> map (fun j -> j.id)
+let ids = jobs |> map (_.id)
 
 print ids

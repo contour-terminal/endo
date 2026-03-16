@@ -3,4 +3,4 @@
 # description: Lambda in pipeline: 5 |> (fun x -> x * 2)
 # mode: ir-only
 
-let result = 5 |> (fun x -> x * 2)
+let result = 5 |> (_ * 2)

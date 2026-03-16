@@ -6,5 +6,4 @@
 
 let json = "{\"name\": \"hello\"}"
 
-json |> Json.query ".name"
-    |> each println
+json |> Json.query ".name" |> each println

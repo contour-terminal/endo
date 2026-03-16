@@ -5,4 +5,4 @@
 
 let apply f x = f x
 
-print (apply (fun x -> x * 2) 5)
+print (apply (_ * 2) 5)

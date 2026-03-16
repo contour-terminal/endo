@@ -46,11 +46,9 @@ println (square 9)
 
 // Pipelines
 print "5 |> double |> add10 = "
-println (5 |> double
-    |> add10)
+println (5 |> double |> add10)
 print "3 |> square |> double = "
-println (3 |> square
-    |> double)
+println (3 |> square |> double)
 
 // Tail-recursive accumulator for summing 1..n
 let rec accumulate n acc =

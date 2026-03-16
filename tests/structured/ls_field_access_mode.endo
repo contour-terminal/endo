@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [rwxr-xr-x; rw-r--r--; rwxr-xr-x]
 
-let modes = ls |> map (fun f -> f.mode)
+let modes = ls |> map (_.mode)
 
 print modes

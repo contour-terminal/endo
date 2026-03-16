@@ -1169,13 +1169,16 @@ struct CompositionExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// The internal parameter name used by PlaceholderLambdaExpr desugaring.
+inline constexpr char PlaceholderParamName[] = "__x";
+
 /// Placeholder lambda expression: `(_ > 2)` or `_.field`
 ///
 /// Preserves the placeholder `_` syntax for formatting round-trips instead of
 /// desugaring to `fun __x -> __x > 2` in the parser.
 struct PlaceholderLambdaExpr final: public Expr
 {
-    std::unique_ptr<Expr> body; ///< Body uses IdentifierExpr("__x") for placeholder
+    std::unique_ptr<Expr> body; ///< Body uses IdentifierExpr(PlaceholderParamName) for placeholder
     bool parenthesized = false; ///< Was it written as `(_ > 2)` vs `_ > 2`
 
     PlaceholderLambdaExpr(std::unique_ptr<Expr> body, bool parens = false):

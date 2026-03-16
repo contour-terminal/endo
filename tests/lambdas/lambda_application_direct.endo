@@ -3,4 +3,4 @@
 # description: Lambda applied directly: (fun x -> x * 2) 5
 # mode: ir-only
 
-let result = (fun x -> x * 2) 5
+let result = (_ * 2) 5

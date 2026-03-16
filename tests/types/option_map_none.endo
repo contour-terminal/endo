@@ -3,4 +3,4 @@
 # description: Option.map on None returns None
 # expect: 0
 
-print (Option.map (fun x -> x * 2) None ?| 0)
+print (Option.map (_ * 2) None ?| 0)

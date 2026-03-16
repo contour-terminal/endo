@@ -6,4 +6,4 @@
 # expect: db-main
 # expect: 
 
-docker ps |> filter (_.status |> contains "Up") |> each (fun c -> println c.names)
+docker ps |> filter (_.status |> contains "Up") |> each (println _.names)

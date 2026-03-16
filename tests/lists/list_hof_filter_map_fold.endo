@@ -4,6 +4,6 @@
 # expect: 56
 
 print ([1; 2; 3; 4; 5; 6]
-    |> filter (fun x -> x % 2 == 0)
-    |> map (fun x -> x * x)
+    |> filter (_ % 2 == 0)
+    |> map (_ * _)
     |> fold 0 (fun acc x -> acc + x))

@@ -3,4 +3,4 @@
 # description: Option.map with strings
 # expect: hi!
 
-print (Option.map (fun s -> s + "!") (Some "hi") ?| "")
+print (Option.map (_ + "!") (Some "hi") ?| "")

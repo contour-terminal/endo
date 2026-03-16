@@ -4,7 +4,7 @@
 # expect: 42
 # session-separator: ---
 
-let inc = fun x -> x + 1
+let inc = _ + 1
 
 # ---
 print (inc 41)

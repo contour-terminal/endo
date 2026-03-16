@@ -3,4 +3,4 @@
 # description: List sortBy pipeline
 # expect: [1; 2; 3]
 
-print ([3; 1; 2] |> sortBy (fun x -> x))
+print ([3; 1; 2] |> sortBy (_))

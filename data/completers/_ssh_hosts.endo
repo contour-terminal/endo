@@ -1,10 +1,10 @@
 let ssh_hosts _ =
     $(grep -i "^Host " ~/.ssh/config)
         |> split "\n"
-        |> filter (fun s -> s != "")
+        |> filter (_ != "")
         |> map (fun line ->
             match split " " line with
             | _ :: host :: _ -> host
             | _ -> "")
-        |> filter (fun s -> s != "")
+        |> filter (_ != "")
         |> filter (fun s -> not (contains "*" s))

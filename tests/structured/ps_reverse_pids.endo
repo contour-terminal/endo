@@ -4,5 +4,4 @@
 # mode: structured
 # expect: [100; 42; 1]
 
-print (ps |> reverse
-    |> map (fun p -> p.pid))
+print (ps |> reverse |> map (_.pid))

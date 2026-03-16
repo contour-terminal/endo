@@ -12,5 +12,4 @@ let s = seq {
     yield! rest
 }
 
-s |> toList
-    |> println
+s |> toList |> println

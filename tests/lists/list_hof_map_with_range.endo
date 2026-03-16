@@ -3,4 +3,4 @@
 # description: List hof map with range
 # expect: [1; 4; 9; 16; 25]
 
-print (map (fun x -> x * x) [1..5])
+print (map (_ * _) [1..5])

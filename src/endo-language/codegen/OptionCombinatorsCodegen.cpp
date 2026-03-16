@@ -50,6 +50,13 @@ std::optional<IRGenerator::ResolvedFunction> IRGenerator::resolveFunctionArgumen
         return ResolvedFunction { .func = lookupFSharpFunction(funcName), .name = funcName };
     }
 
+    if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(expr))
+    {
+        auto funcName = generateLambdaName();
+        registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
+        return ResolvedFunction { .func = lookupFSharpFunction(funcName), .name = funcName };
+    }
+
     return std::nullopt;
 }
 

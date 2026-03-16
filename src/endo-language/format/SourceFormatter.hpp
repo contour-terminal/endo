@@ -223,6 +223,9 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     /// Checks whether an expression is too complex to sit alongside a keyword on the same line.
     [[nodiscard]] static bool isCompoundExpr(ast::Expr const& expr);
 
+    /// Checks whether a LambdaExpr is eligible for simplification to placeholder syntax (`_`).
+    [[nodiscard]] static bool canSimplifyToPlaceholder(ast::LambdaExpr const& node);
+
     /// Checks whether an expression would produce multiline output when formatted.
     [[nodiscard]] bool wouldFormatMultiline(ast::Expr const& expr) const;
 
@@ -259,6 +262,19 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
                          std::function<size_t(size_t)> const& estimateItem,
                          bool forceOnePerLine = false);
 
+    /// Emits a flattened operator chain (e.g., `|>` pipelines or `@` concat) with adaptive formatting.
+    /// Keeps the chain inline if it fits within maxLineWidth; otherwise wraps with the operator
+    /// at the start of each continuation line.
+    ///
+    /// @param chain            Flattened chain of expressions (source first, then stages).
+    /// @param node             The original AST node (for width estimation).
+    /// @param inlineSeparator  Separator when inline (e.g., " |> ", " @ ").
+    /// @param wrappingPrefix   Operator prefix on continuation lines (e.g., "|> ", "@ ").
+    void emitChainFormatted(std::vector<ast::Expr const*> const& chain,
+                            ast::Node const& node,
+                            std::string_view inlineSeparator,
+                            std::string_view wrappingPrefix);
+
     /// Checks whether any element in the expression vector is complex (compound or multiline).
     [[nodiscard]] bool hasComplexElement(std::vector<std::unique_ptr<ast::Expr>> const& elements) const;
 
@@ -274,7 +290,10 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     std::string _result;
     int _indentLevel = 0;
     bool _atLineStart = true;
-    bool _inPlaceholderLambda = false; ///< When true, emit `_` for `__x` identifiers
+    std::string _placeholderParamName;    ///< When non-empty, replace this identifier with `_`
+    int _placeholderReplacementCount = 0; ///< Tracks replacements during placeholder emission
+    int _placeholderParenDepth = -1;      ///< -1 = not tracking; 0+ = paren nesting depth during replacement
+    bool _placeholderUnsafe = false; ///< True if param was found inside nested parens (replacement invalid)
     std::vector<CommentTrivia> const& _comments;
     size_t _nextCommentIndex = 0; ///< Index of next un-emitted comment
     std::set<int> _blankLines;    ///< 0-based line numbers of blank lines in original source

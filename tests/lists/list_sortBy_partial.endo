@@ -3,6 +3,6 @@
 # description: List sortBy partial
 # expect: [1; 2; 3]
 
-let sortAsc = sortBy (fun x -> x)
+let sortAsc = sortBy (_)
 
 print (sortAsc [3; 1; 2])

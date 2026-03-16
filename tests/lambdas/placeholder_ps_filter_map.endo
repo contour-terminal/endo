@@ -4,8 +4,6 @@
 # mode: structured
 # expect: [42; 100]
 
-let pids =
-    ps |> filter (_.pid > 10)
-        |> map _.pid
+let pids = ps |> filter (_.pid > 10) |> map _.pid
 
 print pids

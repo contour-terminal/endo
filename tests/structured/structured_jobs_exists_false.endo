@@ -4,6 +4,6 @@
 # mode: structured
 # expect: false
 
-let r = jobs |> exists (fun j -> j.state == "Terminated")
+let r = jobs |> exists (_.state == "Terminated")
 
 print r
