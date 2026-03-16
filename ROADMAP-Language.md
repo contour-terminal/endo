@@ -259,10 +259,17 @@ This document tracks the implementation status of F# language features as define
 
 ## Modules & Imports
 
-- [ ] `import` statements
+- [x] `import` statements: `import Math`, `import Geometry.Circle` (PascalCase identifier paths)
+- [ ] `import ... as` alias: `import Math as M`
+- [x] `open` statements: `open Math` brings names into scope; `open Math with (square, cube)` for selective import
 - [ ] `from ... import` statements
-- [ ] Module-qualified access: `List.map`, `String.split`
-- [ ] Module creation and exports
+- [x] Module-qualified access: `Module.member`, multi-level `Geometry.Circle.area`
+- [x] Inline module declarations: `module Name = ...` (indentation-based scoping)
+- [x] File-based module loading: `.endo` files as modules, hierarchical names, import-once caching
+- [x] Module exports and `let private` visibility
+- [x] Module signatures: `.endoi` files for API validation
+- [x] Circular dependency detection
+- [x] Standard library modules: `data/stdlib/` (currently `String.endo`)
 
 ## Lexer / Parser
 
@@ -419,10 +426,19 @@ Consult this section to determine what to work on next.
 - [x] Scoped resource management: `let use` / `let manual` with type-registered dispose
 - [ ] Path: `Path.join`, `Path.extension`, `Path.basename`, ~~`Path.temporary_directory`~~
 
-### Phase 8 — Module System
-- [ ] `import "path"`, `import "path" as alias`, `from "path" import (names)` parsing
-- [ ] Module loading: parse imported file, link IR, namespace scoping
-- [ ] Module-qualified access: `List.map`, `String.split`
+### Phase 8 — Module System ✅
+- [x] `import Module` parsing: PascalCase identifier paths with dotted hierarchy (`import Geometry.Circle`)
+- [x] `open Module` with selective imports: `open Math with (square, cube)`
+- [x] Inline module declarations: `module Name = ...` (indentation-based scoping, PascalCase enforcement)
+- [x] File-based module loading: `.endo` files, search paths (relative, `~/.config/endo/modules/`, system stdlib)
+- [x] Import-once caching, circular dependency detection, `.endoi` signature validation
+- [x] Module-qualified access: `Module.member`, multi-level `Geometry.Circle.area`
+- [x] Module value bindings: evaluated once at import time, stored in allocas
+- [x] `let private` / `let export` visibility modifiers with access enforcement
+- [x] REPL persistence of inline modules and opened modules
+- [x] Standard library module structure: `data/stdlib/` (currently `String.endo`)
+- [ ] Import aliases: `import Math as M`
+- [ ] `from ... import` selective import syntax
 
 ### Phase 9 — Generic Types ✅
 - [x] Type variable introduction in annotations (`'a` syntax)
