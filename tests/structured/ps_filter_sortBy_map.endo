@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [vim; firefox]
 
-print (ps |> filter (fun p -> p.pid > 1)
-    |> sortBy (fun p -> p.mem)
-    |> map (fun p -> p.command))
+print (ps |> filter (_.pid > 1)
+    |> sortBy (_.mem)
+    |> map (_.command))

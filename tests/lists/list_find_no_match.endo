@@ -3,6 +3,6 @@
 # description: List find no match
 # expect: none
 
-match find (fun x -> x > 10) [1; 2; 3] with
+match find (_ > 10) [1; 2; 3] with
 | Some v -> print v
 | None -> print "none"

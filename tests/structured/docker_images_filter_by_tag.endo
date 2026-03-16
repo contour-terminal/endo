@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [nginx]
 
-docker images |> filter (fun i -> i.tag == "latest") |> map (fun i -> i.repository) |> print
+docker images |> filter (_.tag == "latest") |> map (_.repository) |> print

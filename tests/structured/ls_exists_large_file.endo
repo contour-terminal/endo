@@ -4,4 +4,4 @@
 # mode: structured
 # expect: true
 
-print (ls |> exists (fun f -> f.size > 1000))
+print (ls |> exists (_.size > 1000))

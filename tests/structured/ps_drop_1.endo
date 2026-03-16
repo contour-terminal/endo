@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [42; 100]
 
-print (ps |> drop 1 |> map (fun p -> p.pid))
+print (ps |> drop 1 |> map (_.pid))

@@ -4,6 +4,6 @@
 # mode: structured
 # expect: 3
 
-let count = ls |> filter (fun f -> f.mtime.year == 2023) |> length
+let count = ls |> filter (_.mtime.year == 2023) |> length
 
 print count

@@ -3,4 +3,4 @@
 # description: List sortBy empty
 # expect: []
 
-print (sortBy (fun x -> x) [])
+print (sortBy (_) [])

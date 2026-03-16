@@ -4,4 +4,4 @@
 # mode: structured
 # expect: false
 
-print (ps |> forall (fun p -> p.mem > 2097152))
+print (ps |> forall (_.mem > 2097152))

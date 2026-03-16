@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [latest; 16; 7]
 
-docker images |> map (fun i -> i.tag) |> print
+docker images |> map (_.tag) |> print

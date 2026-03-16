@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [Alice; Bob]
 
-git log |> take 2 |> map (fun c -> c.author) |> print
+git log |> take 2 |> map (_.author) |> print

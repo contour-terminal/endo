@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [hello.txt; script.sh; docs]
 
-print (ls |> filter (fun f -> f.size > 0)
-    |> sortBy (fun f -> f.size)
-    |> map (fun f -> f.name))
+print (ls |> filter (_.size > 0)
+    |> sortBy (_.size)
+    |> map (_.name))

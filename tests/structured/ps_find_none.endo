@@ -4,6 +4,6 @@
 # mode: structured
 # expect: none
 
-match ps |> find (fun p -> p.pid > 1000) with
+match ps |> find (_.pid > 1000) with
 | Some p -> print p.pid
 | None -> print "none"

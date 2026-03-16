@@ -8,12 +8,12 @@ let cmake_complete args prefix =
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
     let parse_presets raw =
         raw |> split "\n"
-            |> filter (fun line -> contains "\"" line)
+            |> filter (contains "\"" _)
             |> map (fun line ->
                 match split "\"" (trim line) with
                 | _ :: name :: _ -> name
                 | _ -> "")
-            |> filter (fun s -> s != "")
+            |> filter (_ != "")
     match args with
     | [] when startsWith "-" prefix -> options
     | ["--build"; "--preset"] -> parse_presets $(cmake --list-presets=configure)

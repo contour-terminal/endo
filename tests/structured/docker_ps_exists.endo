@@ -4,4 +4,4 @@
 # mode: structured
 # expect: true
 
-docker ps |> exists (fun c -> c.names == "db-main") |> fun r -> print r
+docker ps |> exists (_.names == "db-main") |> print _

@@ -4,4 +4,4 @@
 # mode: structured
 # expect: false
 
-print (ls |> forall (fun f -> f.size > 100))
+print (ls |> forall (_.size > 100))

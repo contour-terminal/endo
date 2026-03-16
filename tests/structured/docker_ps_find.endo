@@ -4,7 +4,7 @@
 # mode: structured
 # expect: redis:7
 
-docker ps |> find (fun c -> c.names == "cache") |> fun x ->
+docker ps |> find (_.names == "cache") |> fun x ->
     match x with
     | Some c -> print c.image
     | None -> print "not found"

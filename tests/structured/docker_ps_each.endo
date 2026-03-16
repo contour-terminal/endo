@@ -4,4 +4,4 @@
 # mode: structured
 # expect: web-serverdb-maincache
 
-docker ps |> each (fun c -> print c.names)
+docker ps |> each (print _.names)

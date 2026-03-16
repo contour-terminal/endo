@@ -3,6 +3,6 @@
 # description: Store lambda in variable, use in pipeline
 # mode: ir-only
 
-let double = fun x -> x * 2
+let double = _ * 2
 
 let result = 5 |> double

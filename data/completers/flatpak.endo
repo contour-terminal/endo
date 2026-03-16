@@ -18,13 +18,13 @@ let flatpak_complete args prefix =
     | ["run"] when startsWith "-" prefix -> run_options
     | ["run"] | ["kill"] | ["override"] -> $(flatpak list --app --columns=application)
         |> split "\n"
-        |> filter (fun s -> s != "")
+        |> filter (_ != "")
     | ["uninstall"] | ["update"] | ["info"] -> $(flatpak list --columns=application)
         |> split "\n"
-        |> filter (fun s -> s != "")
+        |> filter (_ != "")
     | ["remote-delete"] | ["remote-modify"] | ["remote-ls"] | ["remote-info"] -> $(flatpak remotes --columns=name)
         |> split "\n"
-        |> filter (fun s -> s != "")
+        |> filter (_ != "")
     | _ -> []
 
 register_completer "flatpak" flatpak_complete

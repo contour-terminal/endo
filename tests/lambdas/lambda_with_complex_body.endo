@@ -3,4 +3,4 @@
 # description: Lambda with complex expression body
 # mode: ir-only
 
-let result = (fun x -> x * x + x) 5
+let result = (_ * _ + _) 5

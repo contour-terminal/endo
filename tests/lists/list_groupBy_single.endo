@@ -3,4 +3,4 @@
 # description: List groupBy single
 # expect: [(42, [42])]
 
-print (groupBy (fun x -> x) [42])
+print (groupBy (_) [42])

@@ -2,4 +2,4 @@
 #
 # description: List each empty
 
-each (fun x -> print x) []
+each (print _) []

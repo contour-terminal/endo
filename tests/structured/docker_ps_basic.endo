@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [web-server; db-main; cache]
 
-docker ps |> map (fun c -> c.names) |> print
+docker ps |> map (_.names) |> print

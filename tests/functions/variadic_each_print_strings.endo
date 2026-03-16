@@ -3,6 +3,6 @@
 # description: Variadic function iterating string args with each+print
 # expect: helloworld
 
-let say ...xs = each (fun x -> print x) xs
+let say ...xs = each (print _) xs
 
 say hello world

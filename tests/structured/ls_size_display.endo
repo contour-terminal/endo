@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [4 KB; 42 B; 256 B]
 
-print (ls |> map (fun f -> f.size))
+print (ls |> map (_.size))

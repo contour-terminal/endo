@@ -3,4 +3,4 @@
 # description: Simple lambda assigned to a variable
 # mode: ir-only
 
-let f = fun x -> x * 2
+let f = _ * 2

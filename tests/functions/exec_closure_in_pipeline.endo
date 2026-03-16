@@ -5,6 +5,6 @@
 
 let n = 10
 
-let add_n = fun x -> x + n
+let add_n = _ + n
 
 print (5 |> add_n)

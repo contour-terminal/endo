@@ -3,7 +3,7 @@
 
 # The `time` builtin measures execution time
 let elapsed = time fun () ->
-    { let data = [1; 2; 3; 4; 5]; map (fun x -> x * 2) data }
+    { let data = [1; 2; 3; 4; 5]; map (_ * 2) data }
 
 println (formatTimeSpan elapsed)
 

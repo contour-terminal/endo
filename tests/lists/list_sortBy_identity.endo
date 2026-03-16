@@ -3,4 +3,4 @@
 # description: List sortBy identity
 # expect: [1; 2; 3]
 
-print (sortBy (fun x -> x) [3; 1; 2])
+print (sortBy (_) [3; 1; 2])

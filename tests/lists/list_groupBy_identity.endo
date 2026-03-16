@@ -3,4 +3,4 @@
 # description: List groupBy identity
 # expect: [(1, [1]); (2, [2]); (3, [3])]
 
-print (groupBy (fun x -> x) [1; 2; 3])
+print (groupBy (_) [1; 2; 3])

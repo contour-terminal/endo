@@ -4,4 +4,4 @@
 # mode: structured
 # expect: 2
 
-print (ps |> filter (fun p -> p.mem > 1048576) |> length)
+print (ps |> filter (_.mem > 1048576) |> length)

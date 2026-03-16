@@ -3,4 +3,4 @@
 # description: List filter single fail
 # expect: []
 
-print (filter (fun x -> x > 10) [5])
+print (filter (_ > 10) [5])

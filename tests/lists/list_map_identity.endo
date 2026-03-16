@@ -3,4 +3,4 @@
 # description: List map identity
 # expect: [1; 2; 3]
 
-print (map (fun x -> x) [1; 2; 3])
+print (map (_) [1; 2; 3])

@@ -3,4 +3,4 @@
 # description: find returns Some when element found — ?| unwraps
 # expect: 2
 
-print (find (fun x -> x > 1) [1; 2; 3] ?| -1)
+print (find (_ > 1) [1; 2; 3] ?| -1)

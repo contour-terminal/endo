@@ -4,4 +4,4 @@
 # mode: structured
 # expect: true
 
-print (ps |> forall (fun p -> p.pid > 0))
+print (ps |> forall (_.pid > 0))

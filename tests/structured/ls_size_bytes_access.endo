@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [4096; 42; 256]
 
-print (ls |> map (fun f -> f.size.bytes))
+print (ls |> map (_.size.bytes))

@@ -4,6 +4,6 @@
 # expect: 42
 # expect:
 
-let inc = fun x -> x + 1
+let inc = _ + 1
 
 println (inc 41)

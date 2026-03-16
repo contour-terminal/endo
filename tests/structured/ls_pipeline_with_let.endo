@@ -6,6 +6,6 @@
 
 let files = ls
 
-let bigFiles = files |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)
+let bigFiles = files |> filter (_.size > 100) |> map (_.name)
 
 print bigFiles

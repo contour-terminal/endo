@@ -3,4 +3,4 @@
 # description: List sortBy single
 # expect: [42]
 
-print (sortBy (fun x -> x) [42])
+print (sortBy (_) [42])

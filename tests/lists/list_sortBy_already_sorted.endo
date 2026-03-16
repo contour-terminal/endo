@@ -3,4 +3,4 @@
 # description: List sortBy already sorted
 # expect: [1; 2; 3]
 
-print (sortBy (fun x -> x) [1; 2; 3])
+print (sortBy (_) [1; 2; 3])

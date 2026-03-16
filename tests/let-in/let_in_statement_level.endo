@@ -3,4 +3,4 @@
 # description: Let-in expression at statement level (the help example)
 # expect: [2; 4; 6]
 
-let xs = [1; 2; 3] in xs |> map (fun x -> x * 2) |> print
+let xs = [1; 2; 3] in xs |> map (_ * 2) |> print

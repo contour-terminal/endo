@@ -14,7 +14,7 @@ let compute x y = (x + y) * 2
 println (compute 3 4)
 
 // Lambda expressions (anonymous functions)
-let triple = fun x -> x * 3
+let triple = _ * 3
 
 println (triple 5)
 
@@ -25,7 +25,7 @@ println result
 // Closures capture variables from enclosing scope
 let multiplier = 10
 
-let scale = fun x -> x * multiplier
+let scale = _ * multiplier
 
 println (scale 7)
 
@@ -58,7 +58,7 @@ println (5 |> double |> inc)
 println (10 |> add 5)
 
 // Pipelines with inline lambdas
-println (5 |> (fun x -> x * 2) |> (fun x -> x + 1))
+println (5 |> (_ * 2) |> (_ + 1))
 
 // Let-in expressions (scoped bindings)
 println (let x = 7 in x * 3)

@@ -3,4 +3,4 @@
 # description: List filter all pass
 # expect: [1; 2; 3]
 
-print (filter (fun x -> x > 0) [1; 2; 3])
+print (filter (_ > 0) [1; 2; 3])

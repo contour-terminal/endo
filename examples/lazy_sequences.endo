@@ -37,4 +37,4 @@ all |> toList |> each println
 
 # --- Pipeline operations on sequences ---
 println "Doubled and taken:"
-numbers |> take 3 |> toList |> map (fun x -> x * 2) |> each println
+numbers |> take 3 |> toList |> map (_ * 2) |> each println

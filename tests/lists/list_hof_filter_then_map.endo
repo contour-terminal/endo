@@ -3,4 +3,4 @@
 # description: List hof filter then map
 # expect: [20; 40; 60]
 
-print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * 10))
+print ([1; 2; 3; 4; 5; 6] |> filter (_ % 2 == 0) |> map (_ * 10))

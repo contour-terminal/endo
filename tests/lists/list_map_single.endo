@@ -3,4 +3,4 @@
 # description: List map single
 # expect: [15]
 
-print (map (fun x -> x + 10) [5])
+print (map (_ + 10) [5])

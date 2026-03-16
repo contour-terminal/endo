@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [src/main.cpp; README.md; .gitignore]
 
-git status |> map (fun e -> e.path) |> print
+git status |> map (_.path) |> print

@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [/sbin/init; firefox; vim]
 
-let cmds = ps |> map (fun p -> p.command)
+let cmds = ps |> map (_.command)
 
 print cmds

@@ -3,4 +3,4 @@
 # description: List filter single pass
 # expect: [5]
 
-print (filter (fun x -> x > 0) [5])
+print (filter (_ > 0) [5])

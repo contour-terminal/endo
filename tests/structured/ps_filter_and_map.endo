@@ -4,6 +4,6 @@
 # mode: structured
 # expect: [firefox; vim]
 
-let cmds = ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)
+let cmds = ps |> filter (_.pid > 10) |> map (_.command)
 
 print cmds

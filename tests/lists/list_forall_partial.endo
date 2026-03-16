@@ -3,6 +3,6 @@
 # description: List forall partial
 # expect: true
 
-let allPositive = forall (fun x -> x > 0)
+let allPositive = forall (_ > 0)
 
 print (allPositive [1; 2; 3])

@@ -4,4 +4,4 @@
 # mode: structured
 # expect: [abc123def]
 
-docker ps |> filter (fun c -> c.status |> contains "Up") |> map (fun c -> c.id) |> take 1 |> print
+docker ps |> filter (_.status |> contains "Up") |> map (_.id) |> take 1 |> print

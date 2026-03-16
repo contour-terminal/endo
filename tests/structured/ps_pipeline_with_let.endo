@@ -6,6 +6,6 @@
 
 let procs = ps
 
-let highPid = procs |> filter (fun p -> p.pid > 1) |> map (fun p -> p.pid)
+let highPid = procs |> filter (_.pid > 1) |> map (_.pid)
 
 print highPid

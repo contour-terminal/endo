@@ -4,4 +4,4 @@
 # mode: structured
 # expect: 2
 
-docker ps |> filter (fun c -> c.ports |> contains "tcp") |> length |> fun n -> print n
+docker ps |> filter (_.ports |> contains "tcp") |> length |> print _

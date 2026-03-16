@@ -4,4 +4,4 @@
 # mode: structured
 # expect: ["rwxr-xr-x"; "rw-r--r--"; "rwxr-xr-x"]
 
-print (ls |> map (fun f -> formatMode f.mode))
+print (ls |> map (formatMode _.mode))

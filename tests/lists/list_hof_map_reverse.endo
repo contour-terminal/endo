@@ -3,4 +3,4 @@
 # description: List hof map reverse
 # expect: [6; 4; 2]
 
-print ([1; 2; 3] |> map (fun x -> x * 2) |> reverse)
+print ([1; 2; 3] |> map (_ * 2) |> reverse)
