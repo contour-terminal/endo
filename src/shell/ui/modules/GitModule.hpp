@@ -28,6 +28,8 @@ class GitModule final: public PromptModule
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "git"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::CwdChange; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 

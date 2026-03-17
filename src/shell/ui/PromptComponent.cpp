@@ -110,33 +110,56 @@ void PromptComponent::initializeModules()
     add(std::make_unique<IndicatorModule>(_config.indicator));
 }
 
-std::vector<PromptSegments> PromptComponent::evaluateModules(
+void PromptComponent::updateModuleCache(std::vector<std::string> const& moduleNames,
+                                        ModuleSensitivity changedFlags,
+                                        bool timerExpired)
+{
+    for (auto const& name: moduleNames)
+    {
+        auto modIt = _modules.find(name);
+        if (modIt == _modules.end())
+            continue;
+
+        auto& mod = *modIt->second;
+        auto& entry = _moduleCache[name];
+
+        auto const needsReeval = !entry.evaluated
+                                 || (mod.sensitivity() & changedFlags) != ModuleSensitivity::None
+                                 || (timerExpired && mod.refreshInterval().has_value());
+
+        if (needsReeval)
+        {
+            entry.visible = mod.shouldShow(_context);
+            entry.segments = entry.visible ? mod.evaluate(_context) : PromptSegments {};
+            entry.evaluated = true;
+        }
+    }
+}
+
+std::vector<PromptSegments> PromptComponent::buildModuleVector(
     std::vector<std::string> const& moduleNames) const
 {
     auto results = std::vector<PromptSegments> {};
     for (auto const& name: moduleNames)
     {
-        auto it = _modules.find(name);
-        if (it == _modules.end())
+        auto it = _moduleCache.find(name);
+        if (it == _moduleCache.end() || !it->second.visible || it->second.segments.empty())
             continue;
 
-        if (!it->second->shouldShow(_context))
-            continue;
-
-        auto segments = it->second->evaluate(_context);
-        if (!segments.empty())
+        // Apply gradient to path module when configured; otherwise use cached segments directly.
+        if (_config.useGradientPath && name == "path")
         {
-            // Apply gradient to path module when configured
-            if (_config.useGradientPath && name == "path")
-            {
-                std::string pathText;
-                for (auto const& seg: segments)
-                    pathText += seg.text;
-                segments = gradient(_config.gradientStart, _config.gradientEnd, pathText);
-                for (auto& seg: segments)
-                    seg.style.bold = true;
-            }
-            results.push_back(std::move(segments));
+            std::string pathText;
+            for (auto const& seg: it->second.segments)
+                pathText += seg.text;
+            auto gradientSegments = gradient(_config.gradientStart, _config.gradientEnd, pathText);
+            for (auto& seg: gradientSegments)
+                seg.style.bold = true;
+            results.push_back(std::move(gradientSegments));
+        }
+        else
+        {
+            results.push_back(it->second.segments);
         }
     }
     return results;
@@ -169,14 +192,17 @@ void PromptComponent::setPromptContext(PromptContext context)
         || context.cellPixelHeight != _context.cellPixelHeight)
         _auroraFadeCacheWidth = 0;
 
-    // Selective module cache invalidation: only invalidate when semantically
-    // meaningful fields change (CWD, exit code, duration). During typing/re-renders
-    // within the same prompt cycle these fields don't change, avoiding expensive
-    // module evaluation (especially git subprocess calls).
-    if (context.cwd != _context.cwd || context.lastExitCode != _context.lastExitCode
-        || context.lastDuration != _context.lastDuration)
+    // Track granular change flags for per-module selective re-evaluation.
+    if (context.cwd != _context.cwd)
+        _pendingChanges |= ModuleSensitivity::CwdChange;
+    if (context.lastExitCode != _context.lastExitCode)
+        _pendingChanges |= ModuleSensitivity::ExitCode;
+    if (context.lastDuration != _context.lastDuration)
+        _pendingChanges |= ModuleSensitivity::Duration;
+
+    // Invalidate internal module caches (e.g., GitModule TTL) on any context change.
+    if ((_pendingChanges & ModuleSensitivity::ContextChange) != ModuleSensitivity::None)
     {
-        _moduleCacheValid = false;
         for (auto& [name, mod]: _modules)
             mod->invalidateCache();
     }
@@ -278,14 +304,26 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Render info line chrome above input
     if (chrome > 0)
     {
-        // Use cached module results, re-evaluate only when cache is invalid or refresh deadline passed
-        if (!_moduleCacheValid
-            || (_nextModuleRefresh && std::chrono::steady_clock::now() >= *_nextModuleRefresh))
+        // Track input changes for input-sensitive modules.
+        if (auto const inputText = _inputField.text(); inputText != _lastModuleInput)
         {
-            _cachedInfoModules = evaluateModules(_config.infoLineModules);
-            _cachedRightModules = evaluateModules(_config.rightPromptModules);
-            _nextModuleRefresh = computeModuleRefreshDeadline();
-            _moduleCacheValid = true;
+            _lastModuleInput = std::string(inputText);
+            _context.currentInput = _lastModuleInput;
+            _pendingChanges |= ModuleSensitivity::InputChange;
+        }
+
+        // Per-module selective re-evaluation: only modules sensitive to pending changes are updated.
+        auto const timerExpired =
+            _nextModuleRefresh && std::chrono::steady_clock::now() >= *_nextModuleRefresh;
+        if (_pendingChanges != ModuleSensitivity::None || timerExpired)
+        {
+            updateModuleCache(_config.infoLineModules, _pendingChanges, timerExpired);
+            updateModuleCache(_config.rightPromptModules, _pendingChanges, timerExpired);
+            _cachedInfoModules = buildModuleVector(_config.infoLineModules);
+            _cachedRightModules = buildModuleVector(_config.rightPromptModules);
+            _pendingChanges = ModuleSensitivity::None;
+            if (timerExpired)
+                _nextModuleRefresh = computeModuleRefreshDeadline();
         }
         auto const& infoModules = _cachedInfoModules;
         auto const& rightModules = _cachedRightModules;

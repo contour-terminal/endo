@@ -16,6 +16,8 @@ class DurationModule final: public PromptModule
 
     [[nodiscard]] std::string_view id() const noexcept override { return "duration"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::Duration; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 
