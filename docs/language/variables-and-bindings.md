@@ -99,14 +99,46 @@ let export VERBOSE = true     # exports as "true"
 > `let export rec` is not allowed — functions cannot be exported.
 > Mutations to `let export mut` variables automatically re-export the updated value.
 
-### 4.3.1 Properties with Get/Set Accessors
+### 4.3.1 Computed Properties
 
-Computed properties use `with get`/`set` syntax for custom read and write logic.
-Properties are accessed like variables but execute accessor bodies on each read or write.
+Use `let get` to declare a binding that re-evaluates its body on every reference.
+Unlike value bindings (`let x = expr`) which evaluate once, `let get` bindings
+execute their body each time the name is accessed — no `()` call syntax needed.
 
 <!-- endo-no-check -->
 ```endo
-# Read-only computed property (single-line)
+# Re-evaluating binding (short form)
+let get greeting = & echo hello
+print greeting                        # runs 'echo hello' each time
+
+# Useful for shell aliases
+let get cdp = & cd ~/projects
+cdp                                   # changes directory
+
+# Re-evaluation with mutable state
+let mut counter = 0
+let get next =
+    counter <- counter + 1
+    counter
+print next                            # 1
+print next                            # 2
+
+# Works with export and private modifiers
+let export get answer = 42
+let private get helper = computeValue
+```
+
+> **Note:** `let get name = expr` is syntactic sugar for `let name with get () = expr`.
+> The `get` modifier is mutually exclusive with `mut`, `rec`, `use`, and `manual`.
+
+### 4.3.2 Properties with Get/Set Accessors
+
+For read-write properties that need both getter and setter logic, use the full
+`with get`/`set` syntax.
+
+<!-- endo-no-check -->
+```endo
+# Read-only computed property (full form)
 let Pi with get () = 3.14159
 
 # Read-write property backed by a mutable variable
@@ -148,7 +180,7 @@ let X
     and set (v) = _x <- v
 ```
 
-### 4.3.2 Builtin Properties
+### 4.3.3 Builtin Properties
 
 The shell provides builtin properties for configuration that use the same `<-` assignment
 syntax as mutable variables. Unlike user-defined properties, these are registered by the

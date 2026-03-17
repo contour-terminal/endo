@@ -1484,6 +1484,8 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         emit("manual ");
     if (node.isRecursive)
         emit("rec ");
+    if (node.isShortGetSyntax)
+        emit("get ");
     if (node.destructurePattern)
         emitPattern(*node.destructurePattern);
     else
@@ -1495,6 +1497,24 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
 
     if (node.isProperty())
     {
+        if (node.isShortGetSyntax)
+        {
+            // Short getter syntax: let get name = expr
+            emit(" = ");
+            if (node.getter && node.getter->body)
+            {
+                if (wouldFormatMultiline(*node.getter->body))
+                {
+                    emitNewline();
+                    indent();
+                    node.getter->body->accept(*this);
+                    dedent();
+                }
+                else
+                    node.getter->body->accept(*this);
+            }
+            return;
+        }
         emit(" with ");
         if (node.getter)
         {

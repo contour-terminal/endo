@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 'get' as a binding name (not modifier) when followed by '='
+# expect: 5
+
+let get = 5
+
+print get

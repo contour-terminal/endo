@@ -25,7 +25,9 @@ statement       = let_statement
                 | expression_statement
                 ;
 
-let_statement   = "let" [ "export" ] [ "rec" ] [ "mut" ] let_binding { "and" let_binding } ;
+let_statement   = "let" [ "export" | "private" ] [ "rec" ] [ "mut" ] [ "use" | "manual" ] let_binding { "and" let_binding }
+                | "let" [ "export" | "private" ] "get" identifier [ type_annotation ] "=" expression
+                ;
 let_binding     = pattern [ type_annotation ] "=" expression
                 | identifier { pattern } [ type_annotation ] "=" expression
                 ;

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Short getter captures variables from enclosing scope
+# expect: 10
+
+let x = 10
+
+let get value = x
+
+print value

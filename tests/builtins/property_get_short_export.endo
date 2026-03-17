@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Short getter with export modifier
+# expect: 42
+
+let export get answer = 42
+
+print answer

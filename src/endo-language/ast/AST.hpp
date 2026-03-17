@@ -927,6 +927,7 @@ struct LetBindingStmt final: public Statement
     std::unique_ptr<pattern::Pattern> destructurePattern; ///< Optional pattern for `let (x, y) = expr`
     std::unique_ptr<PropertyAccessor> getter;             ///< `with get () = expr`
     std::unique_ptr<PropertyAccessor> setter;             ///< `and set (value) = expr`
+    bool isShortGetSyntax = false;                        ///< True when parsed from `let get name = expr`
 
     LetBindingStmt(Visibility vis,
                    Mutability mut,
