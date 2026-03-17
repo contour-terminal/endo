@@ -35,7 +35,8 @@ namespace
     };
 
     /// Joins expected output lines with newlines as separator (not terminator).
-    /// To express a trailing newline, add an empty `# expect:` line at the end.
+    /// Trailing newlines are normalized during comparison, so a trailing empty
+    /// `# expect:` line is accepted but not required for `println` output.
     [[nodiscard]] std::string joinExpectedOutput(std::vector<std::string> const& lines)
     {
         if (lines.empty())
@@ -49,6 +50,14 @@ namespace
             result += lines[i];
         }
         return result;
+    }
+
+    /// Strips trailing newline characters from a string view.
+    [[nodiscard]] constexpr std::string_view rtrimNewlines(std::string_view s) noexcept
+    {
+        while (!s.empty() && s.back() == '\n')
+            s.remove_suffix(1);
+        return s;
     }
 
     /// Escapes newlines and other control characters for display.
@@ -255,17 +264,17 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 return result;
             }
 
-            // Check output if expected
+            // Check output if expected (trailing newlines are normalized)
             if (!testFile.expectedOutput.empty())
             {
                 auto const expected = joinExpectedOutput(testFile.expectedOutput);
-                if (result.actualOutput != expected)
+                if (rtrimNewlines(result.actualOutput) != rtrimNewlines(expected))
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage =
                         std::format("Output mismatch:\n        Expected: \"{}\"\n        Actual:   \"{}\"",
-                                    escapeForDisplay(expected),
-                                    escapeForDisplay(result.actualOutput));
+                                    escapeForDisplay(rtrimNewlines(expected)),
+                                    escapeForDisplay(rtrimNewlines(result.actualOutput)));
                     return result;
                 }
             }
@@ -382,17 +391,17 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 return result;
             }
 
-            // Check output if expected
+            // Check output if expected (trailing newlines are normalized)
             if (!testFile.expectedOutput.empty())
             {
                 auto const expected = joinExpectedOutput(testFile.expectedOutput);
-                if (result.actualOutput != expected)
+                if (rtrimNewlines(result.actualOutput) != rtrimNewlines(expected))
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage =
                         std::format("Output mismatch:\n        Expected: \"{}\"\n        Actual:   \"{}\"",
-                                    escapeForDisplay(expected),
-                                    escapeForDisplay(result.actualOutput));
+                                    escapeForDisplay(rtrimNewlines(expected)),
+                                    escapeForDisplay(rtrimNewlines(result.actualOutput)));
                     return result;
                 }
             }
