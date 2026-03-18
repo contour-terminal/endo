@@ -72,6 +72,11 @@ void Parser::setKnownVariadicFunctions(std::unordered_set<std::string> names)
     _knownVariadicFunctions = std::move(names);
 }
 
+void Parser::setKnownUnitFunctions(std::unordered_set<std::string> names)
+{
+    _knownUnitFunctions = std::move(names);
+}
+
 CoreVM::SourceLocation Parser::currentLocation() const
 {
     return toCoreLoc(_lexer.currentRange());
@@ -745,6 +750,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                              : nameRange;
                         return stmt;
                     }
+                }
+                // Implicit unit function call: bare `f` at statement level → `f ()`
+                if (auto* identExpr = dynamic_cast<ast::IdentifierExpr*>(expr.get());
+                    identExpr && _knownUnitFunctions.contains(identExpr->name))
+                {
+                    auto app = std::make_unique<ast::ApplicationExpr>(std::move(expr),
+                                                                      std::make_unique<ast::UnitExpr>());
+                    app->origin = ast::ApplicationOrigin::Implicit;
+                    expr = std::move(app);
                 }
                 // Check for trailing |> pipeline (allow newlines before |>)
                 {
@@ -3690,17 +3704,6 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 
     std::string name = consumeLiteral();
 
-    // Short getter syntax: let [export|private] get name = expr
-    // Disambiguate: 'get' is a modifier only when followed by an identifier (the actual name).
-    // If followed by '=' (e.g., `let get = 5`), 'get' is the binding name itself.
-    bool isGetter = false;
-    if (name == "get" && !isMutable && !isRecursive && resourceMode == ast::ResourceMode::None
-        && _lexer.currentToken() == Token::Identifier)
-    {
-        isGetter = true;
-        name = consumeLiteral(); // consume actual binding name; 'get' was a modifier
-    }
-
     // Collect parameters (for function definitions)
     // Parameters can be bare identifiers or annotated: (x: int)
     std::vector<ast::TypedParameter> parameters;
@@ -3745,61 +3748,6 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     // Not a property — push back newline to preserve statement boundary
     if (skippedNewlinesBeforeWith > 0)
         _lexer.pushBackToken(Token::LineFeed, "\n");
-
-    // Short getter syntax: let get name = expr → desugars to getter-only property
-    if (isGetter)
-    {
-        if (!parameters.empty())
-        {
-            _report.syntaxErrorWithSuggestions(
-                currentLocation(),
-                { "Remove parameters or use 'let f () = ...' for functions" },
-                currentContextSnippet(),
-                "'let get' bindings cannot have parameters; use 'let {} () = ...' for a function",
-                name);
-            _lexer.leaveFSharpExpr();
-            return nullptr;
-        }
-
-        if (_lexer.currentToken() != Token::Equal)
-        {
-            _report.syntaxErrorWithSuggestions(currentLocation(),
-                                               { "Add '=' followed by an expression" },
-                                               currentContextSnippet(),
-                                               "Expected '=' in 'let get' binding, got '{}'",
-                                               _lexer.currentTokenText());
-            _lexer.leaveFSharpExpr();
-            return nullptr;
-        }
-        auto const eqLine = _lexer.currentRange().begin.line;
-        _lexer.nextToken(); // consume '='
-        consumeNewlines();
-
-        auto const bodyOnNewLine = _lexer.currentRange().begin.line > eqLine;
-        auto body = bodyOnNewLine ? parseFSharpExprSequence(letColumn) : parseFSharpExpr();
-        if (!body)
-        {
-            _lexer.leaveFSharpExpr();
-            return nullptr;
-        }
-
-        auto getter = std::make_unique<ast::PropertyAccessor>();
-        getter->body = std::move(body);
-
-        auto result = std::make_unique<ast::LetBindingStmt>(
-            vis, mut, false, std::move(name), std::vector<ast::TypedParameter> {}, std::move(returnType), nullptr);
-        result->getter = std::move(getter);
-        result->isShortGetSyntax = true;
-
-        result->location =
-            result->getter->body->location
-                ? SourceLocationRange { .begin = letLoc.begin, .end = result->getter->body->location->end }
-                : letLoc;
-
-        _knownFSharpFunctions.insert(result->name);
-        _lexer.leaveFSharpExpr();
-        return result;
-    }
 
     // Validate: 'let rec' requires parameters (must be a function definition)
     if (isRecursive && parameters.empty())
@@ -3939,6 +3887,10 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _knownFSharpFunctions.insert(result->name);
         for (auto const& ab: result->andBindings)
             _knownFSharpFunctions.insert(ab.name);
+
+        // Track unit functions for implicit calling at statement level
+        if (result->parameters.size() == 1 && result->parameters[0].isUnit)
+            _knownUnitFunctions.insert(result->name);
 
         // Track variadic functions separately for shell-mode argument parsing
         auto const hasVariadic =

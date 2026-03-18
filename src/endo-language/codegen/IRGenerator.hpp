@@ -56,6 +56,9 @@ struct FSharpPersistentState
     /// Function table persisted across REPL prompts (name -> function metadata).
     std::unordered_map<std::string, PersistedFunction> functions;
 
+    /// Unit function names (functions with a single `()` parameter) for implicit calling at statement level.
+    std::unordered_set<std::string> unitFunctions;
+
     /// A persisted value binding (re-evaluated at each prompt).
     struct PersistedValueBinding
     {
@@ -448,6 +451,8 @@ class IRGenerator final: public ast::Visitor
         /// Captured variable bindings from the enclosing scope at function creation time.
         /// Maps variable names to their storage (entry-block allocas).
         std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
+        /// Tracks which captured bindings are mutable (for correct rebinding inside function bodies).
+        std::unordered_set<std::string> capturedMutables;
         /// Deterministic ordering of captured variable names for function compilation.
         /// Populated by compileFunctionBody; used at both definition and call sites.
         std::vector<std::string> captureOrder;
@@ -676,6 +681,9 @@ class IRGenerator final: public ast::Visitor
     /// Delegates AST analysis to collectFreeVariableNames() and maps names to storage.
     [[nodiscard]] std::unordered_map<std::string, CoreVM::Value*> collectFreeVariables(
         ast::Expr const* body, std::vector<std::string> const& boundNames) const;
+
+    /// Populates `func.capturedMutables` from the current scope's binding info.
+    void collectCapturedMutables(FSharpFunction& func) const;
 
     // F# function context for error propagation (? operator)
     // Tracks return block and storage for early returns from try expressions

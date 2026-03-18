@@ -99,37 +99,32 @@ let export VERBOSE = true     # exports as "true"
 > `let export rec` is not allowed — functions cannot be exported.
 > Mutations to `let export mut` variables automatically re-export the updated value.
 
-### 4.3.1 Computed Properties
+### 4.3.1 Unit Functions as Shell Aliases
 
-Use `let get` to declare a binding that re-evaluates its body on every reference.
-Unlike value bindings (`let x = expr`) which evaluate once, `let get` bindings
-execute their body each time the name is accessed — no `()` call syntax needed.
+Define a zero-argument function with `let name () = expr`. At the shell prompt,
+typing the bare name implicitly calls the function — no `()` needed.
 
 <!-- endo-no-check -->
 ```endo
-# Re-evaluating binding (short form)
-let get greeting = & echo hello
-print greeting                        # runs 'echo hello' each time
-
-# Useful for shell aliases
-let get cdp = & cd ~/projects
-cdp                                   # changes directory
+# Shell alias
+let cdp () = & cd ~/projects
+cdp                                   # calls cdp(), changes directory
 
 # Re-evaluation with mutable state
 let mut counter = 0
-let get next =
+let next () =
     counter <- counter + 1
-    counter
-print next                            # 1
-print next                            # 2
+    println counter
+next                                  # 1
+next                                  # 2
 
-# Works with export and private modifiers
-let export get answer = 42
-let private get helper = computeValue
+# Explicit invocation also works
+print (next ())                       # 3
 ```
 
-> **Note:** `let get name = expr` is syntactic sugar for `let name with get () = expr`.
-> The `get` modifier is mutually exclusive with `mut`, `rec`, `use`, and `manual`.
+> **Note:** The implicit call only applies at the top-level shell prompt or script
+> statement level. Inside F# expressions (function arguments, let bindings, etc.),
+> the bare name is a function reference. Use `f ()` for explicit invocation in any context.
 
 ### 4.3.2 Properties with Get/Set Accessors
 

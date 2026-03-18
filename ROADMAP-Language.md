@@ -405,7 +405,7 @@ Consult this section to determine what to work on next.
 ### Phase 6.5 — Dot Property Syntax ✅
 - [x] Built-in dot properties on collection types: `xs.length`, `xs.isEmpty`, `xs.head`, `xs.tail`, `xs.last`, `opt.isSome`, `opt.isNone`, `res.isOk`, `res.isError`, `t.fst`, `t.snd`, `t.trd`, `t.0`, `t.1`, `t.2`, `s.length`
 - [x] Module-level computed properties with `get`/`set` accessors: `let Name with get () = expr and set (v) = expr`
-- [x] Short computed property syntax: `let get name = expr` (re-evaluates on every reference, sugar for `let name with get () = expr`)
+- [x] Implicit unit function calling: bare `f` at statement level calls `f ()` (replaces `let get name = expr` syntax)
 - [x] Multi-line property accessor bodies (indentation-based, like function bodies)
 - [x] `with` keyword on next line after property name
 - [x] Function-as-method dot access: `obj.funcName` resolves to `funcName(obj)` when first parameter type matches (field names take priority)

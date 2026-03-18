@@ -283,6 +283,7 @@ extern "C"
             for (auto const& binding: pg.fsharpState.valueBindings)
                 names.insert(binding.name);
             parser.setKnownFSharpFunctions(std::move(names));
+            parser.setKnownUnitFunctions(pg.fsharpState.unitFunctions);
         }
 
         auto ast = parser.parse();

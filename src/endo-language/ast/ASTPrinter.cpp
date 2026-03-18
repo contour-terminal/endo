@@ -609,8 +609,6 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         _result += "manual ";
     if (node.isRecursive)
         _result += "rec ";
-    if (node.isShortGetSyntax)
-        _result += "get ";
     if (node.destructurePattern)
         _result += pattern::toString(*node.destructurePattern);
     else
@@ -627,27 +625,18 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         _result += ": " + endo::toString(*node.returnType);
     if (node.isProperty())
     {
-        if (node.isShortGetSyntax)
+        _result += " with ";
+        if (node.getter)
         {
-            _result += " = ";
-            if (node.getter && node.getter->body)
-                node.getter->body->accept(*this);
+            _result += "get () = ";
+            node.getter->body->accept(*this);
         }
-        else
+        if (node.getter && node.setter)
+            _result += " and ";
+        if (node.setter)
         {
-            _result += " with ";
-            if (node.getter)
-            {
-                _result += "get () = ";
-                node.getter->body->accept(*this);
-            }
-            if (node.getter && node.setter)
-                _result += " and ";
-            if (node.setter)
-            {
-                _result += "set (" + node.setter->paramName + ") = ";
-                node.setter->body->accept(*this);
-            }
+            _result += "set (" + node.setter->paramName + ") = ";
+            node.setter->body->accept(*this);
         }
     }
     else
@@ -786,6 +775,13 @@ void ASTPrinter::visit(PipelineExpr const& node)
 
 void ASTPrinter::visit(ApplicationExpr const& node)
 {
+    if (node.origin == ApplicationOrigin::Implicit)
+    {
+        // Implicit unit function calls: print as bare identifier (no wrapping parens or unit arg)
+        if (node.function)
+            node.function->accept(*this);
+        return;
+    }
     _result += '(';
     if (node.function)
         node.function->accept(*this);

@@ -1,8 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-#
-# description: Short getter syntax: let get name = expr
-# expect: hello
-
-let get greeting = "hello"
-
-print greeting

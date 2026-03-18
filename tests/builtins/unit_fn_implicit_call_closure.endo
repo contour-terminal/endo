@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Implicit unit function call captures enclosing scope
+# expect: 10
+
+let x = 10
+let f () = println x
+
+f

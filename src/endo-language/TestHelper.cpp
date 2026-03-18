@@ -997,6 +997,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
             for (auto const& binding: fsharpState.valueBindings)
                 names.insert(binding.name);
             parser.setKnownFSharpFunctions(std::move(names));
+            parser.setKnownUnitFunctions(fsharpState.unitFunctions);
         }
         auto ast = parser.parse();
         if (!ast || testRuntime.hasErrors())
@@ -1071,6 +1072,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts,
             for (auto const& binding: fsharpState.valueBindings)
                 names.insert(binding.name);
             parser.setKnownFSharpFunctions(std::move(names));
+            parser.setKnownUnitFunctions(fsharpState.unitFunctions);
         }
         auto ast = parser.parse();
         if (!ast || testRuntime.hasErrors())

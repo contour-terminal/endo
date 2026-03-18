@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Implicit unit function call with mutable state re-evaluates correctly
+# expect: 1
+# expect: 2
+# expect: 3
+
+let mut counter = 0
+let next () =
+    counter <- counter + 1
+    println counter
+
+next
+next
+next

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Implicit unit function call in pipeline
+# expect: 42
+
+let f () = 42
+
+f |> println

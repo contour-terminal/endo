@@ -339,6 +339,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             {
                 auto boundNames = func.parameters;
                 func.capturedBindings = generator.collectFreeVariables(func.body, boundNames);
+                generator.collectCapturedMutables(func);
             }
             generator.compileFunctionBody(name, func);
         }
@@ -467,6 +468,13 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.isRecursive = func.isRecursive;
             persisted.hasVariadicParam = func.hasVariadicParam;
             persistentState->functions[name] = std::move(persisted);
+
+            // Track unit functions for implicit calling at the shell prompt
+            if (func.parameters.size() == 1 && !func.parameterTypes.empty()
+                && func.parameterTypes[0].has_value() && *func.parameterTypes[0] == types::unitType())
+            {
+                persistentState->unitFunctions.insert(name);
+            }
         }
 
         // Persist newly created value bindings
@@ -1280,6 +1288,13 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
         if (auto* storage = lookupFSharpVariable(name))
             freeVars[name] = storage;
     return freeVars;
+}
+
+void IRGenerator::collectCapturedMutables(FSharpFunction& func) const
+{
+    for (auto const& [name, _]: func.capturedBindings)
+        if (auto const* binding = lookupFSharpBinding(name); binding && binding->isMutable)
+            func.capturedMutables.insert(name);
 }
 
 CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
@@ -4941,6 +4956,7 @@ IRGenerator::FSharpFunction IRGenerator::createFunctionFromPlaceholder(ast::Plac
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+    collectCapturedMutables(func);
 
     for (auto const& [capName, _]: func.capturedBindings)
     {
@@ -5508,6 +5524,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+            collectCapturedMutables(func);
 
             // Mark captured variables as used in the enclosing scope
             for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5542,6 +5559,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+            collectCapturedMutables(func);
 
             // Mark captured variables as used in the enclosing scope
             for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5585,6 +5603,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.returnKind = determineReturnKind(func.body);
         func.definitionLocation = node.location;
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+        collectCapturedMutables(func);
 
         // Mark captured variables as used in the enclosing scope
         for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5855,6 +5874,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         if (node.isRecursive)
             allBound.push_back(node.name);
         func.capturedBindings = collectFreeVariables(func.body, allBound);
+        collectCapturedMutables(func);
 
         // Mark captured variables as used in the enclosing scope
         for (auto const& [capName, capVal]: func.capturedBindings)
@@ -6575,6 +6595,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        collectCapturedMutables(lambdaFunc);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -7077,7 +7098,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         pushFSharpScope();
         for (auto const& [capName, capStorage]: func->capturedBindings)
-            bindFSharpVariable(capName, capStorage);
+            bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
         bindFSharpVariable(func->parameters[0], paramAlloca);
 
         // Propagate type annotations through recursive piped parameter
@@ -7129,7 +7150,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Re-bind captured variables from the closure
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -7704,6 +7725,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        collectCapturedMutables(lambdaFunc);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -7965,7 +7987,7 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
 
         pushFSharpScope();
         for (auto const& [capName, capStorage]: fn->capturedBindings)
-            bindFSharpVariable(capName, capStorage);
+            bindFSharpVariable(capName, capStorage, fn->capturedMutables.contains(capName));
         for (size_t j = 0; j < fn->parameters.size(); ++j)
             bindFSharpVariable(fn->parameters[j], slot.paramAllocas[j]);
 
@@ -8069,7 +8091,7 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
     // Push scope and bind captures and parameters from allocas
     pushFSharpScope();
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
     for (size_t i = 0; i < func->parameters.size(); ++i)
         bindFSharpVariable(func->parameters[i], paramAllocas[i]);
 
@@ -8232,7 +8254,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     // Re-bind captured variables from the closure
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -8330,6 +8352,11 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     if (!func.parameters.empty() && !allParamsTyped)
         return;
 
+    // Functions that mutate captured variables must use AST inlining — compiled IRFunctions receive
+    // copies of captures, so mutations to them would not propagate back to the outer scope.
+    if (!func.capturedMutables.empty())
+        return;
+
     // Functions whose body is a lambda cannot be compiled as separate IRFunctions because the inner
     // lambda's captures reference function-local allocas that are destroyed after URET.
     // Unwrap ParenExpr wrappers to detect parenthesized lambdas like `fun x -> (fun y -> ...)`.
@@ -8372,7 +8399,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     {
         auto* sourceStorage = func.capturedBindings.at(capName);
         auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
-        bindFSharpVariable(capName, storage);
+        bindFSharpVariable(capName, storage, func.capturedMutables.contains(capName));
     }
 
     // Create explicit parameter allocas, using type annotations.
@@ -8677,6 +8704,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+    collectCapturedMutables(func);
 
     // Preserve function reference info through lambda captures (HOF support)
     for (auto const& [capName, _]: func.capturedBindings)
@@ -9959,6 +9987,12 @@ void IRGenerator::visit(ast::LazyExpr const& node)
 
     auto const captureCount = static_cast<uint16_t>(captureOrder.size());
 
+    // Collect mutability info from parent scope before it becomes inaccessible after pushFSharpScope()
+    std::unordered_set<std::string> mutableCaptures;
+    for (auto const& capName: captureOrder)
+        if (auto const* binding = lookupFSharpBinding(capName); binding && binding->isMutable)
+            mutableCaptures.insert(capName);
+
     // 2. Compile the body as a zero-arg IRFunction (captures become parameters)
     auto lazyName = std::format("__lazy_{}", _lazyCounter++);
 
@@ -9979,7 +10013,7 @@ void IRGenerator::visit(ast::LazyExpr const& node)
     {
         auto* sourceStorage = freeVars.at(capName);
         auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
-        bindFSharpVariable(capName, storage);
+        bindFSharpVariable(capName, storage, mutableCaptures.contains(capName));
     }
 
     // Codegen the body
