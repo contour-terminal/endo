@@ -3120,6 +3120,7 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::ResultError:   // Error expr
         case Token::Try:           // try expr with ...
         case Token::Lazy:          // lazy expr
+        case Token::Ref:           // ref expr
         case Token::Seq:           // seq { ... }
         case Token::FStringStart:  // F# interpolated string: $"..."
             return true;
@@ -6713,6 +6714,24 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             auto node = std::make_unique<ast::LazyExpr>(std::move(body));
             node->location =
                 SourceLocationRange { .begin = lazyLoc.begin, .end = endLoc ? endLoc->end : lazyLoc.end };
+            return node;
+        }
+
+        case Token::Ref: {
+            // ref expr — mutable reference cell
+            auto const refLoc = _lexer.currentRange();
+            _lexer.nextToken(); // consume 'ref'
+            auto value = parseFSharpPrimary();
+            if (!value)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected expression after 'ref'.");
+                return nullptr;
+            }
+            auto const endLoc = value->location;
+            auto node = std::make_unique<ast::RefExpr>(std::move(value));
+            node->location =
+                SourceLocationRange { .begin = refLoc.begin, .end = endLoc ? endLoc->end : refLoc.end };
             return node;
         }
 

@@ -88,6 +88,14 @@ struct ResultType
     bool operator==(ResultType const& other) const;
 };
 
+// Ref type: ref<T> (mutable reference cell)
+struct RefType
+{
+    TypePtr innerType;
+
+    bool operator==(RefType const& other) const;
+};
+
 // Record field
 struct RecordField
 {
@@ -163,6 +171,7 @@ struct Type
                  TupleType,
                  OptionType,
                  ResultType,
+                 RefType,
                  RecordType,
                  UnionType,
                  TypeApp>
@@ -184,6 +193,8 @@ struct Type
     [[nodiscard]] bool isOption() const { return std::holds_alternative<OptionType>(node); }
 
     [[nodiscard]] bool isResult() const { return std::holds_alternative<ResultType>(node); }
+
+    [[nodiscard]] bool isRef() const { return std::holds_alternative<RefType>(node); }
 
     [[nodiscard]] bool isRecord() const { return std::holds_alternative<RecordType>(node); }
 
@@ -209,6 +220,8 @@ struct Type
 
     [[nodiscard]] ResultType const* asResult() const { return std::get_if<ResultType>(&node); }
 
+    [[nodiscard]] RefType const* asRef() const { return std::get_if<RefType>(&node); }
+
     [[nodiscard]] RecordType const* asRecord() const { return std::get_if<RecordType>(&node); }
 
     [[nodiscard]] UnionType const* asUnion() const { return std::get_if<UnionType>(&node); }
@@ -227,6 +240,8 @@ struct Type
     OptionType* asOption() { return std::get_if<OptionType>(&node); }
 
     ResultType* asResult() { return std::get_if<ResultType>(&node); }
+
+    RefType* asRef() { return std::get_if<RefType>(&node); }
 
     RecordType* asRecord() { return std::get_if<RecordType>(&node); }
 
@@ -265,6 +280,9 @@ namespace types
 
     // Result type: result<T, E>
     TypePtr result(TypePtr ok, TypePtr error);
+
+    // Ref type: ref<T> (mutable reference cell)
+    TypePtr ref(TypePtr inner);
 
     // Record type: { field1: T1, field2: T2, ... }
     TypePtr record(std::string name, std::vector<RecordField> fields);
@@ -323,6 +341,10 @@ Acc foldType(TypePtr const& type, Acc init, F const& f)
     {
         acc = foldType<Acc>(res->okType, std::move(acc), f);
         acc = foldType<Acc>(res->errorType, std::move(acc), f);
+    }
+    else if (auto const* r = type->asRef())
+    {
+        acc = foldType<Acc>(r->innerType, std::move(acc), f);
     }
     else if (auto const* rec = type->asRecord())
     {

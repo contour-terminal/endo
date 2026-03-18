@@ -196,6 +196,9 @@ BuiltinDescriptorRegistry::BuiltinDescriptorRegistry()
     registerProperty({ .typeId = BT::Option, .fieldName = "isSome" });
     registerProperty({ .typeId = BT::Option, .fieldName = "isNone" });
 
+    // Ref properties
+    registerProperty({ .typeId = BT::Ref, .fieldName = "value" });
+
     // Result properties
     registerProperty({ .typeId = BT::Result, .fieldName = "isOk" });
     registerProperty({ .typeId = BT::Result, .fieldName = "isError" });

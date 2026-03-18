@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Assigning via r.value <- x on separate line produces syntax error
+# expect-error: Unexpected token '<-'
+
+let r = ref 0
+
+r.value <- 42

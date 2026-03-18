@@ -355,6 +355,13 @@ void processKill(CoreVM::Params& args);
 void processSignal(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Ref cell operations
+// ---------------------------------------------------------------------------
+
+/// ref_write_barrier(obj) -> unit: Triggers write barrier for GC cycle detection.
+void refWriteBarrier(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

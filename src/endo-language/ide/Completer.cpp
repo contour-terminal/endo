@@ -98,6 +98,10 @@ DocumentRecordInfo collectRecordInfo(std::string const& source)
                 {
                     result.variableTypes[letStmt->name] = "TimeSpan";
                 }
+                else if (dynamic_cast<ast::RefExpr const*>(letStmt->value.get()))
+                {
+                    result.variableTypes[letStmt->name] = "Ref";
+                }
             }
         }
     };

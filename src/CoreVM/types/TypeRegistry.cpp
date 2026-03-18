@@ -355,6 +355,23 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(pathType));
 
+    // Ref<T>: Mutable reference cell — product type with 1 value slot + 1 type tag slot for GC.
+    // Dereference via `.value` dot property, mutate via `r <- newval`.
+    auto refType = std::make_unique<TypeDescriptor>();
+    refType->kind = TypeKind::Product;
+    refType->id = BuiltinTypeId::Ref;
+    refType->name = "Ref";
+    refType->slotCount = 2; // slot 0 = inner value, slot 1 = type tag (LiteralType)
+    refType->fields = {
+        { "value", 0, LiteralType::Void }, // user-facing dot property: r.value
+        { "", 1, LiteralType::Number },    // type tag for GC and formatting (internal, hidden from completion)
+    };
+    refType->hasMutableSlots = true;
+    refType->traceInfo.dynamicSlots = {
+        SlotTraceInfo::DynamicSlot { .slotIndex = 0, .typeTagSlot = 1, .tagPosition = 0 },
+    };
+    addType(std::move(refType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

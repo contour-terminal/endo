@@ -82,6 +82,7 @@ struct OptionDefaultExpr;
 struct TryWithExpr;
 struct TryFinallyExpr;
 struct LazyExpr;
+struct RefExpr;
 struct SeqExpr;
 struct UnitExpr;
 struct BlockExpr;
@@ -188,6 +189,7 @@ struct Visitor
     virtual void visit(TryWithExpr const&) = 0;
     virtual void visit(TryFinallyExpr const&) = 0;
     virtual void visit(LazyExpr const&) = 0;
+    virtual void visit(RefExpr const&) = 0;
     virtual void visit(SeqExpr const&) = 0;
     virtual void visit(FStringExpr const&) = 0;
     virtual void visit(UnitExpr const&) = 0;

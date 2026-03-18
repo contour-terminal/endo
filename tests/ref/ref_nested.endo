@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ref cell wrapping an option value
+# expect: 42
+# expect:
+
+let r = ref 42
+
+let v = r.value
+
+println v

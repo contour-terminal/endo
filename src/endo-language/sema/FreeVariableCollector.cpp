@@ -120,6 +120,12 @@ std::unordered_set<std::string> collectFreeVariableNames(ast::Expr const* body,
                 return;
             }
 
+            if (auto const* refExpr = dynamic_cast<ast::RefExpr const*>(expr))
+            {
+                walk(refExpr->value.get(), bound);
+                return;
+            }
+
             if (auto const* seqExpr = dynamic_cast<ast::SeqExpr const*>(expr))
             {
                 for (auto const& yield: seqExpr->yields)

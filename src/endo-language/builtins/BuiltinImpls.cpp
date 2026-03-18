@@ -1559,6 +1559,17 @@ void processSignal(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
+// Ref cell operations
+// ---------------------------------------------------------------------------
+
+void refWriteBarrier(CoreVM::Params& args)
+{
+    auto* obj = args.getObject(1);
+    args.caller()->writeBarrier(obj);
+    args.setResult(CoreVM::CoreNumber(0));
+}
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver — delegates to StdlibDescriptors table
 // ---------------------------------------------------------------------------
 

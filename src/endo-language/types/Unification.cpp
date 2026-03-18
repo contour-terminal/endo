@@ -290,6 +290,16 @@ UnifyResult unify(TypePtr const& t1, TypePtr const& t2)
         return std::unexpected(TypeError::mismatch(t1, t2));
     }
 
+    // Both are refs
+    if (auto* ref1 = t1->asRef())
+    {
+        if (auto* ref2 = t2->asRef())
+        {
+            return unify(ref1->innerType, ref2->innerType);
+        }
+        return std::unexpected(TypeError::mismatch(t1, t2));
+    }
+
     // Both are results
     if (auto* res1 = t1->asResult())
     {

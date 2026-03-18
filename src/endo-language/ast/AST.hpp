@@ -1672,6 +1672,19 @@ struct LazyExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Ref cell constructor expression: `ref expr`
+///
+/// Creates a mutable reference cell containing the evaluated value.
+/// Dereference with `r.value`, mutate with `r <- newval`.
+struct RefExpr final: public Expr
+{
+    std::unique_ptr<Expr> value; ///< The initial value expression
+
+    explicit RefExpr(std::unique_ptr<Expr> val): value(std::move(val)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// A single yield in a seq expression.
 struct SeqYield
 {

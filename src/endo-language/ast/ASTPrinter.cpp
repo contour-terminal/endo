@@ -1081,6 +1081,13 @@ void ASTPrinter::visit(LazyExpr const& node)
         node.body->accept(*this);
 }
 
+void ASTPrinter::visit(RefExpr const& node)
+{
+    _result += "ref ";
+    if (node.value)
+        node.value->accept(*this);
+}
+
 void ASTPrinter::visit(SeqExpr const& node)
 {
     _result += "seq { ";

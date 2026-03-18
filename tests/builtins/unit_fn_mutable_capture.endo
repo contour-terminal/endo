@@ -6,6 +6,7 @@
 # expect: 3
 
 let mut counter = 0
+
 let next () =
     counter <- counter + 1
     println counter

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Basic ref cell creation and dereference via .value
+# expect: 42
+# expect:
+
+let r = ref 42
+
+println r.value

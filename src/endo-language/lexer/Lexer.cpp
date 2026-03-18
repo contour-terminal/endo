@@ -75,6 +75,10 @@ namespace
         if (literal == "manual")
             return Token::Manual;
 
+        // Mutable references
+        if (literal == "ref")
+            return Token::Ref;
+
         // Boolean literals
         if (literal == "true")
             return Token::True;

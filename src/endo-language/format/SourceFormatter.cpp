@@ -2214,6 +2214,15 @@ void SourceFormatter::visit(ast::LazyExpr const& node)
     emitTrailingComment(node);
 }
 
+void SourceFormatter::visit(ast::RefExpr const& node)
+{
+    emitLeadingComments(node);
+    emit("ref ");
+    if (node.value)
+        node.value->accept(*this);
+    emitTrailingComment(node);
+}
+
 void SourceFormatter::visit(ast::SeqExpr const& node)
 {
     emitLeadingComments(node);

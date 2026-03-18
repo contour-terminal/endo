@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Boolean NOT operator still works unchanged (not affected by ref cells)
+# expect: false
+# expect: true
+# expect:
+
+println (not true)
+println (not false)

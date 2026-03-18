@@ -63,15 +63,17 @@ void ScopeManager::bindVariable(std::string const& name,
 void ScopeManager::bindObjectVariable(std::string const& name,
                                       CoreVM::AllocaInstr* storage,
                                       bool isMutable,
-                                      std::optional<SourceLocationRange> location)
+                                      std::optional<SourceLocationRange> location,
+                                      bool isRefCell)
 {
     if (_currentScope)
     {
         _currentScope->objectVariables.push_back(storage);
         _currentScope->bindings[name] = BindingInfo { .value = storage,
                                                       .isMutable = isMutable,
-                                                      /*isExported=*/.isExported = false,
-                                                      /*isUsed=*/.isUsed = false,
+                                                      .isRefCell = isRefCell,
+                                                      .isExported = false,
+                                                      .isUsed = false,
                                                       .bindingLocation = std::move(location) };
     }
 }

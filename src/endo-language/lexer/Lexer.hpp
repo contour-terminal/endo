@@ -108,6 +108,9 @@ enum class Token // NOLINT(performance-enum-size)
     Use,    // 'use' (scoped resource binding)
     Manual, // 'manual' (manual resource management)
 
+    // F# style keyword for mutable references
+    Ref, // 'ref' (mutable reference cell)
+
     // F# type variable (e.g., 'a in type definitions)
     TypeVar, // 'a, 'b, etc. (only in F# mode)
 
@@ -510,6 +513,7 @@ inline std::string_view tos(Token token)
         case Yield: return "yield";
         case Use: return "use";
         case Manual: return "manual";
+        case Ref: return "ref";
         case TypeVar: return "TypeVar";
         case Arrow: return "->";
         case LeftArrow: return "<-";

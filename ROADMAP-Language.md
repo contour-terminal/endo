@@ -31,7 +31,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Lazy evaluation: `lazy expr` defers computation, `force` evaluates and caches
 - [x] Lazy sequences: `seq { yield 1; yield 2; yield! rest }` with `toList`, `take`, `each`
 - [x] Scoped resource management: `let use fd = File.open "f" "r"` auto-disposes at scope exit
-- [ ] Ref cells: `ref expr`, dereference `!expr`, mutation `expr <- expr`
+- [x] Ref cells: `ref expr`, dereference `r.value`, mutation `r <- expr`
 
 ## Types
 
@@ -49,7 +49,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Results: `result<T, E>` with `Ok` and `Error`
 - [x] Records: `type Person = { name: str; age: int }`
 - [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
-- [ ] Ref cells: `ref<T>` (mutable reference cell)
+- [x] Ref cells: `ref<T>` (mutable reference cell, `r.value` to read, `r <- val` to write)
 - [x] Generic types
 
 ### Type Annotations
@@ -471,12 +471,13 @@ Consult this section to determine what to work on next.
 - [x] `SlotTraceInfo` on `TypeDescriptor`: precomputed fixed/dynamic object slot info for all builtin types; auto-computed for user-defined types at registration
 - [x] `retainObject` upgraded from `memory_order_relaxed` to `memory_order_acq_rel` for future thread safety
 
-### Phase 13 — Ref Cells (Mutable References)
-- [ ] `ref<T>` type: `BuiltinTypeId::Ref`, product type with 1 mutable slot
-- [ ] `ref expr` constructor syntax (`RefExpr` AST node)
-- [ ] `!expr` dereference syntax (`RefDerefExpr`, disambiguated from boolean NOT via type inference)
-- [ ] `expr <- expr` mutation syntax (reuses existing `MutAssignExpr` and `<-` token)
-- [ ] Write barrier on `<-` for GC cycle detection
-- [ ] Type inference for `ref<T>` propagation
-- [ ] Pattern matching restriction: ref cells cannot be destructured (match on `!r` instead)
-- [ ] REPL persistence of ref cells across prompts
+### Phase 13 — Ref Cells (Mutable References) ✅
+- [x] `ref<T>` type: `BuiltinTypeId::Ref = 22`, product type with 2 slots (value + type tag for GC)
+- [x] `ref expr` constructor syntax (`RefExpr` AST node + `Token::Ref` keyword)
+- [x] `r.value` dereference via dot property (consistent with `.isSome`, `.head` pattern)
+- [x] `r <- expr` mutation syntax (reuses `MutAssignStmt`/`MutAssignExpr` with `isRefCell` flag on `BindingInfo`)
+- [x] Write barrier on `<-` for GC cycle detection (`ref_write_barrier` native callback → `Runner::writeBarrier()`)
+- [x] Type inference support: `RefType` variant in type system, unification, `transformType`, `foldType`
+- [x] Pattern matching restriction: ref cells cannot be destructured (error: use `.value` first)
+- [x] Type formatter: `formatRef` displays as `ref <value>`, registered in `registerBuiltinFormatters()`
+- [x] REPL persistence via existing `PersistedValueBinding` with `isRefCell` flag

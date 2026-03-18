@@ -44,6 +44,11 @@ bool ResultType::operator==(ResultType const& other) const
     return *okType == *other.okType && *errorType == *other.errorType;
 }
 
+bool RefType::operator==(RefType const& other) const
+{
+    return *innerType == *other.innerType;
+}
+
 bool RecordField::operator==(RecordField const& other) const
 {
     return name == other.name && *type == *other.type;
@@ -166,6 +171,8 @@ TypePtr transformType(TypePtr const& type, std::function<TypePtr(TypePtr const&)
         return types::option(transformType(opt->innerType, visitor));
     if (auto const* res = type->asResult())
         return types::result(transformType(res->okType, visitor), transformType(res->errorType, visitor));
+    if (auto const* r = type->asRef())
+        return types::ref(transformType(r->innerType, visitor));
     if (auto const* rec = type->asRecord())
     {
         std::vector<RecordField> newFields;
@@ -293,6 +300,11 @@ namespace types
             Type { ResultType { .okType = std::move(ok), .errorType = std::move(error) } });
     }
 
+    TypePtr ref(TypePtr inner)
+    {
+        return std::make_shared<Type>(Type { RefType { std::move(inner) } });
+    }
+
     TypePtr record(std::string name, std::vector<RecordField> fields)
     {
         return std::make_shared<Type>(
@@ -394,6 +406,11 @@ std::string toString(Type const& type)
     {
         auto errStr = toString(*res->errorType);
         return "result<" + toString(*res->okType) + ", " + errStr + (errStr.back() == '>' ? " >" : ">");
+    }
+    else if (const auto* r = type.asRef())
+    {
+        auto inner = toString(*r->innerType);
+        return "ref<" + inner + (inner.back() == '>' ? " >" : ">");
     }
     else if (const auto* rec = type.asRecord())
     {
@@ -506,6 +523,11 @@ std::string toString(Type const& type, TypeVarNameMap const& nameMap)
         auto errStr = toString(*res->errorType, nameMap);
         return "result<" + toString(*res->okType, nameMap) + ", " + errStr
                + (errStr.back() == '>' ? " >" : ">");
+    }
+    else if (const auto* r = type.asRef())
+    {
+        auto inner = toString(*r->innerType, nameMap);
+        return "ref<" + inner + (inner.back() == '>' ? " >" : ">");
     }
     else if (const auto* rec = type.asRecord())
     {

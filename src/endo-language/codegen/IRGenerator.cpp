@@ -564,9 +564,10 @@ void IRGenerator::bindFSharpVariable(std::string const& name,
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
                                            CoreVM::AllocaInstr* storage,
                                            bool isMutable,
-                                           std::optional<SourceLocationRange> location)
+                                           std::optional<SourceLocationRange> location,
+                                           bool isRefCell)
 {
-    _sema.scopes().bindObjectVariable(name, storage, isMutable, std::move(location));
+    _sema.scopes().bindObjectVariable(name, storage, isMutable, std::move(location), isRefCell);
 }
 
 void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
@@ -1383,6 +1384,41 @@ CoreVM::Value* IRGenerator::emitNoneOption(std::string_view label)
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
     // slot 1 (type tag) defaults to 0 = Void = unknown (from zero-initialization)
     return obj;
+}
+
+CoreVM::Value* IRGenerator::emitRefCell(CoreVM::Value* value,
+                                        CoreVM::LiteralType innerType,
+                                        std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Ref));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType)));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
+    obj = _builder.createObjSetSlot(obj, slot1, typeTag, std::string(label) + ".typetag");
+    return obj;
+}
+
+void IRGenerator::emitRefCellMutate(BindingInfo const* binding, CoreVM::Value* newValue)
+{
+    // Load the ref cell object from its alloca
+    auto* refObj = _builder.createLoad(binding->value, "ref.load");
+
+    // Update slot 0 (inner value)
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    refObj = _builder.createObjSetSlot(refObj, slot0, newValue, "ref.set");
+
+    // Update slot 1 (type tag)
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(newValue->type())));
+    refObj = _builder.createObjSetSlot(refObj, slot1, typeTag, "ref.settag");
+
+    // Write barrier for GC cycle detection
+    auto const barrierSig = std::string("ref_write_barrier(I)V");
+    if (auto* cb = findCallback(barrierSig))
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { refObj }, "ref.barrier");
 }
 
 CoreVM::Value* IRGenerator::emitOkResult(CoreVM::Value* value,
@@ -4624,6 +4660,22 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
         return false;
     }
 
+    // --- Ref dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::Ref)
+    {
+        if (fieldName == "value")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "ref.value");
+            // Propagate inner type annotations from the ref cell
+            if (auto innerType = getInnerType(obj))
+                annotateInnerType(_result, *innerType);
+            if (auto innerObjTypeId = getInnerObjectTypeId(obj))
+                annotateObjectTypeId(_result, *innerObjTypeId);
+            return true;
+        }
+        return false;
+    }
+
     // --- Result dot properties ---
     // Result convention: Ok = tag 1, Error = tag 0
     if (*objTypeId == CoreVM::BuiltinTypeId::Result)
@@ -5237,9 +5289,29 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
+        // Semantic check: detect r.value <- x on ref cells and suggest r <- x
+        if (auto err = _sema.validateMutAssignTarget(node.name))
+        {
+            reportTypeError("{}", std::string_view(*err));
+            return;
+        }
         reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
                                        "Undefined variable: {}",
                                        std::string_view(node.name));
+        return;
+    }
+
+    // Ref cell mutation: r <- newval (binding is immutable, but contained value is mutable)
+    if (binding->isRefCell)
+    {
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for ref cell mutation value");
+            return;
+        }
+        emitRefCellMutate(binding, newValue);
+        _result = nullptr;
         return;
     }
 
@@ -5326,9 +5398,29 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
+        // Semantic check: detect r.value <- x on ref cells and suggest r <- x
+        if (auto err = _sema.validateMutAssignTarget(node.name))
+        {
+            reportTypeError("{}", std::string_view(*err));
+            return;
+        }
         reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
                                        "Undefined variable: {}",
                                        std::string_view(node.name));
+        return;
+    }
+
+    // Ref cell mutation: r <- newval (binding is immutable, but contained value is mutable)
+    if (binding->isRefCell)
+    {
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for ref cell mutation value");
+            return;
+        }
+        emitRefCellMutate(binding, newValue);
+        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
         return;
     }
 
@@ -5659,7 +5751,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::SizeLiteralExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::TimeSpanLiteralExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::TimeSpanLiteralExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::RefExpr const*>(node.value.get()) != nullptr;
 
     // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
     // Users should compose with |> join ":" to convert lists before exporting.
@@ -5731,11 +5824,17 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         }
     }
 
+    // Detect ref cell binding
+    auto const isRefCellBinding = dynamic_cast<ast::RefExpr const*>(node.value.get()) != nullptr;
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(
-            node.name, storage, node.mutability == ast::Mutability::Mutable, node.location);
+        bindFSharpObjectVariable(node.name,
+                                 storage,
+                                 node.mutability == ast::Mutability::Mutable,
+                                 node.location,
+                                 isRefCellBinding);
     }
     else
     {
@@ -5770,7 +5869,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                                       isObjectExpr,
                                       storageType,
                                       node.visibility == ast::Visibility::Exported,
-                                      objectTypeName });
+                                      objectTypeName,
+                                      isRefCellBinding });
     }
 
     // Let bindings as statements don't produce a result value
@@ -8741,6 +8841,14 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         return;
     }
 
+    // Ref cells cannot be pattern matched directly — use .value to dereference first
+    if (auto objTypeId = getObjectTypeId(scrutinee);
+        objTypeId && *objTypeId == CoreVM::BuiltinTypeId::Ref)
+    {
+        reportTypeError("Cannot pattern match on a ref cell. Use '.value' to read the contents first.");
+        return;
+    }
+
     // Store scrutinee in a local variable so it's available across all arms
     // Use createAllocaInEntryBlock to ensure proper stack tracking
     CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
@@ -10064,6 +10172,21 @@ void IRGenerator::visit(ast::LazyExpr const& node)
 
     _result = obj;
     annotateObjectTypeId(_result, lazyTypeId);
+}
+
+void IRGenerator::visit(ast::RefExpr const& node)
+{
+    TRACE_SCOPE("visit(RefExpr)");
+
+    CoreVM::Value* innerValue = codegen(node.value.get());
+    if (!innerValue)
+        return;
+
+    _result = emitRefCell(innerValue, innerValue->type(), "ref");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Ref);
+    annotateInnerType(_result, innerValue->type());
+    if (auto objTypeId = getObjectTypeId(innerValue))
+        annotateInnerObjectTypeId(_result, *objTypeId);
 }
 
 void IRGenerator::visit(ast::TryExpr const& node)
