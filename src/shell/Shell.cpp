@@ -4839,6 +4839,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     // Palette is shown internally by AgentInputComponent; just redraw.
                     needsRedraw = true;
                     break;
+                case agent::AgentInputComponent::Action::NewPrompt:
+                    inputComponent.clear();
+                    needsRedraw = true;
+                    break;
                 case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
                 case agent::AgentInputComponent::Action::None: break;
             }

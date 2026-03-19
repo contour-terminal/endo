@@ -513,6 +513,10 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleModel;
+        case tui::InputFieldAction::NewPrompt:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::NewPrompt;
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)

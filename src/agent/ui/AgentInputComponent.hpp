@@ -50,6 +50,7 @@ class AgentInputComponent: public tui::Component
         CycleModel,        ///< User cycled through available models.
         ClearScreen,       ///< User requested screen clear (Ctrl+L).
         CommandPalette,    ///< User pressed Ctrl+Shift+P to open the command palette.
+        NewPrompt,         ///< User requested a new prompt without executing current input.
     };
 
     AgentInputComponent();

@@ -221,6 +221,7 @@ int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownCo
     return 0;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
     std::vector<std::string> echoArgs;
