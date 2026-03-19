@@ -12,6 +12,8 @@ class ClockModule final: public PromptModule
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "clock"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::None; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
 
     [[nodiscard]] std::optional<std::chrono::milliseconds> refreshInterval() const override

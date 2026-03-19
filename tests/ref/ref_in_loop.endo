@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ref cell mutation inside a while loop
+# expect: 5
+# expect:
+
+let count = ref 0
+
+let mut i = 0
+
+while i < 5 do
+    count <- (count.value + 1)
+    i <- i + 1
+
+println count.value

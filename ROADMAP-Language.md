@@ -31,7 +31,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Lazy evaluation: `lazy expr` defers computation, `force` evaluates and caches
 - [x] Lazy sequences: `seq { yield 1; yield 2; yield! rest }` with `toList`, `take`, `each`
 - [x] Scoped resource management: `let use fd = File.open "f" "r"` auto-disposes at scope exit
-- [ ] Ref cells: `ref expr`, dereference `!expr`, mutation `expr <- expr`
+- [x] Ref cells: `ref expr`, dereference `r.value`, mutation `r <- expr`
 
 ## Types
 
@@ -49,7 +49,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Results: `result<T, E>` with `Ok` and `Error`
 - [x] Records: `type Person = { name: str; age: int }`
 - [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
-- [ ] Ref cells: `ref<T>` (mutable reference cell)
+- [x] Ref cells: `ref<T>` (mutable reference cell, `r.value` to read, `r <- val` to write)
 - [x] Generic types
 
 ### Type Annotations
@@ -259,10 +259,17 @@ This document tracks the implementation status of F# language features as define
 
 ## Modules & Imports
 
-- [ ] `import` statements
+- [x] `import` statements: `import Math`, `import Geometry.Circle` (PascalCase identifier paths)
+- [ ] `import ... as` alias: `import Math as M`
+- [x] `open` statements: `open Math` brings names into scope; `open Math with (square, cube)` for selective import
 - [ ] `from ... import` statements
-- [ ] Module-qualified access: `List.map`, `String.split`
-- [ ] Module creation and exports
+- [x] Module-qualified access: `Module.member`, multi-level `Geometry.Circle.area`
+- [x] Inline module declarations: `module Name = ...` (indentation-based scoping)
+- [x] File-based module loading: `.endo` files as modules, hierarchical names, import-once caching
+- [x] Module exports and `let private` visibility
+- [x] Module signatures: `.endoi` files for API validation
+- [x] Circular dependency detection
+- [x] Standard library modules: `data/stdlib/` (currently `String.endo`)
 
 ## Lexer / Parser
 
@@ -398,6 +405,7 @@ Consult this section to determine what to work on next.
 ### Phase 6.5 — Dot Property Syntax ✅
 - [x] Built-in dot properties on collection types: `xs.length`, `xs.isEmpty`, `xs.head`, `xs.tail`, `xs.last`, `opt.isSome`, `opt.isNone`, `res.isOk`, `res.isError`, `t.fst`, `t.snd`, `t.trd`, `t.0`, `t.1`, `t.2`, `s.length`
 - [x] Module-level computed properties with `get`/`set` accessors: `let Name with get () = expr and set (v) = expr`
+- [x] Implicit unit function calling: bare `f` at statement level calls `f ()` (replaces `let get name = expr` syntax)
 - [x] Multi-line property accessor bodies (indentation-based, like function bodies)
 - [x] `with` keyword on next line after property name
 - [x] Function-as-method dot access: `obj.funcName` resolves to `funcName(obj)` when first parameter type matches (field names take priority)
@@ -419,10 +427,19 @@ Consult this section to determine what to work on next.
 - [x] Scoped resource management: `let use` / `let manual` with type-registered dispose
 - [ ] Path: `Path.join`, `Path.extension`, `Path.basename`, ~~`Path.temporary_directory`~~
 
-### Phase 8 — Module System
-- [ ] `import "path"`, `import "path" as alias`, `from "path" import (names)` parsing
-- [ ] Module loading: parse imported file, link IR, namespace scoping
-- [ ] Module-qualified access: `List.map`, `String.split`
+### Phase 8 — Module System ✅
+- [x] `import Module` parsing: PascalCase identifier paths with dotted hierarchy (`import Geometry.Circle`)
+- [x] `open Module` with selective imports: `open Math with (square, cube)`
+- [x] Inline module declarations: `module Name = ...` (indentation-based scoping, PascalCase enforcement)
+- [x] File-based module loading: `.endo` files, search paths (relative, `~/.config/endo/modules/`, system stdlib)
+- [x] Import-once caching, circular dependency detection, `.endoi` signature validation
+- [x] Module-qualified access: `Module.member`, multi-level `Geometry.Circle.area`
+- [x] Module value bindings: evaluated once at import time, stored in allocas
+- [x] `let private` / `let export` visibility modifiers with access enforcement
+- [x] REPL persistence of inline modules and opened modules
+- [x] Standard library module structure: `data/stdlib/` (currently `String.endo`)
+- [ ] Import aliases: `import Math as M`
+- [ ] `from ... import` selective import syntax
 
 ### Phase 9 — Generic Types ✅
 - [x] Type variable introduction in annotations (`'a` syntax)
@@ -454,12 +471,13 @@ Consult this section to determine what to work on next.
 - [x] `SlotTraceInfo` on `TypeDescriptor`: precomputed fixed/dynamic object slot info for all builtin types; auto-computed for user-defined types at registration
 - [x] `retainObject` upgraded from `memory_order_relaxed` to `memory_order_acq_rel` for future thread safety
 
-### Phase 13 — Ref Cells (Mutable References)
-- [ ] `ref<T>` type: `BuiltinTypeId::Ref`, product type with 1 mutable slot
-- [ ] `ref expr` constructor syntax (`RefExpr` AST node)
-- [ ] `!expr` dereference syntax (`RefDerefExpr`, disambiguated from boolean NOT via type inference)
-- [ ] `expr <- expr` mutation syntax (reuses existing `MutAssignExpr` and `<-` token)
-- [ ] Write barrier on `<-` for GC cycle detection
-- [ ] Type inference for `ref<T>` propagation
-- [ ] Pattern matching restriction: ref cells cannot be destructured (match on `!r` instead)
-- [ ] REPL persistence of ref cells across prompts
+### Phase 13 — Ref Cells (Mutable References) ✅
+- [x] `ref<T>` type: `BuiltinTypeId::Ref = 22`, product type with 2 slots (value + type tag for GC)
+- [x] `ref expr` constructor syntax (`RefExpr` AST node + `Token::Ref` keyword)
+- [x] `r.value` dereference via dot property (consistent with `.isSome`, `.head` pattern)
+- [x] `r <- expr` mutation syntax (reuses `MutAssignStmt`/`MutAssignExpr` with `isRefCell` flag on `BindingInfo`)
+- [x] Write barrier on `<-` for GC cycle detection (`ref_write_barrier` native callback → `Runner::writeBarrier()`)
+- [x] Type inference support: `RefType` variant in type system, unification, `transformType`, `foldType`
+- [x] Pattern matching restriction: ref cells cannot be destructured (error: use `.value` first)
+- [x] Type formatter: `formatRef` displays as `ref <value>`, registered in `registerBuiltinFormatters()`
+- [x] REPL persistence via existing `PersistedValueBinding` with `isRefCell` flag

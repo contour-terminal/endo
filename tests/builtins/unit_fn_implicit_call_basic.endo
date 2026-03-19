@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Implicit unit function call at statement level
+# expect: hello
+
+let greet () = println "hello"
+
+greet

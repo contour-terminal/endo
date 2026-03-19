@@ -1502,3 +1502,30 @@ TEST_CASE("SourceFormatter.lazy_with_force", "[format]")
     auto const result = SourceFormatter::format("let x = lazy 42; print (force x)");
     CHECK(result == "let x = lazy 42\n\nprint (force x)\n");
 }
+
+// ============================================================================
+// Implicit unit function call formatting
+// ============================================================================
+
+TEST_CASE("SourceFormatter.unit_fn_definition_preserved", "[format]")
+{
+    auto const result = SourceFormatter::format("let f () = 42");
+    CHECK(result == "let f () = 42\n");
+}
+
+TEST_CASE("SourceFormatter.implicit_unit_call_not_expanded", "[format]")
+{
+    // Bare `f` at statement level should NOT get `()` appended by the formatter
+    auto const result = SourceFormatter::format("let f () = 42\nf");
+    INFO("Result: [" << result << "]");
+    // The output should contain bare `f` on its own line after the definition
+    CHECK(result == "let f () = 42\n\nf\n");
+}
+
+TEST_CASE("SourceFormatter.explicit_unit_call_preserved", "[format]")
+{
+    // Explicit `f ()` should be preserved as-is
+    auto const result = SourceFormatter::format("let f () = 42\nprint (f ())");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("f ()") != std::string::npos);
+}

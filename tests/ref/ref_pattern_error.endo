@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pattern matching on ref cell produces error
+# expect-error: Cannot pattern match on a ref cell
+
+let r = ref 42
+
+match r with
+| _ -> println "bad"

@@ -1501,6 +1501,7 @@ int Shell::execute(std::string const& lineBuffer,
                     names.insert(builtin->name());
             parser.setKnownFSharpFunctions(std::move(names));
             parser.setKnownVariadicFunctions(std::move(variadicNames));
+            parser.setKnownUnitFunctions(_fsharpState.unitFunctions);
         }
         parser.setAutoDisplay(_interactive && _configScriptDepth == 0);
         auto rootNode = parser.parse();

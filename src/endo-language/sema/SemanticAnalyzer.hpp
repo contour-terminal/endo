@@ -5,6 +5,9 @@
 #include <endo-language/sema/ScopeManager.hpp>
 #include <endo-language/sema/TypeRegistry.hpp>
 
+#include <optional>
+#include <string>
+
 namespace endo
 {
 
@@ -31,6 +34,11 @@ class SemanticAnalyzer
     [[nodiscard]] ScopeManager& scopes() noexcept { return _scopes; }
 
     [[nodiscard]] ScopeManager const& scopes() const noexcept { return _scopes; }
+
+    /// Validates a mutation assignment target name.
+    /// Detects `r.value <- x` where `r` is a ref cell and returns an error message
+    /// suggesting `r <- x` instead. Returns std::nullopt if no issue detected.
+    [[nodiscard]] std::optional<std::string> validateMutAssignTarget(std::string const& name) const;
 
   private:
     TypeDefinitionRegistry _types;

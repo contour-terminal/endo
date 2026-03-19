@@ -775,6 +775,13 @@ void ASTPrinter::visit(PipelineExpr const& node)
 
 void ASTPrinter::visit(ApplicationExpr const& node)
 {
+    if (node.origin == ApplicationOrigin::Implicit)
+    {
+        // Implicit unit function calls: print as bare identifier (no wrapping parens or unit arg)
+        if (node.function)
+            node.function->accept(*this);
+        return;
+    }
     _result += '(';
     if (node.function)
         node.function->accept(*this);
@@ -1072,6 +1079,13 @@ void ASTPrinter::visit(LazyExpr const& node)
     _result += "lazy ";
     if (node.body)
         node.body->accept(*this);
+}
+
+void ASTPrinter::visit(RefExpr const& node)
+{
+    _result += "ref ";
+    if (node.value)
+        node.value->accept(*this);
 }
 
 void ASTPrinter::visit(SeqExpr const& node)

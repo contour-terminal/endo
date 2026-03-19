@@ -339,6 +339,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             {
                 auto boundNames = func.parameters;
                 func.capturedBindings = generator.collectFreeVariables(func.body, boundNames);
+                generator.collectCapturedMutables(func);
             }
             generator.compileFunctionBody(name, func);
         }
@@ -467,6 +468,13 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.isRecursive = func.isRecursive;
             persisted.hasVariadicParam = func.hasVariadicParam;
             persistentState->functions[name] = std::move(persisted);
+
+            // Track unit functions for implicit calling at the shell prompt
+            if (func.parameters.size() == 1 && !func.parameterTypes.empty()
+                && func.parameterTypes[0].has_value() && *func.parameterTypes[0] == types::unitType())
+            {
+                persistentState->unitFunctions.insert(name);
+            }
         }
 
         // Persist newly created value bindings
@@ -556,9 +564,10 @@ void IRGenerator::bindFSharpVariable(std::string const& name,
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
                                            CoreVM::AllocaInstr* storage,
                                            bool isMutable,
-                                           std::optional<SourceLocationRange> location)
+                                           std::optional<SourceLocationRange> location,
+                                           bool isRefCell)
 {
-    _sema.scopes().bindObjectVariable(name, storage, isMutable, std::move(location));
+    _sema.scopes().bindObjectVariable(name, storage, isMutable, std::move(location), isRefCell);
 }
 
 void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
@@ -1282,6 +1291,13 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
     return freeVars;
 }
 
+void IRGenerator::collectCapturedMutables(FSharpFunction& func) const
+{
+    for (auto const& [name, _]: func.capturedBindings)
+        if (auto const* binding = lookupFSharpBinding(name); binding && binding->isMutable)
+            func.capturedMutables.insert(name);
+}
+
 CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
 {
     // Get the entry block of the current function
@@ -1368,6 +1384,41 @@ CoreVM::Value* IRGenerator::emitNoneOption(std::string_view label)
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
     // slot 1 (type tag) defaults to 0 = Void = unknown (from zero-initialization)
     return obj;
+}
+
+CoreVM::Value* IRGenerator::emitRefCell(CoreVM::Value* value,
+                                        CoreVM::LiteralType innerType,
+                                        std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Ref));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType)));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
+    obj = _builder.createObjSetSlot(obj, slot1, typeTag, std::string(label) + ".typetag");
+    return obj;
+}
+
+void IRGenerator::emitRefCellMutate(BindingInfo const* binding, CoreVM::Value* newValue)
+{
+    // Load the ref cell object from its alloca
+    auto* refObj = _builder.createLoad(binding->value, "ref.load");
+
+    // Update slot 0 (inner value)
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    refObj = _builder.createObjSetSlot(refObj, slot0, newValue, "ref.set");
+
+    // Update slot 1 (type tag)
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(newValue->type())));
+    refObj = _builder.createObjSetSlot(refObj, slot1, typeTag, "ref.settag");
+
+    // Write barrier for GC cycle detection
+    auto const barrierSig = std::string("ref_write_barrier(I)V");
+    if (auto* cb = findCallback(barrierSig))
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { refObj }, "ref.barrier");
 }
 
 CoreVM::Value* IRGenerator::emitOkResult(CoreVM::Value* value,
@@ -4609,6 +4660,22 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
         return false;
     }
 
+    // --- Ref dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::Ref)
+    {
+        if (fieldName == "value")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "ref.value");
+            // Propagate inner type annotations from the ref cell
+            if (auto innerType = getInnerType(obj))
+                annotateInnerType(_result, *innerType);
+            if (auto innerObjTypeId = getInnerObjectTypeId(obj))
+                annotateObjectTypeId(_result, *innerObjTypeId);
+            return true;
+        }
+        return false;
+    }
+
     // --- Result dot properties ---
     // Result convention: Ok = tag 1, Error = tag 0
     if (*objTypeId == CoreVM::BuiltinTypeId::Result)
@@ -4941,6 +5008,7 @@ IRGenerator::FSharpFunction IRGenerator::createFunctionFromPlaceholder(ast::Plac
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+    collectCapturedMutables(func);
 
     for (auto const& [capName, _]: func.capturedBindings)
     {
@@ -5221,9 +5289,29 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
+        // Semantic check: detect r.value <- x on ref cells and suggest r <- x
+        if (auto err = _sema.validateMutAssignTarget(node.name))
+        {
+            reportTypeError("{}", std::string_view(*err));
+            return;
+        }
         reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
                                        "Undefined variable: {}",
                                        std::string_view(node.name));
+        return;
+    }
+
+    // Ref cell mutation: r <- newval (binding is immutable, but contained value is mutable)
+    if (binding->isRefCell)
+    {
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for ref cell mutation value");
+            return;
+        }
+        emitRefCellMutate(binding, newValue);
+        _result = nullptr;
         return;
     }
 
@@ -5310,9 +5398,29 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
+        // Semantic check: detect r.value <- x on ref cells and suggest r <- x
+        if (auto err = _sema.validateMutAssignTarget(node.name))
+        {
+            reportTypeError("{}", std::string_view(*err));
+            return;
+        }
         reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
                                        "Undefined variable: {}",
                                        std::string_view(node.name));
+        return;
+    }
+
+    // Ref cell mutation: r <- newval (binding is immutable, but contained value is mutable)
+    if (binding->isRefCell)
+    {
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for ref cell mutation value");
+            return;
+        }
+        emitRefCellMutate(binding, newValue);
+        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
         return;
     }
 
@@ -5508,6 +5616,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+            collectCapturedMutables(func);
 
             // Mark captured variables as used in the enclosing scope
             for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5542,6 +5651,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+            collectCapturedMutables(func);
 
             // Mark captured variables as used in the enclosing scope
             for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5585,6 +5695,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.returnKind = determineReturnKind(func.body);
         func.definitionLocation = node.location;
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+        collectCapturedMutables(func);
 
         // Mark captured variables as used in the enclosing scope
         for (auto const& [capName, capVal]: func.capturedBindings)
@@ -5640,7 +5751,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::SizeLiteralExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::TimeSpanLiteralExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::TimeSpanLiteralExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::RefExpr const*>(node.value.get()) != nullptr;
 
     // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
     // Users should compose with |> join ":" to convert lists before exporting.
@@ -5712,11 +5824,17 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         }
     }
 
+    // Detect ref cell binding
+    auto const isRefCellBinding = dynamic_cast<ast::RefExpr const*>(node.value.get()) != nullptr;
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(
-            node.name, storage, node.mutability == ast::Mutability::Mutable, node.location);
+        bindFSharpObjectVariable(node.name,
+                                 storage,
+                                 node.mutability == ast::Mutability::Mutable,
+                                 node.location,
+                                 isRefCellBinding);
     }
     else
     {
@@ -5751,7 +5869,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                                       isObjectExpr,
                                       storageType,
                                       node.visibility == ast::Visibility::Exported,
-                                      objectTypeName });
+                                      objectTypeName,
+                                      isRefCellBinding });
     }
 
     // Let bindings as statements don't produce a result value
@@ -5855,6 +5974,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         if (node.isRecursive)
             allBound.push_back(node.name);
         func.capturedBindings = collectFreeVariables(func.body, allBound);
+        collectCapturedMutables(func);
 
         // Mark captured variables as used in the enclosing scope
         for (auto const& [capName, capVal]: func.capturedBindings)
@@ -6575,6 +6695,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        collectCapturedMutables(lambdaFunc);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -7077,7 +7198,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         pushFSharpScope();
         for (auto const& [capName, capStorage]: func->capturedBindings)
-            bindFSharpVariable(capName, capStorage);
+            bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
         bindFSharpVariable(func->parameters[0], paramAlloca);
 
         // Propagate type annotations through recursive piped parameter
@@ -7129,7 +7250,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Re-bind captured variables from the closure
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -7704,6 +7825,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        collectCapturedMutables(lambdaFunc);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -7965,7 +8087,7 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
 
         pushFSharpScope();
         for (auto const& [capName, capStorage]: fn->capturedBindings)
-            bindFSharpVariable(capName, capStorage);
+            bindFSharpVariable(capName, capStorage, fn->capturedMutables.contains(capName));
         for (size_t j = 0; j < fn->parameters.size(); ++j)
             bindFSharpVariable(fn->parameters[j], slot.paramAllocas[j]);
 
@@ -8069,7 +8191,7 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
     // Push scope and bind captures and parameters from allocas
     pushFSharpScope();
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
     for (size_t i = 0; i < func->parameters.size(); ++i)
         bindFSharpVariable(func->parameters[i], paramAllocas[i]);
 
@@ -8232,7 +8354,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     // Re-bind captured variables from the closure
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage);
+        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -8330,6 +8452,11 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     if (!func.parameters.empty() && !allParamsTyped)
         return;
 
+    // Functions that mutate captured variables must use AST inlining — compiled IRFunctions receive
+    // copies of captures, so mutations to them would not propagate back to the outer scope.
+    if (!func.capturedMutables.empty())
+        return;
+
     // Functions whose body is a lambda cannot be compiled as separate IRFunctions because the inner
     // lambda's captures reference function-local allocas that are destroyed after URET.
     // Unwrap ParenExpr wrappers to detect parenthesized lambdas like `fun x -> (fun y -> ...)`.
@@ -8372,7 +8499,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     {
         auto* sourceStorage = func.capturedBindings.at(capName);
         auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
-        bindFSharpVariable(capName, storage);
+        bindFSharpVariable(capName, storage, func.capturedMutables.contains(capName));
     }
 
     // Create explicit parameter allocas, using type annotations.
@@ -8677,6 +8804,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+    collectCapturedMutables(func);
 
     // Preserve function reference info through lambda captures (HOF support)
     for (auto const& [capName, _]: func.capturedBindings)
@@ -8710,6 +8838,14 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     if (!scrutinee)
     {
         reportTypeError("Failed to evaluate match scrutinee");
+        return;
+    }
+
+    // Ref cells cannot be pattern matched directly — use .value to dereference first
+    if (auto objTypeId = getObjectTypeId(scrutinee);
+        objTypeId && *objTypeId == CoreVM::BuiltinTypeId::Ref)
+    {
+        reportTypeError("Cannot pattern match on a ref cell. Use '.value' to read the contents first.");
         return;
     }
 
@@ -9959,6 +10095,12 @@ void IRGenerator::visit(ast::LazyExpr const& node)
 
     auto const captureCount = static_cast<uint16_t>(captureOrder.size());
 
+    // Collect mutability info from parent scope before it becomes inaccessible after pushFSharpScope()
+    std::unordered_set<std::string> mutableCaptures;
+    for (auto const& capName: captureOrder)
+        if (auto const* binding = lookupFSharpBinding(capName); binding && binding->isMutable)
+            mutableCaptures.insert(capName);
+
     // 2. Compile the body as a zero-arg IRFunction (captures become parameters)
     auto lazyName = std::format("__lazy_{}", _lazyCounter++);
 
@@ -9979,7 +10121,7 @@ void IRGenerator::visit(ast::LazyExpr const& node)
     {
         auto* sourceStorage = freeVars.at(capName);
         auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
-        bindFSharpVariable(capName, storage);
+        bindFSharpVariable(capName, storage, mutableCaptures.contains(capName));
     }
 
     // Codegen the body
@@ -10030,6 +10172,21 @@ void IRGenerator::visit(ast::LazyExpr const& node)
 
     _result = obj;
     annotateObjectTypeId(_result, lazyTypeId);
+}
+
+void IRGenerator::visit(ast::RefExpr const& node)
+{
+    TRACE_SCOPE("visit(RefExpr)");
+
+    CoreVM::Value* innerValue = codegen(node.value.get());
+    if (!innerValue)
+        return;
+
+    _result = emitRefCell(innerValue, innerValue->type(), "ref");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Ref);
+    annotateInnerType(_result, innerValue->type());
+    if (auto objTypeId = getObjectTypeId(innerValue))
+        annotateInnerObjectTypeId(_result, *objTypeId);
 }
 
 void IRGenerator::visit(ast::TryExpr const& node)

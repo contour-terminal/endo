@@ -56,6 +56,9 @@ struct FSharpPersistentState
     /// Function table persisted across REPL prompts (name -> function metadata).
     std::unordered_map<std::string, PersistedFunction> functions;
 
+    /// Unit function names (functions with a single `()` parameter) for implicit calling at statement level.
+    std::unordered_set<std::string> unitFunctions;
+
     /// A persisted value binding (re-evaluated at each prompt).
     struct PersistedValueBinding
     {
@@ -66,6 +69,7 @@ struct FSharpPersistentState
         CoreVM::LiteralType storageType = CoreVM::LiteralType::Void; ///< IR type of the stored value
         bool isExported = false;    ///< Whether binding is exported as environment variable
         std::string objectTypeName; ///< Record type name for completion (e.g., "TimeSpan", "FileInfo")
+        bool isRefCell = false;     ///< Whether binding holds a ref cell
     };
 
     /// Value bindings persisted across REPL prompts, in definition order.
@@ -274,6 +278,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::TryWithExpr const& node) override;
     void visit(ast::TryFinallyExpr const& node) override;
     void visit(ast::LazyExpr const& node) override;
+    void visit(ast::RefExpr const& node) override;
     void visit(ast::SeqExpr const& node) override;
     void visit(ast::FStringExpr const& node) override;
     void visit(ast::UnitExpr const& node) override;
@@ -418,7 +423,8 @@ class IRGenerator final: public ast::Visitor
     void bindFSharpObjectVariable(std::string const& name,
                                   CoreVM::AllocaInstr* storage,
                                   bool isMutable = false,
-                                  std::optional<SourceLocationRange> location = std::nullopt);
+                                  std::optional<SourceLocationRange> location = std::nullopt,
+                                  bool isRefCell = false);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
     [[nodiscard]] BindingInfo const* lookupFSharpBinding(std::string const& name) const;
 
@@ -448,6 +454,8 @@ class IRGenerator final: public ast::Visitor
         /// Captured variable bindings from the enclosing scope at function creation time.
         /// Maps variable names to their storage (entry-block allocas).
         std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
+        /// Tracks which captured bindings are mutable (for correct rebinding inside function bodies).
+        std::unordered_set<std::string> capturedMutables;
         /// Deterministic ordering of captured variable names for function compilation.
         /// Populated by compileFunctionBody; used at both definition and call sites.
         std::vector<std::string> captureOrder;
@@ -677,6 +685,9 @@ class IRGenerator final: public ast::Visitor
     [[nodiscard]] std::unordered_map<std::string, CoreVM::Value*> collectFreeVariables(
         ast::Expr const* body, std::vector<std::string> const& boundNames) const;
 
+    /// Populates `func.capturedMutables` from the current scope's binding info.
+    void collectCapturedMutables(FSharpFunction& func) const;
+
     // F# function context for error propagation (? operator)
     // Tracks return block and storage for early returns from try expressions
     struct FSharpFunctionContext
@@ -725,6 +736,12 @@ class IRGenerator final: public ast::Visitor
 
     /// Emits IR for a None option.
     CoreVM::Value* emitNoneOption(std::string_view label);
+
+    /// Emits IR for a ref cell wrapping the given value.
+    CoreVM::Value* emitRefCell(CoreVM::Value* value, CoreVM::LiteralType innerType, std::string_view label);
+
+    /// Emits IR to mutate a ref cell's contents and trigger the write barrier.
+    void emitRefCellMutate(BindingInfo const* binding, CoreVM::Value* newValue);
 
     /// Emits IR for an Ok(value) result with the given inner type tag.
     CoreVM::Value* emitOkResult(CoreVM::Value* value, CoreVM::LiteralType innerType, std::string_view label);

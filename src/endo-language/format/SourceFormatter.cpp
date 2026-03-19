@@ -1745,6 +1745,13 @@ void SourceFormatter::visit(ast::PipelineExpr const& node)
 
 void SourceFormatter::visit(ast::ApplicationExpr const& node)
 {
+    // Implicit unit function calls are formatted as bare identifiers (no `()` suffix)
+    if (node.origin == ast::ApplicationOrigin::Implicit)
+    {
+        if (node.function)
+            node.function->accept(*this);
+        return;
+    }
     if (node.function)
         node.function->accept(*this);
     emit(" ");
@@ -2204,6 +2211,15 @@ void SourceFormatter::visit(ast::LazyExpr const& node)
     emit("lazy ");
     if (node.body)
         node.body->accept(*this);
+    emitTrailingComment(node);
+}
+
+void SourceFormatter::visit(ast::RefExpr const& node)
+{
+    emitLeadingComments(node);
+    emit("ref ");
+    if (node.value)
+        node.value->accept(*this);
     emitTrailingComment(node);
 }
 

@@ -64,6 +64,9 @@ std::string formatMarkdown(CoreVM::TypedObject const& obj, CoreVM::Runner* runne
 /// Formats a DateTime as "YYYY-MM-DD HH:MM:SS".
 std::string formatDateTime(CoreVM::TypedObject const& obj, CoreVM::Runner* runner);
 
+/// Formats a Ref cell as "ref <value>".
+std::string formatRef(CoreVM::TypedObject const& obj, CoreVM::Runner* runner);
+
 // ---------------------------------------------------------------------------
 // Generic formatters (for user-defined and fallback types)
 // ---------------------------------------------------------------------------

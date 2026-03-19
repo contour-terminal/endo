@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ref cell mutation via <- operator
+# expect: 10
+# expect: 20
+# expect:
+
+let r = ref 10
+
+println r.value
+r <- 20
+println r.value

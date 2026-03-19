@@ -15,6 +15,8 @@ class PathModule final: public PromptModule
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "path"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::CwdChange; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
 };
 

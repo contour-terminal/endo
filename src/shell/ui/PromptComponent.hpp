@@ -76,7 +76,9 @@ class PromptComponent: public tui::Component
     void clear()
     {
         _inputField.clear();
-        _moduleCacheValid = false;
+        _moduleCache.clear();
+        _pendingChanges = ModuleSensitivity::ContextChange;
+        _lastModuleInput.clear();
         _highlightCacheText.clear();
         _highlightCacheMap.clear();
         _diagnosticsPendingSince.reset();
@@ -252,8 +254,13 @@ class PromptComponent: public tui::Component
     /// @brief Initializes the module registry with all available modules.
     void initializeModules();
 
-    /// @brief Evaluates configured modules and returns their segments.
-    [[nodiscard]] std::vector<PromptSegments> evaluateModules(
+    /// @brief Selectively re-evaluates modules affected by the given change flags.
+    void updateModuleCache(std::vector<std::string> const& moduleNames,
+                           ModuleSensitivity changedFlags,
+                           bool timerExpired);
+
+    /// @brief Builds a flat segment vector from the per-module cache (for layout engine).
+    [[nodiscard]] std::vector<PromptSegments> buildModuleVector(
         std::vector<std::string> const& moduleNames) const;
 
     // Style constants
@@ -307,10 +314,19 @@ class PromptComponent: public tui::Component
     /// @return Pair of (start, end) columns in screen coordinates.
     [[nodiscard]] std::pair<int, int> getCommandBounds() const;
 
-    // Module evaluation cache (avoids popen calls during typing)
-    std::vector<PromptSegments> _cachedInfoModules;  ///< Cached info line module results.
-    std::vector<PromptSegments> _cachedRightModules; ///< Cached right prompt module results.
-    bool _moduleCacheValid = false;                  ///< Whether cached module results are current.
+    // Per-module evaluation cache (selective re-evaluation by sensitivity flags)
+    struct ModuleCacheEntry
+    {
+        PromptSegments segments;
+        bool visible = false;
+        bool evaluated = false; ///< Has been evaluated at least once.
+    };
+
+    std::unordered_map<std::string, ModuleCacheEntry> _moduleCache;       ///< Per-module cached results.
+    std::vector<PromptSegments> _cachedInfoModules;                       ///< Flat vector for layout engine.
+    std::vector<PromptSegments> _cachedRightModules;                      ///< Flat vector for layout engine.
+    ModuleSensitivity _pendingChanges = ModuleSensitivity::ContextChange; ///< Initial: evaluate all.
+    std::string _lastModuleInput;                                         ///< Input at last evaluation.
 
     // Syntax highlighting cache (avoids re-tokenizing on every render)
     std::string _highlightCacheText;               ///< Input text that _highlightCacheMap corresponds to.

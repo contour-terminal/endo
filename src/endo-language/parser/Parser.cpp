@@ -72,6 +72,11 @@ void Parser::setKnownVariadicFunctions(std::unordered_set<std::string> names)
     _knownVariadicFunctions = std::move(names);
 }
 
+void Parser::setKnownUnitFunctions(std::unordered_set<std::string> names)
+{
+    _knownUnitFunctions = std::move(names);
+}
+
 CoreVM::SourceLocation Parser::currentLocation() const
 {
     return toCoreLoc(_lexer.currentRange());
@@ -745,6 +750,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                              : nameRange;
                         return stmt;
                     }
+                }
+                // Implicit unit function call: bare `f` at statement level → `f ()`
+                if (auto* identExpr = dynamic_cast<ast::IdentifierExpr*>(expr.get());
+                    identExpr && _knownUnitFunctions.contains(identExpr->name))
+                {
+                    auto app = std::make_unique<ast::ApplicationExpr>(std::move(expr),
+                                                                      std::make_unique<ast::UnitExpr>());
+                    app->origin = ast::ApplicationOrigin::Implicit;
+                    expr = std::move(app);
                 }
                 // Check for trailing |> pipeline (allow newlines before |>)
                 {
@@ -3106,6 +3120,7 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::ResultError:   // Error expr
         case Token::Try:           // try expr with ...
         case Token::Lazy:          // lazy expr
+        case Token::Ref:           // ref expr
         case Token::Seq:           // seq { ... }
         case Token::FStringStart:  // F# interpolated string: $"..."
             return true;
@@ -3873,6 +3888,10 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _knownFSharpFunctions.insert(result->name);
         for (auto const& ab: result->andBindings)
             _knownFSharpFunctions.insert(ab.name);
+
+        // Track unit functions for implicit calling at statement level
+        if (result->parameters.size() == 1 && result->parameters[0].isUnit)
+            _knownUnitFunctions.insert(result->name);
 
         // Track variadic functions separately for shell-mode argument parsing
         auto const hasVariadic =
@@ -6695,6 +6714,24 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             auto node = std::make_unique<ast::LazyExpr>(std::move(body));
             node->location =
                 SourceLocationRange { .begin = lazyLoc.begin, .end = endLoc ? endLoc->end : lazyLoc.end };
+            return node;
+        }
+
+        case Token::Ref: {
+            // ref expr — mutable reference cell
+            auto const refLoc = _lexer.currentRange();
+            _lexer.nextToken(); // consume 'ref'
+            auto value = parseFSharpPrimary();
+            if (!value)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected expression after 'ref'.");
+                return nullptr;
+            }
+            auto const endLoc = value->location;
+            auto node = std::make_unique<ast::RefExpr>(std::move(value));
+            node->location =
+                SourceLocationRange { .begin = refLoc.begin, .end = endLoc ? endLoc->end : refLoc.end };
             return node;
         }
 

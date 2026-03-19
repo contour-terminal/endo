@@ -4,6 +4,7 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,38 @@ namespace endo
 
 class FSharpPersistentState;
 class OutputDefinitionRegistry;
+
+/// @brief Bit flags for events that trigger module re-evaluation.
+enum class ModuleSensitivity : uint8_t
+{
+    None = 0,
+    CwdChange = 1 << 0,   ///< Working directory changed.
+    ExitCode = 1 << 1,    ///< Last command exit code changed.
+    Duration = 1 << 2,    ///< Last command duration changed.
+    InputChange = 1 << 3, ///< User input text changed.
+    /// All shell-context changes (new prompt cycle).
+    ContextChange = CwdChange | ExitCode | Duration,
+};
+
+constexpr ModuleSensitivity operator|(ModuleSensitivity a, ModuleSensitivity b) noexcept
+{
+    return static_cast<ModuleSensitivity>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+constexpr ModuleSensitivity operator&(ModuleSensitivity a, ModuleSensitivity b) noexcept
+{
+    return static_cast<ModuleSensitivity>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+
+constexpr ModuleSensitivity& operator|=(ModuleSensitivity& a, ModuleSensitivity b) noexcept
+{
+    return a = a | b;
+}
+
+constexpr bool operator!=(ModuleSensitivity a, ModuleSensitivity b) noexcept
+{
+    return static_cast<uint8_t>(a) != static_cast<uint8_t>(b);
+}
 
 /// @brief A single styled text segment within a prompt.
 struct PromptSegment
@@ -45,6 +78,7 @@ struct PromptContext
     int cellPixelWidth = 0;                               ///< Cell width in pixels (0 if unknown).
     int cellPixelHeight = 0;                              ///< Cell height in pixels (0 if unknown).
     int shellLevel = 0;                                   ///< Shell nesting depth (0 = outermost).
+    std::string currentInput;                             ///< Current input text being edited.
 };
 
 /// @brief Abstract interface for a pluggable prompt module.
@@ -52,6 +86,10 @@ struct PromptContext
 /// Each module represents a single informational section of the prompt
 /// (e.g., path, git status, exit code). Modules are evaluated in order
 /// and their segments are rendered by the layout engine.
+///
+/// Modules declare their sensitivity via sensitivity() to control when they
+/// are re-evaluated. Only modules sensitive to a given event are re-evaluated
+/// when that event fires, avoiding unnecessary work.
 class PromptModule
 {
   public:
@@ -59,6 +97,10 @@ class PromptModule
 
     /// @brief Returns the unique identifier for this module.
     [[nodiscard]] virtual std::string_view id() const noexcept = 0;
+
+    /// @brief Returns the events that should trigger re-evaluation of this module.
+    /// @return Bit flags indicating which context changes affect this module.
+    [[nodiscard]] virtual ModuleSensitivity sensitivity() const { return ModuleSensitivity::ContextChange; }
 
     /// @brief Evaluates the module and returns styled segments.
     /// @param ctx The prompt context with current shell state.

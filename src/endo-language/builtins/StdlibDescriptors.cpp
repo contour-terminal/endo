@@ -59,6 +59,9 @@ static constexpr ParamDescriptor fileWriteParams[] = { { .name="path", .type=LT:
 
 // Process signal params
 static constexpr ParamDescriptor processPidParam[] = { { .name="pid", .type=LT::Number } };
+
+// Ref cell params
+static constexpr ParamDescriptor refObjParam[] = { { .name="ref", .type=LT::Number } };
 static constexpr ParamDescriptor processSignalParams[] = { { .name="signum", .type=LT::Number }, { .name="pid", .type=LT::Number } };
 
 // ---------------------------------------------------------------------------
@@ -383,6 +386,9 @@ static const std::array descriptors = {
     // Process signal operations
     StdlibDescriptor { .userFacingName="", .vmName="process_kill", .returnType=LT::Number, .params=processPidParam, .sharedImpl=&builtins::processKill, .description="", .detail="" },
     StdlibDescriptor { .userFacingName="", .vmName="process_signal", .returnType=LT::Number, .params=processSignalParams, .sharedImpl=&builtins::processSignal, .description="", .detail="" },
+
+    // Ref cell write barrier
+    StdlibDescriptor { .userFacingName="", .vmName="ref_write_barrier", .returnType=LT::Void, .params=refObjParam, .sharedImpl=&builtins::refWriteBarrier, .description="", .detail="" },
 };
 // clang-format on
 

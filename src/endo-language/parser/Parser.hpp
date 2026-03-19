@@ -35,6 +35,10 @@ class Parser
     /// Sets the known variadic function names for shell-mode argument parsing at statement level.
     void setKnownVariadicFunctions(std::unordered_set<std::string> names);
 
+    /// Sets the known unit function names for implicit calling at statement level.
+    /// Bare references to these names at the shell prompt are wrapped as `f ()` calls.
+    void setKnownUnitFunctions(std::unordered_set<std::string> names);
+
     /// Enables auto-display of bare expression results (for interactive REPL mode).
     void setAutoDisplay(bool enabled) noexcept { _autoDisplay = enabled; }
 
@@ -263,6 +267,8 @@ class Parser
         _knownFSharpFunctions; ///< User-defined F# function names for bare call dispatch
     std::unordered_set<std::string>
         _knownVariadicFunctions; ///< Variadic function names for shell-mode argument parsing
+    std::unordered_set<std::string>
+        _knownUnitFunctions; ///< Unit function names for implicit calling at statement level
 
     /// Known record type names → field names (populated by parseTypeDefinition).
     std::unordered_map<std::string, std::vector<std::string>> _knownRecordTypes;

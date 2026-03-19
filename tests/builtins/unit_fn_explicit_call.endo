@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Explicit f () call still works alongside implicit calling
+# expect: 42
+
+let f () = 42
+
+print (f ())

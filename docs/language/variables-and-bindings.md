@@ -99,14 +99,41 @@ let export VERBOSE = true     # exports as "true"
 > `let export rec` is not allowed — functions cannot be exported.
 > Mutations to `let export mut` variables automatically re-export the updated value.
 
-### 4.3.1 Properties with Get/Set Accessors
+### 4.3.1 Unit Functions as Shell Aliases
 
-Computed properties use `with get`/`set` syntax for custom read and write logic.
-Properties are accessed like variables but execute accessor bodies on each read or write.
+Define a zero-argument function with `let name () = expr`. At the shell prompt,
+typing the bare name implicitly calls the function — no `()` needed.
 
 <!-- endo-no-check -->
 ```endo
-# Read-only computed property (single-line)
+# Shell alias
+let cdp () = & cd ~/projects
+cdp                                   # calls cdp(), changes directory
+
+# Re-evaluation with mutable state
+let mut counter = 0
+let next () =
+    counter <- counter + 1
+    println counter
+next                                  # 1
+next                                  # 2
+
+# Explicit invocation also works
+print (next ())                       # 3
+```
+
+> **Note:** The implicit call only applies at the top-level shell prompt or script
+> statement level. Inside F# expressions (function arguments, let bindings, etc.),
+> the bare name is a function reference. Use `f ()` for explicit invocation in any context.
+
+### 4.3.2 Properties with Get/Set Accessors
+
+For read-write properties that need both getter and setter logic, use the full
+`with get`/`set` syntax.
+
+<!-- endo-no-check -->
+```endo
+# Read-only computed property (full form)
 let Pi with get () = 3.14159
 
 # Read-write property backed by a mutable variable
@@ -148,7 +175,7 @@ let X
     and set (v) = _x <- v
 ```
 
-### 4.3.2 Builtin Properties
+### 4.3.3 Builtin Properties
 
 The shell provides builtin properties for configuration that use the same `<-` assignment
 syntax as mutable variables. Unlike user-defined properties, these are registered by the

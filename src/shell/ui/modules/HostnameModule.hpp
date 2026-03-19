@@ -12,6 +12,8 @@ class HostnameModule final: public PromptModule
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "hostname"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::None; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 };

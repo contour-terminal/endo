@@ -20,6 +20,8 @@ class IndicatorModule final: public PromptModule
 
     [[nodiscard]] std::string_view id() const noexcept override { return "indicator"; }
 
+    [[nodiscard]] ModuleSensitivity sensitivity() const override { return ModuleSensitivity::ExitCode; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
 
     /// @brief Sets the indicator string.

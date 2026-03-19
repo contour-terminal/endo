@@ -23,6 +23,7 @@ struct BindingInfo
 {
     CoreVM::Value* value = nullptr;
     bool isMutable = false;
+    bool isRefCell = false;                             ///< Whether the binding holds a ref cell
     bool isExported = false;
     bool isUsed = false;                                ///< Whether the binding has been referenced
     std::optional<SourceLocationRange> bindingLocation; ///< Source location of the binding definition
@@ -69,7 +70,8 @@ class ScopeManager
     void bindObjectVariable(std::string const& name,
                             CoreVM::AllocaInstr* storage,
                             bool isMutable = false,
-                            std::optional<SourceLocationRange> location = std::nullopt);
+                            std::optional<SourceLocationRange> location = std::nullopt,
+                            bool isRefCell = false);
 
     /// Marks a variable as used by walking the scope chain.
     void markUsed(std::string const& name);

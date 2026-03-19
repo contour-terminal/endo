@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ref cell value used in arithmetic
+# expect: 84
+# expect:
+
+let r = ref 42
+
+println (r.value * 2)
