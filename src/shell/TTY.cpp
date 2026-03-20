@@ -12,8 +12,12 @@
     #include <sys/ioctl.h>
 
     #include <poll.h>
-    #include <pty.h>
     #include <unistd.h>
+    #if defined(__APPLE__)
+        #include <util.h>
+    #else
+        #include <pty.h>
+    #endif
 #endif
 
 namespace endo

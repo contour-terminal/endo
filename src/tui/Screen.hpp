@@ -98,7 +98,7 @@ struct InlineCursorMovement
 ///         screen.dispatchEvent(event);
 /// }
 /// @endcode
-class Screen
+class Screen // NOLINT(clang-analyzer-optin.performance.Padding)
 {
   public:
     /// Constructs a Screen attached to the given terminal.

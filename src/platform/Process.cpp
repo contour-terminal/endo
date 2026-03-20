@@ -47,7 +47,7 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
         // Unblock signals that the shell blocked for signalfd.
         // Child processes need to receive job control signals (e.g., SIGTSTP from Ctrl+Z)
         // and SIGINT (Ctrl+C). The signal mask is inherited across fork() and preserved across exec().
-        sigset_t mask;
+        sigset_t mask {};
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGTSTP);

@@ -43,9 +43,15 @@ namespace
         auto const lwt = dirEntry.last_write_time(ec);
         if (!ec)
         {
+#if defined(__APPLE__)
+            // macOS libc++ lacks std::chrono::clock_cast; file_clock uses the POSIX epoch.
+            entry.mtime =
+                std::chrono::duration_cast<std::chrono::seconds>(lwt.time_since_epoch()).count();
+#else
             auto const sysTime = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
             entry.mtime =
                 std::chrono::duration_cast<std::chrono::seconds>(sysTime.time_since_epoch()).count();
+#endif
         }
         else
         {

@@ -296,7 +296,7 @@ Value* IRBuilder::createPow(Value* lhs, Value* rhs, const std::string& name)
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
-            return get(static_cast<CoreNumber>(powl(a->get(), b->get())));
+            return get(static_cast<CoreNumber>(powl(static_cast<long double>(a->get()), static_cast<long double>(b->get()))));
 
     return insert<IPowInstr>(lhs, rhs, makeName(name));
 }

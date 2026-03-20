@@ -113,7 +113,12 @@ namespace
             padded.push_back(static_cast<uint8_t>(bitLen >> (i * 8)));
 
         // Process each 64-byte block.
+        // macOS libc++ does not yet provide std::views::stride (C++23).
+#if defined(__cpp_lib_ranges_stride) && __cpp_lib_ranges_stride >= 202207L
         for (auto const offset: std::views::iota(0uz, padded.size()) | std::views::stride(64))
+#else
+        for (size_t offset = 0; offset < padded.size(); offset += 64)
+#endif
         {
             std::array<uint32_t, 64> w {};
 
@@ -204,7 +209,12 @@ namespace
         auto result = std::string {};
         result.reserve((length * 4 + 2) / 3);
 
+        // macOS libc++ does not yet provide std::views::stride (C++23).
+#if defined(__cpp_lib_ranges_stride) && __cpp_lib_ranges_stride >= 202207L
         for (auto const i: std::views::iota(0uz, length) | std::views::stride(3))
+#else
+        for (size_t i = 0; i < length; i += 3)
+#endif
         {
             auto const b0 = data[i];
             auto const b1 = (i + 1 < length) ? data[i + 1] : uint8_t(0);

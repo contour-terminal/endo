@@ -316,6 +316,10 @@ if(NOT EMSCRIPTEN)
             SYSTEM YES
         )
         if(llama_cpp_ADDED)
+            # llama.cpp b5460 omits #include <algorithm> (std::fill) — needed on macOS Clang.
+            if(APPLE)
+                target_compile_options(llama PRIVATE "-include" "algorithm")
+            endif()
             set(THIRDPARTY_BUILTIN_llama_cpp "CPM (b5460)")
             set(ENDO_HAS_LOCAL_LLM ON)
         else()

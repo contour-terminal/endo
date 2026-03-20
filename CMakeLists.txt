@@ -12,6 +12,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# On macOS, ensure the SDK sysroot is set so Homebrew Clang (and clang-scan-deps)
+# can find system headers like <time.h>.
+if(APPLE AND NOT CMAKE_OSX_SYSROOT)
+    execute_process(
+        COMMAND xcrun --show-sdk-path
+        OUTPUT_VARIABLE _macos_sdk_path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(_macos_sdk_path)
+        set(CMAKE_OSX_SYSROOT "${_macos_sdk_path}")
+    endif()
+endif()
+
+# Homebrew Clang compiles against its own libc++ headers but links against the
+# system libc++ by default, causing undefined symbols for newer APIs (e.g.
+# __hash_memory).  Point the linker at Homebrew's libc++ instead.
+if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    get_filename_component(_llvm_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(_llvm_prefix "${_llvm_bin_dir}/.." ABSOLUTE)
+    set(_llvm_libcxx "${_llvm_prefix}/lib/c++")
+    if(EXISTS "${_llvm_libcxx}")
+        add_link_options("-L${_llvm_libcxx}" "-Wl,-rpath,${_llvm_libcxx}")
+        message(STATUS "Using Homebrew libc++: ${_llvm_libcxx}")
+    endif()
+endif()
+
 if(WIN32)
     # Prevent <windows.h> from defining min/max macros that conflict with std::min/std::max
     add_definitions(-DNOMINMAX)

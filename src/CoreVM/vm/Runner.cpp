@@ -904,7 +904,8 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(NPOW)
     {
-        SP(-2) = static_cast<Value>(powl(getNumber(-2), getNumber(-1)));
+        SP(-2) = static_cast<Value>(
+            powl(static_cast<long double>(getNumber(-2)), static_cast<long double>(getNumber(-1))));
         pop();
         next;
     }

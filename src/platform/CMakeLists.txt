@@ -92,6 +92,7 @@ add_executable(test-endo-platform
     Wakeup_test.cpp
     MessageQueue_test.cpp
     WindowsPlatform_test.cpp
+    LinuxProcessProvider_test.cpp
 )
 
 target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)
