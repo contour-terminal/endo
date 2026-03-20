@@ -1634,6 +1634,9 @@ Runner::RunResult Runner::loopWithResult()
 
             // Switch to the target function
             _function = _program->function(functionId);
+
+            // Ensure stack capacity for the callee's frame
+            _stack.ensureCapacity(_stack.size() + _function->stackSize());
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         // Re-initialize code reference for new function
@@ -1713,6 +1716,9 @@ Runner::RunResult Runner::loopWithResult()
 
             // Switch to target function (could be same function for self-recursion)
             _function = _program->function(functionId);
+
+            // Ensure stack capacity for the callee's frame
+            _stack.ensureCapacity(_stack.size() + _function->stackSize());
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "UTCALL not yet supported with direct-threaded VM");
@@ -1806,6 +1812,9 @@ Runner::RunResult Runner::loopWithResult()
 
             // Switch to the target function
             _function = _program->function(funcId);
+
+            // Ensure stack capacity for the callee's frame
+            _stack.ensureCapacity(_stack.size() + _function->stackSize());
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "IUCALL not yet supported with direct-threaded VM");
@@ -1884,6 +1893,9 @@ Runner::RunResult Runner::loopWithResult()
 
                 _stack.discard(_stack.size() - _fp - totalSupplied);
                 _function = _program->function(funcId);
+
+                // Ensure stack capacity for the callee's frame
+                _stack.ensureCapacity(_stack.size() + _function->stackSize());
             }
         }
         // All std::vector instances are now destructed; safe for computed goto.
@@ -1970,6 +1982,9 @@ Runner::RunResult Runner::loopWithResult()
 
             // Switch to the thunk function
             _function = _program->function(funcId);
+
+            // Ensure stack capacity for the callee's frame
+            _stack.ensureCapacity(_stack.size() + _function->stackSize());
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "LFORCE not yet supported with direct-threaded VM");
