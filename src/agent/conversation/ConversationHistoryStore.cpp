@@ -432,7 +432,13 @@ auto ConversationHistoryStore::loadWithMetadata() const
     auto const lwt = std::filesystem::last_write_time(_path, ec);
     if (!ec)
     {
+        // macOS libc++ lacks std::chrono::clock_cast; file_clock uses the POSIX epoch.
+#if defined(__APPLE__)
+        auto const sctp = std::chrono::system_clock::time_point(
+            std::chrono::duration_cast<std::chrono::system_clock::duration>(lwt.time_since_epoch()));
+#else
         auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+#endif
         metadata.createdAt = sctp;
         metadata.updatedAt = sctp;
     }
@@ -484,7 +490,13 @@ auto ConversationHistoryStore::loadMetadataOnly() const -> std::expected<Session
     auto const lwt = std::filesystem::last_write_time(_path, ec);
     if (!ec)
     {
+        // macOS libc++ lacks std::chrono::clock_cast; file_clock uses the POSIX epoch.
+#if defined(__APPLE__)
+        auto const sctp = std::chrono::system_clock::time_point(
+            std::chrono::duration_cast<std::chrono::system_clock::duration>(lwt.time_since_epoch()));
+#else
         auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+#endif
         metadata.createdAt = sctp;
         metadata.updatedAt = sctp;
     }

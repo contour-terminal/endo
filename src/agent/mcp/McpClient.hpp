@@ -80,14 +80,15 @@ class McpClient
     int64_t _nextId = 1;
     bool _initialized = false;
 
-    /// @brief Background I/O thread — reads from transport, classifies, and routes messages.
-    std::jthread _ioThread;
-
     /// @brief Queue for responses: I/O thread pushes, sendRequest() pops.
     platform::MessageQueue<McpResult<nlohmann::json>> _responseQueue;
 
     /// @brief Queue for notifications: I/O thread pushes, drainNotifications() drains.
     platform::MessageQueue<McpNotification> _notificationQueue;
+
+    /// @brief Background I/O thread — reads from transport, classifies, and routes messages.
+    /// Declared after the queues so it is destroyed (joined) before them.
+    std::jthread _ioThread;
 
     /// @brief Background I/O loop — reads from transport, classifies, and routes messages.
     void ioLoop(std::stop_token const& stopToken);

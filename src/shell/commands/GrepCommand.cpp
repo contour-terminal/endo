@@ -392,7 +392,12 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
 {
     // Build combined pattern from all -e patterns
     std::string combined;
+    // macOS libc++ does not yet provide std::views::enumerate (C++23).
+#if defined(__cpp_lib_ranges_enumerate) && __cpp_lib_ranges_enumerate >= 202302L
     for (auto const& [idx, pat]: std::views::enumerate(opts.patterns))
+#else
+    for (size_t idx = 0; auto const& pat: opts.patterns)
+#endif
     {
         if (idx > 0)
             combined += '|';
@@ -412,6 +417,9 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
         }
 
         combined += processed;
+#if !defined(__cpp_lib_ranges_enumerate) || __cpp_lib_ranges_enumerate < 202302L
+        ++idx;
+#endif
     }
 
     // Wrap multiple alternatives in a group to keep correct precedence
@@ -429,6 +437,10 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
     catch (std::regex_error const& e)
     {
         return std::unexpected(std::format("grep: invalid regular expression: {}", e.what()));
+    }
+    catch (...)
+    {
+        return std::unexpected(std::string("grep: invalid regular expression"));
     }
 }
 

@@ -6,6 +6,11 @@
 
 #include <unistd.h>
 
+#if defined(__APPLE__)
+    #include <crt_externs.h>
+    #define environ (*_NSGetEnviron())
+#endif
+
 namespace endo::platform
 {
 
@@ -47,7 +52,7 @@ std::vector<std::string> PosixEnvironmentProvider::keys() const
     std::vector<std::string> result;
 
     // First, collect from system environment
-    for (char** env = ::environ; *env != nullptr; ++env)
+    for (char** env = environ; *env != nullptr; ++env)
     {
         std::string_view const entry(*env);
         if (auto const pos = entry.find('='); pos != std::string_view::npos)

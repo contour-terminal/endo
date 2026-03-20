@@ -265,7 +265,12 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
     auto activeColors = std::vector<int> {};
     activeColors.reserve(static_cast<std::size_t>(paletteSize));
 
+    // macOS libc++ does not yet provide std::views::stride (C++23).
+#if defined(__cpp_lib_ranges_stride) && __cpp_lib_ranges_stride >= 202207L
     for (auto const bandY: std::views::iota(0, height) | std::views::stride(6))
+#else
+    for (int bandY = 0; bandY < height; bandY += 6)
+#endif
     {
         // Pass 1: Accumulate sixel bits per color (single pass over pixels)
         auto const bandHeight = std::min(6, height - bandY);

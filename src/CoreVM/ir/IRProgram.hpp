@@ -255,19 +255,19 @@ class IRBuilder
 
     void setProgram(std::unique_ptr<IRProgram> program);
 
-    IRProgram* program() const { return _program.get(); }
+    [[nodiscard]] IRProgram* program() const { return _program.get(); }
 
     std::unique_ptr<IRProgram> takeProgram() { return std::move(_program); }
 
     IRFunction* setFunction(IRFunction* hn);
 
-    IRFunction* function() const { return _function; }
+    [[nodiscard]] IRFunction* function() const { return _function; }
 
     BasicBlock* createBlock(const std::string& name);
 
     void setInsertPoint(BasicBlock* bb);
 
-    BasicBlock* getInsertPoint() const { return _insertPoint; }
+    [[nodiscard]] BasicBlock* getInsertPoint() const { return _insertPoint; }
 
     Instr* insert(std::unique_ptr<Instr> instr);
 

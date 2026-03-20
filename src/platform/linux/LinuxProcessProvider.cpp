@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LinuxProcessProvider.hpp"
+#include "ProcStatusParser.hpp"
 
 #include <algorithm>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -145,18 +145,10 @@ std::vector<ProcessEntry> LinuxProcessProvider::listProcesses() const
             std::string line;
             while (std::getline(statusStream, line))
             {
-                if (line.starts_with("Uid:"))
-                {
-                    int uid = 0;
-                    if (std::sscanf(line.c_str(), "Uid:\t%d", &uid) == 1)
-                        entry.user = uidToUsername(uid);
-                }
-                else if (line.starts_with("VmRSS:"))
-                {
-                    int64_t rss = 0;
-                    if (std::sscanf(line.c_str(), "VmRSS:\t%ld kB", &rss) == 1)
-                        entry.memKb = rss;
-                }
+                if (auto uid = parseUidFromStatusLine(line))
+                    entry.user = uidToUsername(*uid);
+                else if (auto rss = parseVmRssFromStatusLine(line))
+                    entry.memKb = *rss;
             }
         }
 

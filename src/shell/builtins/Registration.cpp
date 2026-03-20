@@ -22,6 +22,9 @@
 #if defined(_WIN32)
     #include <platform/windows/WindowsFileInfoProvider.hpp>
     #include <platform/windows/WindowsProcessProvider.hpp>
+#elif defined(__APPLE__)
+    #include <platform/darwin/DarwinProcessProvider.hpp>
+    #include <platform/linux/LinuxFileInfoProvider.hpp>
 #else
     #include <platform/linux/LinuxFileInfoProvider.hpp>
     #include <platform/linux/LinuxProcessProvider.hpp>
@@ -548,6 +551,8 @@ void Shell::registerStructuredBuiltins()
         .bind([this](CoreVM::Params& args) {
 #if defined(_WIN32)
             WindowsProcessProvider provider;
+#elif defined(__APPLE__)
+            DarwinProcessProvider provider;
 #else
             LinuxProcessProvider provider;
 #endif

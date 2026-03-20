@@ -18,9 +18,9 @@ int SignalHandler::_signalFd = -1;
 std::atomic<bool> SignalHandler::_sigintPending { false };
 
 #if !defined(__linux__) && !defined(_WIN32)
-std::atomic<bool> SignalHandler::_sigchldPending { false };
-std::atomic<bool> SignalHandler::_sigtstpPending { false };
-std::atomic<bool> SignalHandler::_sigcontPending { false };
+std::atomic<bool> SignalHandler::_sigChldPending { false };
+std::atomic<bool> SignalHandler::_sigTstpPending { false };
+std::atomic<bool> SignalHandler::_sigContPending { false };
 #endif
 
 int SignalHandler::initialize(SignalCallback* callback)
@@ -72,9 +72,9 @@ int SignalHandler::initialize(SignalCallback* callback)
     sa.sa_handler = sigintHandler;
     sigaction(SIGINT, &sa, nullptr);
 
-    _sigchldPending.store(false);
-    _sigtstpPending.store(false);
-    _sigcontPending.store(false);
+    _sigChldPending.store(false);
+    _sigTstpPending.store(false);
+    _sigContPending.store(false);
     _sigintPending.store(false);
     return -1;
 #endif
@@ -113,9 +113,9 @@ void SignalHandler::restore()
     signal(SIGCONT, SIG_DFL);
     signal(SIGTTOU, SIG_DFL);
     signal(SIGINT, SIG_DFL);
-    _sigchldPending.store(false);
-    _sigtstpPending.store(false);
-    _sigcontPending.store(false);
+    _sigChldPending.store(false);
+    _sigTstpPending.store(false);
+    _sigContPending.store(false);
     _sigintPending.store(false);
 #endif
 
@@ -169,13 +169,13 @@ bool SignalHandler::processSignalFd()
 void SignalHandler::processPendingSignals()
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    if (_sigchldPending.exchange(false) && _callback)
+    if (_sigChldPending.exchange(false) && _callback)
         _callback->onSigchld();
 
-    if (_sigtstpPending.exchange(false) && _callback)
+    if (_sigTstpPending.exchange(false) && _callback)
         _callback->onSigtstp();
 
-    if (_sigcontPending.exchange(false) && _callback)
+    if (_sigContPending.exchange(false) && _callback)
         _callback->onSigcont();
 #endif
 }
@@ -183,7 +183,7 @@ void SignalHandler::processPendingSignals()
 bool SignalHandler::hasPendingSigchld() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    return _sigchldPending.load();
+    return _sigChldPending.load();
 #else
     return false;
 #endif
@@ -192,14 +192,14 @@ bool SignalHandler::hasPendingSigchld() noexcept
 void SignalHandler::clearPendingSigchld() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    _sigchldPending.store(false);
+    _sigChldPending.store(false);
 #endif
 }
 
 bool SignalHandler::hasPendingSigtstp() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    return _sigtstpPending.load();
+    return _sigTstpPending.load();
 #else
     return false;
 #endif
@@ -208,14 +208,14 @@ bool SignalHandler::hasPendingSigtstp() noexcept
 void SignalHandler::clearPendingSigtstp() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    _sigtstpPending.store(false);
+    _sigTstpPending.store(false);
 #endif
 }
 
 bool SignalHandler::hasPendingSigcont() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    return _sigcontPending.load();
+    return _sigContPending.load();
 #else
     return false;
 #endif
@@ -224,7 +224,7 @@ bool SignalHandler::hasPendingSigcont() noexcept
 void SignalHandler::clearPendingSigcont() noexcept
 {
 #if !defined(__linux__) && !defined(_WIN32)
-    _sigcontPending.store(false);
+    _sigContPending.store(false);
 #endif
 }
 
@@ -264,17 +264,17 @@ void SignalHandler::suspendSelf()
 #if !defined(__linux__) && !defined(_WIN32)
 void SignalHandler::sigchldHandler(int /*sig*/)
 {
-    _sigchldPending.store(true);
+    _sigChldPending.store(true);
 }
 
 void SignalHandler::sigtstpHandler(int /*sig*/)
 {
-    _sigtstpPending.store(true);
+    _sigTstpPending.store(true);
 }
 
 void SignalHandler::sigcontHandler(int /*sig*/)
 {
-    _sigcontPending.store(true);
+    _sigContPending.store(true);
 }
 
 void SignalHandler::sigintHandler(int /*sig*/)

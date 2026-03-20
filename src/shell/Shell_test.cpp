@@ -776,9 +776,12 @@ TEST_CASE("shell.builtin.cat_raw_flag")
 #if !defined(_WIN32)
 TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
 {
+    // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
+    {
+        std::ofstream f("/tmp/endo_test_binary.dat", std::ios::binary);
+        f << "hello" << '\0' << "world";
+    }
     TestShell shell;
-    // Create a file with null bytes (binary content)
-    shell("printf 'hello\\x00world' > /tmp/endo_test_binary.dat");
     shell("cat /tmp/endo_test_binary.dat");
     CHECK(shell.exitCode == 1);
     std::error_code ec;
@@ -787,9 +790,12 @@ TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
 
 TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
 {
+    // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
+    {
+        std::ofstream f("/tmp/endo_test_binary_raw.dat", std::ios::binary);
+        f << "hello" << '\0' << "world";
+    }
     TestShell shell;
-    // Create a file with null bytes (binary content)
-    shell("printf 'hello\\x00world' > /tmp/endo_test_binary_raw.dat");
     static_cast<void>(shell("cat --raw /tmp/endo_test_binary_raw.dat").output());
     // With --raw, binary data should pass through (exit code 0)
     CHECK(shell.exitCode == 0);

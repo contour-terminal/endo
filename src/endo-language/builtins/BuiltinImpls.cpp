@@ -1271,7 +1271,7 @@ void jsonQuery(CoreVM::Params& args)
     try
     {
         auto const segments = parseJsonPath(path);
-        if (!segments.empty())
+        if (!segments.empty() && nlohmann::json::accept(json))
         {
             auto const doc = nlohmann::json::parse(json);
             walkJson(doc, segments, 0, results);

@@ -6,6 +6,7 @@
 
 #include <format>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include "CallHierarchyProvider.hpp"
@@ -302,6 +303,12 @@ void LspServer::dispatch(nlohmann::json const& message)
                 makeErrorResponse(id, ErrorCode::InternalError, std::string("Internal error: ") + ex.what()));
         // Notifications: silently ignore exceptions per LSP spec
     }
+    catch (...)
+    {
+        if (hasId && !method.empty())
+            writeMessage(_output,
+                         makeErrorResponse(id, ErrorCode::InternalError, "Internal error (unknown exception)"));
+    }
 }
 
 nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
@@ -563,6 +570,10 @@ nlohmann::json LspServer::handleHover(nlohmann::json const& params)
 
 nlohmann::json LspServer::handleDefinition(nlohmann::json const& params)
 {
+    if (!params.contains("textDocument") || !params["textDocument"].contains("uri"))
+        throw std::invalid_argument("missing textDocument.uri");
+    if (!params.contains("position"))
+        throw std::invalid_argument("missing position");
     auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
     auto const position = params.at("position").get<Position>();
     auto const* source = _documents.get(textDoc.uri);

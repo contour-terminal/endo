@@ -191,10 +191,18 @@ void ServerManager::shutdown()
 void ServerManager::rebuildToolIndex()
 {
     _toolToServer.clear();
+    // macOS libc++ does not yet provide std::views::enumerate (C++23).
+#if defined(__cpp_lib_ranges_enumerate) && __cpp_lib_ranges_enumerate >= 202302L
     for (auto const& [idx, server]: _servers | std::views::enumerate)
+#else
+    for (size_t idx = 0; auto const& server: _servers)
+#endif
     {
         for (auto const& tool: server.tools)
-            _toolToServer[tool.name] = static_cast<size_t>(idx);
+            _toolToServer[tool.name] = idx;
+#if !defined(__cpp_lib_ranges_enumerate) || __cpp_lib_ranges_enumerate < 202302L
+        ++idx;
+#endif
     }
 }
 

@@ -3795,7 +3795,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
     {
         std::ranges::sort(lines, [&](auto const& a, auto const& b) {
             auto const ka = getKey(a);
-            auto const kb = getKey(b);
+            auto const kb = getKey(b); // NOLINT(clang-analyzer-cplusplus.Move)
             return reverse ? ka > kb : ka < kb;
         });
     }

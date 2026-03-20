@@ -4,6 +4,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include <cstdlib>
+#include <filesystem>
+#include <format>
 #include <fstream>
 
 #include <platform/UserPaths.hpp>
@@ -177,6 +179,9 @@ namespace
 
 auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentConfig, std::string>
 {
+    if (!std::filesystem::exists(path))
+        return std::unexpected(std::format("Config file not found: {}", path.string()));
+
     try
     {
         auto const root = YAML::LoadFile(path.string());
@@ -208,6 +213,14 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
     catch (YAML::Exception const& e)
     {
         return std::unexpected(std::string(e.what()));
+    }
+    catch (std::exception const& e)
+    {
+        return std::unexpected(std::string(e.what()));
+    }
+    catch (...)
+    {
+        return std::unexpected(std::format("Failed to load config: {}", path.string()));
     }
 }
 

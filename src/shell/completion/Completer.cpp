@@ -37,6 +37,7 @@ Completer::Completer(EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<HistoryCompleter>(history));
 
     // Sort by priority (highest first)
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
     std::ranges::sort(_providers, [](auto const& a, auto const& b) { return a->priority() > b->priority(); });
 }
 
@@ -45,6 +46,7 @@ void Completer::addProvider(std::unique_ptr<CompletionProvider> provider)
     _providers.push_back(std::move(provider));
 
     // Re-sort by priority
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
     std::ranges::sort(_providers, [](auto const& a, auto const& b) { return a->priority() > b->priority(); });
 }
 

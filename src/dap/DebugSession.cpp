@@ -15,6 +15,7 @@
 #include <format>
 #include <fstream>
 #include <ranges>
+#include <sstream>
 #include <set>
 #include <utility>
 

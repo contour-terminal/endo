@@ -59,11 +59,11 @@ class TargetCodeGenerator: public InstructionVisitor
 
     static Operand getConstantInt(Value* value);
 
-    size_t getInstructionPointer() const { return _code.size(); }
+    [[nodiscard]] size_t getInstructionPointer() const { return _code.size(); }
 
     std::optional<size_t> findGlobal(const Value* variable) const;
 
-    StackPointer getStackPointer() const { return _stack.size(); }
+    [[nodiscard]] StackPointer getStackPointer() const { return _stack.size(); }
 
     StackPointer getStackPointer(const Value* value);
 

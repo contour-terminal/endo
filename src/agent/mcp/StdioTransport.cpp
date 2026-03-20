@@ -107,7 +107,7 @@ auto StdioTransport::start(StdioTransportConfig const& config) -> McpVoidResult
         return makeMcpError(McpErrorCode::TransportError, "Failed to create stdout pipe");
     }
 
-    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_t actions {};
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, stdinPipe[0], STDIN_FILENO);
     posix_spawn_file_actions_adddup2(&actions, stdoutPipe[1], STDOUT_FILENO);

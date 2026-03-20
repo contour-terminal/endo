@@ -30,7 +30,7 @@ namespace
     }
 
     /// @brief Returns a single-character type indicator for a directory entry.
-    [[nodiscard]] auto typeIndicator(std::filesystem::file_status status) -> std::string_view
+    [[nodiscard]] auto typeIndicator(std::filesystem::file_status const& status) -> std::string_view
     {
         if (std::filesystem::is_directory(status))
             return "d";
@@ -162,8 +162,14 @@ auto ListDirectoryTool::execute(nlohmann::json const& arguments) -> std::expecte
             auto const type = entry.isSymlink ? "l" : typeIndicator(entry.status);
             auto const sizeStr = entry.isDir ? std::string { "-" } : formatSize(entry.size);
 
-            // Convert file_time_type to system_clock for formatting
+            // Convert file_time_type to system_clock for formatting.
+            // macOS libc++ lacks std::chrono::clock_cast; file_clock uses the POSIX epoch.
+#if defined(__APPLE__)
+            auto const sctp = std::chrono::system_clock::time_point(
+                std::chrono::duration_cast<std::chrono::system_clock::duration>(entry.modTime.time_since_epoch()));
+#else
             auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(entry.modTime);
+#endif
             auto const date = std::format("{:%Y-%m-%d %H:%M}", sctp);
 
             auto displayName = entry.name;

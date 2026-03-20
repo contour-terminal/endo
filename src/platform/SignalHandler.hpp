@@ -104,9 +104,9 @@ class SignalHandler
     static void sigtstpHandler(int sig);
     static void sigcontHandler(int sig);
     static void sigintHandler(int sig);
-    static std::atomic<bool> _sigchldPending;
-    static std::atomic<bool> _sigtstpPending;
-    static std::atomic<bool> _sigcontPending;
+    static std::atomic<bool> _sigChldPending; // NOLINT(readability-identifier-naming)
+    static std::atomic<bool> _sigTstpPending; // NOLINT(readability-identifier-naming)
+    static std::atomic<bool> _sigContPending; // NOLINT(readability-identifier-naming)
 #endif
 };
 

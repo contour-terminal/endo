@@ -47,7 +47,7 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
         // Unblock signals that the shell blocked for signalfd.
         // Child processes need to receive job control signals (e.g., SIGTSTP from Ctrl+Z)
         // and SIGINT (Ctrl+C). The signal mask is inherited across fork() and preserved across exec().
-        sigset_t mask;
+        sigset_t mask {};
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGTSTP);
@@ -85,6 +85,15 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
 
         execvp(config.program.c_str(), const_cast<char* const*>(argv.data()));
         _exit(EXIT_FAILURE);
+    }
+
+    // Parent process — also set child's process group to eliminate race condition.
+    // Both parent and child call setpgid(); whichever runs first wins, the other
+    // harmlessly fails with EACCES (child already exec'd) or ESRCH.
+    if (config.processGroup.has_value())
+    {
+        pid_t const pgid = config.processGroup.value() == 0 ? pid : config.processGroup.value();
+        setpgid(pid, pgid);
     }
 
     return pid;

@@ -174,7 +174,7 @@ auto shellExecImpl(std::string const& shellPath,
         dup2(pipeFds[1], STDERR_FILENO);
         close(pipeFds[1]);
 
-        sigset_t mask;
+        sigset_t mask {};
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGTSTP);
@@ -808,6 +808,7 @@ void Shell::setAgentTracePath(std::string path)
     _agentTracePath = std::move(path);
 }
 
+// NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::addModuleSearchPath(std::filesystem::path path)
 {
     if (_fsharpState.moduleLoader)

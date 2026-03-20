@@ -99,12 +99,23 @@ null ::= "null"
             }
 
             auto body = std::string {};
+            // macOS libc++ does not yet provide std::views::enumerate (C++23).
+#if defined(__cpp_lib_ranges_enumerate) && __cpp_lib_ranges_enumerate >= 202302L
             for (auto const& [index, part]: std::views::enumerate(propertyParts))
             {
                 if (index > 0)
                     body += " \",\" ws ";
                 body += part;
             }
+#else
+            for (size_t index = 0; auto const& part: propertyParts)
+            {
+                if (index > 0)
+                    body += " \",\" ws ";
+                body += part;
+                ++index;
+            }
+#endif
 
             rules.emplace_back(std::format(R"({} ::= "{{" ws {} ws "}}")", ruleName, body));
         }
@@ -135,7 +146,12 @@ auto generateToolCallGrammar(std::span<ToolDefinition const> tools) -> std::stri
     auto rules = std::vector<std::string> {};
     auto toolJsonAlternatives = std::vector<std::string> {};
 
+    // macOS libc++ does not yet provide std::views::enumerate (C++23).
+#if defined(__cpp_lib_ranges_enumerate) && __cpp_lib_ranges_enumerate >= 202302L
     for (auto const& [index, tool]: std::views::enumerate(tools))
+#else
+    for (size_t index = 0; auto const& tool: tools)
+#endif
     {
         auto const toolRuleName = std::format("tool{}-json", index);
         auto const argsRuleName = std::format("tool{}-args", index);
@@ -150,16 +166,30 @@ auto generateToolCallGrammar(std::span<ToolDefinition const> tools) -> std::stri
                                        argsRuleName));
 
         toolJsonAlternatives.emplace_back(toolRuleName);
+#if !defined(__cpp_lib_ranges_enumerate) || __cpp_lib_ranges_enumerate < 202302L
+        ++index;
+#endif
     }
 
     // Build the tool-json alternatives rule.
     auto toolJsonBody = std::string {};
+    // macOS libc++ does not yet provide std::views::enumerate (C++23).
+#if defined(__cpp_lib_ranges_enumerate) && __cpp_lib_ranges_enumerate >= 202302L
     for (auto const& [index, alt]: std::views::enumerate(toolJsonAlternatives))
     {
         if (index > 0)
             toolJsonBody += " | ";
         toolJsonBody += alt;
     }
+#else
+    for (size_t index = 0; auto const& alt: toolJsonAlternatives)
+    {
+        if (index > 0)
+            toolJsonBody += " | ";
+        toolJsonBody += alt;
+        ++index;
+    }
+#endif
 
     // Top-level grammar rules.
     auto output = std::string {};
