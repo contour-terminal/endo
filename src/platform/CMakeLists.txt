@@ -58,7 +58,18 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         linux/LinuxFileInfoProvider.hpp
         linux/LinuxFileInfoProvider.cpp
     )
+elseif(APPLE)
+    target_sources(endo-platform PRIVATE
+        posix/PosixWakeup.cpp
+        posix/PosixEnvironmentProvider.hpp
+        posix/PosixEnvironmentProvider.cpp
+        darwin/DarwinProcessProvider.hpp
+        darwin/DarwinProcessProvider.cpp
+        linux/LinuxFileInfoProvider.hpp
+        linux/LinuxFileInfoProvider.cpp
+    )
 else()
+    # Generic POSIX fallback (FreeBSD, etc.)
     target_sources(endo-platform PRIVATE
         posix/PosixWakeup.cpp
         posix/PosixEnvironmentProvider.hpp
@@ -93,6 +104,7 @@ add_executable(test-endo-platform
     MessageQueue_test.cpp
     WindowsPlatform_test.cpp
     LinuxProcessProvider_test.cpp
+    DarwinProcessProvider_test.cpp
 )
 
 target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)
