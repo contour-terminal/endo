@@ -154,12 +154,12 @@ void Runner::Stack::rotate(size_t n)
 {
     // moves stack[n] to stack[top], and shifts stack[n+1..] to stack[n..]
     Value tmp = _stack[n];
-    while (n + 1 < _stack.size())
+    while (n + 1 < _sp)
     {
         _stack[n] = _stack[n + 1];
         n++;
     }
-    _stack[_stack.size() - 1] = tmp;
+    _stack[_sp - 1] = tmp;
 }
 
 void Runner::Stack::rotate(size_t fp, size_t n)

@@ -66,35 +66,37 @@ class Runner
     class Stack
     {
       public:
-        explicit Stack(size_t stackSize) { _stack.reserve(stackSize); }
+        explicit Stack(size_t stackSize): _stack(stackSize) {}
 
-        void push(Value value) { _stack.push_back(value); }
-
-        Value pop()
+        void push(Value value)
         {
-            Value v = _stack.back();
-            _stack.pop_back();
-            return v;
+            if (_sp >= _stack.size())
+                _stack.resize(std::max(_sp + 1, _stack.size() * 2));
+            _stack[_sp++] = value;
         }
 
-        void discard(size_t n)
+        Value pop() { return _stack[--_sp]; }
+
+        void discard(size_t n) { _sp -= std::min(n, _sp); }
+
+        void ensureCapacity(size_t needed)
         {
-            n = std::min(n, _stack.size());
-            _stack.resize(_stack.size() - n);
+            if (needed > _stack.size())
+                _stack.resize(needed);
         }
 
         void rotate(size_t n);
         void rotate(size_t fp, size_t n);
 
-        [[nodiscard]] size_t size() const { return _stack.size(); }
+        [[nodiscard]] size_t size() const { return _sp; }
 
         Value operator[](int relativeIndex) const
         {
             if (relativeIndex < 0)
             {
                 auto const absIndex = static_cast<size_t>(-relativeIndex);
-                COREVM_ASSERT(absIndex <= _stack.size(), "VM stack underflow");
-                return _stack[_stack.size() - absIndex];
+                COREVM_ASSERT(absIndex <= _sp, "VM stack underflow");
+                return _stack[_sp - absIndex];
             }
             else
             {
@@ -107,8 +109,8 @@ class Runner
             if (relativeIndex < 0)
             {
                 auto const absIndex = static_cast<size_t>(-relativeIndex);
-                COREVM_ASSERT(absIndex <= _stack.size(), "VM stack underflow");
-                return _stack[_stack.size() - absIndex];
+                COREVM_ASSERT(absIndex <= _sp, "VM stack underflow");
+                return _stack[_sp - absIndex];
             }
             else
             {
@@ -122,6 +124,7 @@ class Runner
 
       private:
         std::vector<Value> _stack;
+        size_t _sp = 0;
     };
 
   public:
