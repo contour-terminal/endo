@@ -492,6 +492,8 @@ bool SourceFormatter::canSimplifyToPlaceholder(ast::LambdaExpr const& node)
         return false;
     if (param.name == "_" || param.name == ast::PlaceholderParamName)
         return false;
+    if (param.name.size() > 1)
+        return false;
     if (node.returnType.has_value())
         return false;
     if (!node.body)

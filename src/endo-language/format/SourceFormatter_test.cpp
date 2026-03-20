@@ -385,10 +385,11 @@ TEST_CASE("SourceFormatter.match_simple_if_arm_inline", "[format]")
 TEST_CASE("SourceFormatter.lambda_pipeline_body_inline", "[format]")
 {
     // Pipeline body that fits within maxLineWidth stays inline — lambdas simplified to placeholders
+    // Note: outer lambda `fun xs ->` keeps long form (multi-char param), inner `fun x ->` simplified
     auto const result = SourceFormatter::format(
         "let f = fun xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum");
     INFO("Result: [" << result << "]");
-    CHECK(result.find("_ |> map (_ + 1) |> filter (_ > 0) |> sum") != std::string::npos);
+    CHECK(result.find("fun xs -> xs |> map (_ + 1) |> filter (_ > 0) |> sum") != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.lambda_pipeline_body_wraps_when_exceeds_width", "[format]")
@@ -593,6 +594,36 @@ TEST_CASE("SourceFormatter.lambda_no_simplify_compound_body", "[format]")
         SourceFormatter::format(R"(let f = fun x -> (match x with | 0 -> "zero" | _ -> "other"))");
     INFO("Result: [" << result << "]");
     CHECK(result.find("fun x ->") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_multi_char_param_name", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun item -> item + 1");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun item -> item + 1") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_multi_char_param_name_multiply", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun value -> value * 2");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun value -> value * 2") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_two_char_param_name", "[format]")
+{
+    auto const result = SourceFormatter::format("let f = fun xs -> xs > 0");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun xs -> xs > 0") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.lambda_no_simplify_multi_char_in_pipeline", "[format]")
+{
+    auto const result =
+        SourceFormatter::format("let r = data |> map (fun item -> item + 1) |> filter (fun val -> val > 5)");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("map (fun item -> item + 1)") != std::string::npos);
+    CHECK(result.find("filter (fun val -> val > 5)") != std::string::npos);
 }
 
 // --- LetInExpr ---
