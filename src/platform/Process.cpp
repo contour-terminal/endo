@@ -87,6 +87,15 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
         _exit(EXIT_FAILURE);
     }
 
+    // Parent process — also set child's process group to eliminate race condition.
+    // Both parent and child call setpgid(); whichever runs first wins, the other
+    // harmlessly fails with EACCES (child already exec'd) or ESRCH.
+    if (config.processGroup.has_value())
+    {
+        pid_t const pgid = config.processGroup.value() == 0 ? pid : config.processGroup.value();
+        setpgid(pid, pgid);
+    }
+
     return pid;
 }
 
