@@ -918,7 +918,7 @@ Component (base class)
 - [x] Add hover documentation for `set_prompt_*` builtin functions
 - [x] Implement `~/.config/endo/init.endo` auto-execution
 - [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)
-- [x] Implement auto-refresh for live prompt modules (clock 1s, battery 30s) via `refreshInterval()` virtual method
+- [x] Implement auto-refresh for live prompt modules (clock 1s, git 5s, battery 30s) via `refreshInterval()` virtual method; fix auto-refresh initialization regression (`_nextModuleRefresh` deadline now set unconditionally after module update); immediate module cache invalidation and refresh on terminal focus gain
 - [x] Implement transient prompt rendering (replace full prompt with compact indicator on submit)
 - [x] Add syntax highlighting to transient prompt (reuses `computeHighlightMap` / `categoryColor` from `SyntaxHighlighter`)
 - [x] Implement aurora background gradient for endo-signature preset (multi-stop horizontal color interpolation via `multiStopGradient()`)

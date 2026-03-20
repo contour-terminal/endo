@@ -33,6 +33,11 @@ class GitModule final: public PromptModule
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 
+    [[nodiscard]] std::optional<std::chrono::milliseconds> refreshInterval() const override
+    {
+        return std::chrono::seconds(5);
+    }
+
     void invalidateCache() override { _cachePopulated = false; }
 
     /// @brief Returns the cached git info from the most recent query.

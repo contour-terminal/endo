@@ -170,7 +170,7 @@ class PromptComponent: public tui::Component
     /// When unfocused, prompt chrome (left bar, separators) is dimmed
     /// to indicate the terminal is inactive.
     /// @param focused True if terminal has focus, false otherwise.
-    void setTerminalFocused(bool focused) noexcept { _terminalFocused = focused; }
+    void setTerminalFocused(bool focused) noexcept;
 
     /// @brief Returns whether the terminal is currently focused.
     [[nodiscard]] bool isTerminalFocused() const noexcept { return _terminalFocused; }

@@ -210,6 +210,20 @@ void PromptComponent::setPromptContext(PromptContext context)
     _context = std::move(context);
 }
 
+void PromptComponent::setTerminalFocused(bool focused) noexcept
+{
+    auto const wasUnfocused = !_terminalFocused;
+    _terminalFocused = focused;
+    if (focused && wasUnfocused)
+    {
+        // On focus gain: invalidate all module caches and schedule immediate refresh
+        // so that time-varying data (git branch, battery) is re-queried instantly.
+        for (auto& [name, mod]: _modules)
+            mod->invalidateCache();
+        _nextModuleRefresh = std::chrono::steady_clock::now();
+    }
+}
+
 void PromptComponent::render(tui::Canvas& canvas)
 {
     auto const& theme = tui::currentTheme();
@@ -322,8 +336,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             _cachedInfoModules = buildModuleVector(_config.infoLineModules);
             _cachedRightModules = buildModuleVector(_config.rightPromptModules);
             _pendingChanges = ModuleSensitivity::None;
-            if (timerExpired)
-                _nextModuleRefresh = computeModuleRefreshDeadline();
+            _nextModuleRefresh = computeModuleRefreshDeadline();
         }
         auto const& infoModules = _cachedInfoModules;
         auto const& rightModules = _cachedRightModules;
