@@ -438,6 +438,10 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
     {
         return std::unexpected(std::format("grep: invalid regular expression: {}", e.what()));
     }
+    catch (...)
+    {
+        return std::unexpected(std::string("grep: invalid regular expression"));
+    }
 }
 
 bool isBinaryFile(std::filesystem::path const& path)

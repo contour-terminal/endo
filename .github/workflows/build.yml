@@ -221,6 +221,67 @@ jobs:
         path: build/clangcl-release/endo-*.msi
         retention-days: 30
 
+  macos-arm64:
+    runs-on: macos-14
+    name: "macOS ARM64 Release"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Homebrew dependencies
+      run: brew install llvm ninja ccache
+
+    - name: Set up Homebrew LLVM on PATH
+      run: |
+        LLVM_PREFIX="$(brew --prefix llvm)"
+        echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
+
+    - name: Verify compiler
+      run: |
+        which clang++
+        clang++ --version
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-macos-arm64
+        max-size: 256M
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: "Get library crispy & vtparser"
+      run: python3 scripts/get_contour_dirs.py
+
+    - name: Configure CMake
+      run: cmake --preset clang-release
+
+    - name: Build
+      run: cmake --build build/clang-release --config Release
+
+    - name: Test
+      working-directory: build/clang-release
+      run: ctest --output-on-failure --build-config Release
+      timeout-minutes: 5
+
+    - name: Build DMG installer
+      working-directory: build/clang-release
+      run: cpack -G DragNDrop
+
+    - name: Upload macOS binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-macos-arm64
+        path: build/clang-release/src/shell/endo
+        retention-days: 30
+
+    - name: Upload DMG installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-macos-arm64-dmg
+        path: build/clang-release/endo-*.dmg
+        retention-days: 30
+
   vscode-extension:
     runs-on: ubuntu-latest
     name: "VS Code Extension"

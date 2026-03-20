@@ -34,9 +34,47 @@ if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT CMAKE_CXX_COMPILER_I
     get_filename_component(_llvm_prefix "${_llvm_bin_dir}/.." ABSOLUTE)
     set(_llvm_libcxx "${_llvm_prefix}/lib/c++")
     if(EXISTS "${_llvm_libcxx}")
-        add_link_options("-L${_llvm_libcxx}" "-Wl,-rpath,${_llvm_libcxx}")
+        # Use -nostdlib++ to prevent the Clang driver from implicitly linking
+        # the system's libc++/libc++abi.  Then explicitly link Homebrew's
+        # versions so that compile-time headers and runtime exception handling
+        # use the same library (avoiding ABI mismatches in catch blocks).
+        # Also link Homebrew's libunwind so that stack unwinding uses the same
+        # runtime as the exception handling (required for catch blocks to work
+        # when exceptions cross translation-unit boundaries).
+        set(_llvm_libunwind "${_llvm_prefix}/lib/unwind")
+        add_link_options(
+            "-nostdlib++"
+            "-L${_llvm_libcxx}"
+            "-Wl,-rpath,${_llvm_libcxx}"
+            "-lc++"
+            "-lc++abi"
+        )
+        if(EXISTS "${_llvm_libunwind}")
+            add_link_options(
+                "-L${_llvm_libunwind}"
+                "-Wl,-rpath,${_llvm_libunwind}"
+                "-lunwind"
+            )
+            message(STATUS "Using Homebrew libunwind: ${_llvm_libunwind}")
+        endif()
         message(STATUS "Using Homebrew libc++: ${_llvm_libcxx}")
     endif()
+
+    # Prevent CMake from adding -isystem <SDK>/usr/include, which places the
+    # macOS SDK's C headers (math.h, string.h, …) ahead of libc++'s own C
+    # wrapper headers (cmath, cstring, …).  The SDK's math.h defines signbit,
+    # isfinite, isnan as macros that break libc++'s std::signbit usage.
+    # The compiler still finds SDK headers via -isysroot.
+    if(CMAKE_OSX_SYSROOT)
+        list(APPEND CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "${CMAKE_OSX_SYSROOT}/usr/include")
+        list(APPEND CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "${CMAKE_OSX_SYSROOT}/usr/include")
+    endif()
+
+    # Disable libc++ availability annotations (e.g. std::from_chars for
+    # floating-point being marked macOS 26.0+).  These annotations reflect the
+    # *system* libc++ version, but we link against Homebrew's libc++ which
+    # already provides these symbols.
+    add_compile_definitions(_LIBCPP_DISABLE_AVAILABILITY)
 endif()
 
 if(WIN32)
