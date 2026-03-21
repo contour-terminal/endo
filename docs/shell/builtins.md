@@ -1502,7 +1502,7 @@ is `-`), reads from standard input. Default is 10 lines.
 | Option | Description |
 |---|---|
 | `-n NUM` | Output the last NUM lines (default: 10) |
-| `-f` | Follow: output appended data as the file grows (not yet implemented) |
+| `-f` | Follow: output appended data as the file grows |
 | `-h`, `--help` | Display help |
 
 **Examples:**
@@ -1512,6 +1512,7 @@ is `-`), reads from standard input. Default is 10 lines.
 tail file.txt
 tail -n 5 file.txt
 echo "line1\nline2\nline3" | tail -n 2
+tail -f /var/log/syslog
 ```
 
 ---

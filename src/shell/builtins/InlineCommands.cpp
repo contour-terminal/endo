@@ -23,8 +23,8 @@
 #include <ranges>
 #include <span>
 #include <sstream>
-#include <utility>
 #include <thread>
+#include <utility>
 
 #include <fcntl.h>
 
@@ -38,8 +38,10 @@
     #define isatty    _isatty
     #define STDOUT_FD 1
 #else
-    #include <pwd.h>
     #include <sys/utsname.h>
+
+    #include <poll.h>
+    #include <pwd.h>
     #include <unistd.h>
     #define STDOUT_FD STDOUT_FILENO
 #endif
@@ -2800,7 +2802,8 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
         {
             auto const epochStr = dateStr.substr(1);
             long long epochVal = 0;
-            auto const [ptr, ec] = std::from_chars(epochStr.data(), epochStr.data() + epochStr.size(), epochVal);
+            auto const [ptr, ec] =
+                std::from_chars(epochStr.data(), epochStr.data() + epochStr.size(), epochVal);
             if (ec != std::errc {} || ptr != epochStr.data() + epochStr.size())
             {
                 error("date: invalid date '{}'", dateStr);
@@ -2821,7 +2824,8 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
 #endif
 
             std::array<char, 256> buf {};
-            auto const fmt = formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
+            auto const fmt =
+                formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
             auto const len = strftime(buf.data(), buf.size(), std::string(fmt).c_str(), &timeBuf);
             auto output = std::format("{}\n", std::string_view(buf.data(), len));
             [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
@@ -2922,9 +2926,7 @@ int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle 
                     case 'r': showRelease = true; break;
                     case 'm': showMachine = true; break;
                     case 'a': showAll = true; break;
-                    default:
-                        error("uname: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("uname: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
             continue;
@@ -3246,9 +3248,7 @@ int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle out
                     case 's': symbolic = true; break;
                     case 'f': force = true; break;
                     case 'v': verbose = true; break;
-                    default:
-                        error("ln: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("ln: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
             continue;
@@ -3341,10 +3341,10 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         basedir.empty() ? std::filesystem::temp_directory_path() : std::filesystem::path(basedir);
 
     // Generate random suffix
-    static constexpr std::string_view chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    static constexpr std::string_view chars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     std::string suffix = "tmp.";
-    std::mt19937 rng(static_cast<unsigned>(
-        std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::mt19937 rng(static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
     for (auto const _: std::views::iota(0, 10))
     {
@@ -3386,69 +3386,69 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
 namespace
 {
 
-std::vector<std::string> readLinesFromInput(NativeHandle stdinFd,
-                                            std::span<std::string const> files,
-                                            auto const& errorFn)
-{
-    std::vector<std::string> lines;
-
-    auto const readFromStream = [&](std::istream& stream) {
-        std::string line;
-        while (std::getline(stream, line))
-        {
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-            lines.push_back(std::move(line));
-        }
-    };
-
-    if (files.empty())
+    std::vector<std::string> readLinesFromInput(NativeHandle stdinFd,
+                                                std::span<std::string const> files,
+                                                auto const& errorFn)
     {
-        // Read from stdin
-        std::string stdinData;
-        std::array<char, 4096> buffer {};
-        while (true)
-        {
-            auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-            if (bytesRead <= 0)
-                break;
-            stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
-        }
-        std::istringstream iss(stdinData);
-        readFromStream(iss);
-    }
-    else
-    {
-        for (auto const& file: files)
-        {
-            if (file == "-")
+        std::vector<std::string> lines;
+
+        auto const readFromStream = [&](std::istream& stream) {
+            std::string line;
+            while (std::getline(stream, line))
             {
-                std::string stdinData;
-                std::array<char, 4096> buffer {};
-                while (true)
-                {
-                    auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-                    if (bytesRead <= 0)
-                        break;
-                    stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
-                }
-                std::istringstream iss(stdinData);
-                readFromStream(iss);
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                lines.push_back(std::move(line));
             }
-            else
+        };
+
+        if (files.empty())
+        {
+            // Read from stdin
+            std::string stdinData;
+            std::array<char, 4096> buffer {};
+            while (true)
             {
-                std::ifstream ifs(file);
-                if (!ifs)
+                auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+                if (bytesRead <= 0)
+                    break;
+                stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
+            }
+            std::istringstream iss(stdinData);
+            readFromStream(iss);
+        }
+        else
+        {
+            for (auto const& file: files)
+            {
+                if (file == "-")
                 {
-                    errorFn(std::format("{}: No such file or directory", file));
-                    continue;
+                    std::string stdinData;
+                    std::array<char, 4096> buffer {};
+                    while (true)
+                    {
+                        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
+                        if (bytesRead <= 0)
+                            break;
+                        stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
+                    }
+                    std::istringstream iss(stdinData);
+                    readFromStream(iss);
                 }
-                readFromStream(ifs);
+                else
+                {
+                    std::ifstream ifs(file);
+                    if (!ifs)
+                    {
+                        errorFn(std::format("{}: No such file or directory", file));
+                        continue;
+                    }
+                    readFromStream(ifs);
+                }
             }
         }
+        return lines;
     }
-    return lines;
-}
 
 } // namespace
 
@@ -3499,7 +3499,9 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
         files.emplace_back(arg);
     }
 
-    auto const errorFn = [this](std::string const& msg) { error("head: {}", msg); };
+    auto const errorFn = [this](std::string const& msg) {
+        error("head: {}", msg);
+    };
     auto const lines = readLinesFromInput(stdinFd, files, errorFn);
 
     auto const count = std::min(static_cast<size_t>(numLines), lines.size());
@@ -3518,6 +3520,7 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
 int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
 {
     int numLines = 10;
+    bool follow = false;
     std::vector<std::string> files;
 
     for (size_t i = 1; i < args.size(); ++i)
@@ -3539,9 +3542,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
                                       "|--------|-------------|\n"
                                       "| `-n NUM` | Output the last NUM lines (default: 10) |\n"
                                       "| `-f` | Follow: output appended data as file grows |\n"
-                                      "| `-h`, `--help` | Display this help |\n"
-                                      "\n"
-                                      "**Note:** `-f` (follow) is not yet implemented.\n");
+                                      "| `-h`, `--help` | Display this help |\n");
         if (arg == "-n")
         {
             if (i + 1 >= args.size())
@@ -3560,23 +3561,124 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         }
         if (arg == "-f")
         {
-            // Follow mode not yet implemented — just ignore for now
+            follow = true;
             continue;
         }
         files.emplace_back(arg);
     }
 
-    auto const errorFn = [this](std::string const& msg) { error("tail: {}", msg); };
+    auto const writeLine = [outputFd](std::string_view line) {
+        [[maybe_unused]] auto w1 = platformWrite(outputFd, line.data(), line.size());
+        [[maybe_unused]] auto w2 = platformWrite(outputFd, "\n", 1);
+    };
+
+    if (follow && !files.empty())
+    {
+        // Follow mode: open file once, stream last N lines via bounded deque, then follow
+        auto const& filePath = files.back();
+        std::ifstream ifs(filePath);
+        if (!ifs)
+        {
+            error("tail: cannot open '{}': No such file or directory", filePath);
+            return 1;
+        }
+
+        // Read and output last N lines using a sliding window
+        std::deque<std::string> lastLines;
+        std::string line;
+        while (std::getline(ifs, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            lastLines.push_back(std::move(line));
+            if (lastLines.size() > static_cast<size_t>(numLines))
+                lastLines.pop_front();
+        }
+        for (auto const& l: lastLines)
+            writeLine(l);
+
+        // getline() set EOF; clear it so subsequent reads can pick up appended data
+        ifs.clear();
+
+        SignalHandler::clearPendingSigint();
+        while (true)
+        {
+            SignalHandler::processSignalFd();
+            if (SignalHandler::hasPendingSigint())
+            {
+                SignalHandler::clearPendingSigint();
+                return 130;
+            }
+
+            while (std::getline(ifs, line))
+            {
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                writeLine(line);
+            }
+            ifs.clear();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
+    if (follow)
+    {
+        // Follow stdin — print initial last N lines, then poll for new data
+        auto const errorFn = [this](std::string const& msg) {
+            error("tail: {}", msg);
+        };
+        auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+        auto const start =
+            lines.size() > static_cast<size_t>(numLines) ? lines.size() - static_cast<size_t>(numLines) : 0uz;
+        for (auto const i: std::views::iota(start, lines.size()))
+            writeLine(lines[i]);
+
+        SignalHandler::clearPendingSigint();
+        std::array<char, 4096> readBuf {};
+        while (true)
+        {
+            SignalHandler::processSignalFd();
+            if (SignalHandler::hasPendingSigint())
+            {
+                SignalHandler::clearPendingSigint();
+                return 130;
+            }
+#if !defined(_WIN32)
+            pollfd pfd { .fd = stdinFd, .events = POLLIN, .revents = 0 };
+            auto const pollResult = poll(&pfd, 1, 100);
+            if (pollResult < 0)
+                break;
+            if (pollResult > 0)
+            {
+                auto const bytesRead = platformRead(stdinFd, readBuf.data(), readBuf.size());
+                if (bytesRead <= 0)
+                    break;
+                [[maybe_unused]] auto written =
+                    platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
+            }
+#else
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            auto const bytesRead = platformRead(stdinFd, readBuf.data(), readBuf.size());
+            if (bytesRead <= 0)
+                break;
+            [[maybe_unused]] auto written =
+                platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
+#endif
+        }
+        return 0;
+    }
+
+    // Non-follow mode: read all lines, output last N
+    auto const errorFn = [this](std::string const& msg) {
+        error("tail: {}", msg);
+    };
     auto const lines = readLinesFromInput(stdinFd, files, errorFn);
 
-    auto const start = lines.size() > static_cast<size_t>(numLines)
-                           ? lines.size() - static_cast<size_t>(numLines)
-                           : 0uz;
+    auto const start =
+        lines.size() > static_cast<size_t>(numLines) ? lines.size() - static_cast<size_t>(numLines) : 0uz;
     for (auto const i: std::views::iota(start, lines.size()))
-    {
-        auto output = std::format("{}\n", lines[i]);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
-    }
+        writeLine(lines[i]);
+
     return 0;
 }
 
@@ -3623,9 +3725,7 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
                     case 'l': countLines = true; break;
                     case 'w': countWords = true; break;
                     case 'c': countChars = true; break;
-                    default:
-                        error("wc: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("wc: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
             continue;
@@ -3641,7 +3741,9 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
         countChars = true;
     }
 
-    auto const errorFn = [this](std::string const& msg) { error("wc: {}", msg); };
+    auto const errorFn = [this](std::string const& msg) {
+        error("wc: {}", msg);
+    };
     auto const lines = readLinesFromInput(stdinFd, files, errorFn);
 
     size_t totalLines = lines.size();
@@ -3744,9 +3846,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
                             }
                         }
                         goto next_arg; // NOLINT
-                    default:
-                        error("sort: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("sort: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
         next_arg:
@@ -3755,7 +3855,9 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
         files.emplace_back(arg);
     }
 
-    auto const errorFn = [this](std::string const& msg) { error("sort: {}", msg); };
+    auto const errorFn = [this](std::string const& msg) {
+        error("sort: {}", msg);
+    };
     auto lines = readLinesFromInput(stdinFd, files, errorFn);
 
     // Extract key field helper
@@ -3855,9 +3957,7 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
                     case 'c': showCount = true; break;
                     case 'd': duplicatesOnly = true; break;
                     case 'i': ignoreCase = true; break;
-                    default:
-                        error("uniq: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("uniq: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
             continue;
@@ -3865,7 +3965,9 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
         files.emplace_back(arg);
     }
 
-    auto const errorFn = [this](std::string const& msg) { error("uniq: {}", msg); };
+    auto const errorFn = [this](std::string const& msg) {
+        error("uniq: {}", msg);
+    };
     auto const lines = readLinesFromInput(stdinFd, files, errorFn);
 
     auto const compareEqual = [ignoreCase](std::string_view a, std::string_view b) {
@@ -3875,8 +3977,8 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
             return false;
         for (size_t i = 0; i < a.size(); ++i)
         {
-            if (std::tolower(static_cast<unsigned char>(a[i])) !=
-                std::tolower(static_cast<unsigned char>(b[i])))
+            if (std::tolower(static_cast<unsigned char>(a[i]))
+                != std::tolower(static_cast<unsigned char>(b[i])))
                 return false;
         }
         return true;
@@ -4011,7 +4113,9 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
         return ranges;
     };
 
-    auto const errorFn = [this](std::string const& msg) { error("cut: {}", msg); };
+    auto const errorFn = [this](std::string const& msg) {
+        error("cut: {}", msg);
+    };
     auto const lines = readLinesFromInput(stdinFd, files, errorFn);
 
     if (!fieldSpec.empty())
@@ -4121,9 +4225,7 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle out
                 {
                     case 'd': deleteMode = true; break;
                     case 's': squeezeMode = true; break;
-                    default:
-                        error("tr: invalid option -- '{}'", arg[j]);
-                        return 1;
+                    default: error("tr: invalid option -- '{}'", arg[j]); return 1;
                 }
             }
             continue;
@@ -4204,9 +4306,8 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle out
         for (auto const ch: inputData)
         {
             auto const pos = expandedSet1.find(ch);
-            auto const mapped = pos != std::string::npos
-                                    ? expandedSet2[std::min(pos, expandedSet2.size() - 1)]
-                                    : ch;
+            auto const mapped =
+                pos != std::string::npos ? expandedSet2[std::min(pos, expandedSet2.size() - 1)] : ch;
             if (squeezeMode && mapped == lastOutput && pos != std::string::npos)
                 continue;
             output += mapped;
