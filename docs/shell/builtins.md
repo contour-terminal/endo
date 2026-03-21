@@ -988,6 +988,41 @@ bindings.
 
 ---
 
+## history
+
+Display or manage command history.
+
+**Syntax:**
+
+```
+history [N | search PATTERN | clear]
+```
+
+**Description:** Displays the command history with numbered entries. When called without
+arguments, lists all entries. Supports viewing a subset, searching, and clearing.
+
+**Subcommands:**
+
+| Subcommand | Description |
+|---|---|
+| *(none)* | List all history entries, numbered |
+| `N` | List the last N entries |
+| `search PATTERN` | Search entries by prefix |
+| `clear` | Clear all history |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+history
+history 20
+history search git
+history clear
+```
+
+---
+
 ## env
 
 Get an environment variable (F# style).
@@ -1074,6 +1109,43 @@ source-env ./setup-toolchain.ps1
 ```
 
 **Return value:** The exit code of the sourced script (0 on success).
+
+---
+
+## source
+
+Execute a script in the current shell context.
+
+**Syntax:**
+
+```
+source FILE [ARGS...]
+. FILE [ARGS...]
+```
+
+**Description:** Reads and executes commands from FILE in the current shell environment.
+Unlike running a script as a subprocess, variables, functions, and other state changes
+made by the sourced script persist after it completes. The `.` command is a POSIX-compatible
+alias for `source`.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+source ~/.config/endo/utils.endo
+. ./setup-project.endo
+```
+
+!!! tip
+    Use `source` for Endo scripts (`.endo` files) that should modify the current shell
+    environment. For importing environment variables from external shell scripts (bash, zsh,
+    PowerShell), use [`source-env`](#source-env) instead.
 
 ---
 

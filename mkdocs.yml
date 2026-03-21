@@ -123,5 +123,6 @@ nav:
     - Structured Data: roadmap/structured-data.md
     - WebAssembly: roadmap/wasm.md
   - FAQ: FAQ.md
+  - Comparisons: comparisons.md
   - Releases: releases.md
   - Contributing: contributing.md

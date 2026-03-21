@@ -205,7 +205,9 @@ jobs:
 
     - name: Build MSI installer
       working-directory: build/clangcl-release
-      run: cpack -G WIX
+      shell: bash
+      run: |
+        cpack -G WIX || (cat _CPack_Packages/win64/WIX/wix.log 2>/dev/null; exit 1)
 
     - name: Upload Windows binary
       uses: actions/upload-artifact@v4

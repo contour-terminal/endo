@@ -208,7 +208,7 @@ namespace endo
 
 int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent)
 {
-    if (outputFd == standardOutput() && isatty(STDOUT_FD) != 0)
+    if (outputFd == standardOutput() && isTerminal(standardOutput()))
     {
         tui::TerminalOutput termOutput;
         termOutput.updateDimensions();
@@ -625,12 +625,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     }
 
     // Detect whether output goes to a TTY for syntax highlighting
-#if defined(_WIN32)
-    DWORD consoleMode = 0;
-    bool const outputIsTty = GetConsoleMode(outputFd, &consoleMode) != 0;
-#else
-    bool const outputIsTty = isatty(outputFd) != 0;
-#endif
+    bool const outputIsTty = isTerminal(outputFd);
 
     int lineNumber = 1;
     bool lastLineWasBlank = false;
@@ -2182,9 +2177,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         useColor = true;
     else if (opts.colorMode == grep::ColorMode::Auto)
     {
-#if !defined(_WIN32)
-        useColor = (isatty(outputFd) != 0);
-#endif
+        useColor = isTerminal(outputFd);
     }
 
     // Output + error writer lambdas
@@ -3680,6 +3673,164 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         writeLine(lines[i]);
 
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// history
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    // Detect whether output goes to a TTY for syntax highlighting.
+    bool const outputIsTty = isTerminal(outputFd);
+    auto const* noColor = std::getenv("NO_COLOR");
+    bool const useColor = outputIsTty && (noColor == nullptr || noColor[0] == '\0');
+
+    auto const printNumberedEntries = [&](size_t maxCount) {
+        auto const& entries = history.entries();
+        auto const start = entries.size() > maxCount ? entries.size() - maxCount : 0uz;
+        auto const& theme = tui::currentTheme();
+        std::string buf;
+        for (auto const i: std::views::iota(start, entries.size()))
+        {
+            buf.clear();
+            if (useColor)
+            {
+                auto [highlights, _] = tui::highlightLine(entries[i], tui::LanguageId::Endo);
+                auto const coloredEntry = tui::renderHighlightedLineToString(entries[i], highlights, theme);
+                std::format_to(std::back_inserter(buf), "  \033[32m{:>5}\033[m  {}\n", i + 1, coloredEntry);
+            }
+            else
+            {
+                std::format_to(std::back_inserter(buf), "  {:>5}  {}\n", i + 1, entries[i]);
+            }
+            [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
+        }
+    };
+
+    if (args.size() >= 2)
+    {
+        std::string_view const subcmd = args.at(1);
+        if (subcmd == "-h" || subcmd == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# history\n"
+                                      "\n"
+                                      "Display or manage command history.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`history [N | search PATTERN | clear]`\n"
+                                      "\n"
+                                      "## Subcommands\n"
+                                      "\n"
+                                      "| Subcommand | Description |\n"
+                                      "|------------|-------------|\n"
+                                      "| *(none)* | List all history entries, numbered |\n"
+                                      "| `N` | List the last N entries |\n"
+                                      "| `search PATTERN` | Search entries by prefix |\n"
+                                      "| `clear` | Clear all history |\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+
+        if (subcmd == "clear")
+        {
+            history.clear();
+            return 0;
+        }
+
+        if (subcmd == "search")
+        {
+            if (args.size() < 3)
+            {
+                error("history: search requires a pattern");
+                return 1;
+            }
+            auto const results = history.search(args.at(2), 50);
+            auto const& theme = tui::currentTheme();
+            std::string buf;
+            for (auto const& entry: results)
+            {
+                buf.clear();
+                if (useColor)
+                {
+                    auto [highlights, _] = tui::highlightLine(entry, tui::LanguageId::Endo);
+                    std::format_to(std::back_inserter(buf),
+                                   "{}\n",
+                                   tui::renderHighlightedLineToString(entry, highlights, theme));
+                }
+                else
+                {
+                    std::format_to(std::back_inserter(buf), "{}\n", entry);
+                }
+                [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
+            }
+            return 0;
+        }
+
+        // Try parsing as count N
+        int count = 0;
+        auto const [ptr, ec] = std::from_chars(subcmd.data(), subcmd.data() + subcmd.size(), count);
+        if (ec == std::errc {} && ptr == subcmd.data() + subcmd.size())
+        {
+            if (count <= 0)
+            {
+                error("history: count must be a positive number");
+                return 1;
+            }
+            printNumberedEntries(static_cast<size_t>(count));
+            return 0;
+        }
+
+        error("history: unknown subcommand '{}'", subcmd);
+        return 1;
+    }
+
+    printNumberedEntries(history.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// source / .
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    if (args.size() < 2)
+    {
+        error("{}: filename argument required", args.at(0));
+        return 1;
+    }
+
+    std::string_view const firstArg = args.at(1);
+    if (firstArg == "-h" || firstArg == "--help")
+        return renderMarkdownHelp(outputFd,
+                                  "# source\n"
+                                  "\n"
+                                  "Execute a script in the current shell context.\n"
+                                  "\n"
+                                  "## Usage\n"
+                                  "\n"
+                                  "`source FILE [ARGS...]`\n"
+                                  "``. FILE [ARGS...]``\n"
+                                  "\n"
+                                  "Reads and executes commands from FILE in the current shell\n"
+                                  "environment. Variables, functions, and other state changes\n"
+                                  "persist after the script completes.\n"
+                                  "\n"
+                                  "## Options\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|--------|-------------|\n"
+                                  "| `-h`, `--help` | Display this help |\n");
+
+    auto const filePath = std::string(firstArg);
+    auto content = _fs.readFile(filePath);
+    if (!content)
+    {
+        error("{}: {}: {}", args.at(0), filePath, content.error());
+        return 1;
+    }
+
+    return executeConfigScript(*content, filePath);
 }
 
 // ---------------------------------------------------------------------------

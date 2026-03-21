@@ -319,6 +319,10 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
                                        NativeHandle outputFd,
                                        NativeHandle stdinFd);
+    /// Executes the history builtin. Returns exit code.
+    [[nodiscard]] int executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the source builtin, running a script in the current shell context. Returns exit code.
+    [[nodiscard]] int executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the source-env builtin, sourcing a script and importing its environment. Returns exit code.
     [[nodiscard]] int executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
@@ -576,7 +580,8 @@ class Shell final: public SignalCallback
     int _shellLevel = 0;      ///< Shell nesting depth (0 = outermost)
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
-    bool _interactiveReady = false; ///< Whether interactive subsystems (history, completer, dirconfig) are initialized
+    bool _interactiveReady =
+        false; ///< Whether interactive subsystems (history, completer, dirconfig) are initialized
     std::vector<std::vector<std::string>> _cmdBuilderStack;
 
     struct RedirectState

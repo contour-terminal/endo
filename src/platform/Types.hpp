@@ -133,6 +133,16 @@ inline auto platformRead(NativeHandle h, void* data, size_t size) -> intptr_t
         return -1;
     return static_cast<intptr_t>(bytesRead);
 }
+
+/// Checks whether a native handle refers to a terminal (console) device.
+///
+/// @param h The native handle to check.
+/// @return true if the handle is connected to a terminal.
+inline bool isTerminal(NativeHandle h) noexcept
+{
+    DWORD mode = 0;
+    return GetConsoleMode(h, &mode) != 0;
+}
 #else
 /// Cross-platform close using POSIX close.
 ///
@@ -164,6 +174,15 @@ inline auto platformRead(NativeHandle fd, void* data, size_t size) -> intptr_t
 {
     return static_cast<intptr_t>(::read(fd, data, size));
 }
+
+/// Checks whether a native handle refers to a terminal device.
+///
+/// @param fd The file descriptor to check.
+/// @return true if the descriptor is connected to a terminal.
+inline bool isTerminal(NativeHandle fd) noexcept
+{
+    return ::isatty(fd) != 0;
+}
 #endif
 
 } // namespace endo::platform
@@ -173,6 +192,7 @@ namespace endo
 {
 using endo::platform::InvalidHandle;
 using endo::platform::InvalidProcessId;
+using endo::platform::isTerminal;
 using endo::platform::NativeHandle;
 using endo::platform::platformClose;
 using endo::platform::platformRead;

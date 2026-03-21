@@ -24,7 +24,17 @@
 namespace endo
 {
 
+// On MSVC/clang-cl, member-function-pointer size depends on the class's inheritance
+// model. A bare forward declaration defaults to "unknown inheritance" (24 bytes),
+// whereas a fully-defined single-inheritance class yields 8 bytes. If Shell.hpp
+// happens to be included before this header, the struct layout changes and causes
+// an ODR violation. The __single_inheritance annotation pins the pointer size to
+// the correct (single-inheritance) representation regardless of include order.
+#if defined(_MSC_VER)
+class __single_inheritance Shell;
+#else
 class Shell;
+#endif
 
 /// @brief Describes a flag/option for an inline builtin command.
 struct InlineOptionDef

@@ -184,6 +184,18 @@ TEST_CASE("DiagnosticsCollector.exit_no_crash", "[diagnostics][builtins]")
     CHECK(diagnostics.empty());
 }
 
+TEST_CASE("DiagnosticsCollector.history_builtin_no_diagnostic", "[diagnostics][command-not-found]")
+{
+    auto diagnostics = collectDiagnostics("history 10");
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.source_builtin_no_diagnostic", "[diagnostics][command-not-found]")
+{
+    auto diagnostics = collectDiagnostics("source script.sh");
+    CHECK(diagnostics.empty());
+}
+
 // =============================================================================
 // Type error suggestion propagation
 // =============================================================================

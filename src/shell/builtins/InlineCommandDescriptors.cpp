@@ -135,6 +135,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
     /// Adding a new builtin: insert a single entry here (keep sort order!)
     /// + implement the executeInlineXxx function.
     static const InlineCommandDescriptor table[] = {
+        { .name = ".",         .briefDescription = "Execute a script in the current shell context.",
+          .usageLine = ". FILE [ARGS...]",
+          .options = {}, .acceptsFileArgs = true,
+          .noStdinFn = &Shell::executeInlineSource },
         { .name = "basename",  .briefDescription = "Strip directory and suffix from pathname.",
           .usageLine = "basename PATH [SUFFIX]",
           .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = false,
@@ -178,6 +182,9 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "head [OPTIONS] [FILE...]",
           .options = kHeadOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineHead },
+        { .name = "history",   .briefDescription = "Display or manage command history.",
+          .usageLine = "history [N | search PATTERN | clear]",
+          .noStdinFn = &Shell::executeInlineHistory },
         { .name = "hostname",  .briefDescription = "Print the system hostname.",
           .usageLine = "hostname",
           .noStdinFn = &Shell::executeInlineHostname },
@@ -215,6 +222,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "sort [OPTIONS] [FILE...]",
           .options = kSortOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineSort },
+        { .name = "source",    .briefDescription = "Execute a script in the current shell context.",
+          .usageLine = "source FILE [ARGS...]",
+          .options = {}, .acceptsFileArgs = true,
+          .noStdinFn = &Shell::executeInlineSource },
         { .name = "source-env", .briefDescription = "Import environment from an external script.",
           .usageLine = "source-env SCRIPT [ARGS...]",
           .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = false,
