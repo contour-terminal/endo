@@ -64,7 +64,15 @@ struct BuiltinInfo
 };
 
 /// Returns the list of user-facing builtins with descriptions.
-/// Includes shell builtins (cd, exit, ...), control flow keywords, and F# output functions.
+/// Includes shell builtins (cd, exit, ...), control flow keywords, registered inline builtins,
+/// and F# output functions.
 [[nodiscard]] std::vector<BuiltinInfo> userFacingBuiltins();
+
+/// Registers inline builtin descriptors generated from InlineCommandDescriptors.
+///
+/// Called once at shell startup so that completions, diagnostics, and LSP hover
+/// automatically include every inline builtin without maintaining a separate list.
+/// Follows the same pattern as registerEndoHighlighter().
+void registerInlineBuiltins(std::vector<BuiltinInfo> builtins);
 
 } // namespace endo

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/ui/Prompt.hpp>
 #include <shell/ui/RichConsoleReport.hpp>
@@ -543,43 +544,44 @@ void Shell::SubstitutionCapture::clear()
 namespace
 {
 
-/// Cached data derived from CoreVM::TypeRegistry (immutable after construction).
-struct TypeRegistryCachedData
-{
-    std::unordered_map<std::string, std::vector<endo::RecordFieldInfo>> recordTypeFields;
-    endo::ModuleFunctionMap moduleFunctions;
-    std::unordered_map<std::string, std::string> commandOutputTypes;
-    std::unordered_map<std::string, endo::FSharpPersistentState::StructuredCommandInfo> structuredCommands;
-};
+    /// Cached data derived from CoreVM::TypeRegistry (immutable after construction).
+    struct TypeRegistryCachedData
+    {
+        std::unordered_map<std::string, std::vector<endo::RecordFieldInfo>> recordTypeFields;
+        endo::ModuleFunctionMap moduleFunctions;
+        std::unordered_map<std::string, std::string> commandOutputTypes;
+        std::unordered_map<std::string, endo::FSharpPersistentState::StructuredCommandInfo>
+            structuredCommands;
+    };
 
-/// Returns cached TypeRegistry-derived data (computed once, reused for all Shell instances).
-TypeRegistryCachedData const& cachedTypeRegistryData()
-{
-    static auto const instance = [] {
-        CoreVM::TypeRegistry registry;
-        TypeRegistryCachedData data;
-        data.recordTypeFields = endo::builtinRecordFields(registry);
-        data.moduleFunctions = endo::builtinModuleFunctions(registry);
-        data.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
+    /// Returns cached TypeRegistry-derived data (computed once, reused for all Shell instances).
+    TypeRegistryCachedData const& cachedTypeRegistryData()
+    {
+        static auto const instance = [] {
+            CoreVM::TypeRegistry registry;
+            TypeRegistryCachedData data;
+            data.recordTypeFields = endo::builtinRecordFields(registry);
+            data.moduleFunctions = endo::builtinModuleFunctions(registry);
+            data.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
 
-        for (auto const& type: registry.allTypes())
-        {
-            if (!type->producingCommand.empty())
+            for (auto const& type: registry.allTypes())
             {
-                data.structuredCommands[type->producingCommand] = {
-                    .builtinCallbackName = "structured_" + type->producingCommand,
-                    .recordTypeId = type->id,
-                    .recordTypeName = type->name,
-                };
+                if (!type->producingCommand.empty())
+                {
+                    data.structuredCommands[type->producingCommand] = {
+                        .builtinCallbackName = "structured_" + type->producingCommand,
+                        .recordTypeId = type->id,
+                        .recordTypeName = type->name,
+                    };
+                }
             }
-        }
-        if (auto it = data.structuredCommands.find("ls"); it != data.structuredCommands.end())
-            it->second.defaultStringArg = ".";
+            if (auto it = data.structuredCommands.find("ls"); it != data.structuredCommands.end())
+                it->second.defaultStringArg = ".";
 
-        return data;
-    }();
-    return instance;
-}
+            return data;
+        }();
+        return instance;
+    }
 
 } // namespace
 
@@ -757,6 +759,11 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
             }
         }
     }
+
+    // Register inline builtins for diagnostics, completions, and LSP hover.
+    // This ensures that every entry in InlineCommandDescriptors is automatically
+    // recognized — no separate list to maintain.
+    registerInlineBuiltins(inlineBuiltinInfos(inlineCommandDescriptors()));
 
     // Register Endo syntax highlighter for agent-mode code blocks and diffs
     tui::registerEndoHighlighter(

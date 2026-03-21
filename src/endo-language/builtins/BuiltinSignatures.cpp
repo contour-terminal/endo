@@ -625,18 +625,29 @@ namespace
         std::string_view detail;
     };
 
+    /// @brief Storage for inline builtins registered at shell startup via registerInlineBuiltins().
+    std::vector<BuiltinInfo>& registeredInlineBuiltins()
+    {
+        static std::vector<BuiltinInfo> builtins;
+        return builtins;
+    }
+
     // clang-format off
+    /// Shell builtins for completion and diagnostics.
+    ///
+    /// Inline builtins (cat, grep, history, ...) are also registered at runtime
+    /// via registerInlineBuiltins() from InlineCommandDescriptors.  The entries
+    /// here serve as the baseline for test binaries that don't call registration.
+    /// New inline builtins only need an InlineCommandDescriptor entry — they will
+    /// be auto-registered at startup.
     constexpr std::array shellBuiltinDescriptors = {
-        ShellBuiltinDescriptor { .name="cat", .description="builtin", .detail="**cat** -- builtin\n\nConcatenates and displays file contents." },
+        // VM-level builtins (not in InlineCommandDescriptors)
         ShellBuiltinDescriptor { .name="cd", .description="builtin", .detail="**cd** -- builtin\n\nChanges the current working directory.\n\n```\ncd /tmp\ncd ~\n```" },
         ShellBuiltinDescriptor { .name="exit", .description="builtin", .detail="**exit** -- builtin\n\nExits the shell with an optional exit code.\n\n```\nexit\nexit 1\n```" },
         ShellBuiltinDescriptor { .name="export", .description="builtin", .detail="**export** -- builtin\n\nSets an environment variable.\n\n```\nexport PATH=\"/usr/bin:$PATH\"\n```" },
-        ShellBuiltinDescriptor { .name="mv", .description="builtin", .detail="**mv** -- builtin\n\nMoves or renames files and directories." },
-        ShellBuiltinDescriptor { .name="rm", .description="builtin", .detail="**rm** -- builtin\n\nRemoves files and directories." },
         ShellBuiltinDescriptor { .name="set", .description="builtin", .detail="**set** -- builtin\n\nSets a shell variable." },
         ShellBuiltinDescriptor { .name="unset", .description="builtin", .detail="**unset** -- builtin\n\nRemoves a shell variable." },
         ShellBuiltinDescriptor { .name="read", .description="builtin", .detail="**read** -- builtin\n\nReads a line of input into a variable." },
-        ShellBuiltinDescriptor { .name="sleep", .description="builtin", .detail="**sleep** -- builtin\n\nPauses execution for a given duration.\n\n```\nsleep 2\n```" },
         ShellBuiltinDescriptor { .name="true", .description="builtin", .detail="**true** -- builtin\n\nReturns exit code 0 (success)." },
         ShellBuiltinDescriptor { .name="false", .description="builtin", .detail="**false** -- builtin\n\nReturns exit code 1 (failure)." },
         ShellBuiltinDescriptor { .name="jobs", .description="builtin", .detail="**jobs** -- builtin\n\nLists background jobs." },
@@ -665,6 +676,22 @@ namespace
             "bind --reset               # Reset to defaults\n"
             "```"
         },
+        ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
+        ShellBuiltinDescriptor { .name="print", .description="F# print function", .detail="**print** -- builtin\n\nPrints a value without newline (F# style).\n\n```\nprint 42\nprint \"hello\"\n```" },
+        ShellBuiltinDescriptor { .name="println", .description="F# print with newline", .detail="**println** -- builtin\n\nPrints a value followed by a newline (F# style).\n\n```\nprintln \"hello world\"\n```" },
+        // MCP server management
+        ShellBuiltinDescriptor { .name="add_mcp_server", .description="Register an MCP server", .detail="**add_mcp_server** -- builtin\n\nRegisters an MCP (Model Context Protocol) server for agent use." },
+        ShellBuiltinDescriptor { .name="set_mcp_env", .description="Set environment variable for an MCP server", .detail="**set_mcp_env** -- builtin\n\nSets an environment variable for a registered MCP server." },
+        ShellBuiltinDescriptor { .name="remove_mcp_server", .description="Remove an MCP server", .detail="**remove_mcp_server** -- builtin\n\nRemoves a previously registered MCP server." },
+        // Inline builtins — also registered at runtime via registerInlineBuiltins().
+        // These entries provide test-time coverage and richer detail text.
+        ShellBuiltinDescriptor { .name=".", .description="builtin", .detail="**.**  -- builtin\n\nExecute a script in the current shell context." },
+        ShellBuiltinDescriptor { .name="source", .description="builtin", .detail="**source** -- builtin\n\nExecute a script in the current shell context." },
+        ShellBuiltinDescriptor { .name="history", .description="builtin", .detail="**history** -- builtin\n\nDisplay or manage command history." },
+        ShellBuiltinDescriptor { .name="cat", .description="builtin", .detail="**cat** -- builtin\n\nConcatenates and displays file contents." },
+        ShellBuiltinDescriptor { .name="mv", .description="builtin", .detail="**mv** -- builtin\n\nMoves or renames files and directories." },
+        ShellBuiltinDescriptor { .name="rm", .description="builtin", .detail="**rm** -- builtin\n\nRemoves files and directories." },
+        ShellBuiltinDescriptor { .name="sleep", .description="builtin", .detail="**sleep** -- builtin\n\nPauses execution for a given duration.\n\n```\nsleep 2\n```" },
         ShellBuiltinDescriptor { .name="dirconfig", .description="builtin", .detail="**dirconfig** -- builtin\n\nManage directory configuration trust entries.\n\n```\ndirconfig allow\ndirconfig list\n```" },
         ShellBuiltinDescriptor { .name="kill", .description="builtin", .detail="**kill** -- builtin\n\nSend signals to processes or jobs.\n\n```\nkill 1234\nkill -9 %1\nkill -l\n```" },
         ShellBuiltinDescriptor { .name="whoami", .description="builtin", .detail="**whoami** -- builtin\n\nPrint the current username." },
@@ -696,16 +723,30 @@ namespace
             "source-env vcvarsall.bat x64\n"
             "```"
         },
-        ShellBuiltinDescriptor { .name="which", .description="builtin", .detail="**which** -- builtin\n\nLocates a command in `$PATH`." },
         ShellBuiltinDescriptor { .name="echo", .description="builtin", .detail="**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
         ShellBuiltinDescriptor { .name="grep", .description="builtin", .detail="**grep** -- builtin\n\nSearches for patterns in files.\n\n```\ngrep -rn TODO src/\n```" },
         ShellBuiltinDescriptor { .name="timeout", .description="builtin", .detail="**timeout** -- builtin\n\nRun a command with a time limit.\n\n```\ntimeout 5 sleep 10\ntimeout -s KILL -k 2 30 long_running_cmd\n```" },
-        ShellBuiltinDescriptor { .name="print", .description="F# print function", .detail="**print** -- builtin\n\nPrints a value without newline (F# style).\n\n```\nprint 42\nprint \"hello\"\n```" },
-        ShellBuiltinDescriptor { .name="println", .description="F# print with newline", .detail="**println** -- builtin\n\nPrints a value followed by a newline (F# style).\n\n```\nprintln \"hello world\"\n```" },
-        // MCP server management
-        ShellBuiltinDescriptor { .name="add_mcp_server", .description="Register an MCP server", .detail="**add_mcp_server** -- builtin\n\nRegisters an MCP (Model Context Protocol) server for agent use." },
-        ShellBuiltinDescriptor { .name="set_mcp_env", .description="Set environment variable for an MCP server", .detail="**set_mcp_env** -- builtin\n\nSets an environment variable for a registered MCP server." },
-        ShellBuiltinDescriptor { .name="remove_mcp_server", .description="Remove an MCP server", .detail="**remove_mcp_server** -- builtin\n\nRemoves a previously registered MCP server." },
+        // POSIX compatibility names (recognized by the shell but not user-completable with detail)
+        ShellBuiltinDescriptor { .name="printf", .description="builtin", .detail="**printf** -- builtin\n\nFormat and print data." },
+        ShellBuiltinDescriptor { .name="test", .description="builtin", .detail="**test** -- builtin\n\nEvaluate a conditional expression." },
+        ShellBuiltinDescriptor { .name="exec", .description="builtin", .detail="**exec** -- builtin\n\nReplace the shell with a command." },
+        ShellBuiltinDescriptor { .name="eval", .description="builtin", .detail="**eval** -- builtin\n\nEvaluate arguments as a shell command." },
+        ShellBuiltinDescriptor { .name="shift", .description="builtin", .detail="**shift** -- builtin\n\nShift positional parameters." },
+        ShellBuiltinDescriptor { .name="trap", .description="builtin", .detail="**trap** -- builtin\n\nSet signal handlers." },
+        ShellBuiltinDescriptor { .name="type", .description="builtin", .detail="**type** -- builtin\n\nDescribe a command." },
+        ShellBuiltinDescriptor { .name="local", .description="builtin", .detail="**local** -- builtin\n\nDeclare local variables." },
+        ShellBuiltinDescriptor { .name="declare", .description="builtin", .detail="**declare** -- builtin\n\nDeclare variables and attributes." },
+        ShellBuiltinDescriptor { .name="typeset", .description="builtin", .detail="**typeset** -- builtin\n\nDeclare variables and attributes." },
+        ShellBuiltinDescriptor { .name="alias", .description="builtin", .detail="**alias** -- builtin\n\nDefine or display aliases." },
+        ShellBuiltinDescriptor { .name="unalias", .description="builtin", .detail="**unalias** -- builtin\n\nRemove aliases." },
+        ShellBuiltinDescriptor { .name="command", .description="builtin", .detail="**command** -- builtin\n\nRun a command bypassing shell functions." },
+        ShellBuiltinDescriptor { .name="builtin", .description="builtin", .detail="**builtin** -- builtin\n\nRun a builtin command." },
+        ShellBuiltinDescriptor { .name="hash", .description="builtin", .detail="**hash** -- builtin\n\nManage command hash table." },
+        ShellBuiltinDescriptor { .name="let", .description="builtin", .detail="**let** -- builtin\n\nVariable binding." },
+        ShellBuiltinDescriptor { .name="readonly", .description="builtin", .detail="**readonly** -- builtin\n\nMark variables as read-only." },
+        ShellBuiltinDescriptor { .name="select", .description="builtin", .detail="**select** -- builtin\n\nGenerate a menu from a word list." },
+        ShellBuiltinDescriptor { .name="time", .description="builtin", .detail="**time** -- builtin\n\nTime a command execution." },
+        ShellBuiltinDescriptor { .name="until", .description="builtin", .detail="**until** -- builtin\n\nLoop until a condition is true." },
     };
 
     constexpr std::array keywordDescriptors = {
@@ -726,14 +767,20 @@ namespace
 
 std::vector<BuiltinInfo> userFacingBuiltins()
 {
+    auto const& inlineBuiltins = registeredInlineBuiltins();
+
     std::vector<BuiltinInfo> result;
-    result.reserve(shellBuiltinDescriptors.size() + keywordDescriptors.size()
+    result.reserve(shellBuiltinDescriptors.size() + inlineBuiltins.size() + keywordDescriptors.size()
                    + allPropertyDescriptors().size());
 
-    // Shell builtins
+    // Shell builtins (non-inline)
     for (auto const& desc: shellBuiltinDescriptors)
         result.push_back(
             { std::string(desc.name), std::string(desc.description), false, std::string(desc.detail) });
+
+    // Inline builtins (registered at startup from InlineCommandDescriptors)
+    for (auto const& info: inlineBuiltins)
+        result.push_back(info);
 
     // Keywords
     for (auto const& desc: keywordDescriptors)
@@ -746,6 +793,11 @@ std::vector<BuiltinInfo> userFacingBuiltins()
             { std::string(desc.name), std::string(desc.description), true, std::string(desc.detail) });
 
     return result;
+}
+
+void registerInlineBuiltins(std::vector<BuiltinInfo> builtins)
+{
+    registeredInlineBuiltins() = std::move(builtins);
 }
 
 } // namespace endo

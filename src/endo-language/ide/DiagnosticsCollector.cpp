@@ -21,22 +21,20 @@ namespace
 {
 
     /// @brief Known shell builtin command names, derived from BuiltinSignatures.
-    [[nodiscard]] std::set<std::string> const& builtinNames()
+    ///
+    /// All names come from userFacingBuiltins(), which merges:
+    /// - shellBuiltinDescriptors (VM-level + POSIX compatibility builtins)
+    /// - registered inline builtins (from InlineCommandDescriptors via registerInlineBuiltins())
+    /// - keywords and properties
+    ///
+    /// No separate hardcoded list is needed here.
+    [[nodiscard]] std::set<std::string> builtinNames()
     {
-        static auto const names = [] {
-            auto const builtins = userFacingBuiltins();
-            auto result = std::set<std::string>();
-            for (auto const& info: builtins)
-                result.insert(info.name);
-            // Additional names recognized by the shell parser but not user-completable
-            for (auto const& name:
-                 { "printf", "test",  "source",   ".",       "exec",  "eval",    "shift",   "trap",
-                   "type",   "local", "declare",  "typeset", "alias", "unalias", "command", "builtin",
-                   "hash",   "let",   "readonly", "select",  "time",  "until" })
-                result.insert(name);
-            return result;
-        }();
-        return names;
+        auto const builtins = userFacingBuiltins();
+        auto result = std::set<std::string>();
+        for (auto const& info: builtins)
+            result.insert(info.name);
+        return result;
     }
 
     /// @brief Checks if a command exists in PATH.
