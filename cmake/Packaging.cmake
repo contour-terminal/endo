@@ -36,7 +36,25 @@ if(WIN32)
     # WIX (.msi installer)
     # Stable GUID for MSI upgrade detection — must never change once published.
     set(CPACK_WIX_UPGRADE_GUID "E8A5C7B2-3F1D-4A9E-B6D0-8C2F5E7A1B3D")
-    set(CPACK_WIX_LICENSE_RTF "${CMAKE_SOURCE_DIR}/LICENSE.txt")
+
+    # Generate LICENSE.rtf from LICENSE.txt — WIX requires RTF format for the
+    # license dialog.  Keep LICENSE.txt as the single source of truth.
+    file(READ "${CMAKE_SOURCE_DIR}/LICENSE.txt" _license_text)
+    string(REPLACE "\\" "\\\\" _license_text "${_license_text}")
+    string(REPLACE "{" "\\{" _license_text "${_license_text}")
+    string(REPLACE "}" "\\}" _license_text "${_license_text}")
+    string(REPLACE "\n" "\\par\n" _license_text "${_license_text}")
+    file(WRITE "${CMAKE_BINARY_DIR}/LICENSE.rtf"
+        "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0\\fswiss Segoe UI;}}\\f0\\fs18\n"
+        "${_license_text}"
+        "}\n")
+    set(CPACK_WIX_LICENSE_RTF "${CMAKE_BINARY_DIR}/LICENSE.rtf")
+
+    # Add endo's bin directory to the system PATH on install/remove on uninstall.
+    # The component is defined in wix-env-path.wxs (compiled as extra source);
+    # the patch file injects the ComponentRef into the product feature.
+    set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_SOURCE_DIR}/cmake/wix-env-path.wxs")
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/wix-path-env.xml")
 
 elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")

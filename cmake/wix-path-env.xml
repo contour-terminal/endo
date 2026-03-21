@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  WIX patch fragment: includes the PATH environment component (defined in
+  wix-env-path.wxs) in the main product feature so it gets installed.
+-->
+<CPackWiXPatch>
+    <CPackWiXFragment Id="#PRODUCTFEATURE">
+        <ComponentRef Id="Env_PATH" />
+    </CPackWiXFragment>
+</CPackWiXPatch>
