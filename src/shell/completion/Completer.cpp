@@ -3,6 +3,7 @@
 #include <shell/completion/BuiltinSpecs.hpp>
 #include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
+#include <shell/completion/HistorySpec.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
 #include <tui/completer/Completer.hpp>
@@ -26,8 +27,10 @@ Completer::Completer(EnvironmentProvider const& env,
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
-    for (auto& spec : createBuiltinSpecs())
+    for (auto& spec: createBuiltinSpecs())
         specCompleter->registerCommand(std::move(spec), nullptr);
+    // Register after createBuiltinSpecs() to overwrite the auto-generated spec with subcommands
+    specCompleter->registerCommand(createHistorySpec(), nullptr);
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
