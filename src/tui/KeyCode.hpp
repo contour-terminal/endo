@@ -183,4 +183,51 @@ enum class KeyCode : std::uint32_t // NOLINT(readability-enum-initial-value)
     return isPrintable(key) ? static_cast<char32_t>(key) : 0;
 }
 
+/// @brief Returns the text character a numpad key produces, or 0 for non-character numpad keys.
+[[nodiscard]] constexpr auto numpadCodepoint(KeyCode key) noexcept -> char32_t
+{
+    switch (key)
+    {
+        case KeyCode::Kp0: return U'0';
+        case KeyCode::Kp1: return U'1';
+        case KeyCode::Kp2: return U'2';
+        case KeyCode::Kp3: return U'3';
+        case KeyCode::Kp4: return U'4';
+        case KeyCode::Kp5: return U'5';
+        case KeyCode::Kp6: return U'6';
+        case KeyCode::Kp7: return U'7';
+        case KeyCode::Kp8: return U'8';
+        case KeyCode::Kp9: return U'9';
+        case KeyCode::KpDecimal: return U'.';
+        case KeyCode::KpDivide: return U'/';
+        case KeyCode::KpMultiply: return U'*';
+        case KeyCode::KpSubtract: return U'-';
+        case KeyCode::KpAdd: return U'+';
+        case KeyCode::KpEqual: return U'=';
+        case KeyCode::KpSeparator: return U',';
+        default: return 0;
+    }
+}
+
+/// @brief Checks whether a numpad key is an operator that always produces text regardless of NumLock.
+[[nodiscard]] constexpr auto isNumpadOperator(KeyCode key) noexcept -> bool
+{
+    switch (key)
+    {
+        case KeyCode::KpDivide:
+        case KeyCode::KpMultiply:
+        case KeyCode::KpSubtract:
+        case KeyCode::KpAdd:
+        case KeyCode::KpEqual:
+        case KeyCode::KpSeparator: return true;
+        default: return false;
+    }
+}
+
+/// @brief Checks whether a key code can produce text input (Unicode printable or numpad character key).
+[[nodiscard]] constexpr auto isTextProducingKey(KeyCode key) noexcept -> bool
+{
+    return isPrintable(key) || numpadCodepoint(key) != 0;
+}
+
 } // namespace tui

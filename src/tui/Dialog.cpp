@@ -241,7 +241,7 @@ auto ConfirmDialog::processEvent(InputEvent const& event) -> DialogResult
 
             default:
                 // Handle y/n shortcuts
-                if (isPrintable(key->key))
+                if (isTextProducingKey(key->key))
                 {
                     if (key->codepoint == 'y' || key->codepoint == 'Y')
                         return DialogResult::Confirmed;
@@ -399,7 +399,7 @@ auto InputDialog::processEvent(InputEvent const& event) -> DialogResult
             case KeyCode::End: _cursor = _value.size(); return DialogResult::Changed;
 
             default:
-                if (isPrintable(key->key))
+                if (isTextProducingKey(key->key))
                 {
                     // Insert character at cursor
                     auto utf8 = std::string {};

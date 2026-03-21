@@ -116,6 +116,65 @@ TEST_CASE("VtParser.CSIu.escape_key", "[tui,vtparser]")
 }
 
 // ============================================================================
+// CSI u numpad key tests
+// ============================================================================
+
+TEST_CASE("VtParser.CSIu.numpad_5_with_numlock", "[tui,vtparser]")
+{
+    // CSI 57404;129u → KP_5 with NumLock (modifier param 129 = 1 + 128)
+    auto const key = parseKey("\033[57404;129u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp5);
+    CHECK(key->codepoint == U'5');
+    CHECK(hasModifier(key->modifiers, Modifier::NumLock));
+}
+
+TEST_CASE("VtParser.CSIu.numpad_5_without_numlock", "[tui,vtparser]")
+{
+    // CSI 57404u → KP_5 without NumLock — no text character
+    auto const key = parseKey("\033[57404u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp5);
+    CHECK(key->codepoint == 0);
+}
+
+TEST_CASE("VtParser.CSIu.numpad_0_with_numlock", "[tui,vtparser]")
+{
+    // CSI 57399;129u → KP_0 with NumLock
+    auto const key = parseKey("\033[57399;129u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp0);
+    CHECK(key->codepoint == U'0');
+}
+
+TEST_CASE("VtParser.CSIu.numpad_add_no_numlock", "[tui,vtparser]")
+{
+    // CSI 57413u → KP_Add without NumLock — operators always produce text
+    auto const key = parseKey("\033[57413u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::KpAdd);
+    CHECK(key->codepoint == U'+');
+}
+
+TEST_CASE("VtParser.CSIu.numpad_decimal_with_numlock", "[tui,vtparser]")
+{
+    // CSI 57409;129u → KP_Decimal with NumLock
+    auto const key = parseKey("\033[57409;129u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::KpDecimal);
+    CHECK(key->codepoint == U'.');
+}
+
+TEST_CASE("VtParser.CSIu.numpad_home_no_text", "[tui,vtparser]")
+{
+    // CSI 57423;129u → KP_Home with NumLock — navigation keys never produce text
+    auto const key = parseKey("\033[57423;129u");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::KpHome);
+    CHECK(key->codepoint == 0);
+}
+
+// ============================================================================
 // Focus event tests (DECSET 1004)
 // ============================================================================
 
@@ -490,29 +549,51 @@ TEST_CASE("VtParser.Win32Input.altgr_with_extra_modifiers", "[tui,vtparser]")
 
 TEST_CASE("VtParser.Win32Input.numpad_5", "[tui,vtparser]")
 {
-    // VK_NUMPAD5=0x65=101, no modifiers
+    // VK_NUMPAD5=0x65=101, no modifiers (no NumLock)
     auto const key = parseKey("\033[101;76;53;1;0;1_");
     REQUIRE(key.has_value());
     CHECK(key->key == KeyCode::Kp5);
     CHECK(key->modifiers == Modifier::None);
+    CHECK(key->codepoint == 0);
 }
 
 TEST_CASE("VtParser.Win32Input.ctrl_numpad_0", "[tui,vtparser]")
 {
-    // VK_NUMPAD0=0x60=96, CS=LeftCtrl(0x08)
+    // VK_NUMPAD0=0x60=96, CS=LeftCtrl(0x08), no NumLock
     auto const key = parseKey("\033[96;82;48;1;8;1_");
     REQUIRE(key.has_value());
     CHECK(key->key == KeyCode::Kp0);
     CHECK(key->modifiers == Modifier::Ctrl);
+    CHECK(key->codepoint == 0);
 }
 
 TEST_CASE("VtParser.Win32Input.numpad_multiply", "[tui,vtparser]")
 {
-    // VK_MULTIPLY=0x6A=106
+    // VK_MULTIPLY=0x6A=106, no NumLock — operators always produce text
     auto const key = parseKey("\033[106;55;42;1;0;1_");
     REQUIRE(key.has_value());
     CHECK(key->key == KeyCode::KpMultiply);
     CHECK(key->modifiers == Modifier::None);
+    CHECK(key->codepoint == U'*');
+}
+
+TEST_CASE("VtParser.Win32Input.numpad_5_with_numlock", "[tui,vtparser]")
+{
+    // VK_NUMPAD5=0x65=101, UC=53 ('5'), CS=NumLock(0x20)
+    auto const key = parseKey("\033[101;76;53;1;32;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::Kp5);
+    CHECK(key->codepoint == U'5');
+    CHECK(hasModifier(key->modifiers, Modifier::NumLock));
+}
+
+TEST_CASE("VtParser.Win32Input.numpad_add_always_text", "[tui,vtparser]")
+{
+    // VK_ADD=0x6B=107, UC=43 ('+'), CS=0 — operators always produce text
+    auto const key = parseKey("\033[107;78;43;1;0;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->key == KeyCode::KpAdd);
+    CHECK(key->codepoint == U'+');
 }
 
 TEST_CASE("VtParser.Win32Input.altgr_digit_composed", "[tui,vtparser]")

@@ -942,7 +942,7 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
     // ========================================================================
     // Printable characters
     // ========================================================================
-    if (key.codepoint != 0 && !ctrl && !alt && isPrintable(key.key))
+    if (key.codepoint != 0 && !ctrl && !alt && isTextProducingKey(key.key))
     {
         // Save undo state before any changes
         saveUndoState();

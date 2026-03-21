@@ -339,6 +339,22 @@ namespace
         }
     }
 
+    /// @brief Resolves the text codepoint for a numpad key based on modifier state.
+    ///
+    /// Operators always produce text. Digits/decimal produce text only when NumLock is active.
+    /// @param key The numpad key code.
+    /// @param mods Active modifier keys.
+    /// @param unicodeHint Optional platform-provided character (Win32 unicodeChar); 0 to use default mapping.
+    constexpr auto resolveNumpadCodepoint(KeyCode key, Modifier mods, int unicodeHint = 0) -> char32_t
+    {
+        auto const ncp = numpadCodepoint(key);
+        if (ncp == 0)
+            return 0;
+        if (!isNumpadOperator(key) && !hasModifier(mods, Modifier::NumLock))
+            return 0;
+        return (unicodeHint >= 32) ? static_cast<char32_t>(unicodeHint) : ncp;
+    }
+
 } // namespace
 
 auto VtParser::feed(std::string_view data) -> std::vector<InputEvent>
@@ -818,7 +834,10 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             }
 
             if (mappedKey)
-                events.emplace_back(KeyEvent { .key = *mappedKey, .modifiers = modifier });
+            {
+                auto const cp = resolveNumpadCodepoint(*mappedKey, modifier);
+                events.emplace_back(KeyEvent { .key = *mappedKey, .modifiers = modifier, .codepoint = cp });
+            }
             // Silently ignore unmapped keys in PUA range
             return;
         }
@@ -902,7 +921,8 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         // Try special key mapping (Backspace, Enter, arrows, F-keys, etc.)
         if (auto const mapped = mapWin32VkToKeyCode(vkCode))
         {
-            events.emplace_back(KeyEvent { .key = *mapped, .modifiers = mods });
+            auto const cp = resolveNumpadCodepoint(*mapped, mods, unicodeChar);
+            events.emplace_back(KeyEvent { .key = *mapped, .modifiers = mods, .codepoint = cp });
             return;
         }
 

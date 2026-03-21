@@ -253,7 +253,7 @@ auto List::processEvent(InputEvent const& event) -> ListAction
 auto List::handleKey(KeyEvent const& key) -> ListAction
 {
     // Handle vim-style navigation (j/k) and multi-select toggle (Space) for printable keys
-    if (isPrintable(key.key) && withoutLockKeys(key.modifiers) == Modifier::None)
+    if (isTextProducingKey(key.key) && withoutLockKeys(key.modifiers) == Modifier::None)
     {
         if (key.codepoint == ' ' && _multiSelect && !_visibleIndices.empty())
         {
