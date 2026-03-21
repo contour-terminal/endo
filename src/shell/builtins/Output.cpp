@@ -75,8 +75,7 @@ void executeFetch(CoreVM::Params& args,
     };
 
     // Progress bar on stderr when interactive, stderr is a TTY, and not suppressed
-    bool const showProgress =
-        interactive && tty.isStderrTerminal() && getenv("ENDO_FETCH_QUIET") == nullptr;
+    bool const showProgress = interactive && tty.isStderrTerminal() && getenv("ENDO_FETCH_QUIET") == nullptr;
 
     bool progressWritten = false;
     if (showProgress)
@@ -173,8 +172,7 @@ void Shell::builtinMarkdownRender(CoreVM::Params& context)
     NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
-#if !defined(_WIN32)
-    if (isatty(outputFd) != 0)
+    if (isTerminal(outputFd))
     {
         tui::TerminalOutput termOutput;
         tui::MarkdownRenderer renderer(termOutput);
@@ -182,7 +180,6 @@ void Shell::builtinMarkdownRender(CoreVM::Params& context)
         termOutput.flush();
         return;
     }
-#endif
     // Fallback: write raw markdown text
     auto const& text = *content;
     [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
@@ -196,12 +193,7 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
-#if defined(_WIN32)
-    DWORD consoleMode = 0;
-    bool const useColor = GetConsoleMode(outputFd, &consoleMode) != 0;
-#else
-    bool const useColor = isatty(outputFd) != 0;
-#endif
+    bool const useColor = isTerminal(outputFd);
 
     // Check if this is a Markdown object — render with terminal formatting
     if (runner->isKnownObject(rawVal))

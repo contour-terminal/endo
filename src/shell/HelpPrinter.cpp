@@ -12,14 +12,7 @@
 #include <string>
 #include <string_view>
 
-#if defined(_WIN32)
-    #include <io.h>
-    #define isatty    _isatty
-    #define STDOUT_FD 1
-#else
-    #include <unistd.h>
-    #define STDOUT_FD STDOUT_FILENO
-#endif
+#include <platform/Types.hpp>
 
 using namespace std::string_view_literals;
 
@@ -33,16 +26,16 @@ constexpr std::string_view GitHubUrl = "https://github.com/contour-terminal/endo
 constexpr std::string_view Reset = "\033[m";
 
 /// @brief Checks whether stdout is connected to a real terminal.
-[[nodiscard]] bool isTerminal()
+[[nodiscard]] bool isStdoutTerminal()
 {
-    return isatty(STDOUT_FD);
+    return endo::isTerminal(endo::standardOutput());
 }
 
 /// @brief Checks whether stdout supports ANSI color output.
 [[nodiscard]] bool shouldUseColor()
 {
     auto const* noColor = std::getenv("NO_COLOR");
-    return isTerminal() && (noColor == nullptr || noColor[0] == '\0');
+    return isStdoutTerminal() && (noColor == nullptr || noColor[0] == '\0');
 }
 
 /// @brief Helper to build styled help output with optional ANSI colors.
@@ -265,7 +258,7 @@ namespace endo
 void printHelp()
 {
     auto const useColor = shouldUseColor();
-    auto const useHyperlinks = isTerminal();
+    auto const useHyperlinks = isStdoutTerminal();
     auto h = HelpBuilder(useColor, useHyperlinks);
 
     // Title

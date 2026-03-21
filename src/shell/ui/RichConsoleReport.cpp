@@ -13,14 +13,7 @@
 #include <string>
 #include <string_view>
 
-#ifdef _WIN32
-    #include <io.h>
-    #define isatty    _isatty
-    #define STDERR_FD 2
-#else
-    #include <unistd.h>
-    #define STDERR_FD STDERR_FILENO
-#endif
+#include <platform/Types.hpp>
 
 using CoreVM::diagnostics::Message;
 using CoreVM::diagnostics::Type;
@@ -269,7 +262,7 @@ std::string formatDiagnostic(Message const& message, bool useColor)
 RichConsoleReport::RichConsoleReport()
 {
     auto const* noColor = std::getenv("NO_COLOR");
-    _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
+    _useColor = endo::isTerminal(endo::standardError()) && (noColor == nullptr || noColor[0] == '\0');
 }
 
 RichConsoleReport::RichConsoleReport(TTY const& tty): _tty(&tty)
@@ -328,7 +321,7 @@ BufferingConsoleReport::BufferingConsoleReport(ColorMode colorMode)
         case ColorMode::Disabled: _useColor = false; break;
         case ColorMode::Auto: {
             auto const* noColor = std::getenv("NO_COLOR");
-            _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
+            _useColor = endo::isTerminal(endo::standardError()) && (noColor == nullptr || noColor[0] == '\0');
             break;
         }
     }

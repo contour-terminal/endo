@@ -208,7 +208,7 @@ namespace endo
 
 int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent)
 {
-    if (outputFd == standardOutput() && isatty(STDOUT_FD) != 0)
+    if (outputFd == standardOutput() && isTerminal(standardOutput()))
     {
         tui::TerminalOutput termOutput;
         termOutput.updateDimensions();
@@ -625,12 +625,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     }
 
     // Detect whether output goes to a TTY for syntax highlighting
-#if defined(_WIN32)
-    DWORD consoleMode = 0;
-    bool const outputIsTty = GetConsoleMode(outputFd, &consoleMode) != 0;
-#else
-    bool const outputIsTty = isatty(outputFd) != 0;
-#endif
+    bool const outputIsTty = isTerminal(outputFd);
 
     int lineNumber = 1;
     bool lastLineWasBlank = false;
@@ -2182,9 +2177,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         useColor = true;
     else if (opts.colorMode == grep::ColorMode::Auto)
     {
-#if !defined(_WIN32)
-        useColor = (isatty(outputFd) != 0);
-#endif
+        useColor = isTerminal(outputFd);
     }
 
     // Output + error writer lambdas
@@ -3688,14 +3681,29 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
 
 int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
+    // Detect whether output goes to a TTY for syntax highlighting.
+    bool const outputIsTty = isTerminal(outputFd);
+    auto const* noColor = std::getenv("NO_COLOR");
+    bool const useColor = outputIsTty && (noColor == nullptr || noColor[0] == '\0');
+
     auto const printNumberedEntries = [&](size_t maxCount) {
         auto const& entries = history.entries();
         auto const start = entries.size() > maxCount ? entries.size() - maxCount : 0uz;
+        auto const& theme = tui::currentTheme();
         std::string buf;
         for (auto const i: std::views::iota(start, entries.size()))
         {
             buf.clear();
-            std::format_to(std::back_inserter(buf), "  {:>5}  {}\n", i + 1, entries[i]);
+            if (useColor)
+            {
+                auto [highlights, _] = tui::highlightLine(entries[i], tui::LanguageId::Endo);
+                auto const coloredEntry = tui::renderHighlightedLineToString(entries[i], highlights, theme);
+                std::format_to(std::back_inserter(buf), "  \033[32m{:>5}\033[m  {}\n", i + 1, coloredEntry);
+            }
+            else
+            {
+                std::format_to(std::back_inserter(buf), "  {:>5}  {}\n", i + 1, entries[i]);
+            }
             [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
         }
     };
@@ -3737,11 +3745,22 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
                 return 1;
             }
             auto const results = history.search(args.at(2), 50);
+            auto const& theme = tui::currentTheme();
             std::string buf;
             for (auto const& entry: results)
             {
                 buf.clear();
-                std::format_to(std::back_inserter(buf), "{}\n", entry);
+                if (useColor)
+                {
+                    auto [highlights, _] = tui::highlightLine(entry, tui::LanguageId::Endo);
+                    std::format_to(std::back_inserter(buf),
+                                   "{}\n",
+                                   tui::renderHighlightedLineToString(entry, highlights, theme));
+                }
+                else
+                {
+                    std::format_to(std::back_inserter(buf), "{}\n", entry);
+                }
                 [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
             }
             return 0;
