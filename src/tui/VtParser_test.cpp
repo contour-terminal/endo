@@ -438,6 +438,33 @@ TEST_CASE("VtParser.Win32Input.digit_3", "[tui,vtparser]")
     CHECK(key->modifiers == Modifier::None);
 }
 
+TEST_CASE("VtParser.Win32Input.shift_9_parenthesis", "[tui,vtparser]")
+{
+    // Shift+9 on US layout: VK '9'=0x39=57, UC='('=40, CS=SHIFT(0x10)=16
+    auto const key = parseKey("\033[57;10;40;1;16;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'(');
+    CHECK(key->key == KeyCode { U'(' });
+}
+
+TEST_CASE("VtParser.Win32Input.shift_0_parenthesis", "[tui,vtparser]")
+{
+    // Shift+0 on US layout: VK '0'=0x30=48, UC=')'=41, CS=SHIFT(0x10)=16
+    auto const key = parseKey("\033[48;11;41;1;16;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U')');
+    CHECK(key->key == KeyCode { U')' });
+}
+
+TEST_CASE("VtParser.Win32Input.shift_1_exclamation", "[tui,vtparser]")
+{
+    // Shift+1 on US layout: VK '1'=0x31=49, UC='!'=33, CS=SHIFT(0x10)=16
+    auto const key = parseKey("\033[49;2;33;1;16;1_");
+    REQUIRE(key.has_value());
+    CHECK(key->codepoint == U'!');
+    CHECK(key->key == KeyCode { U'!' });
+}
+
 TEST_CASE("VtParser.Win32Input.optional_params_with_defaults", "[tui,vtparser]")
 {
     // 4 params: Vk=65(A), Sc=30, Uc=97('a'), Kd=1 — Cs defaults to 0, Rc defaults to 1

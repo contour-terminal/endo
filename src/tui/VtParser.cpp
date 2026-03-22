@@ -953,20 +953,14 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             return;
         }
 
-        // VK 0-9 (0x30-0x39): emit base digit codepoint, Shift reflected in modifiers.
-        // This mirrors the letter key handling above. The consumer interprets Shift+digit
-        // according to the active keyboard layout (e.g. Shift+1 → '!' on US layout).
-        // When AltGr is active, prefer unicodeChar for composed characters.
+        // VK 0-9 (0x30-0x39): use unicodeChar when printable — it already reflects the active
+        // keyboard layout and Shift state (e.g. Shift+9 → '(' on US, AltGr+2 → '²' on German).
+        // Unlike letters (where Shift+a universally means 'A'), Shift+digit mappings are
+        // layout-dependent, so the consumer cannot derive the shifted character from the VK code.
         if (vkCode >= 0x30 && vkCode <= 0x39)
         {
-            if (isAltGr && unicodeChar >= 32)
-            {
-                auto const cp = static_cast<char32_t>(unicodeChar);
-                events.emplace_back(
-                    KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
-                return;
-            }
-            auto const cp = static_cast<char32_t>(vkCode);
+            auto const cp =
+                (unicodeChar >= 32) ? static_cast<char32_t>(unicodeChar) : static_cast<char32_t>(vkCode);
             events.emplace_back(
                 KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
             return;
