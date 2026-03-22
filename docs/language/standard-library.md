@@ -280,6 +280,23 @@ print (length parts)   # => 3
 print ("a:b:c" |> split ":" |> join "-")   # => a-b-c
 ```
 
+#### `lines`
+
+**Signature:** `lines str : list<str>`
+
+Splits a string into a list of lines by newline characters. Handles both `\n` and `\r\n` line endings,
+stripping `\r` from each line. A trailing newline does not produce an extra empty element.
+
+```endo
+print (lines "a\nb\nc" |> length)    # => 3
+```
+
+```endo
+("hello\nworld") |> lines |> each println
+# => hello
+# => world
+```
+
 #### `join`
 
 **Signature:** `join separator list : str`

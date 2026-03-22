@@ -3950,6 +3950,33 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // lines: 1 arg (text) → list<str>
+    if (name == "lines")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("lines requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate lines argument");
+            return true;
+        }
+        auto* callback = findCallback("string_lines(S)I");
+        if (!callback)
+        {
+            reportTypeError("string_lines builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "string_lines");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
+        return true;
+    }
+
     // Binary predicate string functions: contains, startsWith, endsWith
     if (name == "contains" || name == "startsWith" || name == "endsWith")
     {
@@ -5830,11 +5857,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(node.name,
-                                 storage,
-                                 node.mutability == ast::Mutability::Mutable,
-                                 node.location,
-                                 isRefCellBinding);
+        bindFSharpObjectVariable(
+            node.name, storage, node.mutability == ast::Mutability::Mutable, node.location, isRefCellBinding);
     }
     else
     {
@@ -6420,8 +6444,12 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // This is syntactic sugar for function application: f(value)
     // value |> f is equivalent to f value
 
-    // Evaluate the value (left-hand side)
+    // Evaluate the value (left-hand side).
+    // Pipeline source is an expression context — shell commands must capture output.
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    _shellCommandCaptureMode = true;
     CoreVM::Value* value = codegen(node.value.get());
+    _shellCommandCaptureMode = savedCaptureMode;
     if (!value)
     {
         reportTypeError("Failed to evaluate pipeline value");
@@ -6608,6 +6636,21 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             }
             _result =
                 _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "toText");
+            return;
+        }
+        // lines in pipeline: str |> lines → string_lines(str)
+        if (funcIdent->name == "lines")
+        {
+            auto* callback = findCallback("string_lines(S)I");
+            if (!callback)
+            {
+                reportTypeError("string_lines builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, "string_lines");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
             return;
         }
         // Unary string builtins in pipeline
@@ -8842,8 +8885,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     }
 
     // Ref cells cannot be pattern matched directly — use .value to dereference first
-    if (auto objTypeId = getObjectTypeId(scrutinee);
-        objTypeId && *objTypeId == CoreVM::BuiltinTypeId::Ref)
+    if (auto objTypeId = getObjectTypeId(scrutinee); objTypeId && *objTypeId == CoreVM::BuiltinTypeId::Ref)
     {
         reportTypeError("Cannot pattern match on a ref cell. Use '.value' to read the contents first.");
         return;

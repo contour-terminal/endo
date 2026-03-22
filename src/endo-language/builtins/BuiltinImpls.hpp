@@ -97,6 +97,9 @@ void stringReplace(CoreVM::Params& args);
 /// string_split(delimiter, text) -> list<string>: Splits text by delimiter.
 void stringSplit(CoreVM::Params& args);
 
+/// string_lines(text) -> list<string>: Splits text into lines by newline characters.
+void stringLines(CoreVM::Params& args);
+
 /// string_join(separator, list) -> string: Joins list elements with separator.
 void stringJoin(CoreVM::Params& args);
 

@@ -40,6 +40,7 @@ static constexpr ParamDescriptor listRangeParams[] = { { .name="start", .type=LT
 static constexpr ParamDescriptor stringRepeatParams[] = { { .name="str", .type=LT::String }, { .name="count", .type=LT::Number } };
 static constexpr ParamDescriptor stringReplaceParams[] = { { .name="old_str", .type=LT::String }, { .name="new_str", .type=LT::String }, { .name="text", .type=LT::String } };
 static constexpr ParamDescriptor stringSplitParams[] = { { .name="delimiter", .type=LT::String }, { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor stringLinesParam[] = { { .name="text", .type=LT::String } };
 static constexpr ParamDescriptor stringJoinParams[] = { { .name="separator", .type=LT::String }, { .name="list", .type=LT::Number } };
 static constexpr ParamDescriptor stringContainsParams[] = { { .name="substr", .type=LT::String }, { .name="text", .type=LT::String } };
 static constexpr ParamDescriptor stringStartsWithParams[] = { { .name="prefix", .type=LT::String }, { .name="text", .type=LT::String } };
@@ -127,6 +128,9 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="split", .vmName="string_split", .returnType=LT::Number, .params=stringSplitParams, .sharedImpl=&builtins::stringSplit,
         .description="split delim s -> list<string>",
         .detail="**split** `delim s -> list<string>`\n\nSplits **s** by delimiter **delim**." },
+    StdlibDescriptor { .userFacingName="lines", .vmName="string_lines", .returnType=LT::Number, .params=stringLinesParam, .sharedImpl=&builtins::stringLines,
+        .description="lines s -> list<string>",
+        .detail="**lines** `s -> list<string>`\n\nSplits **s** into a list of lines (by newline, stripping `\\r`)." },
     StdlibDescriptor { .userFacingName="join", .vmName="string_join", .returnType=LT::String, .params=stringJoinParams, .sharedImpl=&builtins::stringJoin,
         .description="join delim lst -> string",
         .detail="**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },

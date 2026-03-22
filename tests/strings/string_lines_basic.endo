@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: lines splits text by newlines
+# expect: 3
+
+print (lines "a\nb\nc" |> length)
