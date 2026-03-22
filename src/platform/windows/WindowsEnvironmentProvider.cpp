@@ -32,13 +32,12 @@ void WindowsEnvironmentProvider::set(std::string_view name, std::string_view val
     _values[std::string(name)] = std::string(value);
 }
 
-std::optional<std::string_view> WindowsEnvironmentProvider::get(std::string_view name) const
+std::optional<std::string> WindowsEnvironmentProvider::get(std::string_view name) const
 {
     if (auto const it = _values.find(std::string(name)); it != _values.end())
         return it->second;
 
-    thread_local std::string buffer;
-    buffer.resize(32767);
+    std::string buffer(32767, '\0');
 
     auto const nameStr = std::string(name);
     auto const len =
@@ -47,7 +46,7 @@ std::optional<std::string_view> WindowsEnvironmentProvider::get(std::string_view
         return std::nullopt;
 
     buffer.resize(len);
-    return std::string_view(buffer);
+    return buffer;
 }
 
 void WindowsEnvironmentProvider::unset(std::string_view name)

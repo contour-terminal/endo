@@ -30,7 +30,7 @@ class TestEnvironmentProvider final: public EnvironmentProvider
         _values[std::string(name)] = std::string(value);
     }
 
-    [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override
+    [[nodiscard]] std::optional<std::string> get(std::string_view name) const override
     {
         if (auto const i = _values.find(std::string(name)); i != _values.end())
             return i->second;

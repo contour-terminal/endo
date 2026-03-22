@@ -21,7 +21,7 @@ class WindowsEnvironmentProvider final: public EnvironmentProvider
     [[nodiscard]] static WindowsEnvironmentProvider& instance();
 
     void set(std::string_view name, std::string_view value) override;
-    [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override;
+    [[nodiscard]] std::optional<std::string> get(std::string_view name) const override;
     void unset(std::string_view name) override;
     void exportVariable(std::string_view name) override;
     [[nodiscard]] std::vector<std::string> keys() const override;

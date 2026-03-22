@@ -25,12 +25,12 @@ void PosixEnvironmentProvider::set(std::string_view name, std::string_view value
     _values[std::string(name)] = std::string(value);
 }
 
-std::optional<std::string_view> PosixEnvironmentProvider::get(std::string_view name) const
+std::optional<std::string> PosixEnvironmentProvider::get(std::string_view name) const
 {
     if (auto i = _values.find(std::string(name)); i != _values.end())
         return i->second;
     else if (auto const* value = getenv(std::string(name).c_str()))
-        return std::string_view { value };
+        return std::string { value };
     else
         return std::nullopt;
 }

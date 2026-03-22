@@ -30,9 +30,12 @@ class EnvironmentProvider
 
     /// Retrieves an environment variable's value.
     ///
+    /// Returns an owned copy to avoid dangling references (the Windows implementation
+    /// uses a shared buffer that is overwritten on each call).
+    ///
     /// @param name Variable name
     /// @return The value if set, or std::nullopt
-    [[nodiscard]] virtual std::optional<std::string_view> get(std::string_view name) const = 0;
+    [[nodiscard]] virtual std::optional<std::string> get(std::string_view name) const = 0;
 
     /// Removes an environment variable.
     ///
@@ -75,9 +78,9 @@ class EnvironmentProvider
     [[nodiscard]] auto homeDirectory() const -> std::optional<std::filesystem::path>
     {
         if (auto home = get("HOME"))
-            return std::filesystem::path(std::string(*home));
+            return std::filesystem::path(*home);
         if (auto home = get("USERPROFILE"))
-            return std::filesystem::path(std::string(*home));
+            return std::filesystem::path(*home);
         return std::nullopt;
     }
 
@@ -90,9 +93,9 @@ class EnvironmentProvider
     [[nodiscard]] auto configHome() const -> std::optional<std::filesystem::path>
     {
         if (auto xdg = get("XDG_CONFIG_HOME"); xdg && !xdg->empty())
-            return std::filesystem::path(std::string(*xdg));
+            return std::filesystem::path(*xdg);
         if (auto appdata = get("APPDATA"); appdata && !appdata->empty())
-            return std::filesystem::path(std::string(*appdata));
+            return std::filesystem::path(*appdata);
         if (auto home = homeDirectory())
             return *home / ".config";
         return std::nullopt;
