@@ -7,6 +7,16 @@
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+#include <libunicode/utf8.h>
+#include <libunicode/utf8_grapheme_segmenter.h>
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
+
 #include <algorithm>
 #include <bit>
 #include <chrono>
@@ -557,6 +567,75 @@ void stringStartsWith(CoreVM::Params& args)
 void stringEndsWith(CoreVM::Params& args)
 {
     args.setResult(args.getString(1).ends_with(args.getString(2)));
+}
+
+// ---------------------------------------------------------------------------
+// Unicode string decomposition and counting
+// ---------------------------------------------------------------------------
+
+void stringToBytes(CoreVM::Params& args)
+{
+    auto const text = args.getString(1);
+    auto* runner = args.caller();
+
+    // Build cons-cell list right-to-left
+    auto* list = runner->makeNilList(CoreVM::LiteralType::Number);
+    for (auto const byte: std::ranges::reverse_view(text))
+        list = runner->makeConsCell(
+            static_cast<uint64_t>(static_cast<uint8_t>(byte)), list, CoreVM::LiteralType::Number);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+}
+
+void stringToCodepoints(CoreVM::Params& args)
+{
+    auto const text = std::string_view(args.getString(1));
+    auto* runner = args.caller();
+    auto const codepoints = unicode::from_utf8<char32_t>(text);
+
+    auto* list = runner->makeNilList(CoreVM::LiteralType::Number);
+    for (auto const cp: std::ranges::reverse_view(codepoints))
+        list = runner->makeConsCell(static_cast<uint64_t>(cp), list, CoreVM::LiteralType::Number);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+}
+
+void stringToGraphemes(CoreVM::Params& args)
+{
+    auto const text = std::string_view(args.getString(1));
+    auto* runner = args.caller();
+
+    // Collect grapheme clusters
+    std::vector<std::string> clusters;
+    auto segmenter = unicode::utf8_grapheme_segmenter(text);
+    for (auto const& cluster: segmenter)
+        clusters.emplace_back(unicode::to_utf8(cluster));
+
+    // Build cons-cell list right-to-left
+    auto* list = runner->makeNilList(CoreVM::LiteralType::String);
+    for (auto& cluster: std::ranges::reverse_view(clusters))
+        list = runner->makeConsCell(
+            reinterpret_cast<uintptr_t>(runner->newString(cluster)), list, CoreVM::LiteralType::String);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+}
+
+void stringByteLength(CoreVM::Params& args)
+{
+    args.setResult(static_cast<CoreVM::CoreNumber>(args.getString(1).size()));
+}
+
+void stringCodepointLength(CoreVM::Params& args)
+{
+    auto const text = std::string_view(args.getString(1));
+    args.setResult(static_cast<CoreVM::CoreNumber>(unicode::from_utf8<char32_t>(text).size()));
+}
+
+void stringGraphemeLength(CoreVM::Params& args)
+{
+    auto const text = std::string_view(args.getString(1));
+    int64_t count = 0;
+    auto segmenter = unicode::utf8_grapheme_segmenter(text);
+    for ([[maybe_unused]] auto const& cluster: segmenter)
+        ++count;
+    args.setResult(static_cast<CoreVM::CoreNumber>(count));
 }
 
 // ---------------------------------------------------------------------------

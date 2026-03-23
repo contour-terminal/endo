@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: grapheme_length with combining characters
+# expect: 4
+
+let s = "noël"
+
+print (grapheme_length s)

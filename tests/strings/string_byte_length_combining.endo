@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: byte_length with combining characters
+# expect: 6
+
+let s = "noël"
+
+print (byte_length s)

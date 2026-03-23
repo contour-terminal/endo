@@ -3550,20 +3550,89 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 {
     // --- IR instruction builtins (no native callback needed) ---
 
-    if (name == "string_length")
+    if (name == "string_length" || name == "grapheme_length")
     {
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
-            reportTypeError("Failed to evaluate string_length argument");
+            reportTypeError("Failed to evaluate {} argument", name);
             return true;
         }
         if (argVal->type() != CoreVM::LiteralType::String)
         {
-            reportTypeError("string_length requires a string argument");
+            reportTypeError("{} requires a string argument", name);
             return true;
         }
-        _result = _builder.createSLen(argVal, "slen");
+        auto* callback = findCallback("string_grapheme_length(S)I");
+        if (!callback)
+        {
+            reportTypeError("string_grapheme_length builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { argVal }, "grapheme_length");
+        return true;
+    }
+
+    // --- Unicode string count builtins ---
+    if (name == "byte_length" || name == "codepoint_length")
+    {
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate {} argument", name);
+            return true;
+        }
+        if (argVal->type() != CoreVM::LiteralType::String)
+        {
+            reportTypeError("{} requires a string argument", name);
+            return true;
+        }
+        auto const* sig = name == "byte_length" ? "string_byte_length(S)I" : "string_codepoint_length(S)I";
+        auto* callback = findCallback(sig);
+        if (!callback)
+        {
+            reportTypeError("{} builtin not found", sig);
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, name);
+        return true;
+    }
+
+    // --- Unicode string collection builtins ---
+    if (name == "bytes" || name == "codepoints" || name == "graphemes")
+    {
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate {} argument", name);
+            return true;
+        }
+        if (argVal->type() != CoreVM::LiteralType::String)
+        {
+            reportTypeError("{} requires a string argument", name);
+            return true;
+        }
+        char const* sig = nullptr;
+        auto elemType = CoreVM::LiteralType::Number;
+        if (name == "bytes")
+            sig = "string_to_bytes(S)I";
+        else if (name == "codepoints")
+            sig = "string_to_codepoints(S)I";
+        else
+        {
+            sig = "string_to_graphemes(S)I";
+            elemType = CoreVM::LiteralType::String;
+        }
+        auto* callback = findCallback(sig);
+        if (!callback)
+        {
+            reportTypeError("{} builtin not found", sig);
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, name);
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementLiteralType(_result, elemType);
         return true;
     }
 
@@ -4581,11 +4650,47 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
     // --- String dot properties ---
     if (objLiteralType == CoreVM::LiteralType::String)
     {
-        if (fieldName == "length")
-        {
-            _result = _builder.createSLen(obj, "string.length");
+        // Helper to call a string callback and return its result
+        auto callStringCallback = [&](char const* sig, char const* label) -> bool {
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return true;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, label);
             return true;
-        }
+        };
+
+        // Helper for collection properties that return a list
+        auto callStringListCallback =
+            [&](char const* sig, char const* label, CoreVM::LiteralType elemType) -> bool {
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return true;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, label);
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementLiteralType(_result, elemType);
+            return true;
+        };
+
+        if (fieldName == "length" || fieldName == "grapheme_length")
+            return callStringCallback("string_grapheme_length(S)I", "string.grapheme_length");
+        if (fieldName == "byte_length")
+            return callStringCallback("string_byte_length(S)I", "string.byte_length");
+        if (fieldName == "codepoint_length")
+            return callStringCallback("string_codepoint_length(S)I", "string.codepoint_length");
+        if (fieldName == "bytes")
+            return callStringListCallback("string_to_bytes(S)I", "string.bytes", CoreVM::LiteralType::Number);
+        if (fieldName == "codepoints")
+            return callStringListCallback(
+                "string_to_codepoints(S)I", "string.codepoints", CoreVM::LiteralType::Number);
+        if (fieldName == "graphemes")
+            return callStringListCallback(
+                "string_to_graphemes(S)I", "string.graphemes", CoreVM::LiteralType::String);
         return false;
     }
 
@@ -6503,14 +6608,70 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Build a temporary argument expression list pointing to a synthetic node.
         // Since builtins codegen their args, and we already have the value, we use
         // a different approach: codegen the value manually for builtins.
-        if (funcIdent->name == "string_length")
+        if (funcIdent->name == "string_length" || funcIdent->name == "grapheme_length")
         {
             if (value->type() != CoreVM::LiteralType::String)
             {
-                reportTypeError("string_length requires a string argument");
+                reportTypeError("{} requires a string argument", funcIdent->name);
                 return;
             }
-            _result = _builder.createSLen(value, "slen");
+            auto* callback = findCallback("string_grapheme_length(S)I");
+            if (!callback)
+            {
+                reportTypeError("string_grapheme_length builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, "grapheme_length");
+            return;
+        }
+        if (funcIdent->name == "byte_length" || funcIdent->name == "codepoint_length")
+        {
+            if (value->type() != CoreVM::LiteralType::String)
+            {
+                reportTypeError("{} requires a string argument", funcIdent->name);
+                return;
+            }
+            auto const* sig =
+                funcIdent->name == "byte_length" ? "string_byte_length(S)I" : "string_codepoint_length(S)I";
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, funcIdent->name);
+            return;
+        }
+        if (funcIdent->name == "bytes" || funcIdent->name == "codepoints" || funcIdent->name == "graphemes")
+        {
+            if (value->type() != CoreVM::LiteralType::String)
+            {
+                reportTypeError("{} requires a string argument", funcIdent->name);
+                return;
+            }
+            char const* sig = nullptr;
+            auto elemType = CoreVM::LiteralType::Number;
+            if (funcIdent->name == "bytes")
+                sig = "string_to_bytes(S)I";
+            else if (funcIdent->name == "codepoints")
+                sig = "string_to_codepoints(S)I";
+            else
+            {
+                sig = "string_to_graphemes(S)I";
+                elemType = CoreVM::LiteralType::String;
+            }
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, funcIdent->name);
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementLiteralType(_result, elemType);
             return;
         }
         if (funcIdent->name == "int_of_string")

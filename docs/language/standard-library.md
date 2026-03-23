@@ -8,6 +8,7 @@ by category. Each example is executable and verified by the documentation test s
 - [15.1 Output](#151-output) -- `print`, `println`
 - [15.2 Type Conversion](#152-type-conversion) -- `string_length`, `int_of_string`, `string_of_int`, `string`, `not`
 - [15.3 String Operations](#153-string-operations) -- `trim`, `toLower`, `toUpper`, `contains`, `startsWith`, `endsWith`, `replace`, `split`, `join`, `*`
+- [15.3.1 Unicode String Operations](#1531-unicode-string-operations) -- `bytes`, `codepoints`, `graphemes`, `byte_length`, `codepoint_length`, `grapheme_length`
 - [15.4 List -- Basic Operations](#154-list-basic-operations) -- `head`, `tail`, `length`, `isEmpty`, `nth`, `last`, `replicate`
 - [15.5 List -- Higher-Order Functions](#155-list-higher-order-functions) -- `map`, `filter`, `fold`, `reduce`, `find`, `exists`, `forall`, `each`
 - [15.6 List -- Transformations](#156-list-transformations) -- `sort`, `reverse`, `distinct`, `sortBy`, `groupBy`, `take`, `drop`, `zip`, `flatten`
@@ -69,7 +70,8 @@ println "hello"   # => hello
 
 **Signature:** `string_length str : int`
 
-Returns the number of characters in a string.
+Returns the number of grapheme clusters (user-perceived characters) in a string.
+This is equivalent to `grapheme_length`. For byte count, use `byte_length`.
 
 ```endo
 print (string_length "hello")   # => 5
@@ -326,6 +328,89 @@ print ("ha" * 3)   # => hahaha
 
 ```endo
 print (3 * "ab")   # => ababab
+```
+
+---
+
+### 15.3.1 Unicode String Operations
+
+Endo provides Unicode-aware string operations for decomposing strings and counting
+at different levels of granularity. Strings are stored as UTF-8 internally.
+
+- **Bytes**: Raw UTF-8 bytes (0–255)
+- **Codepoints**: Unicode scalar values (U+0000 to U+10FFFF)
+- **Graphemes**: User-perceived characters (grapheme clusters, per UAX #29)
+
+For ASCII strings, all three counts are identical. They differ for multi-byte
+characters (e.g., `é` = 2 bytes, 1 codepoint) and combining sequences
+(e.g., `e` + combining accent = 2 codepoints, 1 grapheme).
+
+#### `bytes`
+
+**Signature:** `bytes str : list<int>`
+
+Returns the list of UTF-8 byte values (0–255).
+
+```endo
+print (bytes "hi")   # => [104; 105]
+```
+
+#### `codepoints`
+
+**Signature:** `codepoints str : list<int>`
+
+Returns the list of Unicode codepoint values.
+
+```endo
+print (codepoints "hi")   # => [104; 105]
+```
+
+#### `graphemes`
+
+**Signature:** `graphemes str : list<string>`
+
+Returns the list of grapheme clusters (user-perceived characters) as strings.
+
+```endo
+print (graphemes "café")   # => [c; a; f; é]
+```
+
+#### `byte_length`
+
+**Signature:** `byte_length str : int`
+
+Returns the number of UTF-8 bytes. Equivalent to `bytes str |> length`.
+
+```endo
+print (byte_length "café")   # => 5
+```
+
+#### `codepoint_length`
+
+**Signature:** `codepoint_length str : int`
+
+Returns the number of Unicode codepoints.
+
+```endo
+print (codepoint_length "café")   # => 4
+```
+
+#### `grapheme_length`
+
+**Signature:** `grapheme_length str : int`
+
+Returns the number of grapheme clusters. This is what `.length` returns.
+
+```endo
+print (grapheme_length "café")   # => 4
+```
+
+These functions also work as dot-properties and in pipelines:
+
+```endo
+"café".byte_length         # => 5
+"café".grapheme_length     # => 4
+"café" |> graphemes |> length   # => 4
 ```
 
 ---

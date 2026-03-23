@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: graphemes piped to length gives grapheme count
+# expect: 4
+
+let s = "café"
+
+let n = s |> graphemes |> length
+
+print n

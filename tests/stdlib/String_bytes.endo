@@ -1,0 +1,6 @@
+# description: String.bytes returns list of byte values
+# module-path: STDLIB
+# expect: [104; 105]
+
+import String
+print (String.bytes "hi")

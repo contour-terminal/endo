@@ -199,7 +199,9 @@ This document tracks the implementation status of F# language features as define
 
 - [x] `print` — print without newline
 - [x] `println` — print with newline
-- [x] `string_length` — length of string
+- [x] `string_length` — grapheme cluster count (user-perceived characters)
+- [x] `bytes`, `codepoints`, `graphemes` — Unicode string decomposition to lists
+- [x] `byte_length`, `codepoint_length`, `grapheme_length` — Unicode-aware string counting
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion
 - [x] `string` — universal to-string conversion (int, float, bool, string passthrough)

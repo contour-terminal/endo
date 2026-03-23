@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ZWJ emoji family is 1 grapheme cluster
+# expect: 1
+
+let s = "👨‍👩‍👧"
+
+print (grapheme_length s)

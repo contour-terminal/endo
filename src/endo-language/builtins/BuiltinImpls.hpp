@@ -121,6 +121,24 @@ void stringStartsWith(CoreVM::Params& args);
 /// string_endsWith(text, suffix) -> bool: Checks suffix match.
 void stringEndsWith(CoreVM::Params& args);
 
+/// string_to_bytes(text) -> list<int>: Returns the list of UTF-8 byte values (0–255).
+void stringToBytes(CoreVM::Params& args);
+
+/// string_to_codepoints(text) -> list<int>: Returns the list of Unicode codepoint values.
+void stringToCodepoints(CoreVM::Params& args);
+
+/// string_to_graphemes(text) -> list<string>: Returns the list of grapheme clusters as strings.
+void stringToGraphemes(CoreVM::Params& args);
+
+/// string_byte_length(text) -> int: Returns the number of UTF-8 bytes.
+void stringByteLength(CoreVM::Params& args);
+
+/// string_codepoint_length(text) -> int: Returns the number of Unicode codepoints.
+void stringCodepointLength(CoreVM::Params& args);
+
+/// string_grapheme_length(text) -> int: Returns the number of grapheme clusters (user-perceived characters).
+void stringGraphemeLength(CoreVM::Params& args);
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------

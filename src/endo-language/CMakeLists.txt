@@ -107,7 +107,7 @@ add_library(endo STATIC
     ScopedLogger.hpp
 )
 
-target_link_libraries(endo PUBLIC CoreVM crispy::core nlohmann_json::nlohmann_json)
+target_link_libraries(endo PUBLIC CoreVM crispy::core nlohmann_json::nlohmann_json unicode::unicode)
 target_include_directories(endo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Tracing support

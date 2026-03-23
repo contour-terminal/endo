@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String dot grapheme_length property
+# expect: 4
+
+let s = "café"
+
+print s.grapheme_length

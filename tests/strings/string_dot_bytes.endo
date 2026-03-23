@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String dot bytes property returns byte list
+# expect: 2
+
+let s = "hi"
+
+print s.bytes.length

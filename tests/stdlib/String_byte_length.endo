@@ -1,0 +1,6 @@
+# description: String.byte_length returns UTF-8 byte count
+# module-path: STDLIB
+# expect: 5
+
+import String
+print (String.byte_length "café")

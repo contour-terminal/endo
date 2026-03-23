@@ -1,0 +1,6 @@
+# description: String.graphemes returns list of grapheme clusters
+# module-path: STDLIB
+# expect: ["c"; "a"; "f"; "é"]
+
+import String
+print (String.graphemes "café")
