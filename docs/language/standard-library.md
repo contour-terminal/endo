@@ -372,7 +372,7 @@ print (codepoints "hi")   # => [104; 105]
 Returns the list of grapheme clusters (user-perceived characters) as strings.
 
 ```endo
-print (graphemes "café")   # => [c; a; f; é]
+print (graphemes "café")   # => ["c"; "a"; "f"; "é"]
 ```
 
 #### `byte_length`
@@ -408,9 +408,9 @@ print (grapheme_length "café")   # => 4
 These functions also work as dot-properties and in pipelines:
 
 ```endo
-"café".byte_length         # => 5
-"café".grapheme_length     # => 4
-"café" |> graphemes |> length   # => 4
+print ("café".byte_length)         # => 5
+print ("café".grapheme_length)     # => 4
+print ("café" |> graphemes |> length)   # => 4
 ```
 
 ---
