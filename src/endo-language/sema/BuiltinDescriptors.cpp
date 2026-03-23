@@ -96,6 +96,12 @@ BuiltinDescriptorRegistry::BuiltinDescriptorRegistry()
         desc.returnListElemType = LT::String;
         registerCall(desc);
     }
+    {
+        auto desc = fixedArity("lines", 1);
+        desc.returnObjectTypeId = BT::List;
+        desc.returnListElemType = LT::String;
+        registerCall(desc);
+    }
     registerCall(fixedArity("join", 2));
     registerCall(fixedArity("toText", 1));
 

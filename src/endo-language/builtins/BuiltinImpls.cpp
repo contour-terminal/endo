@@ -466,6 +466,37 @@ void stringSplit(CoreVM::Params& args)
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
 }
 
+void stringLines(CoreVM::Params& args)
+{
+    auto const text = std::string(args.getString(1));
+    auto* runner = args.caller();
+
+    auto extractLine = [&text](size_t start, size_t end) -> std::string {
+        auto len = end - start;
+        if (len > 0 && text[start + len - 1] == '\r')
+            --len;
+        return text.substr(start, len);
+    };
+
+    std::vector<std::string> parts;
+    size_t pos = 0;
+    size_t found = 0;
+    while ((found = text.find('\n', pos)) != std::string::npos)
+    {
+        parts.push_back(extractLine(pos, found));
+        pos = found + 1;
+    }
+    if (pos < text.size())
+        parts.push_back(extractLine(pos, text.size()));
+
+    // Build cons-cell list right-to-left
+    auto* list = runner->makeNilList(CoreVM::LiteralType::String);
+    for (auto& part: std::ranges::reverse_view(parts))
+        list = runner->makeConsCell(
+            reinterpret_cast<uintptr_t>(runner->newString(part)), list, CoreVM::LiteralType::String);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+}
+
 void stringJoin(CoreVM::Params& args)
 {
     auto const sep = std::string(args.getString(1));

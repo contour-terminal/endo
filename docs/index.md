@@ -20,6 +20,11 @@ A modern, cross-platform shell where functional programming meets everyday produ
 
 ---
 
+!!! warning "Early Development"
+
+    Endo is under active development and has not yet had an official release.
+    The language, builtins, and APIs may change. That said, there is already a lot to explore — dive in and share your feedback!
+
 ## Why Endo?
 
 Shells haven't evolved. You're still gluing strings together, guessing at exit codes, and
@@ -94,11 +99,11 @@ println $"Hello, {name}!"
 <!-- endo-no-check -->
 ```endo
 # Pipe shell command output straight into F# transforms
-ps aux | lines |> filter (contains _ "nginx") |> length
-|> fun n -> echo $"Found {n} nginx processes"
+ps aux |> lines |> filter (contains "nginx" _) |> length
+|> fun n -> println $"Found {n} nginx processes"
 
 # Process git history with functional pipelines
-git log --oneline | lines |> take 5 |> each println
+git log --oneline |> lines |> take 5 |> each println
 ```
 
 **Functional data processing:**
@@ -106,7 +111,7 @@ git log --oneline | lines |> take 5 |> each println
 <!-- endo-no-check -->
 ```endo
 # Placeholder lambdas keep pipelines concise
-[10; 25; 3; 42; 7] |> filter (_ > 10) |> map (_ * 2)   # [50; 6; 84]
+[10; 25; 3; 42; 7] |> filter (_ > 10) |> map (_ * 2)   # [50; 84]
 
 # Curried functions and partial application
 let add x y = x + y

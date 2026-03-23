@@ -3603,6 +3603,27 @@ TEST_CASE("shell.compiled_function.void_last_expr")
     CHECK(escape(shell.output()) == escape("42\n"));
 }
 
+TEST_CASE("shell.bare_expr.paren_string_pipeline_each")
+{
+    TestShell shell;
+    shell(R"(("hello\nworld") |> lines |> each println)");
+    CHECK(escape(shell.output()) == escape("hello\nworld\n"));
+}
+
+TEST_CASE("shell.bare_expr.paren_string_pipeline_display")
+{
+    TestShell shell;
+    shell(R"(("hello\nworld") |> lines)");
+    CHECK(escape(shell.output()) == escape("[\"hello\"; \"world\"]\n"));
+}
+
+TEST_CASE("shell.shell_command_expr.capture_in_pipeline")
+{
+    TestShell shell;
+    shell(R"((& echo hello) |> lines |> length |> print)");
+    CHECK(escape(shell.output()) == escape("1"));
+}
+
 // ============================================================================
 // Table Formatter Tests
 // ============================================================================

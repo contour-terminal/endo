@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: lines in pipeline context
+# expect: 2
+
+let text = "hello\nworld"
+
+text |> lines |> length |> print

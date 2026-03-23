@@ -716,7 +716,7 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_56_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 58);
+    CHECK(stdlib.size() == 59);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")

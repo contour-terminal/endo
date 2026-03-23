@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: lines piped to each println
+# expect: hello
+# expect: world
+
+("hello\nworld") |> lines |> each println
