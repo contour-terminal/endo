@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Prompt.hpp"
+#include "PromptPresets.hpp"
 
 #include <tui/Screen.hpp>
 
@@ -28,7 +29,11 @@
 namespace endo
 {
 
-Prompt::Prompt() = default;
+Prompt::Prompt():
+    _promptConfig { promptPreset("endo-signature") }
+{
+    _promptStr = _promptConfig.indicator;
+}
 
 Prompt::~Prompt()
 {
