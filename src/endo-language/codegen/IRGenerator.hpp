@@ -49,7 +49,8 @@ struct FSharpPersistentState
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
         ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
-        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
+        ast::Recursion recursion = ast::Recursion::None;     ///< Whether function is declared with `let rec`
+        ast::ShellCaptureMode captureMode = ast::ShellCaptureMode::Capture; ///< Shell I/O capture mode
         bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
     };
 
@@ -447,7 +448,8 @@ class IRGenerator final: public ast::Visitor
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
         ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
-        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
+        ast::Recursion recursion = ast::Recursion::None;     ///< Whether function is declared with `let rec`
+        ast::ShellCaptureMode captureMode = ast::ShellCaptureMode::Capture; ///< Shell I/O capture mode
         bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
         /// Names of all functions in the mutual recursion group (empty for non-mutual).
         std::vector<std::string> mutualGroup;
@@ -783,9 +785,7 @@ class IRGenerator final: public ast::Visitor
     CoreVM::Value* _result = nullptr;
     CoreVM::Signature _processCallSignature;
 
-    /// When false, ShellCommandExpr runs with normal I/O (statement-level).
-    /// When true (default), ShellCommandExpr captures stdout as a string.
-    bool _shellCommandCaptureMode = true;
+    ast::ShellCaptureMode _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
 
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;

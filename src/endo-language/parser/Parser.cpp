@@ -3634,6 +3634,33 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume 'rec'
     }
 
+    // Check for 'passthrough' modifier (shell command passthrough mode)
+    bool const isPassthrough = _lexer.currentToken() == Token::Passthrough;
+    if (isPassthrough)
+    {
+        if (isMutable)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let passthrough' without 'mut'" },
+                currentContextSnippet(),
+                "'let mut passthrough' is not allowed; 'mut' and 'passthrough' are mutually exclusive");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        if (isExported)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let passthrough' without 'export'" },
+                currentContextSnippet(),
+                "'let export passthrough' is not allowed; passthrough functions cannot be exported");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'passthrough'
+    }
+
     // Check for 'use' or 'manual' resource management modifier
     auto resourceMode = ast::ResourceMode::None;
     if (_lexer.currentToken() == Token::Use)
@@ -3788,13 +3815,15 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    auto result = std::make_unique<ast::LetBindingStmt>(vis,
-                                                        mut,
-                                                        isRecursive,
-                                                        std::move(name),
-                                                        std::move(parameters),
-                                                        std::move(returnType),
-                                                        std::move(value));
+    auto result = std::make_unique<ast::LetBindingStmt>(
+        vis,
+        mut,
+        isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
+        isPassthrough ? ast::ShellCaptureMode::Passthrough : ast::ShellCaptureMode::Capture,
+        std::move(name),
+        std::move(parameters),
+        std::move(returnType),
+        std::move(value));
     result->resourceMode = resourceMode;
 
     // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
@@ -3934,7 +3963,7 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
         result = std::make_unique<ast::LetInExpr>(
             std::move(let->destructurePattern), std::move(let->value), std::move(body));
     else
-        result = std::make_unique<ast::LetInExpr>(let->isRecursive,
+        result = std::make_unique<ast::LetInExpr>(let->isRecursive() ? ast::Recursion::Recursive : ast::Recursion::None,
                                                   std::move(let->name),
                                                   std::move(let->parameters),
                                                   std::move(let->returnType),
@@ -3967,7 +3996,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(ast::Visibil
 
     auto result = std::make_unique<ast::LetBindingStmt>(visibility,
                                                         mutability,
-                                                        false,
+                                                        ast::Recursion::None,
+                                                        ast::ShellCaptureMode::Capture,
                                                         std::move(name),
                                                         std::vector<ast::TypedParameter> {},
                                                         std::move(returnType),
@@ -4305,7 +4335,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
 
     auto const endLoc = body->location;
-    auto node = std::make_unique<ast::LetInExpr>(isRecursive,
+    auto node = std::make_unique<ast::LetInExpr>(isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
                                                  std::move(name),
                                                  std::move(parameters),
                                                  std::move(returnType),

@@ -3390,7 +3390,7 @@ TEST_CASE("LetBindingCompleter.recursive_function_description")
         .returnType = std::make_shared<endo::Type>(endo::PrimitiveTypeNode { endo::PrimitiveType::Int }),
         .body = nullptr,
         .returnKind = endo::ReturnKind::Plain,
-        .isRecursive = true,
+        .recursion = endo::ast::Recursion::Recursive,
     };
 
     endo::LetBindingCompleter completer(state);

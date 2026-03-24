@@ -913,11 +913,26 @@ enum class Mutability : uint8_t
     Mutable,   ///< `let mut x = ...`
 };
 
+/// Recursion mode for a let binding.
+enum class Recursion : uint8_t
+{
+    None,      ///< Regular non-recursive function
+    Recursive, ///< `let rec` — self or mutual recursion
+};
+
+/// Shell command I/O capture mode for function definitions.
+enum class ShellCaptureMode : uint8_t
+{
+    Capture,     ///< Default: shell commands capture stdout as string in expression context
+    Passthrough, ///< `let passthrough` — shell commands always pass through to terminal
+};
+
 struct LetBindingStmt final: public Statement
 {
     Visibility visibility;                          ///< Visibility modifier (default, export, private)
     Mutability mutability;                          ///< Mutability modifier (immutable, mutable)
-    bool isRecursive;                               ///< True for `let rec`
+    Recursion recursion;                            ///< Recursion modifier (none, recursive)
+    ShellCaptureMode captureMode;                   ///< Shell I/O capture mode (capture, passthrough)
     ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
     std::string name;                               ///< Binding/function name
     std::vector<TypedParameter> parameters;         ///< Function parameters with optional type annotations
@@ -930,14 +945,16 @@ struct LetBindingStmt final: public Statement
 
     LetBindingStmt(Visibility vis,
                    Mutability mut,
-                   bool rec,
+                   Recursion rec,
+                   ShellCaptureMode capture,
                    std::string n,
                    std::vector<TypedParameter> params,
                    std::optional<TypePtr> retType,
                    std::unique_ptr<Expr> val):
         visibility(vis),
         mutability(mut),
-        isRecursive(rec),
+        recursion(rec),
+        captureMode(capture),
         name(std::move(n)),
         parameters(std::move(params)),
         returnType(std::move(retType)),
@@ -949,12 +966,21 @@ struct LetBindingStmt final: public Statement
     LetBindingStmt(Mutability mut, std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val):
         visibility(Visibility::Default),
         mutability(mut),
-        isRecursive(false),
-
+        recursion(Recursion::None),
+        captureMode(ShellCaptureMode::Capture),
         returnType(std::nullopt),
         value(std::move(val)),
         destructurePattern(std::move(pat))
     {
+    }
+
+    /// Is this a recursive function definition?
+    [[nodiscard]] bool isRecursive() const noexcept { return recursion == Recursion::Recursive; }
+
+    /// Is this a passthrough function?
+    [[nodiscard]] bool isPassthrough() const noexcept
+    {
+        return captureMode == ShellCaptureMode::Passthrough;
     }
 
     /// Is this a function definition (has parameters)?
@@ -993,7 +1019,7 @@ struct ExprStmt final: public Statement
 /// the body expression following `in`.
 struct LetInExpr final: public Expr
 {
-    bool isRecursive;                               ///< True for `let rec`
+    Recursion recursion;                            ///< Recursion modifier (none, recursive)
     ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
     std::string name;                               ///< Binding/function name
     std::vector<TypedParameter> parameters;         ///< Function parameters with optional type annotations
@@ -1003,13 +1029,13 @@ struct LetInExpr final: public Expr
     std::unique_ptr<pattern::Pattern>
         destructurePattern; ///< Optional pattern for `let (x, y) = expr in body`
 
-    LetInExpr(bool rec,
+    LetInExpr(Recursion rec,
               std::string n,
               std::vector<TypedParameter> params,
               std::optional<TypePtr> retType,
               std::unique_ptr<Expr> val,
               std::unique_ptr<Expr> b):
-        isRecursive(rec),
+        recursion(rec),
         name(std::move(n)),
         parameters(std::move(params)),
         returnType(std::move(retType)),
@@ -1018,10 +1044,12 @@ struct LetInExpr final: public Expr
     {
     }
 
+    /// Is this a recursive function definition?
+    [[nodiscard]] bool isRecursive() const noexcept { return recursion == Recursion::Recursive; }
+
     /// Constructor for destructuring let-in: `let (x, y) = expr in body`
     LetInExpr(std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val, std::unique_ptr<Expr> b):
-        isRecursive(false),
-
+        recursion(Recursion::None),
         returnType(std::nullopt),
         value(std::move(val)),
         body(std::move(b)),

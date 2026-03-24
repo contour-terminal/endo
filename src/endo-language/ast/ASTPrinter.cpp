@@ -607,8 +607,10 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         _result += "use ";
     else if (node.resourceMode == ResourceMode::Manual)
         _result += "manual ";
-    if (node.isRecursive)
+    if (node.isRecursive())
         _result += "rec ";
+    if (node.isPassthrough())
+        _result += "passthrough ";
     if (node.destructurePattern)
         _result += pattern::toString(*node.destructurePattern);
     else
@@ -673,7 +675,7 @@ void ASTPrinter::visit(LetInExpr const& node)
         _result += "use ";
     else if (node.resourceMode == ResourceMode::Manual)
         _result += "manual ";
-    if (node.isRecursive)
+    if (node.isRecursive())
         _result += "rec ";
     if (node.destructurePattern)
         _result += pattern::toString(*node.destructurePattern);

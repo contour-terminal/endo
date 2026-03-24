@@ -268,7 +268,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             auto innerEnv = env->childScope();
             std::vector<TypePtr> paramTypes;
 
-            if (letIn->isRecursive)
+            if (letIn->isRecursive())
             {
                 // Pre-bind with fresh type for recursive reference
                 auto freshParams = std::vector<TypePtr> {};
@@ -286,7 +286,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             }
 
             auto bodyEnv = innerEnv->childScope();
-            if (!letIn->isRecursive)
+            if (!letIn->isRecursive())
             {
                 for (auto const& param: letIn->parameters)
                 {
@@ -309,7 +309,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             for (auto& paramType: std::ranges::reverse_view(paramTypes))
                 funcType = types::function(s1.apply(paramType), funcType);
 
-            if (letIn->isRecursive)
+            if (letIn->isRecursive())
             {
                 // Unify with pre-bound type
                 auto scheme = innerEnv->lookup(letIn->name);
@@ -1346,7 +1346,7 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 paramTypes.push_back(t);
             }
 
-            if (letStmt->isRecursive)
+            if (letStmt->isRecursive())
             {
                 // Pre-bind with fresh function type for recursive reference
                 auto freshRet = funcEnv->freshTypeVarType();
@@ -1375,7 +1375,7 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             for (auto& paramType: std::ranges::reverse_view(paramTypes))
                 funcType = types::function(s1.apply(paramType), funcType);
 
-            if (letStmt->isRecursive)
+            if (letStmt->isRecursive())
             {
                 // Unify with pre-bound type
                 auto scheme = funcEnv->lookup(letStmt->name);

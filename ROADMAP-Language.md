@@ -85,6 +85,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Variadic parameters: `let f ...args = ...` — collects extra arguments into a list
 - [x] Splat expression: `...args` in shell commands — expands list into individual command arguments
 - [x] Shell aliases via let bindings: `let ll ...args = & exa -l ...args`
+- [x] `let passthrough` modifier: shell commands in function body always pass through to terminal
 - [x] Variadic function invocation at statement level: bare `ll` or `ll somefile` with shell-mode arg parsing
 
 ## Lists & Collections

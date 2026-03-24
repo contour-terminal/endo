@@ -105,8 +105,9 @@ enum class Token // NOLINT(performance-enum-size)
     Yield, // 'yield' (yield element in seq block)
 
     // F# style keywords for resource management
-    Use,    // 'use' (scoped resource binding)
-    Manual, // 'manual' (manual resource management)
+    Use,         // 'use' (scoped resource binding)
+    Manual,      // 'manual' (manual resource management)
+    Passthrough, // 'passthrough' (shell command passthrough mode)
 
     // F# style keyword for mutable references
     Ref, // 'ref' (mutable reference cell)

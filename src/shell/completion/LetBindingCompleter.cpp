@@ -24,7 +24,7 @@ namespace
             info.name = name;
             info.isFunction = true;
             info.parameterNames = func.parameters;
-            info.isRecursive = func.isRecursive;
+            info.isRecursive = func.recursion == ast::Recursion::Recursive;
             for (auto const& pt: func.parameterTypes)
                 info.parameterTypes.push_back(pt.has_value() ? std::optional(toString(*pt)) : std::nullopt);
             if (func.returnType.has_value())

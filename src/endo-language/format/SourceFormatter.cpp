@@ -1484,8 +1484,10 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         emit("use ");
     else if (node.resourceMode == ast::ResourceMode::Manual)
         emit("manual ");
-    if (node.isRecursive)
+    if (node.isRecursive())
         emit("rec ");
+    if (node.isPassthrough())
+        emit("passthrough ");
     if (node.destructurePattern)
         emitPattern(*node.destructurePattern);
     else
@@ -1604,7 +1606,7 @@ void SourceFormatter::visit(ast::LetInExpr const& node)
         emit("use ");
     else if (node.resourceMode == ast::ResourceMode::Manual)
         emit("manual ");
-    if (node.isRecursive)
+    if (node.isRecursive())
         emit("rec ");
     if (node.destructurePattern)
         emitPattern(*node.destructurePattern);

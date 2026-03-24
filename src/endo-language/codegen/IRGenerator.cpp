@@ -465,7 +465,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.returnType = func.returnType;
             persisted.body = func.body;
             persisted.returnKind = func.returnKind;
-            persisted.isRecursive = func.isRecursive;
+            persisted.recursion = func.recursion;
+            persisted.captureMode = func.captureMode;
             persisted.hasVariadicParam = func.hasVariadicParam;
             persistentState->functions[name] = std::move(persisted);
 
@@ -5713,6 +5714,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
+    if (node.isPassthrough() && !node.isFunction())
+    {
+        reportTypeError("'let passthrough' requires a function definition");
+        return;
+    }
+
     if (node.isFunction())
     {
         // Function definition: let add x y = x + y
@@ -5722,7 +5729,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // For mutual recursion (let rec f ... and g ...), register all names first
         // so that captured-variable analysis can see sibling functions
         auto allRecNames = std::vector<std::string> {};
-        if (node.isRecursive)
+        if (node.isRecursive())
         {
             allRecNames.push_back(node.name);
             for (auto const& ab: node.andBindings)
@@ -5739,7 +5746,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.returnType = node.returnType;
             func.body = node.value.get();
             func.returnKind = determineReturnKind(func.body);
-            func.isRecursive = node.isRecursive;
+            func.recursion = node.recursion;
+            func.captureMode = node.captureMode;
             func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -5774,7 +5782,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.returnType = ab.returnType;
             func.body = ab.value.get();
             func.returnKind = determineReturnKind(func.body);
-            func.isRecursive = true;
+            func.recursion = ast::Recursion::Recursive;
+            func.captureMode = node.captureMode;
             func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -6095,12 +6104,12 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         func.returnType = node.returnType;
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
-        func.isRecursive = node.isRecursive;
+        func.recursion = node.recursion;
         func.definitionLocation = node.location;
 
         // Include function name as bound for recursive functions (prevents self-capture)
         auto allBound = func.parameters;
-        if (node.isRecursive)
+        if (node.isRecursive())
             allBound.push_back(node.name);
         func.capturedBindings = collectFreeVariables(func.body, allBound);
         collectCapturedMutables(func);
@@ -6174,7 +6183,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 
     // At statement level, shell commands should run with normal I/O (not capture mode)
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = false;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
 
     CoreVM::Value* value = nullptr;
 
@@ -6552,7 +6561,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Evaluate the value (left-hand side).
     // Pipeline source is an expression context — shell commands must capture output.
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
     CoreVM::Value* value = codegen(node.value.get());
     _shellCommandCaptureMode = savedCaptureMode;
     if (!value)
@@ -7378,7 +7387,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
 
     // Handle recursive function via pipeline (e.g., 10 |> countdown)
-    if (func->isRecursive)
+    if (func->recursion == ast::Recursion::Recursive)
     {
         // Reuse the same loop-based compilation as ApplicationExpr Case A
         auto* entryBlock = _builder.createBlock("rec.entry");
@@ -7487,10 +7496,18 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _sema.scopes().bindFunctionRef(func->parameters[0], constStr->get());
     }
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedPipelineCaptureMode = _shellCommandCaptureMode;
+    if (func->captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Inline the function body
     ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
     --_functionBodyDepth;
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedPipelineCaptureMode;
 
     if (func->returnKind != ReturnKind::Plain)
     {
@@ -7554,7 +7571,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             }
             // Print argument is an expression context → restore capture mode
             auto const savedCapture = _shellCommandCaptureMode;
-            _shellCommandCaptureMode = true;
+            _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
             generatePrintCall(argExprs[0], funcIdent->name == "println");
             _shellCommandCaptureMode = savedCapture;
             return;
@@ -7948,7 +7965,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true; // Arguments are expression contexts → capture mode
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture; // Arguments are expression contexts → capture mode
     std::vector<CoreVM::Value*> args;
     for (ast::Expr const* argExpr: argExprs)
     {
@@ -8105,7 +8122,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     }
 
     // Fallback: loop-based recursion for untyped recursive functions
-    if (func->isRecursive)
+    if (func->recursion == ast::Recursion::Recursive)
     {
         if (!func->mutualGroup.empty())
             generateMutualRecursiveCall(func, funcName, args);
@@ -8163,7 +8180,7 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
     partialFunc.returnType = func->returnType;
     partialFunc.body = func->body;
     partialFunc.returnKind = func->returnKind;
-    partialFunc.isRecursive = false;
+    partialFunc.recursion = ast::Recursion::None;
     partialFunc.builtinHOF = func->builtinHOF;
     partialFunc.resultKind = func->resultKind;
     partialFunc.capturedBindings = std::move(newCaptures);
@@ -8606,10 +8623,18 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         }
     }
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedInlineCaptureMode = _shellCommandCaptureMode;
+    if (func->captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Inline the function body
     ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
     --_functionBodyDepth;
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedInlineCaptureMode;
 
     // Validate return type annotation if present
     if (bodyResult && func->returnType)
@@ -8752,8 +8777,16 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     _compilingFunction = irFunction;
     ++_functionBodyDepth;
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    if (func.captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Codegen the function body
     auto* bodyResult = codegen(func.body);
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedCaptureMode;
 
     // Restore tail position and compiling function
     _inTailPosition = savedTailPosition;
@@ -8848,7 +8881,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
 
     // If bodyResult is null and no errors, all code paths end with tail calls (valid).
     // If bodyResult is null and we're not in a recursive/function context, it's unexpected.
-    if (!bodyResult && !func.isRecursive)
+    if (!bodyResult && func.recursion != ast::Recursion::Recursive)
     {
         revertToInlining();
         return;
@@ -9864,7 +9897,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         return;
     }
 
-    if (!_shellCommandCaptureMode)
+    if (_shellCommandCaptureMode == ast::ShellCaptureMode::Passthrough)
     {
         // Statement-level: run command with normal I/O (no capture)
         codegen(node.command.get());
@@ -11890,7 +11923,7 @@ void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
     auto args = std::vector<CoreVM::Value*> {};
     for (auto const* argExpr: argExprs)
     {
@@ -11945,7 +11978,8 @@ IRGenerator::FSharpFunction IRGenerator::toFSharpFunction(
     func.returnType = persisted.returnType;
     func.body = persisted.body;
     func.returnKind = persisted.returnKind;
-    func.isRecursive = persisted.isRecursive;
+    func.recursion = persisted.recursion;
+    func.captureMode = persisted.captureMode;
     func.hasVariadicParam = persisted.hasVariadicParam;
     return func;
 }
@@ -12181,7 +12215,8 @@ void IRGenerator::visit(ast::ModuleDeclStmt const& node)
         persisted.returnType = func.returnType;
         persisted.body = func.body;
         persisted.returnKind = func.returnKind;
-        persisted.isRecursive = func.isRecursive;
+        persisted.recursion = func.recursion;
+        persisted.captureMode = func.captureMode;
         persisted.hasVariadicParam = func.hasVariadicParam;
         descriptor->functions[name] = std::move(persisted);
     }

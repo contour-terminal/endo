@@ -45,7 +45,14 @@ enum class TokenCategory // NOLINT(performance-enum-size)
         case Try:
         case Finally:
         case True:
-        case False: return TokenCategory::Keyword;
+        case False:
+        case Lazy:
+        case Seq:
+        case Yield:
+        case Use:
+        case Manual:
+        case Passthrough:
+        case Ref: return TokenCategory::Keyword;
 
         // Numbers
         case Number: return TokenCategory::Number;
