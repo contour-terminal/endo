@@ -788,6 +788,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     prompt.terminal().onColorSchemeChanged([this](tui::ColorScheme scheme) {
         auto& mgr = tui::ThemeManager::instance();
         mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
+        prompt.setTheme(mgr.current());
         // Re-apply prompt preset with appropriate colors for new color scheme
         auto const& currentName = prompt.promptConfig().name;
         if (!currentName.empty())

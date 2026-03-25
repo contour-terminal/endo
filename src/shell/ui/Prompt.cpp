@@ -570,6 +570,12 @@ void Prompt::resume()
     }
 }
 
+void Prompt::setTheme(tui::Theme theme)
+{
+    if (_screen)
+        _screen->setTheme(theme);
+}
+
 void Prompt::setPromptConfig(PromptConfig config)
 {
     _promptConfig = std::move(config);
