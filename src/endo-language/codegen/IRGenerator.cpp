@@ -3550,9 +3550,124 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     _result = _builder.get(CoreVM::CoreNumber(0)); // print/println returns unit
 }
 
+bool IRGenerator::dispatchBuiltinCall(BuiltinCallEntry const& entry,
+                                      std::vector<ast::Expr const*> const& argExprs)
+{
+    auto const expectedArity = entry.arity();
+    if (static_cast<int>(argExprs.size()) != expectedArity)
+    {
+        reportTypeError("{} requires {} argument(s), got {}", entry.name, expectedArity, argExprs.size());
+        return true;
+    }
+
+    // Evaluate arguments
+    std::vector<CoreVM::Value*> args;
+    args.reserve(argExprs.size());
+    for (auto const* argExpr: argExprs)
+    {
+        auto* val = codegen(argExpr);
+        if (!val)
+        {
+            reportTypeError("Failed to evaluate argument for {}", entry.name);
+            return true;
+        }
+        args.push_back(val);
+    }
+
+    // Reverse args if data-last convention
+    if (entry.reverseArgs && args.size() == 2)
+        std::swap(args[0], args[1]);
+
+    // Find and call the callback
+    auto* callback = findCallback(std::string(entry.callbackSignature));
+    if (!callback)
+    {
+        reportTypeError("{} builtin not registered", entry.callbackSignature);
+        return true;
+    }
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), args, std::string(entry.name));
+
+    // Apply static annotations
+    if (entry.resultObjectTypeId != 0)
+        annotateObjectTypeId(_result, entry.resultObjectTypeId);
+    if (entry.resultInnerLiteralType != CoreVM::LiteralType::Void)
+        annotateInnerType(_result, entry.resultInnerLiteralType);
+    if (entry.resultInnerObjectTypeId != 0)
+        annotateInnerObjectTypeId(_result, entry.resultInnerObjectTypeId);
+    if (entry.resultListElementLiteralType != CoreVM::LiteralType::Void)
+        annotateListElementLiteralType(_result, entry.resultListElementLiteralType);
+
+    // Apply dynamic propagation from the first argument (the collection)
+    if (!args.empty())
+    {
+        switch (entry.propagation)
+        {
+            case ResultPropagation::ListElementAsOptionInner:
+                if (auto elemTypeId = getListElementTypeId(args[0]))
+                    annotateInnerObjectTypeId(_result, *elemTypeId);
+                break;
+            case ResultPropagation::ListElementAsList:
+                if (auto elemTypeId = getListElementTypeId(args[0]))
+                    annotateListElementTypeId(_result, *elemTypeId);
+                if (auto elt = getListElementLiteralType(args[0]))
+                    annotateListElementLiteralType(_result, *elt);
+                break;
+            case ResultPropagation::None: break;
+        }
+    }
+
+    return true;
+}
+
+bool IRGenerator::dispatchPipelineBuiltin(BuiltinCallEntry const& entry, CoreVM::Value* value)
+{
+    // Find and call the callback with the piped value as the single argument
+    auto* callback = findCallback(std::string(entry.callbackSignature));
+    if (!callback)
+    {
+        reportTypeError("{} builtin not registered", entry.callbackSignature);
+        return true;
+    }
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { value }, std::string(entry.name));
+
+    // Apply static annotations
+    if (entry.resultObjectTypeId != 0)
+        annotateObjectTypeId(_result, entry.resultObjectTypeId);
+    if (entry.resultInnerLiteralType != CoreVM::LiteralType::Void)
+        annotateInnerType(_result, entry.resultInnerLiteralType);
+    if (entry.resultInnerObjectTypeId != 0)
+        annotateInnerObjectTypeId(_result, entry.resultInnerObjectTypeId);
+    if (entry.resultListElementLiteralType != CoreVM::LiteralType::Void)
+        annotateListElementLiteralType(_result, entry.resultListElementLiteralType);
+
+    // Apply dynamic propagation from the piped value
+    switch (entry.propagation)
+    {
+        case ResultPropagation::ListElementAsOptionInner:
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
+            break;
+        case ResultPropagation::ListElementAsList:
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateListElementTypeId(_result, *elemTypeId);
+            if (auto elt = getListElementLiteralType(value))
+                annotateListElementLiteralType(_result, *elt);
+            break;
+        case ResultPropagation::None: break;
+    }
+
+    return true;
+}
+
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
+    // Data-driven dispatch from registry
+    if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
+        return dispatchBuiltinCall(*entry, argExprs);
+
     // --- IR instruction builtins (no native callback needed) ---
 
     if (name == "string_length" || name == "grapheme_length")
@@ -6622,10 +6737,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
-        // Check other builtins
-        // Build a temporary argument expression list pointing to a synthetic node.
-        // Since builtins codegen their args, and we already have the value, we use
-        // a different approach: codegen the value manually for builtins.
+        // Data-driven dispatch from registry for unary pipeline builtins
+        if (auto const* entry = findPipelineBuiltinEntry(funcIdent->name))
+        {
+            dispatchPipelineBuiltin(*entry, value);
+            return;
+        }
+
+        // Check other builtins (not yet migrated to registry)
         if (funcIdent->name == "string_length" || funcIdent->name == "grapheme_length")
         {
             if (value->type() != CoreVM::LiteralType::String)
