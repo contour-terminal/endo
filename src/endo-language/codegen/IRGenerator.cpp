@@ -3,6 +3,7 @@
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/ast/Pattern.hpp>
+#include <endo-language/builtins/CompilerBuiltinRegistry.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/codegen/PatternIRGenerator.hpp>
 #include <endo-language/module/ModuleLoader.hpp>
@@ -746,7 +747,7 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         {
             auto const& name = ident->name;
 
-            if (name == "ignore")
+            if (endo::isUnitProducingBuiltin(name))
                 return true;
 
             // Cycle detection for recursive functions

@@ -73,6 +73,7 @@ add_library(endo STATIC
     ide/DiagnosticsCollector.cpp
 
     # Builtin Registration (single source of truth for signatures + shared implementations)
+    builtins/CompilerBuiltinRegistry.hpp
     builtins/BuiltinSignatures.hpp
     builtins/BuiltinSignatures.cpp
     builtins/BuiltinImpls.hpp
