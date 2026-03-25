@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: captured function with non-string explicit return type is rejected
+# expect-error: Type mismatch
+
+let f () : int = & echo hello
+
+f () |> ignore

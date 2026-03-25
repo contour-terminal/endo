@@ -530,7 +530,7 @@ void IRGenerator::popFSharpScope()
         {
             _report.typeError(toCoreLoc(loc),
                               "Value '{}' is defined but never used. "
-                              "Use 'let _ = ...' to explicitly discard.",
+                              "Use 'ignore' to explicitly discard.",
                               name);
             _hasErrors = true;
         }
@@ -745,6 +745,9 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(fn))
         {
             auto const& name = ident->name;
+
+            if (name == "ignore")
+                return true;
 
             // Cycle detection for recursive functions
             if (visited.contains(name))
@@ -6239,8 +6242,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         // Prefer the inner expression's location (the actual call site) over ExprStmt's location
         auto const& exprLoc = node.expr->location;
         auto const loc = exprLoc.value_or(node.location.value_or(SourceLocationRange {}));
-        _report.typeError(toCoreLoc(loc),
-                          "Return value is discarded. Use 'let _ = ...' to explicitly discard.");
+        _report.typeError(toCoreLoc(loc), "Return value is discarded. Use 'ignore' to explicitly discard.");
         _hasErrors = true;
     }
 
@@ -6602,6 +6604,12 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 _builder.createCallFunction(
                     _builder.getBuiltinFunction(*callback), { argValue }, funcIdent->name);
             }
+            _result = nullptr;
+            return;
+        }
+
+        if (funcIdent->name == "ignore")
+        {
             _result = nullptr;
             return;
         }
@@ -7577,6 +7585,18 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             return;
         }
 
+        if (funcIdent->name == "ignore")
+        {
+            if (argExprs.size() != 1)
+            {
+                reportTypeError("ignore requires exactly one argument");
+                return;
+            }
+            codegen(argExprs[0]);
+            _result = _builder.get(CoreVM::CoreNumber(0)); // unit
+            return;
+        }
+
         // force: evaluate a lazy value
         if (funcIdent->name == "force")
         {
@@ -7965,7 +7985,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture; // Arguments are expression contexts → capture mode
+    _shellCommandCaptureMode =
+        ast::ShellCaptureMode::Capture; // Arguments are expression contexts → capture mode
     std::vector<CoreVM::Value*> args;
     for (ast::Expr const* argExpr: argExprs)
     {
@@ -8862,7 +8883,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         {
             _report.typeError(toCoreLoc(unusedLoc),
                               "Value '{}' is defined but never used. "
-                              "Use 'let _ = ...' to explicitly discard.",
+                              "Use 'ignore' to explicitly discard.",
                               unusedName);
             _hasErrors = true;
         }
@@ -8874,7 +8895,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     {
         _report.typeError(toCoreLoc(unusedLoc),
                           "Value '{}' is defined but never used. "
-                          "Use 'let _ = ...' to explicitly discard.",
+                          "Use 'ignore' to explicitly discard.",
                           unusedName);
         _hasErrors = true;
     }

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: passthrough function with non-int return type is rejected
+# expect-error: Type mismatch
+
+let passthrough e () : string = & true
+
+e () |> ignore

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: captured function implicitly returns string
+# expect: hello
+
+let f () = & echo hello
+
+print (f ())

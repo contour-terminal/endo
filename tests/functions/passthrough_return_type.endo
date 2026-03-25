@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: passthrough function returns exit code as int
+# expect: 0
+
+let passthrough e () = & true
+
+print (e ())

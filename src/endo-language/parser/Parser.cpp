@@ -317,7 +317,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
             else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println"
-                     || _lexer.currentLiteral() == "each")
+                     || _lexer.currentLiteral() == "each" || _lexer.currentLiteral() == "ignore")
             {
                 // F# style print/println/each functions - parse as F# expression wrapped in ExprStmt
                 _lexer.enterFSharpExpr();
@@ -3130,7 +3130,7 @@ bool Parser::isFSharpPrimary() const noexcept
                 return false;
             // Contextual keywords that should not be treated as primary expressions
             if (lit == "in" || lit == "then" || lit == "else" || lit == "elif" || lit == "do"
-                || lit == "break" || lit == "continue" || lit == "exec" || lit == "yield")
+                || lit == "break" || lit == "continue" || lit == "exec" || lit == "yield" || lit == "ignore")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -3963,7 +3963,8 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
         result = std::make_unique<ast::LetInExpr>(
             std::move(let->destructurePattern), std::move(let->value), std::move(body));
     else
-        result = std::make_unique<ast::LetInExpr>(let->isRecursive() ? ast::Recursion::Recursive : ast::Recursion::None,
+        result = std::make_unique<ast::LetInExpr>(let->isRecursive() ? ast::Recursion::Recursive
+                                                                     : ast::Recursion::None,
                                                   std::move(let->name),
                                                   std::move(let->parameters),
                                                   std::move(let->returnType),
@@ -4335,12 +4336,13 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
 
     auto const endLoc = body->location;
-    auto node = std::make_unique<ast::LetInExpr>(isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
-                                                 std::move(name),
-                                                 std::move(parameters),
-                                                 std::move(returnType),
-                                                 std::move(value),
-                                                 std::move(body));
+    auto node =
+        std::make_unique<ast::LetInExpr>(isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
+                                         std::move(name),
+                                         std::move(parameters),
+                                         std::move(returnType),
+                                         std::move(value),
+                                         std::move(body));
     node->resourceMode = resourceMode;
     node->location = endLoc ? SourceLocationRange { .begin = letLoc.begin, .end = endLoc->end } : letLoc;
     return node;

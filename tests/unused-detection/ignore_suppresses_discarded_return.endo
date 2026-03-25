@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: ignore suppresses discarded return value
+# description: ignore (f x) suppresses discarded return value
 # mode: ir-only
 # unused-detection: true
 

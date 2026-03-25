@@ -251,7 +251,22 @@ let addPair (a, b) = a + b
 let sumFirst [x; y; _...] = x + y
 ```
 
-### 4.5 Scope and Visibility
+### 4.5 Discarding Return Values
+
+When a function returns a value that you don't need, use `ignore` to explicitly discard it.
+This prevents the "Return value is discarded" warning.
+
+```endo
+# Statement form
+ignore (File.delete path)
+
+# Pipeline form
+File.writeAll path "hello" |> ignore
+```
+
+`ignore` evaluates the expression for its side effects and discards the result.
+
+### 4.6 Scope and Visibility
 
 <!-- endo-no-check -->
 ```endo
@@ -282,7 +297,7 @@ let processConfig =
     CONFIG_CACHE
 ```
 
-### 4.6 Lazy Bindings
+### 4.7 Lazy Bindings
 
 Use `lazy` to defer evaluation of an expression until its value is needed:
 

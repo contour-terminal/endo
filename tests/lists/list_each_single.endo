@@ -3,4 +3,4 @@
 # description: List each single
 # expect: 42
 
-let _ = [42] |> each print
+[42] |> each print |> ignore

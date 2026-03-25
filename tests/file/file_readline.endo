@@ -5,7 +5,7 @@
 
 let path = $"{Path.temporary_directory}/endo_test_file_readline.txt"
 
-let _ = File.writeAll path "line1\nline2\n"
+ignore (File.writeAll path "line1\nline2\n")
 
 match File.open path "r" with
 | Ok fd ->
@@ -15,4 +15,4 @@ match File.open path "r" with
     let _ = File.close fd
 | Error e -> println e
 
-let _ = File.delete path
+ignore (File.delete path)

@@ -3,6 +3,7 @@
 
 #include <format>
 #include <ranges>
+#include <utility>
 
 namespace endo
 {
@@ -757,9 +758,13 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         return std::pair { types::list(s3.apply(bodyType)), s3 };
     }
 
-    // --- Shell expressions: treat as string ---
+    // --- Shell expressions: passthrough returns exit code (int), capture returns string ---
     if (dynamic_cast<ast::ShellCommandExpr const*>(&expr))
-        return std::pair { types::strType(), subst };
+    {
+        auto const shellType =
+            _captureMode == ast::ShellCaptureMode::Passthrough ? types::intType() : types::strType();
+        return std::pair { shellType, subst };
+    }
 
     if (dynamic_cast<ast::VariableExpr const*>(&expr))
         return std::pair { types::strType(), subst };
@@ -1361,7 +1366,9 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             for (size_t i = 0; i < letStmt->parameters.size(); ++i)
                 bodyEnv->bindMono(letStmt->parameters[i].name, paramTypes[i]);
 
+            auto const savedCaptureMode = std::exchange(_captureMode, letStmt->captureMode);
             auto valResult = inferExpr(*letStmt->value, bodyEnv, subst);
+            _captureMode = savedCaptureMode;
             if (!valResult)
             {
                 recordError(valResult.error());
