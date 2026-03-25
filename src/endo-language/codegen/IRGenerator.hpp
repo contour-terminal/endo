@@ -386,6 +386,9 @@ class IRGenerator final: public ast::Visitor
     /// @return true if dispatched successfully
     bool dispatchPipelineBuiltin(BuiltinCallEntry const& entry, CoreVM::Value* value);
 
+    /// Applies result annotations from a registry entry to _result.
+    void applyBuiltinAnnotations(BuiltinCallEntry const& entry, CoreVM::Value* sourceArg);
+
     /// Tries to generate IR for a built-in property access on collection types.
     /// Dispatches on the object's type ID and field name to emit the appropriate IR.
     /// @param obj The object value being accessed

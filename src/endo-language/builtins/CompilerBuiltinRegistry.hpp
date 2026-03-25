@@ -72,31 +72,34 @@ static_assert(
     }(),
     "Duplicate entry in compilerBuiltins");
 
-/// Returns the statement parse strategy for a builtin, or None if not a compiler builtin.
-constexpr auto getStmtParseStrategy(std::string_view name) -> StmtParseStrategy
+/// Looks up a compiler builtin entry by name.
+constexpr auto lookupCompilerBuiltin(std::string_view name) -> CompilerBuiltinEntry const*
 {
     for (auto const& entry: compilerBuiltins)
         if (entry.name == name)
-            return entry.stmtStrategy;
-    return StmtParseStrategy::None;
+            return &entry;
+    return nullptr;
+}
+
+/// Returns the statement parse strategy for a builtin, or None if not a compiler builtin.
+constexpr auto getStmtParseStrategy(std::string_view name) -> StmtParseStrategy
+{
+    auto const* e = lookupCompilerBuiltin(name);
+    return e ? e->stmtStrategy : StmtParseStrategy::None;
 }
 
 /// Returns true if this name should be excluded from isFSharpPrimary().
 constexpr auto isExcludedFromPrimary(std::string_view name) -> bool
 {
-    for (auto const& entry: compilerBuiltins)
-        if (entry.name == name)
-            return entry.excludeFromPrimary;
-    return false;
+    auto const* e = lookupCompilerBuiltin(name);
+    return e && e->excludeFromPrimary;
 }
 
 /// Returns true if this builtin is statically known to produce unit.
 constexpr auto isUnitProducingBuiltin(std::string_view name) -> bool
 {
-    for (auto const& entry: compilerBuiltins)
-        if (entry.name == name)
-            return entry.unitProducing;
-    return false;
+    auto const* e = lookupCompilerBuiltin(name);
+    return e && e->unitProducing;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,16 +240,6 @@ constexpr auto findBuiltinCallEntry(std::string_view name, int arity) -> Builtin
 {
     for (auto const& entry: builtinCallEntries)
         if (entry.name == name && entry.arity() == arity)
-            return &entry;
-    return nullptr;
-}
-
-/// Looks up a builtin call entry by name (any arity).
-/// Returns nullptr if not found.
-constexpr auto findBuiltinCallEntryByName(std::string_view name) -> BuiltinCallEntry const*
-{
-    for (auto const& entry: builtinCallEntries)
-        if (entry.name == name)
             return &entry;
     return nullptr;
 }
