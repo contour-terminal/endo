@@ -912,7 +912,7 @@ void Shell::registerPromptBuiltins()
         })
         .onSet([this](CoreVM::Params& args) {
             auto const& name = args.getString(1);
-            prompt.setPromptConfig(promptPreset(name));
+            prompt.setPromptConfig(promptPreset(name, prompt.terminal().colorScheme()));
         });
 
     _runtime.registerProperty("shell_prompt_indicator", CoreVM::LiteralType::String)

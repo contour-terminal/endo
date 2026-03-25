@@ -1643,7 +1643,7 @@ TEST_CASE("Parser.FSharp.let_passthrough_function")
 {
     auto ast = parse("let passthrough greet () = & echo hello");
     REQUIRE(ast != nullptr);
-    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt const*>(getFirstStatement(ast.get()));
+    const auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt const*>(getFirstStatement(ast.get()));
     REQUIRE(letStmt != nullptr);
     CHECK(letStmt->name == "greet");
     CHECK(letStmt->isPassthrough() == true);
