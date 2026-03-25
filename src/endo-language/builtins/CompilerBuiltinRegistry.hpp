@@ -226,11 +226,7 @@ inline constexpr std::array builtinCallEntries = {
     BuiltinCallEntry { .name = "markdown", .callbackSignature = "markdown_create(S)I", .pipelineSupport = true,
                         .resultObjectTypeId = detail::Md },
 
-    // Overloaded: fetch (1 or 2 args)
-    BuiltinCallEntry { .name = "fetch", .callbackSignature = "fetch(S)I",
-                        .resultObjectTypeId = detail::Res, .resultInnerLiteralType = detail::Str },
-    BuiltinCallEntry { .name = "fetch", .callbackSignature = "fetch(SI)I",
-                        .resultObjectTypeId = detail::Res, .resultInnerLiteralType = detail::Str },
+    // NOTE: fetch, env, time, rand, register_completer have custom codegen — not in this table
 };
 
 // clang-format on

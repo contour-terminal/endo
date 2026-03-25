@@ -3664,9 +3664,10 @@ bool IRGenerator::dispatchPipelineBuiltin(BuiltinCallEntry const& entry, CoreVM:
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
-    // Data-driven dispatch from registry
-    if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
-        return dispatchBuiltinCall(*entry, argExprs);
+    // Data-driven dispatch from registry (skip if user-defined function shadows the builtin)
+    if (!lookupFSharpFunction(name))
+        if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
+            return dispatchBuiltinCall(*entry, argExprs);
 
     // --- IR instruction builtins (no native callback needed) ---
 
