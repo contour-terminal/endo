@@ -136,6 +136,7 @@ struct BuiltinCallEntry
     std::string_view callbackSignature; ///< VM callback signature, e.g. "string_trim(S)S"
     bool pipelineSupport = false;       ///< Whether this builtin works as a unary pipeline target
     bool reverseArgs = false;           ///< Pass args in reverse order (data-last convention)
+    bool shadowable = false;            ///< User-defined functions with same name take priority
 
     /// Static result annotations (applied unconditionally after the call).
     uint16_t resultObjectTypeId = 0;                                              ///< 0 = no annotation
@@ -201,11 +202,11 @@ inline constexpr std::array builtinCallEntries = {
                         .resultObjectTypeId = detail::List, .propagation = ResultPropagation::ListElementAsList },
     BuiltinCallEntry { .name = "length",    .callbackSignature = "list_length(I)I",  .pipelineSupport = true },
     BuiltinCallEntry { .name = "isEmpty",   .callbackSignature = "list_isEmpty(I)B", .pipelineSupport = true },
-    BuiltinCallEntry { .name = "last",      .callbackSignature = "list_last(I)I",    .pipelineSupport = true,
+    BuiltinCallEntry { .name = "last",      .callbackSignature = "list_last(I)I",    .pipelineSupport = true, .shadowable = true,
                         .resultObjectTypeId = detail::Opt, .propagation = ResultPropagation::ListElementAsOptionInner },
-    BuiltinCallEntry { .name = "nth",       .callbackSignature = "list_nth(II)I",
+    BuiltinCallEntry { .name = "nth",       .callbackSignature = "list_nth(II)I",   .shadowable = true,
                         .resultObjectTypeId = detail::Opt, .propagation = ResultPropagation::ListElementAsOptionInner },
-    BuiltinCallEntry { .name = "replicate", .callbackSignature = "list_replicate(II)I",
+    BuiltinCallEntry { .name = "replicate", .callbackSignature = "list_replicate(II)I", .shadowable = true,
                         .resultObjectTypeId = detail::List },
 
     // Lookup

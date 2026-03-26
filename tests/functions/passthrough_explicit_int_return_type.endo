@@ -3,6 +3,6 @@
 # description: passthrough function with explicit int return type
 # expect: 0
 
-let passthrough e () : int = & true
+let passthrough e (): int = & true
 
 print (e ())

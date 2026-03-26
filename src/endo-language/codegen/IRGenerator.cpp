@@ -3553,8 +3553,8 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 bool IRGenerator::dispatchBuiltinCall(BuiltinCallEntry const& entry,
                                       std::vector<ast::Expr const*> const& argExprs)
 {
-    auto const expectedArity = entry.arity();
-    if (static_cast<int>(argExprs.size()) != expectedArity)
+    auto const expectedArity = static_cast<size_t>(entry.arity());
+    if (argExprs.size() != expectedArity)
     {
         reportTypeError("{} requires {} argument(s), got {}", entry.name, expectedArity, argExprs.size());
         return true;
@@ -3641,8 +3641,8 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
     // Data-driven dispatch from registry (skip if user-defined function shadows the builtin)
-    if (!lookupFSharpFunction(name))
-        if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
+    if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
+        if (!entry->shadowable || !lookupFSharpFunction(name))
             return dispatchBuiltinCall(*entry, argExprs);
 
     // --- IR instruction builtins (no native callback needed) ---
