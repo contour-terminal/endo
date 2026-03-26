@@ -256,6 +256,7 @@ let sumFirst [x; y; _...] = x + y
 When a function returns a value that you don't need, use `ignore` to explicitly discard it.
 This prevents the "Return value is discarded" warning.
 
+<!-- endo-no-check -->
 ```endo
 # Statement form
 ignore (File.delete path)

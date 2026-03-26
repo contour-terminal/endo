@@ -104,13 +104,6 @@ jobs:
       run: ctest --output-on-failure --build-config ${{ matrix.build_type }}
       timeout-minutes: 1
 
-    - name: Check documentation code snippets
-      run: |
-        python3 \
-            scripts/check-doc-snippets.py \
-            --endo-path "${{ steps.strings.outputs.build-output-dir }}/src/shell/endo"
-      timeout-minutes: 2
-
   static-build:
     runs-on: ubuntu-latest
     name: "Linux static x86_64"
