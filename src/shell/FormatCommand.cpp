@@ -4,10 +4,12 @@
 #include <endo-language/format/FormatConfig.hpp>
 #include <endo-language/format/SourceFormatter.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <print>
+#include <ranges>
 #include <sstream>
 #include <string>
 
@@ -22,6 +24,7 @@ namespace
         bool check = false;
         bool diff = false;
         bool toStdout = false;
+        bool recursive = false;
         std::string configPath;
         std::vector<std::string_view> files;
     };
@@ -38,6 +41,8 @@ namespace
                 opts.diff = true;
             else if (arg == "--stdout")
                 opts.toStdout = true;
+            else if (arg == "--recursive" || arg == "-r")
+                opts.recursive = true;
             else if (arg == "--config" && i + 1 < args.size())
                 opts.configPath = args[++i];
             else if (arg.starts_with("--config="))
@@ -47,12 +52,14 @@ namespace
                 std::print(R"(Usage: endo format [OPTIONS] FILE...
 
 Options:
-  --check         Check formatting without modifying files (exit 1 if unformatted)
-  --diff          Show diff between original and formatted output
-  --stdout        Print formatted output to stdout instead of writing in-place
-  --config PATH   Use a specific .endo-format config file
-  -h, --help      Show this help message
+  --check            Check formatting without modifying files (exit 1 if unformatted)
+  --diff             Show diff between original and formatted output
+  --stdout           Print formatted output to stdout instead of writing in-place
+  --recursive, -r    Recursively find and process all .endo files in directories
+  --config PATH      Use a specific .endo-format config file
+  -h, --help         Show this help message
 
+Arguments can be files or directories. Directories require --recursive.
 If no files are specified, reads from stdin.
 )");
                 std::exit(EXIT_SUCCESS);
@@ -127,8 +134,36 @@ int runFormatCommand(std::span<char const* const> args)
         return EXIT_SUCCESS;
     }
 
+    // Expand directories into .endo file lists
+    std::vector<std::string> expandedFiles;
+    for (auto const& path: opts.files)
+    {
+        if (std::filesystem::is_directory(path))
+        {
+            if (!opts.recursive)
+            {
+                std::print(stderr, "endo format: {}: is a directory (use --recursive)\n", path);
+                return EXIT_FAILURE;
+            }
+            std::error_code ec;
+            for (auto const& entry: std::filesystem::recursive_directory_iterator(std::string(path), ec))
+                if (!ec && entry.is_regular_file() && entry.path().extension() == ".endo")
+                    expandedFiles.emplace_back(entry.path().string());
+            if (ec)
+            {
+                std::print(stderr, "endo format: error reading directory {}: {}\n", path, ec.message());
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            expandedFiles.emplace_back(path);
+        }
+    }
+    std::ranges::sort(expandedFiles);
+
     auto anyChanged = false;
-    for (auto const& filePath: opts.files)
+    for (auto const& filePath: expandedFiles)
     {
         auto const path = std::filesystem::path(filePath);
         auto const source = readFile(path);
