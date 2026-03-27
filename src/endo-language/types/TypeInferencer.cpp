@@ -3,6 +3,7 @@
 
 #include <format>
 #include <ranges>
+#include <utility>
 
 namespace endo
 {
@@ -268,7 +269,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             auto innerEnv = env->childScope();
             std::vector<TypePtr> paramTypes;
 
-            if (letIn->isRecursive)
+            if (letIn->isRecursive())
             {
                 // Pre-bind with fresh type for recursive reference
                 auto freshParams = std::vector<TypePtr> {};
@@ -286,7 +287,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             }
 
             auto bodyEnv = innerEnv->childScope();
-            if (!letIn->isRecursive)
+            if (!letIn->isRecursive())
             {
                 for (auto const& param: letIn->parameters)
                 {
@@ -309,7 +310,7 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             for (auto& paramType: std::ranges::reverse_view(paramTypes))
                 funcType = types::function(s1.apply(paramType), funcType);
 
-            if (letIn->isRecursive)
+            if (letIn->isRecursive())
             {
                 // Unify with pre-bound type
                 auto scheme = innerEnv->lookup(letIn->name);
@@ -757,9 +758,13 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         return std::pair { types::list(s3.apply(bodyType)), s3 };
     }
 
-    // --- Shell expressions: treat as string ---
+    // --- Shell expressions: passthrough returns exit code (int), capture returns string ---
     if (dynamic_cast<ast::ShellCommandExpr const*>(&expr))
-        return std::pair { types::strType(), subst };
+    {
+        auto const shellType =
+            _captureMode == ast::ShellCaptureMode::Passthrough ? types::intType() : types::strType();
+        return std::pair { shellType, subst };
+    }
 
     if (dynamic_cast<ast::VariableExpr const*>(&expr))
         return std::pair { types::strType(), subst };
@@ -1346,7 +1351,7 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
                 paramTypes.push_back(t);
             }
 
-            if (letStmt->isRecursive)
+            if (letStmt->isRecursive())
             {
                 // Pre-bind with fresh function type for recursive reference
                 auto freshRet = funcEnv->freshTypeVarType();
@@ -1361,7 +1366,9 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             for (size_t i = 0; i < letStmt->parameters.size(); ++i)
                 bodyEnv->bindMono(letStmt->parameters[i].name, paramTypes[i]);
 
+            auto const savedCaptureMode = std::exchange(_captureMode, letStmt->captureMode);
             auto valResult = inferExpr(*letStmt->value, bodyEnv, subst);
+            _captureMode = savedCaptureMode;
             if (!valResult)
             {
                 recordError(valResult.error());
@@ -1375,7 +1382,7 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             for (auto& paramType: std::ranges::reverse_view(paramTypes))
                 funcType = types::function(s1.apply(paramType), funcType);
 
-            if (letStmt->isRecursive)
+            if (letStmt->isRecursive())
             {
                 // Unify with pre-bound type
                 auto scheme = funcEnv->lookup(letStmt->name);

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: passthrough variadic function passes args and stdout through
+# expect: hello world
+
+let passthrough say ...args = & echo ...args
+
+say hello world

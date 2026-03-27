@@ -1,0 +1,6 @@
+# description: String.grapheme_length returns grapheme cluster count
+# module-path: STDLIB
+# expect: 4
+
+import String
+print (String.grapheme_length "café")

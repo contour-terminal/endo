@@ -85,6 +85,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Variadic parameters: `let f ...args = ...` — collects extra arguments into a list
 - [x] Splat expression: `...args` in shell commands — expands list into individual command arguments
 - [x] Shell aliases via let bindings: `let ll ...args = & exa -l ...args`
+- [x] `let passthrough` modifier: shell commands in function body always pass through to terminal
 - [x] Variadic function invocation at statement level: bare `ll` or `ll somefile` with shell-mode arg parsing
 
 ## Lists & Collections
@@ -182,7 +183,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue`
 - [x] Compile-time error for unwrapped Option/Result in binary operations (with suggestion in shell hover + LSP)
 - [x] Source location tracking on F# expression AST nodes for accurate diagnostic ranges
-- [x] Unused value detection: unused let bindings, function parameters, and discarded return values (`let _ = ...` suppresses)
+- [x] Unused value detection: unused let bindings, function parameters, and discarded return values (`ignore` suppresses)
 
 ## Control Flow
 
@@ -199,7 +200,9 @@ This document tracks the implementation status of F# language features as define
 
 - [x] `print` — print without newline
 - [x] `println` — print with newline
-- [x] `string_length` — length of string
+- [x] `string_length` — grapheme cluster count (user-perceived characters)
+- [x] `bytes`, `codepoints`, `graphemes` — Unicode string decomposition to lists
+- [x] `byte_length`, `codepoint_length`, `grapheme_length` — Unicode-aware string counting
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion
 - [x] `string` — universal to-string conversion (int, float, bool, string passthrough)

@@ -14,4 +14,4 @@ match File.size path with
 | Ok n -> println $"size: {n}"
 | Error e -> println e
 
-let _ = File.delete path
+ignore (File.delete path)

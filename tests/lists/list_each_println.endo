@@ -6,4 +6,4 @@
 # expect: 3
 # expect: 
 
-let _ = [1; 2; 3] |> each println
+[1; 2; 3] |> each println |> ignore

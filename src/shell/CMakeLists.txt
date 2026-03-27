@@ -290,7 +290,6 @@ if(Python3_FOUND)
         COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/scripts/check-doc-snippets.py
             --endo-path $<TARGET_FILE:endo-bin>
-            --allow-failures
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
     set_tests_properties(check-doc-snippets PROPERTIES

@@ -7,10 +7,10 @@
 
 let path = $"{Path.temporary_directory}/endo_test_file_exists.txt"
 
-let _ = File.writeAll path "test"
+ignore (File.writeAll path "test")
 
 println (File.exists path)
 
-let _ = File.delete path
+ignore (File.delete path)
 
 println (File.exists path)

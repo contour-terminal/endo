@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: byte_length returns UTF-8 byte count
+# expect: 5
+
+print (byte_length "café")

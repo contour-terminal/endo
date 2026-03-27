@@ -73,6 +73,7 @@ add_library(endo STATIC
     ide/DiagnosticsCollector.cpp
 
     # Builtin Registration (single source of truth for signatures + shared implementations)
+    builtins/CompilerBuiltinRegistry.hpp
     builtins/BuiltinSignatures.hpp
     builtins/BuiltinSignatures.cpp
     builtins/BuiltinImpls.hpp
@@ -107,7 +108,7 @@ add_library(endo STATIC
     ScopedLogger.hpp
 )
 
-target_link_libraries(endo PUBLIC CoreVM crispy::core nlohmann_json::nlohmann_json)
+target_link_libraries(endo PUBLIC CoreVM crispy::core nlohmann_json::nlohmann_json unicode::unicode)
 target_include_directories(endo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Tracing support

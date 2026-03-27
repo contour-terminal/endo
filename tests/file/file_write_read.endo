@@ -5,10 +5,10 @@
 
 let path = $"{Path.temporary_directory}/endo_test_file_write_read.txt"
 
-let _ = File.writeAll path "Hello, World!"
+ignore (File.writeAll path "Hello, World!")
 
 match File.readAll path with
 | Ok content -> println content
 | Error e -> println e
 
-let _ = File.delete path
+ignore (File.delete path)

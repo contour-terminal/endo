@@ -17,11 +17,12 @@ with other shells to help you decide if Endo is right for you.
 | Structured data | :material-check-bold: Typed records | :material-close: Text | :material-close: Text | :material-check-bold: Tables | :material-approximately-equal: Values |
 | Type system | :material-check-bold: Hindley-Milner | :material-close: | :material-close: | :material-approximately-equal: Dynamic | :material-approximately-equal: Dynamic |
 | Pattern matching | :material-check-bold: Full ADTs | :material-approximately-equal: case/glob | :material-close: | :material-approximately-equal: match | :material-close: |
-| LSP support | :material-check-bold: Full | :material-close: | :material-close: | :material-approximately-equal: Basic | :material-close: |
+| LSP support | :material-check-bold: Full | :material-approximately-equal: External | :material-close: | :material-approximately-equal: Basic | :material-approximately-equal: Built-in |
 | Tab completion | :material-check-bold: Type-aware | :material-approximately-equal: Basic | :material-check-bold: Rich | :material-check-bold: Rich | :material-approximately-equal: Basic |
-| Syntax highlighting | :material-check-bold: Semantic | :material-close: | :material-check-bold: | :material-check-bold: | :material-close: |
-| Windows | :material-check-bold: Native | :material-approximately-equal: WSL/Git Bash | :material-check-bold: | :material-check-bold: | :material-check-bold: |
-| Maturity | :material-new-box: 0.1.0 | :material-check-bold: 35+ years | :material-check-bold: 18+ years | :material-approximately-equal: ~4 years | :material-approximately-equal: ~8 years |
+| Syntax highlighting | :material-check-bold: Semantic | :material-close: | :material-check-bold: | :material-check-bold: | :material-check-bold: |
+| Windows | :material-check-bold: Native | :material-approximately-equal: WSL/Git Bash | :material-approximately-equal: WSL | :material-check-bold: | :material-approximately-equal: Experimental |
+| Debugging | :material-check-bold: Full DAP | :material-approximately-equal: bashdb + DAP | :material-close: | :material-close: | :material-close: |
+| Maturity | :material-new-box: 0.1.0 | :material-check-bold: 35+ years | :material-check-bold: 21+ years | :material-approximately-equal: ~7 years | :material-approximately-equal: ~8 years |
 
 ## Endo vs Nushell
 
@@ -41,6 +42,10 @@ plain text. The key differences:
   signature help, code actions, formatting -- not just basic completions.
 - **Type inference.** Hindley-Milner inference (Algorithm W) that stays out of your way
   until you need it.
+- **Integrated debugger.** Full Debug Adapter Protocol (DAP) server with breakpoints,
+  stepping, variable inspection, watch expressions, conditional breakpoints, and
+  disassembly -- works directly with VS Code and any DAP-compatible editor. Nushell has
+  no debugging support.
 
 **Where Nushell excels:**
 
@@ -61,6 +66,9 @@ experience, but they take different approaches:
 - **F# expressions.** Let bindings, lambdas, currying, partial application, and composition
   operators at your prompt.
 - **LSP integration.** Full IDE features in your editor for `.endo` scripts.
+- **Integrated debugger.** Full DAP server for breakpoints, stepping, and variable
+  inspection. Fish only offers a basic `breakpoint` command with no step debugger or DAP
+  support.
 
 **Where Fish excels:**
 
@@ -84,6 +92,9 @@ on their foundation:
 - **IDE features.** Full LSP server, semantic syntax highlighting, and source formatting.
 - **Modern error handling.** Result/Option types with `?` propagation instead of exit codes.
 - **Type inference.** Automatic type deduction with optional annotations.
+- **Modern debugger.** Integrated DAP server with conditional breakpoints, watch
+  expressions, disassembly, and expression evaluation. Bash has bashdb and a VS Code DAP
+  extension, but Endo's debugger is built-in and requires no external tools.
 
 **Where Bash/Zsh excel:**
 
@@ -96,9 +107,12 @@ on their foundation:
 
 Endo is a great fit if you:
 
+- Want your shell prompt to feel like an IDE -- hover tooltips, real-time diagnostics,
+  semantic syntax highlighting, and go-to-definition right at the command line
 - Want functional programming at your prompt without leaving shell mode
 - Are tired of `grep | awk | sed` chains and want typed pipelines
-- Want IDE features (LSP, semantic tokens, go-to-def) in your shell scripts
+- Value a first-class graphical terminal experience with elevated UX out of the box
+- Need an integrated script debugger with breakpoints, stepping, and variable inspection
 - Are comfortable with F#, OCaml, Haskell, or similar syntax
 - Want a single shell that works on Linux, macOS, and Windows
 

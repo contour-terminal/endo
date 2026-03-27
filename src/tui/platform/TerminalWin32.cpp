@@ -61,6 +61,36 @@ auto Terminal::initialize() -> VoidResult
     _cellPixelWidth = cellWidth;
     _cellPixelHeight = cellHeight;
 
+    // Wait for color scheme response so the first prompt renders with correct colors.
+    // The original query from enableProtocols() may have been consumed by the raw
+    // XTVERSION read in detectCapabilities(), so re-send it here.
+    if (_colorScheme == ColorScheme::Unknown)
+    {
+        _output->writeRaw("\033[?996n"); // CSI ? 996 n — query color scheme
+        _output->flush();
+        auto constexpr totalTimeout = std::chrono::milliseconds(100);
+        auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+        while (_colorScheme == ColorScheme::Unknown)
+        {
+            auto const now = std::chrono::steady_clock::now();
+            if (now >= deadline)
+                break;
+            auto const remaining =
+                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+            auto events = _input.poll(static_cast<int>(remaining));
+            if (events.empty())
+                break; // Real timeout — terminal doesn't support color scheme queries
+            for (auto const& event: events)
+            {
+                if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
+                {
+                    auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
+                    handleColorSchemeReport(scheme);
+                }
+            }
+        }
+    }
+
     _initialized = true;
     return {};
 }

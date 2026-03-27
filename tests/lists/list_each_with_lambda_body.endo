@@ -6,4 +6,4 @@
 # expect: 60
 # expect: 
 
-let _ = [10; 20; 30] |> each (fun x -> println (x * 2))
+[10; 20; 30] |> each (fun x -> println (x * 2)) |> ignore

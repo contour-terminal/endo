@@ -105,6 +105,29 @@ BuiltinDescriptorRegistry::BuiltinDescriptorRegistry()
     registerCall(fixedArity("join", 2));
     registerCall(fixedArity("toText", 1));
 
+    // --- Unicode string decomposition ---
+    {
+        auto desc = fixedArity("bytes", 1);
+        desc.returnObjectTypeId = BT::List;
+        desc.returnListElemType = LT::Number;
+        registerCall(desc);
+    }
+    {
+        auto desc = fixedArity("codepoints", 1);
+        desc.returnObjectTypeId = BT::List;
+        desc.returnListElemType = LT::Number;
+        registerCall(desc);
+    }
+    {
+        auto desc = fixedArity("graphemes", 1);
+        desc.returnObjectTypeId = BT::List;
+        desc.returnListElemType = LT::String;
+        registerCall(desc);
+    }
+    registerCall(fixedArity("byte_length", 1));
+    registerCall(fixedArity("codepoint_length", 1));
+    registerCall(fixedArity("grapheme_length", 1));
+
     // --- Structured data builtins ---
     {
         auto desc = fixedArity("ps", 0);

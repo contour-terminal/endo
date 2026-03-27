@@ -802,6 +802,10 @@ tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& m
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
 {
+    // Mouse events are handled by onEvent/handleMouseEvent, not here.
+    if (std::holds_alternative<tui::MouseEvent>(event))
+        return Action::None;
+
     // Handle command palette events first (takes priority over everything)
     if (_commandPalette.visible())
     {

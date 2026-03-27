@@ -109,6 +109,9 @@ class Prompt
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
 
+    /// @brief Updates the TUI theme used for rendering.
+    void setTheme(tui::Theme theme);
+
     /// @brief Returns the GitModule for accessing cached git info.
     [[nodiscard]] GitModule const* gitModule() const noexcept;
 

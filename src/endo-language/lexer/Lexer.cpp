@@ -74,6 +74,8 @@ namespace
             return Token::Use;
         if (literal == "manual")
             return Token::Manual;
+        if (literal == "passthrough")
+            return Token::Passthrough;
 
         // Mutable references
         if (literal == "ref")

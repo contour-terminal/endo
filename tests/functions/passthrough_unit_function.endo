@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: passthrough function passes stdout through to terminal
+# expect: hello
+
+let passthrough greet () = & echo hello
+
+greet

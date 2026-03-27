@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: graphemes returns list of grapheme cluster strings
+# expect: ["c"; "a"; "f"; "é"]
+
+print (graphemes "café")

@@ -38,7 +38,7 @@ InlineCursorMovement calculateInlineCursorMovement(int previousContentHeight,
 }
 
 Screen::Screen(Terminal& terminal, ScreenConfig config):
-    _terminal(terminal), _config(config), _theme(darkTheme()), _root(std::make_unique<RootComponent>())
+    _terminal(terminal), _config(config), _theme(currentTheme()), _root(std::make_unique<RootComponent>())
 {
     _root->setScreen(this);
 

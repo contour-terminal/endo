@@ -3,4 +3,4 @@
 # description: List each print ref
 # expect: 123
 
-let _ = [1; 2; 3] |> each print
+[1; 2; 3] |> each print |> ignore

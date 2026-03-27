@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String dot graphemes property returns grapheme list
+# expect: 4
+
+let s = "café"
+
+print s.graphemes.length

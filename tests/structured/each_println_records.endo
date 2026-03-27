@@ -7,4 +7,4 @@
 # expect: { id = 3; state = Done; command = make build; pid = 9012 }
 # expect: 
 
-let _ = jobs |> each println
+jobs |> each println |> ignore

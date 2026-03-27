@@ -3,6 +3,7 @@
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/ast/Pattern.hpp>
+#include <endo-language/builtins/CompilerBuiltinRegistry.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/codegen/PatternIRGenerator.hpp>
 #include <endo-language/module/ModuleLoader.hpp>
@@ -465,7 +466,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.returnType = func.returnType;
             persisted.body = func.body;
             persisted.returnKind = func.returnKind;
-            persisted.isRecursive = func.isRecursive;
+            persisted.recursion = func.recursion;
+            persisted.captureMode = func.captureMode;
             persisted.hasVariadicParam = func.hasVariadicParam;
             persistentState->functions[name] = std::move(persisted);
 
@@ -529,7 +531,7 @@ void IRGenerator::popFSharpScope()
         {
             _report.typeError(toCoreLoc(loc),
                               "Value '{}' is defined but never used. "
-                              "Use 'let _ = ...' to explicitly discard.",
+                              "Use 'ignore' to explicitly discard.",
                               name);
             _hasErrors = true;
         }
@@ -744,6 +746,9 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(fn))
         {
             auto const& name = ident->name;
+
+            if (endo::isUnitProducingBuiltin(name))
+                return true;
 
             // Cycle detection for recursive functions
             if (visited.contains(name))
@@ -3545,27 +3550,102 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     _result = _builder.get(CoreVM::CoreNumber(0)); // print/println returns unit
 }
 
+bool IRGenerator::dispatchBuiltinCall(BuiltinCallEntry const& entry,
+                                      std::vector<ast::Expr const*> const& argExprs)
+{
+    auto const expectedArity = static_cast<size_t>(entry.arity());
+    if (argExprs.size() != expectedArity)
+    {
+        reportTypeError("{} requires {} argument(s), got {}", entry.name, expectedArity, argExprs.size());
+        return true;
+    }
+
+    // Evaluate arguments
+    std::vector<CoreVM::Value*> args;
+    args.reserve(argExprs.size());
+    for (auto const* argExpr: argExprs)
+    {
+        auto* val = codegen(argExpr);
+        if (!val)
+        {
+            reportTypeError("Failed to evaluate argument for {}", entry.name);
+            return true;
+        }
+        args.push_back(val);
+    }
+
+    // Reverse args if data-last convention
+    if (entry.reverseArgs && args.size() == 2)
+        std::swap(args[0], args[1]);
+
+    // Find and call the callback
+    auto* callback = findCallback(std::string(entry.callbackSignature));
+    if (!callback)
+    {
+        reportTypeError("{} builtin not registered", entry.callbackSignature);
+        return true;
+    }
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), args, std::string(entry.name));
+
+    applyBuiltinAnnotations(entry, args.empty() ? nullptr : args[0]);
+    return true;
+}
+
+bool IRGenerator::dispatchPipelineBuiltin(BuiltinCallEntry const& entry, CoreVM::Value* value)
+{
+    auto* callback = findCallback(std::string(entry.callbackSignature));
+    if (!callback)
+    {
+        reportTypeError("{} builtin not registered", entry.callbackSignature);
+        return true;
+    }
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { value }, std::string(entry.name));
+
+    applyBuiltinAnnotations(entry, value);
+    return true;
+}
+
+void IRGenerator::applyBuiltinAnnotations(BuiltinCallEntry const& entry, CoreVM::Value* sourceArg)
+{
+    if (entry.resultObjectTypeId != 0)
+        annotateObjectTypeId(_result, entry.resultObjectTypeId);
+    if (entry.resultInnerLiteralType != CoreVM::LiteralType::Void)
+        annotateInnerType(_result, entry.resultInnerLiteralType);
+    if (entry.resultInnerObjectTypeId != 0)
+        annotateInnerObjectTypeId(_result, entry.resultInnerObjectTypeId);
+    if (entry.resultListElementLiteralType != CoreVM::LiteralType::Void)
+        annotateListElementLiteralType(_result, entry.resultListElementLiteralType);
+
+    if (sourceArg)
+    {
+        switch (entry.propagation)
+        {
+            case ResultPropagation::ListElementAsOptionInner:
+                if (auto elemTypeId = getListElementTypeId(sourceArg))
+                    annotateInnerObjectTypeId(_result, *elemTypeId);
+                break;
+            case ResultPropagation::ListElementAsList:
+                if (auto elemTypeId = getListElementTypeId(sourceArg))
+                    annotateListElementTypeId(_result, *elemTypeId);
+                if (auto elt = getListElementLiteralType(sourceArg))
+                    annotateListElementLiteralType(_result, *elt);
+                break;
+            case ResultPropagation::None: break;
+        }
+    }
+}
+
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
-    // --- IR instruction builtins (no native callback needed) ---
+    // Data-driven dispatch from registry (skip if user-defined function shadows the builtin)
+    if (auto const* entry = findBuiltinCallEntry(name, static_cast<int>(argExprs.size())))
+        if (!entry->shadowable || !lookupFSharpFunction(name))
+            return dispatchBuiltinCall(*entry, argExprs);
 
-    if (name == "string_length")
-    {
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate string_length argument");
-            return true;
-        }
-        if (argVal->type() != CoreVM::LiteralType::String)
-        {
-            reportTypeError("string_length requires a string argument");
-            return true;
-        }
-        _result = _builder.createSLen(argVal, "slen");
-        return true;
-    }
+    // --- IR instruction builtins (no native callback needed) ---
 
     if (name == "int_of_string")
     {
@@ -3698,444 +3778,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
-    if (name == "which")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("which requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate which argument");
-            return true;
-        }
-        auto* callback = findCallback("which_find(S)I");
-        if (!callback)
-        {
-            reportTypeError("which_find builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "which_find");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-        annotateInnerType(_result, CoreVM::LiteralType::String);
-        return true;
-    }
-
-    if (name == "head")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("head requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate head argument");
-            return true;
-        }
-        auto* callback = findCallback("list_head(I)I");
-        if (!callback)
-        {
-            reportTypeError("list_head builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_head");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-        // Propagate list element type as inner object type of the Option (Some wraps the element)
-        if (auto elemTypeId = getListElementTypeId(argVal))
-            annotateInnerObjectTypeId(_result, *elemTypeId);
-        return true;
-    }
-
-    if (name == "tail")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("tail requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate tail argument");
-            return true;
-        }
-        auto* callback = findCallback("list_tail(I)I");
-        if (!callback)
-        {
-            reportTypeError("list_tail builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_tail");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        // Propagate list element type through tail (same element type as input list)
-        if (auto elemTypeId = getListElementTypeId(argVal))
-            annotateListElementTypeId(_result, *elemTypeId);
-        if (auto elt = getListElementLiteralType(argVal))
-            annotateListElementLiteralType(_result, *elt);
-        return true;
-    }
-
-    if (name == "length")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("length requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate length argument");
-            return true;
-        }
-        auto* callback = findCallback("list_length(I)I");
-        if (!callback)
-        {
-            reportTypeError("list_length builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_length");
-        return true;
-    }
-
-    if (name == "isEmpty")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("isEmpty requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate isEmpty argument");
-            return true;
-        }
-        auto* callback = findCallback("list_isEmpty(I)B");
-        if (!callback)
-        {
-            reportTypeError("list_isEmpty builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_isEmpty");
-        return true;
-    }
-
-    if (name == "nth" && !lookupFSharpFunction(name))
-    {
-        if (argExprs.size() != 2)
-        {
-            reportTypeError("nth requires exactly 2 arguments (index, list), got {}", argExprs.size());
-            return true;
-        }
-        auto* indexVal = codegen(argExprs[0]);
-        if (!indexVal)
-        {
-            reportTypeError("Failed to evaluate nth index argument");
-            return true;
-        }
-        auto* listVal = codegen(argExprs[1]);
-        if (!listVal)
-        {
-            reportTypeError("Failed to evaluate nth list argument");
-            return true;
-        }
-        auto* callback = findCallback("list_nth(II)I");
-        if (!callback)
-        {
-            reportTypeError("list_nth builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(
-            _builder.getBuiltinFunction(*callback), { indexVal, listVal }, "list_nth");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-        if (auto elemTypeId = getListElementTypeId(listVal))
-            annotateInnerObjectTypeId(_result, *elemTypeId);
-        return true;
-    }
-
-    if (name == "last" && !lookupFSharpFunction(name))
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("last requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate last argument");
-            return true;
-        }
-        auto* callback = findCallback("list_last(I)I");
-        if (!callback)
-        {
-            reportTypeError("list_last builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_last");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-        if (auto elemTypeId = getListElementTypeId(argVal))
-            annotateInnerObjectTypeId(_result, *elemTypeId);
-        return true;
-    }
-
-    if (name == "replicate" && !lookupFSharpFunction(name))
-    {
-        if (argExprs.size() != 2)
-        {
-            reportTypeError("replicate requires exactly 2 arguments (count, value), got {}", argExprs.size());
-            return true;
-        }
-        auto* countVal = codegen(argExprs[0]);
-        if (!countVal)
-        {
-            reportTypeError("Failed to evaluate replicate count argument");
-            return true;
-        }
-        auto* valueVal = codegen(argExprs[1]);
-        if (!valueVal)
-        {
-            reportTypeError("Failed to evaluate replicate value argument");
-            return true;
-        }
-        auto* callback = findCallback("list_replicate(II)I");
-        if (!callback)
-        {
-            reportTypeError("list_replicate builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(
-            _builder.getBuiltinFunction(*callback), { countVal, valueVal }, "list_replicate");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        if (valueVal->type() != CoreVM::LiteralType::Void)
-            annotateListElementLiteralType(_result, valueVal->type());
-        return true;
-    }
-
-    // --- String builtins ---
-
-    // Unary string functions: trim, toLower, toUpper
-    if (name == "trim" || name == "toLower" || name == "toUpper")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("{} requires exactly 1 argument, got {}", name, argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate {} argument", name);
-            return true;
-        }
-        auto const sigName = "string_" + std::string(name);
-        auto* callback = findCallback(sigName + "(S)S");
-        if (!callback)
-        {
-            reportTypeError("{} builtin not found", sigName);
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, sigName);
-        return true;
-    }
-
-    // lines: 1 arg (text) → list<str>
-    if (name == "lines")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("lines requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate lines argument");
-            return true;
-        }
-        auto* callback = findCallback("string_lines(S)I");
-        if (!callback)
-        {
-            reportTypeError("string_lines builtin not found");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "string_lines");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
-        return true;
-    }
-
-    // Binary predicate string functions: contains, startsWith, endsWith
-    if (name == "contains" || name == "startsWith" || name == "endsWith")
-    {
-        if (argExprs.size() != 2)
-        {
-            reportTypeError("{} requires exactly 2 arguments, got {}", name, argExprs.size());
-            return true;
-        }
-        auto* arg1 = codegen(argExprs[0]);
-        if (!arg1)
-        {
-            reportTypeError("Failed to evaluate {} first argument", name);
-            return true;
-        }
-        auto* arg2 = codegen(argExprs[1]);
-        if (!arg2)
-        {
-            reportTypeError("Failed to evaluate {} second argument", name);
-            return true;
-        }
-        auto const sigName = "string_" + std::string(name);
-        auto* callback = findCallback(sigName + "(SS)B");
-        if (!callback)
-        {
-            reportTypeError("{} builtin not found", sigName);
-            return true;
-        }
-        // Data-last convention: contains substr text, startsWith prefix text, endsWith suffix text
-        // Native expects (text, pattern), so pass arg2 (text) first, arg1 (substr/prefix/suffix) second
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg2, arg1 }, sigName);
-        return true;
-    }
-
-    // replace: 3 args (old, new, text) → string
-    if (name == "replace")
-    {
-        if (argExprs.size() != 3)
-        {
-            reportTypeError("replace requires exactly 3 arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg1 = codegen(argExprs[0]);
-        if (!arg1)
-        {
-            reportTypeError("Failed to evaluate replace first argument");
-            return true;
-        }
-        auto* arg2 = codegen(argExprs[1]);
-        if (!arg2)
-        {
-            reportTypeError("Failed to evaluate replace second argument");
-            return true;
-        }
-        auto* arg3 = codegen(argExprs[2]);
-        if (!arg3)
-        {
-            reportTypeError("Failed to evaluate replace third argument");
-            return true;
-        }
-        auto* callback = findCallback("string_replace(SSS)S");
-        if (!callback)
-        {
-            reportTypeError("string_replace builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(
-            _builder.getBuiltinFunction(*callback), { arg1, arg2, arg3 }, "string_replace");
-        return true;
-    }
-
-    // split: 2 args (delimiter, text) → list<str>
-    if (name == "split")
-    {
-        if (argExprs.size() != 2)
-        {
-            reportTypeError("split requires exactly 2 arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg1 = codegen(argExprs[0]);
-        if (!arg1)
-        {
-            reportTypeError("Failed to evaluate split first argument");
-            return true;
-        }
-        auto* arg2 = codegen(argExprs[1]);
-        if (!arg2)
-        {
-            reportTypeError("Failed to evaluate split second argument");
-            return true;
-        }
-        auto* callback = findCallback("string_split(SS)I");
-        if (!callback)
-        {
-            reportTypeError("string_split builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(
-            _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_split");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-        annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
-        return true;
-    }
-
-    // join: 2 args (separator, list) → str
-    if (name == "join")
-    {
-        if (argExprs.size() != 2)
-        {
-            reportTypeError("join requires exactly 2 arguments, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg1 = codegen(argExprs[0]);
-        if (!arg1)
-        {
-            reportTypeError("Failed to evaluate join first argument");
-            return true;
-        }
-        auto* arg2 = codegen(argExprs[1]);
-        if (!arg2)
-        {
-            reportTypeError("Failed to evaluate join second argument");
-            return true;
-        }
-        auto* callback = findCallback("string_join(SI)S");
-        if (!callback)
-        {
-            reportTypeError("string_join builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(
-            _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_join");
-        return true;
-    }
-
-    // toText: convert object value to its string representation
-    if (name == "toText")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("toText requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate toText argument");
-            return true;
-        }
-        auto* callback = findCallback("object_to_string(I)S");
-        if (!callback)
-        {
-            reportTypeError("object_to_string builtin not found");
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "toText");
-        return true;
-    }
-
     // Data-driven structured command dispatch (ps, jobs, ls, bind, etc.)
     if (_persistentState)
     {
@@ -4187,181 +3829,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         }
     }
 
-    // formatDateTime: int -> string (format epoch seconds as UTC datetime string)
-    if (name == "formatDateTime")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("formatDateTime takes 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg = codegen(argExprs[0]);
-        if (!arg)
-        {
-            reportTypeError("Failed to evaluate formatDateTime argument");
-            return true;
-        }
-        auto* callback = findCallback("format_datetime(I)S");
-        if (!callback)
-        {
-            reportTypeError("format_datetime builtin not registered");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatDateTime");
-        return true;
-    }
-
-    // formatTimeSpan: TimeSpan -> string (format TimeSpan as human-readable duration)
-    if (name == "formatTimeSpan")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("formatTimeSpan takes 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg = codegen(argExprs[0]);
-        if (!arg)
-        {
-            reportTypeError("Failed to evaluate formatTimeSpan argument");
-            return true;
-        }
-        auto* callback = findCallback("format_timespan(I)S");
-        if (!callback)
-        {
-            reportTypeError("format_timespan builtin not registered");
-            return true;
-        }
-        _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatTimeSpan");
-        return true;
-    }
-
-    // sleep: TimeSpan -> unit (pause execution for a TimeSpan duration)
-    if (name == "sleep")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("sleep takes 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg = codegen(argExprs[0]);
-        if (!arg)
-        {
-            reportTypeError("Failed to evaluate sleep argument");
-            return true;
-        }
-        auto* callback = findCallback("timespan_sleep(I)I");
-        if (!callback)
-        {
-            reportTypeError("timespan_sleep builtin not registered");
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "sleep");
-        return true;
-    }
-
-    // formatMode: int -> string (format permission bits as rwx string)
-    if (name == "formatMode")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("formatMode takes 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* arg = codegen(argExprs[0]);
-        if (!arg)
-        {
-            reportTypeError("Failed to evaluate formatMode argument");
-            return true;
-        }
-        auto* callback = findCallback("format_mode(I)S");
-        if (!callback)
-        {
-            reportTypeError("format_mode builtin not registered");
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatMode");
-        return true;
-    }
-
-    // formatNumber: string -> int -> string  OR  int -> string (locale-aware)
-    if (name == "formatNumber")
-    {
-        if (argExprs.size() == 1)
-        {
-            // 1-arg: use user's locale thousand separator
-            auto* num = codegen(argExprs[0]);
-            if (!num)
-            {
-                reportTypeError("Failed to evaluate formatNumber number argument");
-                return true;
-            }
-            auto* callback = findCallback("format_number(I)S");
-            if (!callback)
-            {
-                reportTypeError("format_number builtin not registered");
-                return true;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { num }, "formatNumber");
-            return true;
-        }
-        if (argExprs.size() == 2)
-        {
-            // 2-arg: explicit separator
-            auto* sep = codegen(argExprs[0]);
-            if (!sep)
-            {
-                reportTypeError("Failed to evaluate formatNumber separator argument");
-                return true;
-            }
-            auto* num = codegen(argExprs[1]);
-            if (!num)
-            {
-                reportTypeError("Failed to evaluate formatNumber number argument");
-                return true;
-            }
-            auto* callback = findCallback("format_number(SI)S");
-            if (!callback)
-            {
-                reportTypeError("format_number builtin not registered");
-                return true;
-            }
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { sep, num }, "formatNumber");
-            return true;
-        }
-        reportTypeError("formatNumber requires 1 or 2 arguments, got {}", argExprs.size());
-        return true;
-    }
-
-    // isReadable/isWritable/isExecutable: int -> bool (test permission bits)
-    if (name == "isReadable" || name == "isWritable" || name == "isExecutable")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("{} takes 1 argument, got {}", name, argExprs.size());
-            return true;
-        }
-        auto* arg = codegen(argExprs[0]);
-        if (!arg)
-        {
-            reportTypeError("Failed to evaluate {} argument", name);
-            return true;
-        }
-        auto const callbackSig = std::format("mode_{}(I)B", name);
-        auto* callback = findCallback(callbackSig);
-        if (!callback)
-        {
-            reportTypeError("{} builtin not registered", name);
-            return true;
-        }
-        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, name);
-        return true;
-    }
-
-    // fetch: 1 or 2 args, returns Result<string, string>
+    // fetch: custom codegen (type validation + overloaded arity)
     if (name == "fetch")
     {
         if (argExprs.empty() || argExprs.size() > 2)
@@ -4414,27 +3882,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
         annotateInnerType(_result, CoreVM::LiteralType::String);
         return true;
-    }
-
-    // markdown: 1 arg (text) → Markdown object
-    if (name == "markdown")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("markdown requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate markdown argument");
-            return true;
-        }
-        if (tryGenerateNativeCall("markdown_create", { argVal }))
-        {
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Markdown);
-            return true;
-        }
     }
 
     if (name == "rand")
@@ -4581,11 +4028,47 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
     // --- String dot properties ---
     if (objLiteralType == CoreVM::LiteralType::String)
     {
-        if (fieldName == "length")
-        {
-            _result = _builder.createSLen(obj, "string.length");
+        // Helper to call a string callback and return its result
+        auto callStringCallback = [&](char const* sig, char const* label) -> bool {
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return true;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, label);
             return true;
-        }
+        };
+
+        // Helper for collection properties that return a list
+        auto callStringListCallback =
+            [&](char const* sig, char const* label, CoreVM::LiteralType elemType) -> bool {
+            auto* callback = findCallback(sig);
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sig);
+                return true;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, label);
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementLiteralType(_result, elemType);
+            return true;
+        };
+
+        if (fieldName == "length" || fieldName == "grapheme_length")
+            return callStringCallback("string_grapheme_length(S)I", "string.grapheme_length");
+        if (fieldName == "byte_length")
+            return callStringCallback("string_byte_length(S)I", "string.byte_length");
+        if (fieldName == "codepoint_length")
+            return callStringCallback("string_codepoint_length(S)I", "string.codepoint_length");
+        if (fieldName == "bytes")
+            return callStringListCallback("string_to_bytes(S)I", "string.bytes", CoreVM::LiteralType::Number);
+        if (fieldName == "codepoints")
+            return callStringListCallback(
+                "string_to_codepoints(S)I", "string.codepoints", CoreVM::LiteralType::Number);
+        if (fieldName == "graphemes")
+            return callStringListCallback(
+                "string_to_graphemes(S)I", "string.graphemes", CoreVM::LiteralType::String);
         return false;
     }
 
@@ -5608,6 +5091,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
+    if (node.isPassthrough() && !node.isFunction())
+    {
+        reportTypeError("'let passthrough' requires a function definition");
+        return;
+    }
+
     if (node.isFunction())
     {
         // Function definition: let add x y = x + y
@@ -5617,7 +5106,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // For mutual recursion (let rec f ... and g ...), register all names first
         // so that captured-variable analysis can see sibling functions
         auto allRecNames = std::vector<std::string> {};
-        if (node.isRecursive)
+        if (node.isRecursive())
         {
             allRecNames.push_back(node.name);
             for (auto const& ab: node.andBindings)
@@ -5634,7 +5123,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.returnType = node.returnType;
             func.body = node.value.get();
             func.returnKind = determineReturnKind(func.body);
-            func.isRecursive = node.isRecursive;
+            func.recursion = node.recursion;
+            func.captureMode = node.captureMode;
             func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -5669,7 +5159,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.returnType = ab.returnType;
             func.body = ab.value.get();
             func.returnKind = determineReturnKind(func.body);
-            func.isRecursive = true;
+            func.recursion = ast::Recursion::Recursive;
+            func.captureMode = node.captureMode;
             func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -5990,12 +5481,12 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         func.returnType = node.returnType;
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
-        func.isRecursive = node.isRecursive;
+        func.recursion = node.recursion;
         func.definitionLocation = node.location;
 
         // Include function name as bound for recursive functions (prevents self-capture)
         auto allBound = func.parameters;
-        if (node.isRecursive)
+        if (node.isRecursive())
             allBound.push_back(node.name);
         func.capturedBindings = collectFreeVariables(func.body, allBound);
         collectCapturedMutables(func);
@@ -6069,7 +5560,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 
     // At statement level, shell commands should run with normal I/O (not capture mode)
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = false;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
 
     CoreVM::Value* value = nullptr;
 
@@ -6125,8 +5616,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         // Prefer the inner expression's location (the actual call site) over ExprStmt's location
         auto const& exprLoc = node.expr->location;
         auto const loc = exprLoc.value_or(node.location.value_or(SourceLocationRange {}));
-        _report.typeError(toCoreLoc(loc),
-                          "Return value is discarded. Use 'let _ = ...' to explicitly discard.");
+        _report.typeError(toCoreLoc(loc), "Return value is discarded. Use 'ignore' to explicitly discard.");
         _hasErrors = true;
     }
 
@@ -6447,7 +5937,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Evaluate the value (left-hand side).
     // Pipeline source is an expression context — shell commands must capture output.
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
     CoreVM::Value* value = codegen(node.value.get());
     _shellCommandCaptureMode = savedCaptureMode;
     if (!value)
@@ -6492,6 +5982,12 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
+        if (funcIdent->name == "ignore")
+        {
+            _result = nullptr;
+            return;
+        }
+
         // force: evaluate a lazy value in pipeline
         if (funcIdent->name == "force")
         {
@@ -6499,20 +5995,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
-        // Check other builtins
-        // Build a temporary argument expression list pointing to a synthetic node.
-        // Since builtins codegen their args, and we already have the value, we use
-        // a different approach: codegen the value manually for builtins.
-        if (funcIdent->name == "string_length")
+        // Data-driven dispatch from registry for unary pipeline builtins
+        if (auto const* entry = findPipelineBuiltinEntry(funcIdent->name))
         {
-            if (value->type() != CoreVM::LiteralType::String)
-            {
-                reportTypeError("string_length requires a string argument");
-                return;
-            }
-            _result = _builder.createSLen(value, "slen");
+            dispatchPipelineBuiltin(*entry, value);
             return;
         }
+
+        // IR-instruction builtins (not data-driven — they use direct IR builder calls)
         if (funcIdent->name == "int_of_string")
         {
             _result = _builder.createS2N(value, "s2n");
@@ -6538,179 +6028,6 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _result = _builder.createBNot(toBool(value), "not");
             return;
         }
-        if (funcIdent->name == "head")
-        {
-            auto* callback = findCallback("list_head(I)I");
-            if (!callback)
-            {
-                reportTypeError("list_head builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_head");
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-            // Propagate list element type as inner object type of the Option
-            if (auto elemTypeId = getListElementTypeId(value))
-                annotateInnerObjectTypeId(_result, *elemTypeId);
-            return;
-        }
-        if (funcIdent->name == "tail")
-        {
-            auto* callback = findCallback("list_tail(I)I");
-            if (!callback)
-            {
-                reportTypeError("list_tail builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_tail");
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-            // Propagate list element type through tail
-            if (auto elemTypeId = getListElementTypeId(value))
-                annotateListElementTypeId(_result, *elemTypeId);
-            if (auto elt = getListElementLiteralType(value))
-                annotateListElementLiteralType(_result, *elt);
-            return;
-        }
-        if (funcIdent->name == "which")
-        {
-            auto* callback = findCallback("which_find(S)I");
-            if (!callback)
-            {
-                reportTypeError("which_find builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "which_find");
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-            annotateInnerType(_result, CoreVM::LiteralType::String);
-            return;
-        }
-        if (funcIdent->name == "length")
-        {
-            auto* callback = findCallback("list_length(I)I");
-            if (!callback)
-            {
-                reportTypeError("list_length builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_length");
-            return;
-        }
-        if (funcIdent->name == "isEmpty")
-        {
-            auto* callback = findCallback("list_isEmpty(I)B");
-            if (!callback)
-            {
-                reportTypeError("list_isEmpty builtin not found");
-                return;
-            }
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { value }, "list_isEmpty");
-            return;
-        }
-        if (funcIdent->name == "last")
-        {
-            auto* callback = findCallback("list_last(I)I");
-            if (!callback)
-            {
-                reportTypeError("list_last builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_last");
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
-            if (auto elemTypeId = getListElementTypeId(value))
-                annotateInnerObjectTypeId(_result, *elemTypeId);
-            return;
-        }
-        // toText: convert object to its string representation (bypass table rendering)
-        if (funcIdent->name == "toText")
-        {
-            auto* callback = findCallback("object_to_string(I)S");
-            if (!callback)
-            {
-                reportTypeError("object_to_string builtin not found");
-                return;
-            }
-            _result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "toText");
-            return;
-        }
-        // lines in pipeline: str |> lines → string_lines(str)
-        if (funcIdent->name == "lines")
-        {
-            auto* callback = findCallback("string_lines(S)I");
-            if (!callback)
-            {
-                reportTypeError("string_lines builtin not found");
-                return;
-            }
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { value }, "string_lines");
-            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
-            annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
-            return;
-        }
-        // Unary string builtins in pipeline
-        if (funcIdent->name == "trim" || funcIdent->name == "toLower" || funcIdent->name == "toUpper")
-        {
-            auto const sigName = "string_" + std::string(funcIdent->name);
-            auto* callback = findCallback(sigName + "(S)S");
-            if (!callback)
-            {
-                reportTypeError("{} builtin not found", sigName);
-                return;
-            }
-            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, sigName);
-            return;
-        }
-        // Locale-aware formatNumber in pipeline: number |> formatNumber
-        if (funcIdent->name == "formatNumber")
-        {
-            auto* callback = findCallback("format_number(I)S");
-            if (!callback)
-            {
-                reportTypeError("format_number builtin not found");
-                return;
-            }
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { value }, "formatNumber");
-            return;
-        }
-        // markdown constructor in pipeline: "# Hello" |> markdown
-        if (funcIdent->name == "markdown")
-        {
-            if (tryGenerateNativeCall("markdown_create", { value }))
-            {
-                annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Markdown);
-                return;
-            }
-        }
-        // sleep in pipeline: TimeSpan.fromSeconds 5 |> sleep
-        if (funcIdent->name == "sleep")
-        {
-            auto* callback = findCallback("timespan_sleep(I)I");
-            if (callback)
-            {
-                _result =
-                    _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "sleep");
-                return;
-            }
-        }
-        // formatTimeSpan in pipeline: TimeSpan.fromSeconds 90 |> formatTimeSpan
-        if (funcIdent->name == "formatTimeSpan")
-        {
-            auto* callback = findCallback("format_timespan(I)S");
-            if (callback)
-            {
-                _result = _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { value }, "formatTimeSpan");
-                return;
-            }
-        }
-
         // Named function or stored lambda
         funcName = funcIdent->name;
         func = lookupFSharpFunction(funcName);
@@ -7217,7 +6534,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     }
 
     // Handle recursive function via pipeline (e.g., 10 |> countdown)
-    if (func->isRecursive)
+    if (func->recursion == ast::Recursion::Recursive)
     {
         // Reuse the same loop-based compilation as ApplicationExpr Case A
         auto* entryBlock = _builder.createBlock("rec.entry");
@@ -7326,10 +6643,18 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _sema.scopes().bindFunctionRef(func->parameters[0], constStr->get());
     }
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedPipelineCaptureMode = _shellCommandCaptureMode;
+    if (func->captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Inline the function body
     ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
     --_functionBodyDepth;
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedPipelineCaptureMode;
 
     if (func->returnKind != ReturnKind::Plain)
     {
@@ -7393,9 +6718,21 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             }
             // Print argument is an expression context → restore capture mode
             auto const savedCapture = _shellCommandCaptureMode;
-            _shellCommandCaptureMode = true;
+            _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
             generatePrintCall(argExprs[0], funcIdent->name == "println");
             _shellCommandCaptureMode = savedCapture;
+            return;
+        }
+
+        if (funcIdent->name == "ignore")
+        {
+            if (argExprs.size() != 1)
+            {
+                reportTypeError("ignore requires exactly one argument");
+                return;
+            }
+            codegen(argExprs[0]);
+            _result = _builder.get(CoreVM::CoreNumber(0)); // unit
             return;
         }
 
@@ -7787,7 +7124,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true; // Arguments are expression contexts → capture mode
+    _shellCommandCaptureMode =
+        ast::ShellCaptureMode::Capture; // Arguments are expression contexts → capture mode
     std::vector<CoreVM::Value*> args;
     for (ast::Expr const* argExpr: argExprs)
     {
@@ -7944,7 +7282,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     }
 
     // Fallback: loop-based recursion for untyped recursive functions
-    if (func->isRecursive)
+    if (func->recursion == ast::Recursion::Recursive)
     {
         if (!func->mutualGroup.empty())
             generateMutualRecursiveCall(func, funcName, args);
@@ -8002,7 +7340,7 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
     partialFunc.returnType = func->returnType;
     partialFunc.body = func->body;
     partialFunc.returnKind = func->returnKind;
-    partialFunc.isRecursive = false;
+    partialFunc.recursion = ast::Recursion::None;
     partialFunc.builtinHOF = func->builtinHOF;
     partialFunc.resultKind = func->resultKind;
     partialFunc.capturedBindings = std::move(newCaptures);
@@ -8445,10 +7783,18 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         }
     }
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedInlineCaptureMode = _shellCommandCaptureMode;
+    if (func->captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Inline the function body
     ++_functionBodyDepth;
     CoreVM::Value* bodyResult = codegen(func->body);
     --_functionBodyDepth;
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedInlineCaptureMode;
 
     // Validate return type annotation if present
     if (bodyResult && func->returnType)
@@ -8591,8 +7937,16 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     _compilingFunction = irFunction;
     ++_functionBodyDepth;
 
+    // Save and optionally override capture mode for passthrough functions
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    if (func.captureMode == ast::ShellCaptureMode::Passthrough)
+        _shellCommandCaptureMode = ast::ShellCaptureMode::Passthrough;
+
     // Codegen the function body
     auto* bodyResult = codegen(func.body);
+
+    // Restore capture mode
+    _shellCommandCaptureMode = savedCaptureMode;
 
     // Restore tail position and compiling function
     _inTailPosition = savedTailPosition;
@@ -8668,7 +8022,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         {
             _report.typeError(toCoreLoc(unusedLoc),
                               "Value '{}' is defined but never used. "
-                              "Use 'let _ = ...' to explicitly discard.",
+                              "Use 'ignore' to explicitly discard.",
                               unusedName);
             _hasErrors = true;
         }
@@ -8680,14 +8034,14 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     {
         _report.typeError(toCoreLoc(unusedLoc),
                           "Value '{}' is defined but never used. "
-                          "Use 'let _ = ...' to explicitly discard.",
+                          "Use 'ignore' to explicitly discard.",
                           unusedName);
         _hasErrors = true;
     }
 
     // If bodyResult is null and no errors, all code paths end with tail calls (valid).
     // If bodyResult is null and we're not in a recursive/function context, it's unexpected.
-    if (!bodyResult && !func.isRecursive)
+    if (!bodyResult && func.recursion != ast::Recursion::Recursive)
     {
         revertToInlining();
         return;
@@ -9703,7 +9057,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         return;
     }
 
-    if (!_shellCommandCaptureMode)
+    if (_shellCommandCaptureMode == ast::ShellCaptureMode::Passthrough)
     {
         // Statement-level: run command with normal I/O (no capture)
         codegen(node.command.get());
@@ -11729,7 +11083,7 @@ void IRGenerator::generateModuleFunctionCall(ModuleDescriptor const* descriptor,
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
     auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = true;
+    _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
     auto args = std::vector<CoreVM::Value*> {};
     for (auto const* argExpr: argExprs)
     {
@@ -11784,7 +11138,8 @@ IRGenerator::FSharpFunction IRGenerator::toFSharpFunction(
     func.returnType = persisted.returnType;
     func.body = persisted.body;
     func.returnKind = persisted.returnKind;
-    func.isRecursive = persisted.isRecursive;
+    func.recursion = persisted.recursion;
+    func.captureMode = persisted.captureMode;
     func.hasVariadicParam = persisted.hasVariadicParam;
     return func;
 }
@@ -12020,7 +11375,8 @@ void IRGenerator::visit(ast::ModuleDeclStmt const& node)
         persisted.returnType = func.returnType;
         persisted.body = func.body;
         persisted.returnKind = func.returnKind;
-        persisted.isRecursive = func.isRecursive;
+        persisted.recursion = func.recursion;
+        persisted.captureMode = func.captureMode;
         persisted.hasVariadicParam = func.hasVariadicParam;
         descriptor->functions[name] = std::move(persisted);
     }

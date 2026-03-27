@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: .length returns grapheme count for Unicode strings
+# expect: 4
+
+let s = "café"
+
+print s.length

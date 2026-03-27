@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: let _ = f x suppresses discarded return value
+# description: ignore suppresses discarded return value
 # mode: ir-only
 # unused-detection: true
 
 let f (x: int): int = x + 1
 
-let _ = f 5
+ignore (f 5)

@@ -1,7 +1,7 @@
 // String utility functions for the Endo standard library.
 
-/// Returns the number of characters in a string.
-let length (value: string): int = string_length value
+/// Returns the number of grapheme clusters (user-perceived characters) in a string.
+let length (value: string): int = grapheme_length value
 
 /// Converts a string to uppercase.
 let upper (value: string): string = toUpper value
@@ -26,3 +26,21 @@ let contains (sub: string) (value: string): bool = value |> contains sub
 
 /// Repeats a string n times.
 let repeat (n: int) (value: string): string = value |> replicate n |> join ""
+
+/// Returns the list of UTF-8 byte values (0-255) of a string.
+let bytes (value: string): list<int> = bytes value
+
+/// Returns the list of Unicode codepoint values of a string.
+let codepoints (value: string): list<int> = codepoints value
+
+/// Returns the list of grapheme clusters (user-perceived characters) as strings.
+let graphemes (value: string): list<string> = graphemes value
+
+/// Returns the number of UTF-8 bytes in a string.
+let byte_length (value: string): int = byte_length value
+
+/// Returns the number of Unicode codepoints in a string.
+let codepoint_length (value: string): int = codepoint_length value
+
+/// Returns the number of grapheme clusters (user-perceived characters) in a string.
+let grapheme_length (value: string): int = grapheme_length value

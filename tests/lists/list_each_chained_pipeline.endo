@@ -3,4 +3,4 @@
 # description: List each chained pipeline
 # expect: 24
 
-let _ = [1; 2; 3; 4] |> filter (_ % 2 == 0) |> each print
+[1; 2; 3; 4] |> filter (_ % 2 == 0) |> each print |> ignore

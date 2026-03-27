@@ -103,6 +103,8 @@ class TypeInferencer
 
     TypeEnvPtr _env;         ///< Root type environment
     InferenceResult _result; ///< Accumulated inference results
+    ast::ShellCaptureMode _captureMode =
+        ast::ShellCaptureMode::Capture; ///< Current shell capture mode context
 };
 
 } // namespace endo

@@ -68,7 +68,7 @@ TEST_CASE("Parser.FSharp.let_export")
     CHECK(letStmt->name == "X");
     CHECK(letStmt->visibility == endo::ast::Visibility::Exported);
     CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
-    CHECK(letStmt->isRecursive == false);
+    CHECK(letStmt->isRecursive() == false);
     CHECK(letStmt->parameters.empty());
 }
 
@@ -1615,7 +1615,7 @@ TEST_CASE("Parser.FSharp.let_rec_basic")
 
     CHECK(letStmt->name == "countdown");
     CHECK(letStmt->mutability == endo::ast::Mutability::Immutable);
-    CHECK(letStmt->isRecursive == true);
+    CHECK(letStmt->isRecursive() == true);
     CHECK(letStmt->isFunction() == true);
     REQUIRE(letStmt->parameters.size() == 1);
     CHECK(letStmt->parameters[0].name == "n");
@@ -1633,10 +1633,22 @@ TEST_CASE("Parser.FSharp.let_rec_multiple_params")
     REQUIRE(letStmt != nullptr);
 
     CHECK(letStmt->name == "factorial");
-    CHECK(letStmt->isRecursive == true);
+    CHECK(letStmt->isRecursive() == true);
     REQUIRE(letStmt->parameters.size() == 2);
     CHECK(letStmt->parameters[0].name == "n");
     CHECK(letStmt->parameters[1].name == "acc");
+}
+
+TEST_CASE("Parser.FSharp.let_passthrough_function")
+{
+    auto ast = parse("let passthrough greet () = & echo hello");
+    REQUIRE(ast != nullptr);
+    const auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt const*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "greet");
+    CHECK(letStmt->isPassthrough() == true);
+    CHECK(letStmt->isRecursive() == false);
+    CHECK(letStmt->isFunction() == true);
 }
 
 TEST_CASE("Parser.FSharp.let_rec_no_params_error")

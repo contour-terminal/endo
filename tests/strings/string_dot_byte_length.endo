@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String dot byte_length property
+# expect: 5
+
+let s = "café"
+
+print s.byte_length

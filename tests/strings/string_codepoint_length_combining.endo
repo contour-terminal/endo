@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: codepoint_length with combining characters is greater than grapheme count
+# expect: 5
+
+let s = "noël"
+
+print (codepoint_length s)

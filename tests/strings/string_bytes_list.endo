@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: bytes returns list of byte values
+# expect: [104; 105]
+
+print (bytes "hi")

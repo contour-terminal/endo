@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: grapheme_length returns grapheme cluster count
+# expect: 4
+
+print (grapheme_length "café")

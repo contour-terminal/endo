@@ -3,6 +3,7 @@
 #include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/ui/Prompt.hpp>
+#include <shell/ui/PromptPresets.hpp>
 #include <shell/ui/RichConsoleReport.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/ui/modules/GitModule.hpp>
@@ -784,9 +785,14 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
 
     // Register dark/light mode auto-switching via terminal color scheme detection
-    prompt.terminal().onColorSchemeChanged([](tui::ColorScheme scheme) {
+    prompt.terminal().onColorSchemeChanged([this](tui::ColorScheme scheme) {
         auto& mgr = tui::ThemeManager::instance();
         mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
+        prompt.setTheme(mgr.current());
+        // Re-apply prompt preset with appropriate colors for new color scheme
+        auto const& currentName = prompt.promptConfig().name;
+        if (!currentName.empty())
+            prompt.setPromptConfig(promptPreset(currentName, scheme));
     });
 }
 

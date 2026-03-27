@@ -4,6 +4,7 @@
 #include <endo-language/ScopedLogger.hpp>
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/ASTPrinter.hpp>
+#include <endo-language/builtins/CompilerBuiltinRegistry.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/DiagnosticsAdapter.hpp>
 #include <endo-language/parser/Parser.hpp>
@@ -306,153 +307,46 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return parseBreak();
             else if (_lexer.isDirective("continue"))
                 return parseContinue();
-            else if (_lexer.currentLiteral() == "register_completer")
+            else if (auto const strategy = endo::getStmtParseStrategy(_lexer.currentLiteral());
+                     strategy != endo::StmtParseStrategy::None)
             {
-                // register_completer "cmd" funcName — parse as F# application for compile-time verification
-                _lexer.enterFSharpExpr();
-                auto expr = parseFSharpApplication();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
-            }
-            else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println"
-                     || _lexer.currentLiteral() == "each")
-            {
-                // F# style print/println/each functions - parse as F# expression wrapped in ExprStmt
-                _lexer.enterFSharpExpr();
-                auto expr = parseFSharpApplication();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
-            }
-            else if (_lexer.currentLiteral() == "rand")
-            {
-                // F# style rand builtin - parse as F# expression with optional |> pipeline
-                _lexer.enterFSharpExpr();
-                auto expr = parseFSharpApplication();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                // Check for trailing |> pipeline (e.g., rand 1 10 |> fun n -> ...)
-                if (_lexer.currentToken() == Token::ForwardPipe)
+                switch (strategy)
                 {
-                    _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
-                    auto step = parseFSharpComposition();
-                    if (!step)
-                    {
+                    case endo::StmtParseStrategy::FSharpSimple: {
+                        _lexer.enterFSharpExpr();
+                        auto expr = parseFSharpApplication();
                         _lexer.leaveFSharpExpr();
-                        return nullptr;
-                    }
-                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    // Continue chaining |> left-associatively (allow newlines before |>)
-                    while (true)
-                    {
-                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
-                        if (_lexer.currentToken() != Token::ForwardPipe)
-                        {
-                            if (skippedNewlines)
-                                _lexer.pushBackToken(Token::LineFeed, "\n");
-                            break;
-                        }
-                        _lexer.nextToken(); // consume |>
-                        step = parseFSharpComposition();
-                        if (!step)
-                        {
-                            _lexer.leaveFSharpExpr();
+                        if (!expr)
                             return nullptr;
-                        }
-                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                        return std::make_unique<ast::ExprStmt>(std::move(expr));
                     }
-                    _lexer.leaveFSharpExpr();
-                }
-                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
-            }
-            else if (_lexer.currentLiteral() == "time")
-            {
-                // F# style time builtin - parse as F# expression with optional |> pipeline
-                _lexer.enterFSharpExpr();
-                auto expr = parseFSharpApplication();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                // Support trailing |> pipeline: time { body } |> formatTimeSpan
-                if (_lexer.currentToken() == Token::ForwardPipe)
-                {
-                    _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
-                    auto step = parseFSharpComposition();
-                    if (!step)
-                    {
+                    case endo::StmtParseStrategy::FSharpWithPipeline: {
+                        _lexer.enterFSharpExpr();
+                        auto expr = parseFSharpApplication();
                         _lexer.leaveFSharpExpr();
-                        return nullptr;
-                    }
-                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (true)
-                    {
-                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
-                        if (_lexer.currentToken() != Token::ForwardPipe)
-                        {
-                            if (skippedNewlines)
-                                _lexer.pushBackToken(Token::LineFeed, "\n");
-                            break;
-                        }
-                        _lexer.nextToken(); // consume |>
-                        step = parseFSharpComposition();
-                        if (!step)
-                        {
-                            _lexer.leaveFSharpExpr();
+                        if (!expr)
                             return nullptr;
-                        }
-                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                        if (_lexer.currentToken() == Token::ForwardPipe)
+                            expr = parseTrailingPipeline(std::move(expr));
+                        if (!expr)
+                            return nullptr;
+                        return std::make_unique<ast::ExprStmt>(std::move(expr),
+                                                               /*displayResult=*/_autoDisplay);
                     }
-                    _lexer.leaveFSharpExpr();
-                }
-                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
-            }
-            else if (_lexer.currentLiteral() == "exec")
-            {
-                // F# style exec — dynamic command execution with optional | piping
-                _lexer.enterFSharpExpr();
-                auto expr = parseExecPipeline();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                // Check for trailing |> pipeline (e.g., exec "/bin/echo" "hi" |> ...)
-                if (_lexer.currentToken() == Token::ForwardPipe)
-                {
-                    _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
-                    auto step = parseFSharpComposition();
-                    if (!step)
-                    {
+                    case endo::StmtParseStrategy::ExecPipeline: {
+                        _lexer.enterFSharpExpr();
+                        auto expr = parseExecPipeline();
                         _lexer.leaveFSharpExpr();
-                        return nullptr;
-                    }
-                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (true)
-                    {
-                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
-                        if (_lexer.currentToken() != Token::ForwardPipe)
-                        {
-                            if (skippedNewlines)
-                                _lexer.pushBackToken(Token::LineFeed, "\n");
-                            break;
-                        }
-                        _lexer.nextToken(); // consume |>
-                        step = parseFSharpComposition();
-                        if (!step)
-                        {
-                            _lexer.leaveFSharpExpr();
+                        if (!expr)
                             return nullptr;
-                        }
-                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                        if (_lexer.currentToken() == Token::ForwardPipe)
+                            expr = parseTrailingPipeline(std::move(expr));
+                        if (!expr)
+                            return nullptr;
+                        return std::make_unique<ast::ExprStmt>(std::move(expr));
                     }
-                    _lexer.leaveFSharpExpr();
+                    default: break;
                 }
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
             else if ((_lexer.currentLiteral() == "ls" || _lexer.currentLiteral() == "ps"
                       || _lexer.currentLiteral() == "jobs")
@@ -3130,7 +3024,9 @@ bool Parser::isFSharpPrimary() const noexcept
                 return false;
             // Contextual keywords that should not be treated as primary expressions
             if (lit == "in" || lit == "then" || lit == "else" || lit == "elif" || lit == "do"
-                || lit == "break" || lit == "continue" || lit == "exec" || lit == "yield")
+                || lit == "break" || lit == "continue" || lit == "yield")
+                return false;
+            if (endo::isExcludedFromPrimary(lit))
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -3634,6 +3530,33 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume 'rec'
     }
 
+    // Check for 'passthrough' modifier (shell command passthrough mode)
+    bool const isPassthrough = _lexer.currentToken() == Token::Passthrough;
+    if (isPassthrough)
+    {
+        if (isMutable)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let passthrough' without 'mut'" },
+                currentContextSnippet(),
+                "'let mut passthrough' is not allowed; 'mut' and 'passthrough' are mutually exclusive");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        if (isExported)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let passthrough' without 'export'" },
+                currentContextSnippet(),
+                "'let export passthrough' is not allowed; passthrough functions cannot be exported");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'passthrough'
+    }
+
     // Check for 'use' or 'manual' resource management modifier
     auto resourceMode = ast::ResourceMode::None;
     if (_lexer.currentToken() == Token::Use)
@@ -3788,13 +3711,15 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    auto result = std::make_unique<ast::LetBindingStmt>(vis,
-                                                        mut,
-                                                        isRecursive,
-                                                        std::move(name),
-                                                        std::move(parameters),
-                                                        std::move(returnType),
-                                                        std::move(value));
+    auto result = std::make_unique<ast::LetBindingStmt>(
+        vis,
+        mut,
+        isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
+        isPassthrough ? ast::ShellCaptureMode::Passthrough : ast::ShellCaptureMode::Capture,
+        std::move(name),
+        std::move(parameters),
+        std::move(returnType),
+        std::move(value));
     result->resourceMode = resourceMode;
 
     // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
@@ -3934,7 +3859,8 @@ std::unique_ptr<ast::LetInExpr> Parser::convertToLetIn(std::unique_ptr<ast::LetB
         result = std::make_unique<ast::LetInExpr>(
             std::move(let->destructurePattern), std::move(let->value), std::move(body));
     else
-        result = std::make_unique<ast::LetInExpr>(let->isRecursive,
+        result = std::make_unique<ast::LetInExpr>(let->isRecursive() ? ast::Recursion::Recursive
+                                                                     : ast::Recursion::None,
                                                   std::move(let->name),
                                                   std::move(let->parameters),
                                                   std::move(let->returnType),
@@ -3967,7 +3893,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(ast::Visibil
 
     auto result = std::make_unique<ast::LetBindingStmt>(visibility,
                                                         mutability,
-                                                        false,
+                                                        ast::Recursion::None,
+                                                        ast::ShellCaptureMode::Capture,
                                                         std::move(name),
                                                         std::vector<ast::TypedParameter> {},
                                                         std::move(returnType),
@@ -4305,12 +4232,13 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
 
     auto const endLoc = body->location;
-    auto node = std::make_unique<ast::LetInExpr>(isRecursive,
-                                                 std::move(name),
-                                                 std::move(parameters),
-                                                 std::move(returnType),
-                                                 std::move(value),
-                                                 std::move(body));
+    auto node =
+        std::make_unique<ast::LetInExpr>(isRecursive ? ast::Recursion::Recursive : ast::Recursion::None,
+                                         std::move(name),
+                                         std::move(parameters),
+                                         std::move(returnType),
+                                         std::move(value),
+                                         std::move(body));
     node->resourceMode = resourceMode;
     node->location = endLoc ? SourceLocationRange { .begin = letLoc.begin, .end = endLoc->end } : letLoc;
     return node;
@@ -5070,6 +4998,39 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
     }
 
     return std::make_unique<ast::ShellCommandExpr>(std::move(command));
+}
+
+std::unique_ptr<ast::Expr> Parser::parseTrailingPipeline(std::unique_ptr<ast::Expr> expr)
+{
+    _lexer.enterFSharpExpr();
+    _lexer.nextToken(); // consume first |>
+    auto step = parseFSharpComposition();
+    if (!step)
+    {
+        _lexer.leaveFSharpExpr();
+        return nullptr;
+    }
+    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+    while (true)
+    {
+        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+        if (_lexer.currentToken() != Token::ForwardPipe)
+        {
+            if (skippedNewlines)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+        _lexer.nextToken(); // consume |>
+        step = parseFSharpComposition();
+        if (!step)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+    }
+    _lexer.leaveFSharpExpr();
+    return expr;
 }
 
 std::unique_ptr<ast::Expr> Parser::parseExecPipeline()

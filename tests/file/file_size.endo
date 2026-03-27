@@ -5,10 +5,10 @@
 
 let path = $"{Path.temporary_directory}/endo_test_file_size.txt"
 
-let _ = File.writeAll path "hello"
+ignore (File.writeAll path "hello")
 
 match File.size path with
 | Ok n -> println n
 | Error e -> println e
 
-let _ = File.delete path
+ignore (File.delete path)

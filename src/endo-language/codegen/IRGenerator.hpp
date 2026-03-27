@@ -3,6 +3,7 @@
 
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/Visitor.hpp>
+#include <endo-language/builtins/CompilerBuiltinRegistry.hpp>
 #include <endo-language/codegen/AnnotationTracker.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
@@ -49,8 +50,9 @@ struct FSharpPersistentState
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
         ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
-        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
-        bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
+        ast::Recursion recursion = ast::Recursion::None;    ///< Whether function is declared with `let rec`
+        ast::ShellCaptureMode captureMode = ast::ShellCaptureMode::Capture; ///< Shell I/O capture mode
+        bool hasVariadicParam = false; ///< True if last param is variadic (...args)
     };
 
     /// Function table persisted across REPL prompts (name -> function metadata).
@@ -375,6 +377,18 @@ class IRGenerator final: public ast::Visitor
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
 
+    /// Dispatches a data-driven builtin call from the registry.
+    /// Evaluates args, calls the callback, annotates the result.
+    /// @return true if dispatched successfully
+    bool dispatchBuiltinCall(BuiltinCallEntry const& entry, std::vector<ast::Expr const*> const& argExprs);
+
+    /// Dispatches a data-driven builtin in pipeline context (value already evaluated).
+    /// @return true if dispatched successfully
+    bool dispatchPipelineBuiltin(BuiltinCallEntry const& entry, CoreVM::Value* value);
+
+    /// Applies result annotations from a registry entry to _result.
+    void applyBuiltinAnnotations(BuiltinCallEntry const& entry, CoreVM::Value* sourceArg);
+
     /// Tries to generate IR for a built-in property access on collection types.
     /// Dispatches on the object's type ID and field name to emit the appropriate IR.
     /// @param obj The object value being accessed
@@ -447,8 +461,9 @@ class IRGenerator final: public ast::Visitor
         std::optional<TypePtr> returnType;                  ///< Optional return type annotation
         ast::Expr const* body = nullptr;                    ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
-        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
-        bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
+        ast::Recursion recursion = ast::Recursion::None;    ///< Whether function is declared with `let rec`
+        ast::ShellCaptureMode captureMode = ast::ShellCaptureMode::Capture; ///< Shell I/O capture mode
+        bool hasVariadicParam = false; ///< True if last param is variadic (...args)
         /// Names of all functions in the mutual recursion group (empty for non-mutual).
         std::vector<std::string> mutualGroup;
         /// Captured variable bindings from the enclosing scope at function creation time.
@@ -783,9 +798,7 @@ class IRGenerator final: public ast::Visitor
     CoreVM::Value* _result = nullptr;
     CoreVM::Signature _processCallSignature;
 
-    /// When false, ShellCommandExpr runs with normal I/O (statement-level).
-    /// When true (default), ShellCommandExpr captures stdout as a string.
-    bool _shellCommandCaptureMode = true;
+    ast::ShellCaptureMode _shellCommandCaptureMode = ast::ShellCaptureMode::Capture;
 
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;

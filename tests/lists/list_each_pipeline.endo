@@ -3,4 +3,4 @@
 # description: List each pipeline
 # expect: 123
 
-let _ = [1; 2; 3] |> each (print _)
+[1; 2; 3] |> each (print _) |> ignore

@@ -126,7 +126,32 @@ print (next ())                       # 3
 > statement level. Inside F# expressions (function arguments, let bindings, etc.),
 > the bare name is a function reference. Use `f ()` for explicit invocation in any context.
 
-### 4.3.2 Properties with Get/Set Accessors
+### 4.3.2 Passthrough Functions
+
+By default, shell commands inside compiled F# function bodies capture stdout as a
+string. For interactive commands (TUIs, editors) or shell aliases where output should
+go directly to the terminal, use the `passthrough` modifier:
+
+<!-- endo-no-check -->
+```endo
+# Interactive TUI commands
+let passthrough mc () = & mc
+let passthrough htop () = & htop
+mc                                    # launches mc with full terminal I/O
+
+# Shell aliases with arguments
+let passthrough ll ...args = & exa -l ...args
+ll -a /tmp                            # output goes to terminal, not captured
+
+# Without passthrough, output would be captured and discarded
+let broken () = & mc                  # captures stdout — mc won't display properly
+```
+
+> **When to use `passthrough`:** Any function that wraps an interactive command or
+> where you want terminal output to be visible. Without it, shell commands in compiled
+> functions silently capture stdout as a string return value.
+
+### 4.3.3 Properties with Get/Set Accessors
 
 For read-write properties that need both getter and setter logic, use the full
 `with get`/`set` syntax.
@@ -175,7 +200,7 @@ let X
     and set (v) = _x <- v
 ```
 
-### 4.3.3 Builtin Properties
+### 4.3.4 Builtin Properties
 
 The shell provides builtin properties for configuration that use the same `<-` assignment
 syntax as mutable variables. Unlike user-defined properties, these are registered by the
@@ -226,7 +251,23 @@ let addPair (a, b) = a + b
 let sumFirst [x; y; _...] = x + y
 ```
 
-### 4.5 Scope and Visibility
+### 4.5 Discarding Return Values
+
+When a function returns a value that you don't need, use `ignore` to explicitly discard it.
+This prevents the "Return value is discarded" warning.
+
+<!-- endo-no-check -->
+```endo
+# Statement form
+ignore (File.delete path)
+
+# Pipeline form
+File.writeAll path "hello" |> ignore
+```
+
+`ignore` evaluates the expression for its side effects and discards the result.
+
+### 4.6 Scope and Visibility
 
 <!-- endo-no-check -->
 ```endo
@@ -257,7 +298,7 @@ let processConfig =
     CONFIG_CACHE
 ```
 
-### 4.6 Lazy Bindings
+### 4.7 Lazy Bindings
 
 Use `lazy` to defer evaluation of an expression until its value is needed:
 

@@ -943,7 +943,7 @@ namespace
                 return formatLetBinding(name,
                                         letStmt->visibility == ast::Visibility::Exported,
                                         letStmt->mutability == ast::Mutability::Mutable,
-                                        letStmt->isRecursive,
+                                        letStmt->isRecursive(),
                                         letStmt->parameters,
                                         letStmt->returnType,
                                         valuePreview,

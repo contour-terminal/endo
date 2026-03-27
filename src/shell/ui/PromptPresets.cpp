@@ -106,11 +106,38 @@ static std::vector<PromptConfig> presets = {
     },
 };
 
-PromptConfig promptPreset(std::string_view name)
+/// @brief Overrides gradient and aurora colors for light-mode terminals.
+static void applyLightOverrides(PromptConfig& config)
+{
+    if (config.name == "endo-signature"sv)
+    {
+        config.gradientStart = 0x3060D8_rgb; // Darker blue (readable on light bg)
+        config.gradientEnd = 0x009688_rgb;   // Darker teal (readable on light bg)
+        config.auroraBackground = {
+            0xD8DCF0_rgb, // soft lavender
+            0xCCE8E8_rgb, // soft teal
+            0xCCE8D4_rgb, // soft mint
+            0xE4D0EC_rgb, // soft mauve
+            0xD8DCF0_rgb, // soft lavender (wrap)
+        };
+    }
+    else if (config.name == "gradient-glow"sv)
+    {
+        config.gradientStart = 0x3060D8_rgb; // Darker blue
+        config.gradientEnd = 0x009688_rgb;   // Darker teal
+    }
+}
+
+PromptConfig promptPreset(std::string_view name, tui::ColorScheme scheme)
 {
     for (const auto& preset: presets)
         if (preset.name == name)
-            return preset;
+        {
+            auto config = preset;
+            if (scheme == tui::ColorScheme::Light)
+                applyLightOverrides(config);
+            return config;
+        }
 
     return PromptConfig {};
 }

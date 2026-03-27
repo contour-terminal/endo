@@ -87,7 +87,7 @@ static const std::array descriptors = {
     // -----------------------------------------------------------------------
     StdlibDescriptor { .userFacingName="string_length", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
         .description="string_length s -> int",
-        .detail="**string_length** `s -> int`\n\nReturns the length of string **s** in characters." },
+        .detail="**string_length** `s -> int`\n\nReturns the number of grapheme clusters (user-perceived characters) in string **s**." },
     StdlibDescriptor { .userFacingName="int_of_string", .vmName="", .returnType=LT::Void, .params={}, .sharedImpl=nullptr,
         .description="int_of_string s -> int",
         .detail="**int_of_string** `s -> int`\n\nParses string **s** as an integer." },
@@ -134,6 +134,28 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="join", .vmName="string_join", .returnType=LT::String, .params=stringJoinParams, .sharedImpl=&builtins::stringJoin,
         .description="join delim lst -> string",
         .detail="**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },
+
+    // -----------------------------------------------------------------------
+    // String Unicode Decomposition
+    // -----------------------------------------------------------------------
+    StdlibDescriptor { .userFacingName="bytes", .vmName="string_to_bytes", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringToBytes,
+        .description="bytes s -> list<int>",
+        .detail="**bytes** `s -> list<int>`\n\nReturns the list of UTF-8 byte values (0–255) of string **s**." },
+    StdlibDescriptor { .userFacingName="codepoints", .vmName="string_to_codepoints", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringToCodepoints,
+        .description="codepoints s -> list<int>",
+        .detail="**codepoints** `s -> list<int>`\n\nReturns the list of Unicode codepoint values of string **s**." },
+    StdlibDescriptor { .userFacingName="graphemes", .vmName="string_to_graphemes", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringToGraphemes,
+        .description="graphemes s -> list<string>",
+        .detail="**graphemes** `s -> list<string>`\n\nReturns the list of grapheme clusters (user-perceived characters) of string **s**." },
+    StdlibDescriptor { .userFacingName="byte_length", .vmName="string_byte_length", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringByteLength,
+        .description="byte_length s -> int",
+        .detail="**byte_length** `s -> int`\n\nReturns the number of UTF-8 bytes in string **s**." },
+    StdlibDescriptor { .userFacingName="codepoint_length", .vmName="string_codepoint_length", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringCodepointLength,
+        .description="codepoint_length s -> int",
+        .detail="**codepoint_length** `s -> int`\n\nReturns the number of Unicode codepoints in string **s**." },
+    StdlibDescriptor { .userFacingName="grapheme_length", .vmName="string_grapheme_length", .returnType=LT::Number, .params=textStringParam, .sharedImpl=&builtins::stringGraphemeLength,
+        .description="grapheme_length s -> int",
+        .detail="**grapheme_length** `s -> int`\n\nReturns the number of grapheme clusters (user-perceived characters) in string **s**." },
 
     // -----------------------------------------------------------------------
     // List Basic
