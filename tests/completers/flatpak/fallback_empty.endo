@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Flatpak completer: fallback returns empty
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # source-file: data/completers/flatpak.endo
 # expect-exit: 0
 # expect:

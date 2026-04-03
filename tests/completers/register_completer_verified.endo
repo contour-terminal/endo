@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: register_completer with compile-time function verification
+# description: Completion.register with compile-time function verification
 # expect: ok
 
 let my_complete args prefix = ["--help"; "--version"]
 
-register_completer "mytest" my_complete
+Completion .register "mytest" my_complete
 print "ok"

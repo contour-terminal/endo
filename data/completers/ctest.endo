@@ -1,8 +1,22 @@
 let ctest_complete args prefix =
     let options = [
-        "--preset"; "--list-presets"; "--parallel"; "-j"; "--build-config"; "-C"; "--test-dir";
-        "--output-on-failure"; "--stop-on-failure"; "-R"; "-E"; "-L"; "--verbose"; "-V";
-        "--timeout"; "--repeat"; "--rerun-failed"
+        Completion.described "--preset" "Use a test preset";
+        Completion.described "--list-presets" "List available presets";
+        Completion.described "--parallel" "Parallel test jobs";
+        Completion.described "-j" "Parallel test jobs";
+        Completion.described "--build-config" "Build configuration";
+        Completion.described "-C" "Build configuration";
+        Completion.described "--test-dir" "Test directory";
+        Completion.described "--output-on-failure" "Show output on failure";
+        Completion.described "--stop-on-failure" "Stop on first failure";
+        Completion.described "-R" "Include tests by regex";
+        Completion.described "-E" "Exclude tests by regex";
+        Completion.described "-L" "Include tests by label";
+        Completion.described "--verbose" "Enable verbose output";
+        Completion.described "-V" "Enable verbose output";
+        Completion.described "--timeout" "Per-test timeout";
+        Completion.described "--repeat" "Repeat tests";
+        Completion.described "--rerun-failed" "Rerun failed tests"
     ]
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
     let parse_presets raw =
@@ -19,4 +33,4 @@ let ctest_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-register_completer "ctest" ctest_complete
+Completion .register "ctest" ctest_complete

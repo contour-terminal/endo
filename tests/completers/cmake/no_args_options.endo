@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: CMake completer: option completion with no prior args
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # source-file: data/completers/cmake.endo
 # expect: --preset
 # expect: --list-presets

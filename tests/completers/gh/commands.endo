@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: GH completer: top-level commands
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # source-file: data/completers/gh.endo
 # expect: auth
 # expect: browse

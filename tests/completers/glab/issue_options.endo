@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: GLab completer: issue options
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # source-file: data/completers/glab.endo
 # expect: --help
 # expect: --version

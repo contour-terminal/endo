@@ -1,11 +1,40 @@
 let claude_complete args prefix =
-    let subcommands = ["mcp"; "auth"; "doctor"; "install"; "plugin"; "setup-token"; "update"]
+    let subcommands = [
+        Completion.described "mcp" "Manage MCP servers";
+        Completion.described "auth" "Manage authentication";
+        Completion.described "doctor" "Diagnose issues";
+        Completion.described "install" "Install components";
+        Completion.described "plugin" "Manage plugins";
+        Completion.described "setup-token" "Configure API token";
+        Completion.described "update" "Update Claude"
+    ]
     let options = [
-        "--help"; "-h"; "--version"; "--verbose"; "-v"; "--debug"; "--model"; "--fallback-model";
-        "--permission-mode"; "--resume"; "-r"; "--continue"; "-c"; "--print"; "-p";
-        "--output-format"; "--input-format"; "--max-turns"; "--system-prompt";
-        "--append-system-prompt"; "--allowedTools"; "--disallowedTools"; "--mcp-config";
-        "--no-cache"; "--no-profile"; "--profile"; "--effort"; "--yes"; "-y"
+        Completion.described "--help" "Show help"; Completion.described "-h" "Show help";
+        Completion.described "--version" "Show version";
+        Completion.described "--verbose" "Verbose output";
+        Completion.described "-v" "Verbose output";
+        Completion.described "--debug" "Debug mode";
+        Completion.described "--model" "Model to use";
+        Completion.described "--fallback-model" "Fallback model";
+        Completion.described "--permission-mode" "Permission mode";
+        Completion.described "--resume" "Resume conversation";
+        Completion.described "-r" "Resume conversation";
+        Completion.described "--continue" "Continue conversation";
+        Completion.described "-c" "Continue conversation";
+        Completion.described "--print" "Print mode"; Completion.described "-p" "Print mode";
+        Completion.described "--output-format" "Output format";
+        Completion.described "--input-format" "Input format";
+        Completion.described "--max-turns" "Max agent turns";
+        Completion.described "--system-prompt" "System prompt";
+        Completion.described "--append-system-prompt" "Append to system prompt";
+        Completion.described "--allowedTools" "Allowed tools";
+        Completion.described "--disallowedTools" "Disallowed tools";
+        Completion.described "--mcp-config" "MCP config file";
+        Completion.described "--no-cache" "Disable caching";
+        Completion.described "--no-profile" "Disable profile";
+        Completion.described "--profile" "Profile name";
+        Completion.described "--effort" "Effort level";
+        Completion.described "--yes" "Auto-confirm"; Completion.described "-y" "Auto-confirm"
     ]
     let models = [
         "opus"; "sonnet"; "haiku"; "claude-opus-4-6"; "claude-sonnet-4-6";
@@ -15,9 +44,29 @@ let claude_complete args prefix =
     let output_formats = ["text"; "json"; "stream-json"]
     let input_formats = ["text"; "stream-json"]
     let effort_levels = ["low"; "medium"; "high"; "auto"]
-    let mcp_subcommands = ["add"; "list"; "get"; "remove"; "serve"; "start"; "stop"; "reset"]
-    let auth_subcommands = ["login"; "logout"; "status"]
-    let plugin_subcommands = ["install"; "list"; "enable"; "disable"; "uninstall"; "update"; "info"]
+    let mcp_subcommands = [
+        Completion.described "add" "Add MCP server";
+        Completion.described "list" "List MCP servers";
+        Completion.described "get" "Get MCP server info";
+        Completion.described "remove" "Remove MCP server";
+        Completion.described "serve" "Serve as MCP server";
+        Completion.described "start" "Start MCP server";
+        Completion.described "stop" "Stop MCP server";
+        Completion.described "reset" "Reset MCP config"
+    ]
+    let auth_subcommands = [
+        Completion.described "login" "Log in"; Completion.described "logout" "Log out";
+        Completion.described "status" "Show auth status"
+    ]
+    let plugin_subcommands = [
+        Completion.described "install" "Install a plugin";
+        Completion.described "list" "List plugins";
+        Completion.described "enable" "Enable a plugin";
+        Completion.described "disable" "Disable a plugin";
+        Completion.described "uninstall" "Uninstall a plugin";
+        Completion.described "update" "Update a plugin";
+        Completion.described "info" "Show plugin info"
+    ]
     match args with
     | [] when startsWith "-" prefix -> options
     | [] -> subcommands
@@ -33,4 +82,4 @@ let claude_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-register_completer "claude" claude_complete
+Completion .register "claude" claude_complete

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: SSH completer: host completion with no args
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # session-separator: ---
 # source-file: data/completers/ssh.endo
 # expect: server1

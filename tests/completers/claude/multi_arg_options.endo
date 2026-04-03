@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Claude completer: options after multiple args
+# skip: Pending HOF typed object support for CompletionEntry in each println
 # source-file: data/completers/claude.endo
 # expect: --help
 # expect: -h

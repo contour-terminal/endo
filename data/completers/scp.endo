@@ -1,7 +1,14 @@
 let scp_complete args prefix =
-    let scp_options = ["-P"; "-i"; "-F"; "-o"; "-r"; "-v"; "-C"; "-q"; "-4"; "-6"; "-3"]
+    let scp_options = [
+        Completion.described "-P" "Port number"; Completion.described "-i" "Identity file";
+        Completion.described "-F" "Config file"; Completion.described "-o" "SSH option";
+        Completion.described "-r" "Recursive copy"; Completion.described "-v" "Verbose mode";
+        Completion.described "-C" "Enable compression"; Completion.described "-q" "Quiet mode";
+        Completion.described "-4" "Force IPv4"; Completion.described "-6" "Force IPv6";
+        Completion.described "-3" "Copy via local host"
+    ]
     match args with
     | _ when startsWith "-" prefix -> scp_options
     | _ -> ssh_hosts ()
 
-register_completer "scp" scp_complete
+Completion .register "scp" scp_complete
