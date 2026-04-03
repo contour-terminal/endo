@@ -107,6 +107,7 @@ nav:
     - Overview: shell/index.md
     - Configuration: shell/configuration.md
     - Builtins: shell/builtins.md
+    - Completions: shell/completions.md
     - Structured Output: shell/structured-output.md
   - Debugging:
     - Overview: debugging/index.md

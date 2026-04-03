@@ -81,6 +81,8 @@ Press **Tab** or **Ctrl+Space** to trigger completions. Endo offers:
 - **F# dot-access completion** -- `Option.map`, record fields, method-style calls
 - **History-based suggestions** -- fish-style ghost text (dimmed, press Right to accept)
 
+See [Completions](completions.md) for full documentation including writing custom completers.
+
 ### Rich Text Editing
 
 The input field supports:
@@ -141,6 +143,7 @@ bindings and available actions.
 
 - [Configuration](configuration.md) -- Prompt, aliases, key bindings, and environment
 - [Built-in Commands](builtins.md) -- Reference for all shell builtins
+- [Completions](completions.md) -- Tab completion system and writing custom completers
 - [Structured Output](structured-output.md) -- Automatic parsing of command output
 - [Platform Differences](platform-differences.md) -- Windows vs POSIX differences
 - [FAQ](../FAQ.md) -- Common questions about pipes, lambdas, and patterns
