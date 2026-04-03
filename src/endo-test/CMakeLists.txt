@@ -21,6 +21,7 @@ if(ENDO_TESTING)
         ENDO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests"
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
         ENDO_STDLIB_DIR="${CMAKE_SOURCE_DIR}/data/stdlib"
+        ENDO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     )
     add_test(NAME endo-test COMMAND endo-test --dir "${CMAKE_SOURCE_DIR}/tests")
     add_test(NAME endo-examples COMMAND endo-test --dir "${CMAKE_SOURCE_DIR}/examples")

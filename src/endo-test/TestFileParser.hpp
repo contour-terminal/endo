@@ -44,6 +44,10 @@ struct TestFile
     /// Auxiliary source files embedded in test (for multi-file module tests).
     /// Each pair is (filename, content). Written to a temp dir at execution time.
     std::vector<std::pair<std::string, std::string>> auxiliaryFiles;
+
+    /// External source files to load as session prompts before the test source.
+    /// Paths are relative to the project source root (ENDO_SOURCE_DIR).
+    std::vector<std::string> sourceFiles;
 };
 
 /// Parses an .endo test file into its metadata directives and source code.

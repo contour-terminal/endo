@@ -207,6 +207,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.modulePaths.emplace_back(*val);
                 continue;
             }
+            if (auto val = parseDirective(line, "source-file"))
+            {
+                result.sourceFiles.emplace_back(*val);
+                continue;
+            }
 
             // Unknown directive or plain comment — skip
             continue;
@@ -263,6 +268,51 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
             lastPrompt.pop_back();
         if (!lastPrompt.empty())
             result.sessionPrompts.push_back(std::move(lastPrompt));
+    }
+
+    // Load external source files and inject as session prompts
+    if (!result.sourceFiles.empty())
+    {
+        std::vector<std::string> sourceFileContents;
+        for (auto const& sourcePath: result.sourceFiles)
+        {
+#ifdef ENDO_SOURCE_DIR
+            auto fullPath = std::filesystem::path(ENDO_SOURCE_DIR) / sourcePath;
+#else
+            auto fullPath = std::filesystem::path(sourcePath);
+#endif
+            std::ifstream srcFile(fullPath);
+            if (srcFile.is_open())
+            {
+                auto content = std::string(std::istreambuf_iterator<char>(srcFile), {});
+                if (!content.empty() && content.back() == '\n')
+                    content.pop_back();
+                sourceFileContents.push_back(std::move(content));
+            }
+        }
+
+        if (!sourceFileContents.empty())
+        {
+            if (result.isSessionTest && !result.sessionPrompts.empty())
+            {
+                // Insert source files AFTER any manual prompts that precede the test call,
+                // but BEFORE the last prompt (the test invocation).
+                auto lastPrompt = std::move(result.sessionPrompts.back());
+                result.sessionPrompts.pop_back();
+                for (auto& content: sourceFileContents)
+                    result.sessionPrompts.push_back(std::move(content));
+                result.sessionPrompts.push_back(std::move(lastPrompt));
+            }
+            else
+            {
+                // No session separator — create implicit session: [sourceFiles..., testSource]
+                result.isSessionTest = true;
+                result.sessionPrompts.clear();
+                for (auto& content: sourceFileContents)
+                    result.sessionPrompts.push_back(std::move(content));
+                result.sessionPrompts.push_back(result.source);
+            }
+        }
     }
 
     return result;

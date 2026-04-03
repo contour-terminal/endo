@@ -66,6 +66,7 @@ Test File Format:
     # expect-nonempty            Assert output is non-empty
     # aux-file: <filename>       Start an auxiliary file section (for multi-file module tests)
     # main-file:                 End aux file section, rest is main test source
+    # source-file: <path>        Load external file as session prompt (relative to project root)
 
   Example:
     # description: Addition of two integers
