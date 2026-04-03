@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: pr subcommands
+# source-file: data/completers/gh.endo
+# expect: checkout
+# expect: checks
+# expect: close
+# expect: comment
+# expect: create
+# expect: diff
+# expect: edit
+# expect: list
+# expect: merge
+# expect: ready
+# expect: reopen
+# expect: review
+# expect: status
+# expect: view
+# expect:
+
+let _ = gh_complete ["pr"] "" |> each println

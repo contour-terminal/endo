@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: gist subcommands
+# source-file: data/completers/gh.endo
+# expect: clone
+# expect: create
+# expect: delete
+# expect: edit
+# expect: list
+# expect: rename
+# expect: view
+# expect:
+
+let _ = gh_complete ["gist"] "" |> each println

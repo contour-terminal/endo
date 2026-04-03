@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: issue list options
+# source-file: data/completers/gh.endo
+# expect: --state
+# expect: --label
+# expect: --assignee
+# expect: --author
+# expect: --milestone
+# expect: --limit
+# expect: --search
+# expect: --json
+# expect: --web
+# expect:
+
+let _ = gh_complete ["issue"; "list"] "-" |> each println

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CTest completer: fallback returns empty
+# source-file: data/completers/ctest.endo
+# expect-exit: 0
+# expect:
+
+let _ = ctest_complete ["x"] "" |> each println

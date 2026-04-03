@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: empty completions for unknown context
+# source-file: data/completers/claude.endo
+# expect-exit: 0
+
+let _ = claude_complete ["mcp"; "add"] "" |> each println

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: top-level commands
+# source-file: data/completers/glab.endo
+# expect: alias
+# expect: api
+# expect: auth
+# expect: check-update
+# expect: ci
+# expect: completion
+# expect: config
+# expect: help
+# expect: incident
+# expect: issue
+# expect: label
+# expect: mr
+# expect: release
+# expect: repo
+# expect: schedule
+# expect: snippet
+# expect: ssh-key
+# expect: user
+# expect: variable
+# expect: version
+# expect:
+
+let _ = glab_complete [] "" |> each println

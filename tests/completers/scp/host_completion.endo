@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: SCP completer: host completion with no args
+# session-separator: ---
+# source-file: data/completers/scp.endo
+# expect: server1
+# expect: server2
+# expect: gateway
+# expect:
+
+let ssh_hosts _ = ["server1"; "server2"; "gateway"]
+
+# ---
+let _ = scp_complete [] "" |> each println

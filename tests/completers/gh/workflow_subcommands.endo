@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: workflow subcommands
+# source-file: data/completers/gh.endo
+# expect: disable
+# expect: enable
+# expect: list
+# expect: run
+# expect: view
+# expect:
+
+let _ = gh_complete ["workflow"] "" |> each println

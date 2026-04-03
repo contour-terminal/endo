@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: issue create options
+# source-file: data/completers/glab.endo
+# expect: --title
+# expect: --description
+# expect: --label
+# expect: --assignee
+# expect: --milestone
+# expect: --confidential
+# expect: --web
+# expect: --weight
+# expect:
+
+let _ = glab_complete ["issue"; "create"] "-" |> each println

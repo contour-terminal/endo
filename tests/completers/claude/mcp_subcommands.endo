@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: mcp subcommands
+# source-file: data/completers/claude.endo
+# expect: add
+# expect: list
+# expect: get
+# expect: remove
+# expect: serve
+# expect: start
+# expect: stop
+# expect: reset
+# expect:
+
+let _ = claude_complete ["mcp"] "" |> each println

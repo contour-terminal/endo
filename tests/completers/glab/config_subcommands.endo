@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: config subcommands
+# source-file: data/completers/glab.endo
+# expect: get
+# expect: set
+# expect:
+
+let _ = glab_complete ["config"] "" |> each println

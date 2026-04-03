@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: search subcommands
+# source-file: data/completers/gh.endo
+# expect: code
+# expect: commits
+# expect: issues
+# expect: prs
+# expect: repos
+# expect:
+
+let _ = gh_complete ["search"] "" |> each println

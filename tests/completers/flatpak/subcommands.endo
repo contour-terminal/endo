@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Flatpak completer: subcommand completion
+# source-file: data/completers/flatpak.endo
+# expect: run
+# expect: install
+# expect: uninstall
+# expect: update
+# expect: list
+# expect: info
+# expect: search
+# expect: override
+# expect: remotes
+# expect: remote-add
+# expect: remote-delete
+# expect: remote-modify
+# expect: remote-ls
+# expect: remote-info
+# expect: config
+# expect: repair
+# expect: history
+# expect: ps
+# expect: kill
+# expect: enter
+# expect: mask
+# expect: pin
+# expect: make-current
+# expect: create-usb
+# expect: repo
+# expect: documents
+# expect: document-export
+# expect: document-unexport
+# expect: document-info
+# expect: permission-reset
+# expect: permission-remove
+# expect: permission-set
+# expect: permission-show
+# expect:
+
+let _ = flatpak_complete [] "" |> each println

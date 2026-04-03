@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: variable subcommands
+# source-file: data/completers/glab.endo
+# expect: delete
+# expect: export
+# expect: get
+# expect: list
+# expect: set
+# expect: update
+# expect:
+
+let _ = glab_complete ["variable"] "" |> each println

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Flatpak completer: fallback returns empty
+# source-file: data/completers/flatpak.endo
+# expect-exit: 0
+# expect:
+
+let _ = flatpak_complete ["search"] "" |> each println

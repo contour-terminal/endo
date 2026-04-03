@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: mr subcommands
+# source-file: data/completers/glab.endo
+# expect: approve
+# expect: checkout
+# expect: close
+# expect: create
+# expect: delete
+# expect: diff
+# expect: for
+# expect: issues
+# expect: list
+# expect: merge
+# expect: note
+# expect: rebase
+# expect: reopen
+# expect: revoke
+# expect: subscribe
+# expect: todo
+# expect: unsubscribe
+# expect: update
+# expect: view
+# expect:
+
+let _ = glab_complete ["mr"] "" |> each println

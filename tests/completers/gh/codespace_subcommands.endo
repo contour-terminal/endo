@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: codespace subcommands
+# source-file: data/completers/gh.endo
+# expect: code
+# expect: cp
+# expect: create
+# expect: delete
+# expect: edit
+# expect: jupyter
+# expect: list
+# expect: logs
+# expect: ports
+# expect: rebuild
+# expect: ssh
+# expect: stop
+# expect: view
+# expect:
+
+let _ = gh_complete ["codespace"] "" |> each println

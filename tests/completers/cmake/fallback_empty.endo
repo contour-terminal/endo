@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CMake completer: fallback returns empty
+# source-file: data/completers/cmake.endo
+# expect-exit: 0
+# expect:
+
+let _ = cmake_complete ["--build"] "" |> each println

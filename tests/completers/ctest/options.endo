@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CTest completer: option completion
+# source-file: data/completers/ctest.endo
+# expect: --preset
+# expect: --list-presets
+# expect: --parallel
+# expect: -j
+# expect: --build-config
+# expect: -C
+# expect: --test-dir
+# expect: --output-on-failure
+# expect: --stop-on-failure
+# expect: -R
+# expect: -E
+# expect: -L
+# expect: --verbose
+# expect: -V
+# expect: --timeout
+# expect: --repeat
+# expect: --rerun-failed
+# expect:
+
+let _ = ctest_complete [] "-" |> each println

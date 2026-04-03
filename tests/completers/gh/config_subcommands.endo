@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: config subcommands
+# source-file: data/completers/gh.endo
+# expect: get
+# expect: list
+# expect: set
+# expect: clear-cache
+# expect:
+
+let _ = gh_complete ["config"] "" |> each println

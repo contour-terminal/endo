@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: permission mode completions
+# source-file: data/completers/claude.endo
+# expect: default
+# expect: plan
+# expect: auto
+# expect: bypassPermissions
+# expect:
+
+let _ = claude_complete ["--permission-mode"] "" |> each println

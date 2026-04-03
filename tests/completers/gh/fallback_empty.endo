@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: empty completions for unknown context
+# source-file: data/completers/gh.endo
+# expect-exit: 0
+
+let _ = gh_complete ["pr"; "create"; "x"] "" |> each println

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: pr create options
+# source-file: data/completers/gh.endo
+# expect: --title
+# expect: --body
+# expect: --base
+# expect: --head
+# expect: --draft
+# expect: --fill
+# expect: --label
+# expect: --assignee
+# expect: --reviewer
+# expect: --milestone
+# expect: --project
+# expect: --web
+# expect:
+
+let _ = gh_complete ["pr"; "create"] "-" |> each println

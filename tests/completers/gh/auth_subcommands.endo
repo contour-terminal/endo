@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: auth subcommands
+# source-file: data/completers/gh.endo
+# expect: login
+# expect: logout
+# expect: refresh
+# expect: setup-git
+# expect: status
+# expect: switch
+# expect: token
+# expect:
+
+let _ = gh_complete ["auth"] "" |> each println

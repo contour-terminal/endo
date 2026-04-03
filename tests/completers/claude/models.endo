@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: model completions
+# source-file: data/completers/claude.endo
+# expect: opus
+# expect: sonnet
+# expect: haiku
+# expect: claude-opus-4-6
+# expect: claude-sonnet-4-6
+# expect: claude-haiku-4-5-20251001
+# expect:
+
+let _ = claude_complete ["--model"] "" |> each println

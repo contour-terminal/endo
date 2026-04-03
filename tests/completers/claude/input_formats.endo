@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: input format completions
+# source-file: data/completers/claude.endo
+# expect: text
+# expect: stream-json
+# expect:
+
+let _ = claude_complete ["--input-format"] "" |> each println

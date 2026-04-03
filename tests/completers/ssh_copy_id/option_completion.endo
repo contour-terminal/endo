@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ssh-copy-id completer: option completion with dash prefix
+# session-separator: ---
+# source-file: data/completers/ssh-copy-id.endo
+# expect: -f
+# expect: -n
+# expect: -s
+# expect: -x
+# expect: -h
+# expect: -i
+# expect: -t
+# expect: -F
+# expect: -o
+# expect: -p
+# expect:
+
+let ssh_hosts _ = ["server1"; "server2"; "gateway"]
+
+# ---
+let _ = ssh_copy_id_complete [] "-" |> each println
