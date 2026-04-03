@@ -14,6 +14,7 @@
 
 #include <tui/Box.hpp>
 #include <tui/Canvas.hpp>
+#include <tui/PopupKeyDispatch.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 
@@ -24,69 +25,6 @@ namespace
 {
     constexpr int detailMaxWidth = 40; ///< Maximum detail panel width.
     constexpr int detailMinWidth = 20; ///< Minimum detail panel width.
-
-    /// @brief Calculates display width of a UTF-8 string.
-    auto stringWidth(std::string_view text) -> int
-    {
-        int width = 0;
-        auto segmenter = unicode::utf8_grapheme_segmenter(text);
-        for (auto it = segmenter.begin(); it != segmenter.end(); ++it)
-            width += graphemeClusterWidth(*it);
-        return width;
-    }
-
-    /// @brief Checks if a grapheme index is in the match positions set.
-    auto isMatchPosition(std::vector<size_t> const& positions, size_t index) -> bool
-    {
-        // positions is typically small (pattern length), linear search is fine
-        for (size_t pos: positions)
-        {
-            if (pos == index)
-                return true;
-            if (pos > index)
-                break; // positions are sorted
-        }
-        return false;
-    }
-
-    /// @brief Renders text with highlighted match positions grapheme-by-grapheme.
-    /// @return Number of columns consumed.
-    auto putStringWithHighlights(Canvas& canvas,
-                                 int row,
-                                 int col,
-                                 std::string_view text,
-                                 Style const& normalStyle,
-                                 Style const& matchStyle,
-                                 std::vector<size_t> const& matchPositions) -> int
-    {
-        int currentCol = col;
-        size_t graphemeIndex = 0;
-
-        auto segmenter = unicode::utf8_grapheme_segmenter(text);
-        for (auto it = segmenter.begin(); it != segmenter.end(); ++it, ++graphemeIndex)
-        {
-            auto const& cluster = *it;
-
-            // Get grapheme as string_view
-            auto nextIt = it;
-            ++nextIt;
-            char const* clusterStart = it._clusterStart;
-            char const* clusterEnd =
-                (nextIt != segmenter.end()) ? nextIt._clusterStart : (text.data() + text.size());
-            std::string_view grapheme(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
-
-            // Calculate grapheme width
-            int const graphemeWidth = graphemeClusterWidth(cluster);
-
-            // Choose style based on whether this position is highlighted
-            Style const& style = isMatchPosition(matchPositions, graphemeIndex) ? matchStyle : normalStyle;
-
-            canvas.put(row, currentCol, grapheme, style);
-            currentCol += graphemeWidth;
-        }
-
-        return currentCol - col;
-    }
 
     /// @brief Truncates a string to fit within a given width, adding ellipsis.
     /// @return A pair of (truncated string, display width).
@@ -134,7 +72,7 @@ void CompletionPopup::render(Canvas& canvas)
     auto const& theme = canvas.theme();
 
     // Calculate dimensions
-    size_t visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
+    size_t visibleCount = std::min(_selection.maxVisible(), _items.size());
     int menuWidth = calculateWidth(canvas.width());
     int menuHeight = static_cast<int>(visibleCount) + 2; // +2 for border
 
@@ -148,17 +86,17 @@ void CompletionPopup::render(Canvas& canvas)
     canvas.drawBox(borderRect, BorderStyle::Single, theme.dialogBorder);
 
     // Scroll indicator at top if needed
-    if (_scrollOffset > 0)
+    if (_selection.scrollOffset() > 0)
     {
-        canvas.put(0, menuWidth - 2, "\u25B2", theme.textMuted); // U+25B2: Black Up-Pointing Triangle
+        canvas.put(0, menuWidth - 2, "\u25B2", theme.textMuted);
     }
 
     // Draw items
     for (size_t i = 0; i < visibleCount; ++i)
     {
-        size_t itemIndex = _scrollOffset + i;
+        size_t itemIndex = _selection.scrollOffset() + i;
         auto const& item = _items[itemIndex];
-        bool isSelected = (itemIndex == _selected);
+        bool isSelected = (itemIndex == _selection.selected());
 
         int row = static_cast<int>(i) + 1; // +1 for top border
 
@@ -258,12 +196,9 @@ void CompletionPopup::render(Canvas& canvas)
     }
 
     // Scroll indicator at bottom if needed
-    if (_scrollOffset + visibleCount < _items.size())
+    if (_selection.scrollOffset() + visibleCount < _items.size())
     {
-        canvas.put(menuHeight - 1,
-                   menuWidth - 2,
-                   "\u25BC",
-                   theme.textMuted); // U+25BC: Black Down-Pointing Triangle
+        canvas.put(menuHeight - 1, menuWidth - 2, "\u25BC", theme.textMuted);
     }
 
     // ========================================================================
@@ -332,7 +267,7 @@ Size CompletionPopup::preferredSize() const
     if (_items.empty())
         return { .width = 0, .height = 0 };
 
-    auto const visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
+    auto const visibleCount = std::min(_selection.maxVisible(), _items.size());
     auto width = calculateWidth(200);                       // Use large max for preferred size
     auto const height = static_cast<int>(visibleCount) + 2; // +2 for border
 
@@ -351,24 +286,22 @@ Size CompletionPopup::preferredSize() const
 void CompletionPopup::show(std::vector<CompletionItem> items)
 {
     _items = std::move(items);
-    _selected = 0;
-    _scrollOffset = 0;
+    _selection.reset();
     _visible = !_items.empty();
-    Component::setVisible(_visible); // Sync Component visibility state
+    Component::setVisible(_visible);
     updateDetailContent();
 }
 
 void CompletionPopup::hide()
 {
     _items.clear();
-    _selected = 0;
-    _scrollOffset = 0;
+    _selection.reset();
     _visible = false;
     _renderedHeight = 0;
     _renderedWidth = 0;
     _detailContent.clear();
     _detailScrollOffset = 0;
-    Component::setVisible(false); // Sync Component visibility state
+    Component::setVisible(false);
 }
 
 void CompletionPopup::updateItems(std::vector<CompletionItem> items)
@@ -379,23 +312,20 @@ void CompletionPopup::updateItems(std::vector<CompletionItem> items)
         return;
     }
 
-    // Remember current selection text
     std::string previousSelection;
-    if (_selected < _items.size())
-        previousSelection = _items[_selected].text;
+    if (_selection.selected() < _items.size())
+        previousSelection = _items[_selection.selected()].text;
 
     _items = std::move(items);
-    _scrollOffset = 0;
+    _selection.reset();
 
-    // Try to find the previously selected item in the new list
     if (!previousSelection.empty())
     {
         for (size_t i = 0; i < _items.size(); ++i)
         {
             if (_items[i].text == previousSelection)
             {
-                _selected = i;
-                ensureSelectedVisible();
+                _selection.select(i, _items.size());
                 _visible = true;
                 Component::setVisible(true);
                 updateDetailContent();
@@ -404,8 +334,6 @@ void CompletionPopup::updateItems(std::vector<CompletionItem> items)
         }
     }
 
-    // Not found - select first item (best match)
-    _selected = 0;
     _visible = true;
     Component::setVisible(true);
     updateDetailContent();
@@ -437,14 +365,14 @@ std::vector<CompletionItem> const& CompletionPopup::items() const noexcept
 
 size_t CompletionPopup::selectedIndex() const noexcept
 {
-    return _selected;
+    return _selection.selected();
 }
 
 CompletionItem const* CompletionPopup::selectedItem() const noexcept
 {
     if (_items.empty())
         return nullptr;
-    return &_items[_selected];
+    return &_items[_selection.selected()];
 }
 
 CompletionItem const* CompletionPopup::itemAt(size_t index) const noexcept
@@ -456,88 +384,38 @@ CompletionItem const* CompletionPopup::itemAt(size_t index) const noexcept
 
 void CompletionPopup::selectNext()
 {
-    if (_items.empty())
-        return;
-
-    if (_selected + 1 < _items.size())
-        ++_selected;
-    else
-        _selected = 0; // Wrap around
-
-    ensureSelectedVisible();
+    _selection.selectNext(_items.size());
     updateDetailContent();
 }
 
 void CompletionPopup::selectPrev()
 {
-    if (_items.empty())
-        return;
-
-    if (_selected > 0)
-        --_selected;
-    else
-        _selected = _items.size() - 1; // Wrap around
-
-    ensureSelectedVisible();
+    _selection.selectPrev(_items.size());
     updateDetailContent();
 }
 
 void CompletionPopup::pageDown()
 {
-    if (_items.empty())
-        return;
-
-    auto const pageSize = static_cast<size_t>(_maxVisible);
-    if (_selected + pageSize < _items.size())
-        _selected += pageSize;
-    else
-        _selected = _items.size() - 1;
-
-    ensureSelectedVisible();
+    _selection.pageDown(_items.size());
     updateDetailContent();
 }
 
 void CompletionPopup::pageUp()
 {
-    if (_items.empty())
-        return;
-
-    auto const pageSize = static_cast<size_t>(_maxVisible);
-    if (_selected > pageSize)
-        _selected -= pageSize;
-    else
-        _selected = 0;
-
-    ensureSelectedVisible();
+    _selection.pageUp(_items.size());
     updateDetailContent();
 }
 
 void CompletionPopup::selectFirst()
 {
-    _selected = 0;
-    ensureSelectedVisible();
+    _selection.selectFirst(_items.size());
     updateDetailContent();
 }
 
 void CompletionPopup::selectLast()
 {
-    if (!_items.empty())
-        _selected = _items.size() - 1;
-    ensureSelectedVisible();
+    _selection.selectLast(_items.size());
     updateDetailContent();
-}
-
-void CompletionPopup::ensureSelectedVisible()
-{
-    if (_items.empty())
-        return;
-
-    size_t visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
-
-    if (_selected < _scrollOffset)
-        _scrollOffset = _selected;
-    else if (_selected >= _scrollOffset + visibleCount)
-        _scrollOffset = _selected - visibleCount + 1;
 }
 
 // ============================================================================
@@ -546,12 +424,12 @@ void CompletionPopup::ensureSelectedVisible()
 
 void CompletionPopup::setMaxVisible(int maxVisible)
 {
-    _maxVisible = std::max(1, maxVisible);
+    _selection.setMaxVisible(static_cast<size_t>(std::max(1, maxVisible)));
 }
 
 int CompletionPopup::maxVisible() const noexcept
 {
-    return _maxVisible;
+    return static_cast<int>(_selection.maxVisible());
 }
 
 // ============================================================================
@@ -571,41 +449,20 @@ CompletionAction CompletionPopup::processEvent(InputEvent const& event)
 
 CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
 {
-    // Down arrow or Ctrl+J (vim-style)
-    if (key.key == KeyCode::Down || (key.codepoint == 'j' && hasModifier(key.modifiers, Modifier::Ctrl)))
+    // Navigation via shared key dispatch
+    auto const nav = classifyNavigationKey(key);
+    if (nav != PopupNavAction::None)
     {
-        selectNext();
-        return CompletionAction::Changed;
-    }
-
-    // Up arrow or Ctrl+K (vim-style)
-    if (key.key == KeyCode::Up || (key.codepoint == 'k' && hasModifier(key.modifiers, Modifier::Ctrl)))
-    {
-        selectPrev();
-        return CompletionAction::Changed;
-    }
-
-    if (key.key == KeyCode::PageDown)
-    {
-        pageDown();
-        return CompletionAction::Changed;
-    }
-
-    if (key.key == KeyCode::PageUp)
-    {
-        pageUp();
-        return CompletionAction::Changed;
-    }
-
-    if (key.key == KeyCode::Home)
-    {
-        selectFirst();
-        return CompletionAction::Changed;
-    }
-
-    if (key.key == KeyCode::End)
-    {
-        selectLast();
+        switch (nav)
+        {
+            case PopupNavAction::SelectNext: selectNext(); break;
+            case PopupNavAction::SelectPrev: selectPrev(); break;
+            case PopupNavAction::PageDown: pageDown(); break;
+            case PopupNavAction::PageUp: pageUp(); break;
+            case PopupNavAction::SelectFirst: selectFirst(); break;
+            case PopupNavAction::SelectLast: selectLast(); break;
+            case PopupNavAction::None: break;
+        }
         return CompletionAction::Changed;
     }
 
@@ -613,7 +470,7 @@ CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
     if (key.key == KeyCode::Tab)
     {
         if (_items.size() == 1)
-            return CompletionAction::Accepted; // Auto-accept single remaining item
+            return CompletionAction::Accepted;
 
         if (hasModifier(key.modifiers, Modifier::Shift))
             selectPrev();
@@ -622,19 +479,14 @@ CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
         return CompletionAction::Changed;
     }
 
-    // Accept selection with Enter
     if (key.key == KeyCode::Enter)
-    {
         return CompletionAction::Accepted;
-    }
 
-    // Modifier-only keys (Kitty keyboard protocol reports bare Ctrl/Alt/Shift as key events)
-    // should not dismiss the popup — they produce no text and no editing action.
+    // Modifier-only keys should not dismiss the popup
     if (isModifierOnlyKey(key.key))
         return CompletionAction::Changed;
 
-    // Dismiss popup on Escape or any other unhandled key
-    // Any unhandled key dismisses the popup, allowing the key to be processed by parent
+    // Any unhandled key dismisses the popup
     return CompletionAction::Dismissed;
 }
 
@@ -679,13 +531,13 @@ void CompletionPopup::updateDetailContent()
 {
     _detailScrollOffset = 0;
 
-    if (_items.empty() || _selected >= _items.size())
+    if (_items.empty() || _selection.selected() >= _items.size())
     {
         _detailContent.clear();
         return;
     }
 
-    auto const& detail = _items[_selected].detail;
+    auto const& detail = _items[_selection.selected()].detail;
     if (detail.empty())
     {
         _detailContent.clear();

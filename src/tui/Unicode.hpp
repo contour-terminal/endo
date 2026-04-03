@@ -56,4 +56,9 @@ inline int graphemeClusterWidth(std::u32string_view cluster) noexcept
     return baseWidth > 0 ? baseWidth : 1;
 }
 
+/// @brief Calculates the display width of a UTF-8 string in terminal columns.
+/// @param text UTF-8 encoded text.
+/// @return Total display width in columns.
+int stringWidth(std::string_view text) noexcept;
+
 } // namespace tui

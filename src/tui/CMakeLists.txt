@@ -6,6 +6,7 @@ add_library(tui
     Cell.cpp
     CommandPalettePopup.cpp
     CommandRegistry.cpp
+    FuzzyPickerPopup.cpp
     Component.cpp
     CompletionPopup.cpp
     Dialog.cpp
@@ -30,6 +31,7 @@ add_library(tui
     Text.cpp
     Theme.cpp
     Tooltip.cpp
+    Unicode.cpp
     VtParser.cpp
     completer/Completer.cpp
     completer/FuzzyMatch.cpp
@@ -81,6 +83,9 @@ add_executable(test-tui
     Renderer_test.cpp
     Completer_test.cpp
     CompletionPopup_test.cpp
+    FuzzyPickerPopup_test.cpp
+    PopupKeyDispatch_test.cpp
+    ScrollableSelection_test.cpp
     Screen_test.cpp
     SmartCaseMatch_test.cpp
     FuzzyMatch_test.cpp

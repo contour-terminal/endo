@@ -2,6 +2,18 @@
 #include "Canvas.hpp"
 
 #include <tui/Theme.hpp>
+#include <tui/Unicode.hpp>
+
+#include <algorithm>
+
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+#include <libunicode/utf8_grapheme_segmenter.h>
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
 
 namespace tui
 {
@@ -187,6 +199,41 @@ Rect Canvas::clipToLocal(Rect localArea) const noexcept
 Rect Canvas::toBufferRect(Rect localArea) const noexcept
 {
     return localArea.offset(_area.x, _area.y);
+}
+
+int putStringWithHighlights(Canvas& canvas,
+                            int row,
+                            int col,
+                            std::string_view text,
+                            Style const& normalStyle,
+                            Style const& matchStyle,
+                            std::vector<size_t> const& matchPositions)
+{
+    auto currentCol = col;
+    size_t graphemeIndex = 0;
+
+    auto segmenter = unicode::utf8_grapheme_segmenter(text);
+    for (auto it = segmenter.begin(); it != segmenter.end(); ++it, ++graphemeIndex)
+    {
+        auto const& cluster = *it;
+
+        auto nextIt = it;
+        ++nextIt;
+        char const* clusterStart = it._clusterStart;
+        char const* clusterEnd =
+            (nextIt != segmenter.end()) ? nextIt._clusterStart : (text.data() + text.size());
+        auto const grapheme = std::string_view(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
+
+        auto const graphemeWidth = graphemeClusterWidth(cluster);
+
+        auto const isMatch = std::ranges::find(matchPositions, graphemeIndex) != matchPositions.end();
+        auto const& style = isMatch ? matchStyle : normalStyle;
+
+        canvas.put(row, currentCol, grapheme, style);
+        currentCol += graphemeWidth;
+    }
+
+    return currentCol - col;
 }
 
 } // namespace tui

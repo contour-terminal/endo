@@ -5,7 +5,9 @@
 #include <tui/Buffer.hpp>
 #include <tui/Rect.hpp>
 
+#include <cstddef>
 #include <string_view>
+#include <vector>
 
 namespace tui
 {
@@ -176,5 +178,26 @@ class Canvas
     /// Translates a local rectangle to buffer coordinates.
     [[nodiscard]] Rect toBufferRect(Rect localArea) const noexcept;
 };
+
+/// @brief Renders text with highlighted match positions grapheme-by-grapheme.
+///
+/// Used by popup components to render fuzzy-matched text with highlighted characters.
+/// Match positions are grapheme cluster indices (not byte offsets).
+///
+/// @param canvas The canvas to render to.
+/// @param row Row to render at.
+/// @param col Starting column.
+/// @param text UTF-8 text to render.
+/// @param normalStyle Style for non-matched characters.
+/// @param matchStyle Style for matched characters.
+/// @param matchPositions Grapheme indices of matched characters.
+/// @return Number of columns consumed.
+int putStringWithHighlights(Canvas& canvas,
+                            int row,
+                            int col,
+                            std::string_view text,
+                            Style const& normalStyle,
+                            Style const& matchStyle,
+                            std::vector<size_t> const& matchPositions);
 
 } // namespace tui

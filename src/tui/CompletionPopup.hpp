@@ -3,6 +3,7 @@
 
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
+#include <tui/ScrollableSelection.hpp>
 #include <tui/StyledText.hpp>
 #include <tui/Theme.hpp>
 #include <tui/completer/CompletionItem.hpp>
@@ -168,9 +169,7 @@ class CompletionPopup: public Component
 
   private:
     std::vector<CompletionItem> _items;
-    size_t _selected = 0;
-    size_t _scrollOffset = 0;
-    int _maxVisible = 10;
+    ScrollableSelection _selection { 10 }; ///< Selection and scroll state.
     int _renderedHeight = 0;
     int _renderedWidth = 0;
     bool _visible = false;
@@ -178,9 +177,6 @@ class CompletionPopup: public Component
     // Detail panel state
     StyledText _detailContent;   ///< Parsed markdown for selected item's detail.
     int _detailScrollOffset = 0; ///< Scroll offset within detail panel.
-
-    /// @brief Ensures the selected item is visible by adjusting scroll offset.
-    void ensureSelectedVisible();
 
     /// @brief Calculates the width needed for the popup.
     [[nodiscard]] int calculateWidth(int maxWidth) const;
