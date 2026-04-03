@@ -1,0 +1,15 @@
+let is_file_option_last args =
+    match last args with
+    | Some "-i" -> true
+    | Some "-F" -> true
+    | Some "-t" -> true
+    | _ -> false
+
+let ssh_copy_id_complete args prefix =
+    let options = ["-f"; "-n"; "-s"; "-x"; "-h"; "-i"; "-t"; "-F"; "-o"; "-p"]
+    match args with
+    | _ when is_file_option_last args -> []
+    | _ when startsWith "-" prefix -> options
+    | _ -> ssh_hosts ()
+
+register_completer "ssh-copy-id" ssh_copy_id_complete
