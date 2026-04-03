@@ -1070,7 +1070,12 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "each.src");
     _builder.createStore(srcStorage, listValue);
-    auto const eachElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    // Use Void alloca for typed object elements (e.g., CompletionEntry) so convertToString
+    // dispatches to object_to_string at runtime instead of N2S on the raw pointer.
+    auto const hasObjectElements = getListElementTypeId(listValue).has_value();
+    auto const eachElemType = hasObjectElements
+                                  ? CoreVM::LiteralType::Void
+                                  : getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
     auto* elemAlloca = createAllocaInEntryBlock(eachElemType, "each.elem");
 
     // Propagate list element type to extracted elements

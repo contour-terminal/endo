@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: SCP completer: host completion with no args
-# skip: Pending HOF typed object support for CompletionEntry in each println
+# skip: Pending cross-Runner object pool support in executeSession
 # session-separator: ---
 # source-file: data/completers/scp.endo
 # expect: server1

@@ -3461,22 +3461,14 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                     _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
             }
         }
-        // Check for record types
-        if (objTypeId)
+        // Typed objects (tuples, options, results, records, CompletionEntry, etc.)
+        // dispatch to object_to_string for runtime formatting via formatFn.
+        if (objTypeId && *objTypeId != CoreVM::BuiltinTypeId::List)
         {
-            for (auto const& [name, info]: _sema.types().records())
-            {
-                if (info.typeId == *objTypeId)
-                {
-                    auto* callback = findCallback("object_to_string(I)S");
-                    if (callback)
-                    {
-                        return _builder.createCallFunction(
-                            _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".rec2s");
-                    }
-                    break;
-                }
-            }
+            auto* callback = findCallback("object_to_string(I)S");
+            if (callback)
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".obj2s");
         }
         // Fallback for unannotated Void values: use N2S (number-to-string) which is safe
         // for raw numbers extracted from ObjGetSlot. The previous object_to_string fallback
@@ -8689,6 +8681,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
     // Annotate list element literal type if all elements share the same type
     if (auto commonType = determineCommonLiteralType(elemValues))
         annotateListElementLiteralType(_result, *commonType);
+
+    // Propagate element objectTypeId (e.g., CompletionEntry) so HOFs can dispatch correctly
+    if (auto elemObjTypeId = getObjectTypeId(elemValues[0]))
+        annotateListElementTypeId(_result, *elemObjTypeId);
 }
 
 void IRGenerator::visit(ast::ConsExpr const& node)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: ssh-copy-id completer: -i after host expects file completion
-# skip: Pending HOF typed object support for CompletionEntry in each println
+# skip: Pending cross-Runner object pool support in executeSession
 # session-separator: ---
 # source-file: data/completers/ssh-copy-id.endo
 # expect-exit: 0

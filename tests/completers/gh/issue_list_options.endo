@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: GH completer: issue list options
-# skip: Pending HOF typed object support for CompletionEntry in each println
+# skip: Pending cross-Runner object pool support in executeSession
 # source-file: data/completers/gh.endo
 # expect: --state
 # expect: --label
