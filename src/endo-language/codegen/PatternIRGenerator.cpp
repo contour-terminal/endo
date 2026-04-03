@@ -329,13 +329,22 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
     auto* savedStorage = _scrutineeStorage;
     auto* finalSuccess = _successBlock;
 
+    // Use a private alloca for tail traversal so we don't corrupt the shared scrutinee
+    // storage when this arm fails and control falls through to subsequent arms.
+    CoreVM::AllocaInstr* traversalStorage = savedStorage;
+    if (pat.elements.size() > 1)
+    {
+        traversalStorage = createAllocaInEntryBlock(currentScrutinee->type(), "list.pat.traversal");
+        _builder.createStore(traversalStorage, currentScrutinee, "list.pat.traversal.init");
+    }
+
     for (size_t i = 0; i < pat.elements.size(); ++i)
     {
         bool isLast = (i + 1 == pat.elements.size());
 
         // Check that current scrutinee is Cons (tag == 1)
-        auto* scrutineeVal =
-            (i > 0 && savedStorage) ? _builder.createLoad(savedStorage, "list.pat.reload") : currentScrutinee;
+        auto* scrutineeVal = (i > 0) ? _builder.createLoad(traversalStorage, "list.pat.reload")
+                                      : currentScrutinee;
 
         auto* tag = _builder.createObjGetTag(scrutineeVal, "list.pat.tag." + std::to_string(i));
         auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "list.pat.isCons");
@@ -344,10 +353,8 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         _builder.createCondBr(isCons, consBlock, _failureBlock);
         _builder.setInsertPoint(consBlock);
 
-        // Reload scrutinee and extract head (slot 0)
-        auto* reloaded = _builder.createLoad(savedStorage, "list.pat.head.reload." + std::to_string(i));
-        auto* headVal = _builder.createObjGetSlot(
-            reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
+        bool const elemIsWildcard =
+            dynamic_cast<pattern::WildcardPattern const*>(pat.elements[i].get()) != nullptr;
 
         // For the element sub-pattern: create success block that chains to next element or final check
         CoreVM::BasicBlock* elemSuccess = nullptr;
@@ -361,11 +368,25 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
             elemSuccess = _builder.createBlock("list.pat.next." + std::to_string(i + 1));
         }
 
-        // Match head element with sub-pattern
-        _scrutinee = headVal;
-        _scrutineeStorage = nullptr;
-        _successBlock = elemSuccess;
-        pat.elements[i]->accept(*this);
+        if (elemIsWildcard)
+        {
+            // Skip head extraction for wildcard elements to avoid dead ObjGetSlot on stack.
+            _builder.createBr(elemSuccess);
+        }
+        else
+        {
+            // Reload scrutinee and extract head (slot 0)
+            auto* reloaded =
+                _builder.createLoad(traversalStorage, "list.pat.head.reload." + std::to_string(i));
+            auto* headVal = _builder.createObjGetSlot(
+                reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
+
+            // Match head element with sub-pattern
+            _scrutinee = headVal;
+            _scrutineeStorage = nullptr;
+            _successBlock = elemSuccess;
+            pat.elements[i]->accept(*this);
+        }
 
         _builder.setInsertPoint(elemSuccess);
 
@@ -373,7 +394,7 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         {
             // Check that tail is Nil (tag == 0)
             auto* tailReloaded =
-                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+                _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
             auto* tailVal = _builder.createObjGetSlot(
                 tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
             auto* tailTag = _builder.createObjGetTag(tailVal, "list.pat.tail.tag");
@@ -385,12 +406,12 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         {
             // Move scrutinee to tail (slot 1) for next iteration
             auto* tailReloaded =
-                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+                _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
             auto* tailVal = _builder.createObjGetSlot(
                 tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
 
-            // Store tail as new scrutinee for the next iteration
-            _builder.createStore(savedStorage, tailVal, "list.pat.next.store");
+            // Store tail in private traversal storage (NOT the shared scrutinee storage)
+            _builder.createStore(traversalStorage, tailVal, "list.pat.next.store");
         }
     }
 
