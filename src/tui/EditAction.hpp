@@ -76,6 +76,9 @@ enum class EditAction : std::uint8_t
     // === Command Palette ===
     CommandPalette, ///< Open the command palette (Ctrl+Shift+P)
 
+    // === Fuzzy File Finder ===
+    FuzzyFileFinder, ///< Open the fuzzy file finder (Ctrl+G)
+
     // === Prompt Control ===
     NewPrompt, ///< Abandon current input and start a fresh prompt
 };

@@ -19,12 +19,12 @@ class FileCompleter: public CompletionProvider
 
     [[nodiscard]] int priority() const override { return 50; }
 
+    /// @brief Escapes special characters for shell.
+    [[nodiscard]] static std::string escapeForShell(std::string_view path);
+
   private:
     /// @brief Expands tilde to home directory.
     [[nodiscard]] static std::filesystem::path expandTilde(std::string_view path);
-
-    /// @brief Escapes special characters for shell.
-    [[nodiscard]] static std::string escapeForShell(std::string_view path);
 
     /// @brief Checks if a filename is hidden (starts with dot).
     [[nodiscard]] static bool isHidden(std::string_view name);

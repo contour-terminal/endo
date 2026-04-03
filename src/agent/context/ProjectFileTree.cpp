@@ -7,6 +7,7 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 
 #include <agent/context/ProjectFileTree.hpp>
 
@@ -71,6 +72,23 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
         files = getGitTrackedFiles(rootPath);
         if (files.size() > FilePathLimit)
             files.resize(FilePathLimit);
+
+        // Also include root-level files that may be excluded via .git/info/exclude
+        // but are still useful navigation targets (e.g. TODO.md, CLAUDE.md).
+        auto const fileSet = std::unordered_set<std::string>(files.begin(), files.end());
+        for (auto const& entry: std::filesystem::directory_iterator(rootPath,
+                                                                     std::filesystem::directory_options::skip_permission_denied))
+        {
+            if (files.size() >= FilePathLimit)
+                break;
+            if (!entry.is_regular_file())
+                continue;
+            auto const name = entry.path().filename().string();
+            if (name.starts_with('.'))
+                continue;
+            if (!fileSet.contains(name))
+                files.push_back(name);
+        }
     }
     else
     {

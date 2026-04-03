@@ -513,6 +513,9 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleModel;
+        case tui::InputFieldAction::FuzzyFileFinder:
+            // Not applicable in agent mode; ignore.
+            break;
         case tui::InputFieldAction::NewPrompt:
             _inputField.clearGhostText();
             dismissPopup();

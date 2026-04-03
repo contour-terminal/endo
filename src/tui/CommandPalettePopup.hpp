@@ -5,6 +5,7 @@
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/InputField.hpp>
+#include <tui/ScrollableSelection.hpp>
 
 #include <cstdint>
 #include <string>
@@ -94,25 +95,21 @@ class CommandPalettePopup: public Component
         int score = 0;                       ///< Fuzzy match score for sorting.
     };
 
-    InputField _filterField;                  ///< Text input for filtering.
-    std::vector<CommandEntry> _allItems;      ///< All available commands (snapshot).
-    std::vector<FilteredItem> _filteredItems; ///< Filtered and sorted commands.
-    size_t _selected = 0;                     ///< Currently selected index.
-    size_t _scrollOffset = 0;                 ///< First visible item index.
-    bool _visible = false;                    ///< Whether the palette is shown.
-    int _renderedHeight = 0;                  ///< Last rendered height.
-    int _renderedWidth = 0;                   ///< Last rendered width.
-    std::string _title;                       ///< Optional title for sub-menus.
+    InputField _filterField;                            ///< Text input for filtering.
+    std::vector<CommandEntry> _allItems;                ///< All available commands (snapshot).
+    std::vector<FilteredItem> _filteredItems;           ///< Filtered and sorted commands.
+    ScrollableSelection _selection { maxVisibleItems }; ///< Selection and scroll state.
+    bool _visible = false;                              ///< Whether the palette is shown.
+    int _renderedHeight = 0;                            ///< Last rendered height.
+    int _renderedWidth = 0;                             ///< Last rendered width.
+    std::string _title;                                 ///< Optional title for sub-menus.
 
-    static constexpr int maxVisibleItems = 12; ///< Maximum number of visible items.
-    static constexpr int minPaletteWidth = 50; ///< Minimum palette width.
-    static constexpr int maxPaletteWidth = 80; ///< Maximum palette width.
+    static constexpr size_t maxVisibleItems = 12; ///< Maximum number of visible items.
+    static constexpr int minPaletteWidth = 50;    ///< Minimum palette width.
+    static constexpr int maxPaletteWidth = 80;    ///< Maximum palette width.
 
     /// @brief Recomputes _filteredItems from _allItems and current filter text.
     void refilter();
-
-    /// @brief Ensures the selected item is visible by adjusting scroll offset.
-    void ensureSelectedVisible();
 
     /// @brief Calculates the width needed for the palette.
     [[nodiscard]] int calculateWidth(int maxWidth) const;
@@ -122,18 +119,6 @@ class CommandPalettePopup: public Component
 
     /// @brief Executes the currently selected command.
     void executeSelected();
-
-    /// @brief Selects the next item (with wrap-around).
-    void selectNext();
-
-    /// @brief Selects the previous item (with wrap-around).
-    void selectPrev();
-
-    /// @brief Moves selection down by one page.
-    void pageDown();
-
-    /// @brief Moves selection up by one page.
-    void pageUp();
 };
 
 } // namespace tui

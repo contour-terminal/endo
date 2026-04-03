@@ -461,6 +461,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::CycleThinkingMode:
         case InputFieldAction::CycleModel:
         case InputFieldAction::CommandPalette:
+        case InputFieldAction::FuzzyFileFinder:
         case InputFieldAction::NewPrompt:
             // These need special handling by the parent
             return EventResult::Handled;
@@ -804,6 +805,8 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
         case EditAction::CycleModel: _lastWasKill = false; return InputFieldAction::CycleModel;
 
         case EditAction::CommandPalette: _lastWasKill = false; return InputFieldAction::CommandPalette;
+
+        case EditAction::FuzzyFileFinder: _lastWasKill = false; return InputFieldAction::FuzzyFileFinder;
 
         // History
         case EditAction::HistoryPrev:
