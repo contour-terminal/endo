@@ -7073,6 +7073,62 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 }
             }
 
+            // Completion module dispatch
+            if (modIdent->name == "Completion")
+            {
+                if (method == "register" && argExprs.size() == 2)
+                {
+                    auto* cmdArg = codegen(argExprs[0]);
+                    auto* funcArg = codegen(argExprs[1]);
+                    if (cmdArg && funcArg && tryGenerateNativeCall("completer_register", { cmdArg, funcArg }))
+                        return;
+                }
+                else if (method == "entry" && argExprs.size() == 1)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    if (textArg && tryGenerateNativeCall("completion_entry", { textArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "described" && argExprs.size() == 2)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    auto* descArg = codegen(argExprs[1]);
+                    if (textArg && descArg
+                        && tryGenerateNativeCall("completion_described", { textArg, descArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "detailed" && argExprs.size() == 3)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    auto* descArg = codegen(argExprs[1]);
+                    auto* detailArg = codegen(argExprs[2]);
+                    if (textArg && descArg && detailArg
+                        && tryGenerateNativeCall("completion_detailed", { textArg, descArg, detailArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "text" && argExprs.size() == 1)
+                {
+                    auto* entryArg = codegen(argExprs[0]);
+                    if (entryArg && tryGenerateNativeCall("completion_text", { entryArg }))
+                        return;
+                }
+                else
+                {
+                    reportTypeError("Completion.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
+                }
+            }
+
             // User-defined module function call: Module.func args
             if (auto modIt = _loadedModules.find(modIdent->name); modIt != _loadedModules.end())
             {
@@ -10460,6 +10516,21 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 }
             }
             reportTypeError("Process has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "Completion")
+        {
+            static constexpr std::string_view completionMethods[] = { "register", "entry", "described",
+                                                                      "detailed", "text" };
+            for (auto const& m: completionMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    reportTypeError("Completion.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
+            }
+            reportTypeError("Completion has no member '{}'", std::string_view(node.fieldName));
             return;
         }
 

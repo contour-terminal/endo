@@ -1088,16 +1088,10 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
         else
             expr += c;
     }
-    expr += "\" |> each println";
+    expr += "\" |> __collect_completions";
 
-    // Capture stdout via pipe
-    auto pipeResult = createPipe();
-    if (!pipeResult.has_value())
-        return {};
-
-    auto& pipe = pipeResult.value();
-    auto const savedStdout = _currentPipelineBuilder.defaultStdoutFd;
-    _currentPipelineBuilder.defaultStdoutFd = pipe->writer();
+    // Clear collection buffer
+    _collectedCompletions.clear();
 
     // Use buffering report to capture errors instead of writing to stderr
     BufferingConsoleReport bufferingReport;
@@ -1110,34 +1104,9 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
-    _currentPipelineBuilder.defaultStdoutFd = savedStdout;
-    pipe->closeWriter();
-
-    // Read captured output
-    std::string output;
-    char buf[4096];
-    while (true)
-    {
-        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
-        if (n <= 0)
-            break;
-        output.append(buf, static_cast<size_t>(n));
-    }
-    pipe->closeReader();
-
-    // Split by newlines
+    // Collect results from the bridge function
     CompleterExecutionResult result;
-    size_t pos = 0;
-    while (pos < output.size())
-    {
-        auto const nl = output.find('\n', pos);
-        auto line = (nl == std::string::npos) ? output.substr(pos) : output.substr(pos, nl - pos);
-        if (!line.empty())
-            result.completions.push_back(std::move(line));
-        if (nl == std::string::npos)
-            break;
-        pos = nl + 1;
-    }
+    result.completions = std::move(_collectedCompletions);
 
     // Capture any compilation/link errors
     if (bufferingReport.hasMessages())

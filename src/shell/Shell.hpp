@@ -526,7 +526,8 @@ class Shell final: public SignalCallback
     TTY& _tty;
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
-    CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry
+    CompleterFunctionRegistry _completerFunctions;           ///< Scripted completer function registry
+    std::vector<CollectedCompletion> _collectedCompletions; ///< Buffer for __collect_completions bridge
     std::unique_ptr<DirectoryConfigManager> _dirConfigManager; ///< Per-directory config manager
 
     ProcessManager& _processManager;

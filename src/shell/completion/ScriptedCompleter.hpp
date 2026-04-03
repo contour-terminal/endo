@@ -14,11 +14,19 @@
 namespace endo
 {
 
+/// @brief A single collected completion with optional description and detail.
+struct CollectedCompletion
+{
+    std::string text;        ///< The completion text to insert.
+    std::string description; ///< Short description (shown right-aligned in menu).
+    std::string detail;      ///< Longer markdown detail (shown in side panel).
+};
+
 /// @brief Result of executing a completer function, including any compilation errors.
 struct CompleterExecutionResult
 {
-    std::vector<std::string> completions; ///< Completion candidate strings.
-    std::vector<std::string> errors;      ///< Formatted diagnostic messages (if any).
+    std::vector<CollectedCompletion> completions; ///< Completion candidates.
+    std::vector<std::string> errors;              ///< Formatted diagnostic messages (if any).
 };
 
 /// @brief Callback type for executing an endo completer function.
@@ -60,7 +68,7 @@ class ScriptedCompleter: public CompletionProvider
 
     struct CacheEntry
     {
-        std::vector<std::string> results;
+        std::vector<CollectedCompletion> results;
         std::chrono::steady_clock::time_point timestamp;
     };
 

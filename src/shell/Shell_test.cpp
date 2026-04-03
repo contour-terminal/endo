@@ -3482,7 +3482,7 @@ TEST_CASE("LetBindingCompleter.does_not_handle_variable_context")
 {
     endo::LetBindingCompleter completer(endo::FSharpPersistentState {});
     CHECK(completer.canHandle(endo::CompletionContextType::Command));
-    CHECK(!completer.canHandle(endo::CompletionContextType::Argument));
+    CHECK(completer.canHandle(endo::CompletionContextType::Argument));
     CHECK(!completer.canHandle(endo::CompletionContextType::Variable));
     CHECK(!completer.canHandle(endo::CompletionContextType::VariableBrace));
     CHECK(!completer.canHandle(endo::CompletionContextType::FilePath));

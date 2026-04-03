@@ -1467,27 +1467,7 @@ TEST_CASE("SignatureHelp.not in function call returns nullopt", "[lsp][signature
     CHECK_FALSE(sig.has_value());
 }
 
-TEST_CASE("SignatureHelp.stdlib builtin register_completer", "[lsp][signaturehelp]")
-{
-    const auto* source = "register_completer \"cmd\" func";
-    // cursor on first argument (col 19 = inside "cmd")
-    auto sig = computeSignatureHelp(source, Position { .line = 0, .character = 19 });
-    REQUIRE(sig.has_value());
-    REQUIRE(!sig->signatures.empty());
-    CHECK(sig->signatures[0].parameters.size() == 2);
-    CHECK(sig->activeParameter == 0);
-}
-
-TEST_CASE("SignatureHelp.stdlib builtin register_completer second arg", "[lsp][signaturehelp]")
-{
-    const auto* source = "register_completer \"cmd\" func";
-    // cursor on second argument (col 25 = on "func")
-    auto sig = computeSignatureHelp(source, Position { .line = 0, .character = 25 });
-    REQUIRE(sig.has_value());
-    REQUIRE(!sig->signatures.empty());
-    CHECK(sig->signatures[0].parameters.size() == 2);
-    CHECK(sig->activeParameter == 1);
-}
+// register_completer signature help tests removed — function moved to Completion.register module
 
 // =============================================================================
 // E2E: Definition, References, SignatureHelp

@@ -1017,6 +1017,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
         if (!targetProgram)
             return std::unexpected(TestError::CodeGenerationFailed);
 
+        builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+
         // Link
         if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
             return std::unexpected(TestError::LinkFailed);
@@ -1091,6 +1093,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts,
         auto targetProgram = codegen.generate(ir.get());
         if (!targetProgram)
             return std::unexpected(TestError::CodeGenerationFailed);
+
+        builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
 
         // Link
         if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))

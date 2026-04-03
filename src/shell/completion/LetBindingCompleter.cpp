@@ -66,6 +66,17 @@ std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext cons
     // Apply fuzzy scoring for user symbols (higher base score)
     auto results = applyFuzzyScoring(candidates, prefix, 80);
 
+    // Add type constructor candidates (Some, None, Ok, Error, etc.)
+    auto ctorCandidates = constructorCandidates();
+    auto ctorResults = applyFuzzyScoring(ctorCandidates, prefix, 70);
+    for (auto& item: ctorResults)
+    {
+        auto const isDuplicate =
+            std::ranges::any_of(results, [&](auto const& existing) { return existing.text == item.text; });
+        if (!isDuplicate)
+            results.push_back(std::move(item));
+    }
+
     // Add standard library candidates at slightly lower base score
     // so user-defined functions rank higher
     auto stdlibCandidates = standardLibraryCandidates();
@@ -92,7 +103,7 @@ std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext cons
 
 bool LetBindingCompleter::canHandle(CompletionContextType type) const
 {
-    return type == CompletionContextType::Command;
+    return type == CompletionContextType::Command || type == CompletionContextType::Argument;
 }
 
 } // namespace endo
