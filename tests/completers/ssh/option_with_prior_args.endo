@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: SSH completer: option completion with prior args
-# skip: Pending cross-Runner object pool support in executeSession
 # session-separator: ---
 # source-file: data/completers/ssh.endo
 # expect: -p

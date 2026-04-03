@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: CMake completer: generators
-# skip: Pending cross-Runner object pool support in executeSession
 # source-file: data/completers/cmake.endo
 # expect: Ninja
 # expect: Ninja Multi-Config

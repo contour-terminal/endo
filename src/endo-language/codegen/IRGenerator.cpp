@@ -3319,6 +3319,12 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
             if (*innerType == CoreVM::LiteralType::Float)
                 return _builder.createF2S(value, std::string(label) + ".f2s");
         }
+        // Fallback: use object_to_string for runtime dispatch. This handles Number values
+        // that are actually typed object pointers (e.g., CompletionEntry) or string pointers
+        // (from match expression type mismatch). valueToString() safely handles all types.
+        if (auto* callback = findCallback("object_to_string(I)S"))
+            return _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".n2s.rt");
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::Float)

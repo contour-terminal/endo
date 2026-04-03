@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: GLab completer: variable subcommands
-# skip: Pending cross-Runner object pool support in executeSession
 # source-file: data/completers/glab.endo
 # expect: delete
 # expect: export

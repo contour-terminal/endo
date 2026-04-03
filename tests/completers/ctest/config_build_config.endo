@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: CTest completer: config via --build-config
-# skip: Pending cross-Runner object pool support in executeSession
 # source-file: data/completers/ctest.endo
 # expect: Debug
 # expect: Release
