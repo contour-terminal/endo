@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -81,11 +82,11 @@ namespace
 
 } // namespace
 
-double FuzzyMatchResult::quality(size_t textGraphemeCount) const noexcept
+double FuzzyMatchResult::quality(size_t graphemeCount) const noexcept
 {
-    if (textGraphemeCount == 0 || !matches)
+    if (graphemeCount == 0 || !matches)
         return 0.0;
-    return static_cast<double>(matchedChars) / static_cast<double>(textGraphemeCount);
+    return static_cast<double>(matchedChars) / static_cast<double>(graphemeCount);
 }
 
 bool FuzzyMatchResult::isContiguousSubstring() const noexcept
@@ -161,6 +162,9 @@ FuzzyMatchResult FuzzyMatch::match(std::string_view text,
     auto patternGraphemes = segmentGraphemes(pattern);
     auto graphemeByteOffsets = getGraphemeByteOffsets(text);
 
+    result.textGraphemeCount = textGraphemes.size();
+    result.patternGraphemeCount = patternGraphemes.size();
+
     if (patternGraphemes.size() > textGraphemes.size())
         return result;
 
@@ -212,16 +216,16 @@ FuzzyMatchResult FuzzyMatch::matchSmartCase(std::string_view text, std::string_v
 }
 
 int FuzzyMatch::calculateScore(int baseScore,
-                               std::string_view text,
-                               std::string_view pattern,
+                               [[maybe_unused]] std::string_view text,
+                               [[maybe_unused]] std::string_view pattern,
                                FuzzyMatchResult const& result,
                                FuzzyConfig const& config) noexcept
 {
     if (!result.matches)
         return baseScore;
 
-    size_t textLen = countGraphemes(text);
-    size_t patternLen = countGraphemes(pattern);
+    auto const textLen = result.textGraphemeCount;
+    auto const patternLen = result.patternGraphemeCount;
 
     // Match percentage bonus: pattern coverage of text
     double matchPercent = textLen > 0 ? static_cast<double>(patternLen) / static_cast<double>(textLen) : 0.0;

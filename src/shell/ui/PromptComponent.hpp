@@ -13,6 +13,7 @@
 #include <tui/CommandRegistry.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
+#include <tui/FuzzyPickerPopup.hpp>
 #include <tui/InputField.hpp>
 #include <tui/TextDecorator.hpp>
 
@@ -238,6 +239,7 @@ class PromptComponent: public tui::Component
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup;
     tui::CommandPalettePopup _commandPalette;
+    tui::FuzzyPickerPopup _fuzzyFileFinder;
     tui::CommandRegistry* _commandRegistry = nullptr;
     Completer* _completer = nullptr;
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
@@ -292,8 +294,11 @@ class PromptComponent: public tui::Component
     void updateCompletionPopup();
     void insertCompletion(std::string_view text);
 
-    /// @brief Hides the completion popup and resets history search mode.
+    /// @brief Hides the completion popup, command palette, fuzzy file finder, and resets history search mode.
     void dismissPopup();
+
+    /// @brief Opens the fuzzy file finder popup with recursive file paths from CWD.
+    void triggerFuzzyFileFinder();
 
     // History search (Ctrl+R)
     bool _historySearchMode = false; ///< True when popup shows history entries instead of completions.

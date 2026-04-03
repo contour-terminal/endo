@@ -20,19 +20,21 @@ struct FuzzyConfig
 /// @brief Result of a fuzzy match operation.
 struct FuzzyMatchResult
 {
-    bool matches = false;        ///< Did the pattern match?
-    size_t matchedChars = 0;     ///< Number of pattern graphemes matched.
-    size_t consecutiveRuns = 0;  ///< Number of consecutive match sequences.
-    size_t longestRun = 0;       ///< Length of longest consecutive run.
-    size_t wordStartMatches = 0; ///< Matches occurring at word boundaries.
+    bool matches = false;            ///< Did the pattern match?
+    size_t matchedChars = 0;         ///< Number of pattern graphemes matched.
+    size_t consecutiveRuns = 0;      ///< Number of consecutive match sequences.
+    size_t longestRun = 0;           ///< Length of longest consecutive run.
+    size_t wordStartMatches = 0;     ///< Matches occurring at word boundaries.
+    size_t textGraphemeCount = 0;    ///< Total grapheme count in the matched text.
+    size_t patternGraphemeCount = 0; ///< Total grapheme count in the pattern.
 
     /// @brief Grapheme cluster indices of matched characters (for highlighting).
     /// These are visual character positions, not byte offsets.
     std::vector<size_t> positions;
 
     /// @brief Match quality as ratio (0.0 - 1.0).
-    /// @param textGraphemeCount Total grapheme count in the text.
-    [[nodiscard]] double quality(size_t textGraphemeCount) const noexcept;
+    /// @param graphemeCount Total grapheme count in the text.
+    [[nodiscard]] double quality(size_t graphemeCount) const noexcept;
 
     /// @brief True when all matched characters were found consecutively (substring match).
     /// A contiguous substring match is always considered valid regardless of text length.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PromptComponent.hpp"
 #include <shell/completion/Completer.hpp>
+#include <shell/completion/FileCompleter.hpp>
 #include <shell/history/History.hpp>
 #include <shell/ui/SourceOffsetUtils.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
@@ -33,6 +34,7 @@
 #include "modules/ShellLevelModule.hpp"
 #include "modules/StructuredOutputModule.hpp"
 #include "modules/ToolchainModule.hpp"
+#include <agent/context/ProjectFileTree.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
@@ -87,6 +89,10 @@ PromptComponent::PromptComponent()
 {
     _inputField.setPrompt(""); // We handle prompt rendering ourselves
     initializeModules();
+
+    // Add fuzzy file finder as child component for proper tree-based rendering.
+    // Starts hidden; shown on Ctrl+G. High z-index ensures overlay rendering.
+    addChild(_fuzzyFileFinder, tui::LayoutParams { .visible = false, .zIndex = 10 });
 }
 
 void PromptComponent::initializeModules()
@@ -655,6 +661,26 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
+    // Position fuzzy file finder (centered, below input area).
+    // Rendering is handled by the component tree (child of PromptComponent with z-index 10).
+    if (_fuzzyFileFinder.visible())
+    {
+        auto const finderPrefSize = _fuzzyFileFinder.preferredSize();
+        auto const finderWidth = std::min(finderPrefSize.width, canvasWidth);
+        auto const finderRow = inputStartRow + totalLines;
+        auto const finderHeight = std::min(finderPrefSize.height, canvas.height() - finderRow);
+        if (finderHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
+        {
+            auto const finderX = std::max(0, (canvasWidth - finderWidth) / 2);
+            _fuzzyFileFinder.setArea(
+                tui::Rect { .x = finderX, .y = finderRow, .width = finderWidth, .height = finderHeight });
+        }
+        else
+        {
+            _fuzzyFileFinder.hide();
+        }
+    }
+
     // Mark bottom padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < botPad; ++i)
         canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
@@ -690,6 +716,14 @@ tui::Size PromptComponent::preferredSize() const
         auto const paletteSize = _commandPalette.preferredSize();
         totalHeight += paletteSize.height;
         maxWidth = std::max(maxWidth, paletteSize.width);
+    }
+
+    // If fuzzy file finder is visible, add space for it below the input
+    if (_fuzzyFileFinder.visible())
+    {
+        auto const finderSize = _fuzzyFileFinder.preferredSize();
+        totalHeight += finderSize.height;
+        maxWidth = std::max(maxWidth, finderSize.width);
     }
 
     return { .width = maxWidth, .height = totalHeight };
@@ -815,6 +849,23 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             case tui::CommandPaletteAction::Changed: return Action::Changed;
             case tui::CommandPaletteAction::Executed:
             case tui::CommandPaletteAction::Dismissed: return Action::Changed;
+        }
+        return Action::Changed;
+    }
+
+    // Handle fuzzy file finder events (takes priority over InputField)
+    if (_fuzzyFileFinder.visible())
+    {
+        auto const finderAction = _fuzzyFileFinder.processEvent(event);
+        switch (finderAction)
+        {
+            case tui::FuzzyPickerAction::Accepted:
+                if (auto const* selected = _fuzzyFileFinder.selectedItem())
+                    insertCompletion(FileCompleter::escapeForShell(*selected));
+                _fuzzyFileFinder.hide();
+                return Action::Changed;
+            case tui::FuzzyPickerAction::Dismissed: return Action::Changed;
+            case tui::FuzzyPickerAction::Changed: return Action::Changed;
         }
         return Action::Changed;
     }
@@ -1043,6 +1094,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (_commandRegistry)
                 _commandPalette.show(*_commandRegistry, tui::CommandContext::Shell);
             return Action::Changed;
+        case tui::InputFieldAction::FuzzyFileFinder:
+            _inputField.clearGhostText();
+            dismissPopup();
+            resetHistoryCycling();
+            triggerFuzzyFileFinder();
+            return Action::Changed;
         case tui::InputFieldAction::CycleAgentMode:
         case tui::InputFieldAction::CycleThinkingMode:
         case tui::InputFieldAction::CycleModel:
@@ -1201,7 +1258,18 @@ void PromptComponent::updateCompletionPopup()
 void PromptComponent::dismissPopup()
 {
     _completionPopup.hide();
+    _commandPalette.hide();
+    _fuzzyFileFinder.hide();
     _historySearchMode = false;
+}
+
+void PromptComponent::triggerFuzzyFileFinder()
+{
+    auto tree =
+        endo::agent::ProjectFileTree(endo::agent::FileTreeConfig { .maxDepth = 20, .maxEntries = 10000 });
+    auto files = tree.filePaths(std::filesystem::current_path());
+    if (!files.empty())
+        _fuzzyFileFinder.show(std::move(files), "File> ");
 }
 
 void PromptComponent::triggerHistorySearch()
