@@ -1057,8 +1057,10 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
                                                          std::vector<std::string> const& args,
                                                          std::string_view prefix)
 {
-    // Build the expression: funcName [arg1; arg2; ...] "prefix" |> each println
-    std::string expr;
+    // Build the expression: __collect_completions (funcName [args] "prefix")
+    // Uses direct function application instead of pipeline because the |> handler
+    // only resolves F# user functions, not native Runtime functions.
+    std::string expr = "__collect_completions (";
     expr += funcName;
     expr += " [";
     for (size_t i = 0; i < args.size(); ++i)
@@ -1066,7 +1068,6 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
         if (i > 0)
             expr += "; ";
         expr += '"';
-        // Escape quotes in args
         for (auto c: args[i])
         {
             if (c == '"')
@@ -1088,7 +1089,7 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
         else
             expr += c;
     }
-    expr += "\" |> __collect_completions";
+    expr += "\")";
 
     // Clear collection buffer
     _collectedCompletions.clear();
