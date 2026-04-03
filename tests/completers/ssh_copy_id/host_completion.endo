@@ -1,8 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: ssh-copy-id completer: host completion with no args
+# description: ssh-copy-id completer: returns options and hosts together
 # session-separator: ---
 # source-file: data/completers/ssh-copy-id.endo
+# expect: -F
+# expect: -f
+# expect: -h
+# expect: -i
+# expect: -n
+# expect: -o
+# expect: -p
+# expect: -s
+# expect: -t
+# expect: -x
 # expect: server1
 # expect: server2
 # expect: gateway

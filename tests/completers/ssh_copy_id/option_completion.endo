@@ -1,18 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: ssh-copy-id completer: option completion with dash prefix
+# description: ssh-copy-id completer: dash prefix still returns full list (fuzzy filters in UI)
 # session-separator: ---
 # source-file: data/completers/ssh-copy-id.endo
+# expect: -F
 # expect: -f
-# expect: -n
-# expect: -s
-# expect: -x
 # expect: -h
 # expect: -i
-# expect: -t
-# expect: -F
+# expect: -n
 # expect: -o
 # expect: -p
+# expect: -s
+# expect: -t
+# expect: -x
+# expect: server1
+# expect: server2
+# expect: gateway
 # expect:
 
 let ssh_hosts _ = ["server1"; "server2"; "gateway"]
