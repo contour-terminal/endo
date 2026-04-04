@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/TerminalInput.hpp>
+#include <tui/TerminalProtocols.hpp>
 #include <tui/platform/PosixIO.hpp>
 
 #include <array>
@@ -16,63 +17,6 @@
 
 namespace tui
 {
-
-namespace
-{
-    using namespace std::string_view_literals;
-
-    // Terminal protocol escape sequences
-    //
-    // Kitty keyboard protocol flags (CSI > flags u):
-    //   1 = Disambiguate escape codes
-    //   2 = Report event types (press, repeat, release)
-    //   4 = Report alternate keys
-    //   8 = Report all keys as escape codes
-    //  16 = Report associated text
-    //
-    // We use flags 1|8=9 to ensure modifiers are reported for all keys including Enter.
-    // Flag 8 is needed because some terminals only report Shift+Enter with this flag.
-    constexpr auto EnableCsiU = "\033[>9u"sv; // Kitty keyboard protocol (disambiguate + all keys)
-    constexpr auto DisableCsiU = "\033[<u"sv; // Pop Kitty keyboard protocol
-    constexpr auto EnableBracketedPaste = "\033[?2004h"sv;
-    constexpr auto DisableBracketedPaste = "\033[?2004l"sv;
-
-    // Color scheme change notifications (DEC mode 2031)
-    // When enabled, the terminal sends CSI ? 997 ; N n when the palette changes
-    // N: 1 = dark, 2 = light
-    constexpr auto EnableColorSchemeNotify = "\033[?2031h"sv;
-    constexpr auto DisableColorSchemeNotify = "\033[?2031l"sv;
-
-    // One-shot color scheme query: CSI ? 996 n
-    // Response: CSI ? 997 ; N n (same format as notifications)
-    constexpr auto QueryColorScheme = "\033[?996n"sv;
-
-    // SGR extended mouse format (mode 1006) - allows coordinates > 223
-    // Uses CSI < button ; column ; row M/m format instead of legacy X10 encoding
-    constexpr auto EnableSGRMouse = "\033[?1006h"sv;
-    constexpr auto DisableSGRMouse = "\033[?1006l"sv;
-
-    // Any-motion mouse tracking (mode 1003) - reports ALL mouse movements
-    // Required for hover tooltips - tracks mouse even without button held
-    // Without this, only button press/release events are reported
-    constexpr auto EnableAnyMotionTracking = "\033[?1003h"sv;
-    constexpr auto DisableAnyMotionTracking = "\033[?1003l"sv;
-
-    // Passive mouse tracking (DEC mode 2029) - Contour terminal extension
-    // Adds an additional uiHandled parameter indicating whether the terminal UI
-    // consumed the event (e.g., for scrollback selection).
-    // Format: CSI < button ; column ; row ; uiHandled M/m
-    // Note: In Contour, this automatically enables SGR format, but we enable it
-    // explicitly above for compatibility with other terminals.
-    constexpr auto EnablePassiveMouseTracking = "\033[?2029h"sv;
-    constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv;
-
-    // Focus tracking (DEC mode 1004)
-    // When enabled, the terminal sends CSI I on focus-in and CSI O on focus-out.
-    constexpr auto EnableFocusTracking = "\033[?1004h"sv;
-    constexpr auto DisableFocusTracking = "\033[?1004l"sv;
-
-} // namespace
 
 TerminalInput::TerminalInput() = default;
 
@@ -246,25 +190,25 @@ void TerminalInput::writeProtocol(std::string_view data) const
 
 void TerminalInput::enableProtocols()
 {
-    writeProtocol(EnableCsiU);
-    writeProtocol(EnableSGRMouse);             // SGR format for extended coordinates
-    writeProtocol(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
-    writeProtocol(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
-    writeProtocol(EnableBracketedPaste);
-    writeProtocol(EnableColorSchemeNotify); // Subscribe to dark/light mode changes
-    writeProtocol(QueryColorScheme);        // Query current color scheme
-    writeProtocol(EnableFocusTracking);     // Focus in/out notifications
+    writeProtocol(protocols::EnableCsiU);
+    writeProtocol(protocols::EnableSGRMouse);
+    writeProtocol(protocols::EnablePassiveMouseTracking);
+    writeProtocol(protocols::EnableAnyMotionTracking);
+    writeProtocol(protocols::EnableBracketedPaste);
+    writeProtocol(protocols::EnableColorSchemeNotify);
+    writeProtocol(protocols::QueryColorScheme);
+    writeProtocol(protocols::EnableFocusTracking);
 }
 
 void TerminalInput::disableProtocols()
 {
-    writeProtocol(DisableFocusTracking); // Disable in reverse order
-    writeProtocol(DisableColorSchemeNotify);
-    writeProtocol(DisableBracketedPaste);
-    writeProtocol(DisableAnyMotionTracking);
-    writeProtocol(DisablePassiveMouseTracking);
-    writeProtocol(DisableSGRMouse);
-    writeProtocol(DisableCsiU);
+    writeProtocol(protocols::DisableFocusTracking);
+    writeProtocol(protocols::DisableColorSchemeNotify);
+    writeProtocol(protocols::DisableBracketedPaste);
+    writeProtocol(protocols::DisableAnyMotionTracking);
+    writeProtocol(protocols::DisablePassiveMouseTracking);
+    writeProtocol(protocols::DisableSGRMouse);
+    writeProtocol(protocols::DisableCsiU);
 }
 
 } // namespace tui
