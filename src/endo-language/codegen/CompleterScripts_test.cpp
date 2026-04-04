@@ -1252,6 +1252,14 @@ TEST_CASE("Completer.register_completer.valid_definition", "[completer][register
     )"));
 }
 
+TEST_CASE("Completer.Completion_register.valid_definition", "[completer][register]")
+{
+    CHECK(executesSuccessfully(R"(
+        let my_complete args prefix = ["--help"; "--version"]
+        Completion.register "mytest" my_complete
+    )"));
+}
+
 // =============================================================================
 // REPL persistence leak regression test
 // =============================================================================

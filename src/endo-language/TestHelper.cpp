@@ -551,6 +551,14 @@ TestRuntime::TestRuntime()
                 }
             });
 
+        // --- Completer registration (stateful) ---
+        if ((name == "completer_register" || name == "register_completer") && arity == 2)
+            return Functor([this](CoreVM::Params& args) {
+                auto command = std::string(args.getString(1));
+                auto functionName = std::string(args.getString(2));
+                registeredCompleters[std::move(command)] = std::move(functionName);
+            });
+
         // Fall back to shared stateless implementations (list_*, string_*, format_*, rand, etc.)
         return builtins::resolveSharedImpl(name, arity);
     };
