@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ExitStatusModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -16,7 +17,9 @@ bool ExitStatusModule::shouldShow(PromptContext const& ctx) const
 PromptSegments ExitStatusModule::evaluate(PromptContext const& ctx) const
 {
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->exitCode.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.exitCode;
     style.bold = true;
 

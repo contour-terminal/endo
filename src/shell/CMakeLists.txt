@@ -20,6 +20,8 @@ add_library(endo-shell STATIC
     ui/Prompt.cpp
     ui/PromptComponent.hpp
     ui/PromptComponent.cpp
+    ui/PromptColorResolver.hpp
+    ui/PromptColorResolver.cpp
     ui/PromptConfig.hpp
     ui/PromptLayoutEngine.hpp
     ui/PromptLayoutEngine.cpp

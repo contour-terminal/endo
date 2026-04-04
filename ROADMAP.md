@@ -933,6 +933,7 @@ Component (base class)
 - [x] Fix Ctrl+T prompt toggle drift on real terminals via DECSC/DECRC cursor anchoring (`clearAndRelease()` saves cursor via `saveCursor()`, next Screen's first `flushInline()` restores via `restoreCursor()` eliminating relative-tracking drift; eliminated double-draw in `Prompt::read()` via `_displayDrewCurrentState` flag)
 - [x] TUI testing infrastructure: `TerminalOutput` made polymorphic (all public methods virtual), `MockTerminalOutput` tracks cursor position/visibility semantically, `Terminal` supports DI via `unique_ptr<TerminalOutput>` constructor, renamed `write()` → `writeText()` for clarity
 - [x] Implement double Ctrl+D exit confirmation (first press shows ghost text hint, second press within configurable timeout exits; `set_exit_confirm_timeout` builtin for customization; 0 disables confirmation for immediate exit)
+- [x] Implement per-color prompt theming with `PromptColorOverrides` and `ResolvedPromptColors` (14 customizable color properties, transparent background support, multi-stop gradient support for any module via `ColorSpec`, colon-separated gradient syntax in shell properties)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests

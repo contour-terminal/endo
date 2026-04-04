@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ToolchainModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -68,7 +69,9 @@ PromptSegments ToolchainModule::evaluate(PromptContext const& ctx) const
         return {};
 
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->badgeText.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.badgeText;
 
     return { PromptSegment { .text = info.icon + " " + info.name, .style = style } };

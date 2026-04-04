@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GitModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -121,7 +122,16 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
 
     // Branch icon
     auto branchStyle = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+    {
+        if (_cache.dirty > 0)
+            branchStyle.fg = ctx.resolvedColors->gitDirty.solid();
+        else if (_cache.staged > 0)
+            branchStyle.fg = ctx.resolvedColors->gitStaged.solid();
+        else
+            branchStyle.fg = ctx.resolvedColors->gitClean.solid();
+    }
+    else if (ctx.theme)
     {
         if (_cache.dirty > 0)
             branchStyle.fg = ctx.theme->promptColors.gitDirty;
@@ -144,7 +154,10 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
             indicatorText += " +" + std::to_string(_cache.staged);
 
         auto indicatorStyle = tui::Style {};
-        if (ctx.theme)
+        if (ctx.resolvedColors)
+            indicatorStyle.fg = (_cache.dirty > 0) ? ctx.resolvedColors->gitDirty.solid()
+                                                   : ctx.resolvedColors->gitStaged.solid();
+        else if (ctx.theme)
             indicatorStyle.fg =
                 (_cache.dirty > 0) ? ctx.theme->promptColors.gitDirty : ctx.theme->promptColors.gitStaged;
         segments.push_back(PromptSegment { .text = indicatorText, .style = indicatorStyle });

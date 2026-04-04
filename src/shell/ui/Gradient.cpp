@@ -53,34 +53,51 @@ namespace
         return 4;
     }
 
-} // namespace
-
-PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text)
-{
-    if (text.empty())
-        return {};
-
-    // Collect grapheme clusters as byte spans in the original UTF-8 text
     struct ClusterSpan
     {
         std::size_t offset;
         std::size_t length;
     };
 
-    auto spans = std::vector<ClusterSpan> {};
-
-    auto segmenter = unicode::utf8_grapheme_segmenter(text);
-    std::size_t bytePos = 0;
-    for (auto const& cluster: segmenter)
+    /// @brief Collects grapheme cluster byte spans from UTF-8 text.
+    [[nodiscard]] std::vector<ClusterSpan> collectGraphemeSpans(std::string_view text)
     {
-        // Compute byte length of the cluster from its codepoints
-        std::size_t clusterBytes = 0;
-        for (auto const cp: cluster)
-            clusterBytes += utf8ByteLength(cp);
-        spans.push_back({ bytePos, clusterBytes });
-        bytePos += clusterBytes;
+        auto spans = std::vector<ClusterSpan> {};
+        auto segmenter = unicode::utf8_grapheme_segmenter(text);
+        std::size_t bytePos = 0;
+        for (auto const& cluster: segmenter)
+        {
+            std::size_t clusterBytes = 0;
+            for (auto const cp: cluster)
+                clusterBytes += utf8ByteLength(cp);
+            spans.push_back({ bytePos, clusterBytes });
+            bytePos += clusterBytes;
+        }
+        return spans;
     }
 
+} // namespace
+
+PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text)
+{
+    auto const stops = std::array { start, end };
+    return gradient(std::span<tui::RgbColor const>(stops), text);
+}
+
+PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view text)
+{
+    if (stops.empty() || text.empty())
+        return {};
+
+    // Single stop: solid color
+    if (stops.size() == 1)
+    {
+        auto style = tui::Style {};
+        style.fg = stops[0];
+        return { PromptSegment { .text = std::string(text), .style = style } };
+    }
+
+    auto const spans = collectGraphemeSpans(text);
     if (spans.empty())
         return {};
 
@@ -92,7 +109,7 @@ PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view
     {
         auto const t = (count == 1) ? 0.0f : static_cast<float>(i) / static_cast<float>(count - 1);
         auto style = tui::Style {};
-        style.fg = tui::lerpColor(start, end, t);
+        style.fg = multiStopGradient(stops, t);
         segments.push_back(PromptSegment { .text = std::string(text.substr(spans[i].offset, spans[i].length)),
                                            .style = style });
     }

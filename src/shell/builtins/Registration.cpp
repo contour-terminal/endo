@@ -7,6 +7,7 @@
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
 #include <shell/output/OutputParser.hpp>
+#include <shell/ui/PromptColorResolver.hpp>
 #include <shell/ui/PromptPresets.hpp>
 #include <shell/util/CommandResolver.hpp>
 
@@ -1029,6 +1030,75 @@ void Shell::registerPromptBuiltins()
 
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });
+
+    // --- Prompt color overrides ---
+
+    // Background (special: supports "transparent")
+    _runtime.registerProperty("shell_prompt_color_background", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& ov = prompt.promptConfig().colorOverrides;
+            if (ov.transparentBackground)
+                args.setResult(std::string("transparent"));
+            else if (ov.background)
+                args.setResult(formatColorSpec(*ov.background));
+            else
+                args.setResult(std::string("theme"));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            auto const& value = args.getString(1);
+            auto config = prompt.promptConfig();
+            if (value == "transparent" || value == "default")
+            {
+                config.colorOverrides.transparentBackground = true;
+                config.colorOverrides.background.reset();
+            }
+            else if (value == "theme" || value == "reset")
+            {
+                config.colorOverrides.transparentBackground = false;
+                config.colorOverrides.background.reset();
+            }
+            else if (auto parsed = parseColorSpec(value))
+            {
+                config.colorOverrides.transparentBackground = false;
+                config.colorOverrides.background = *parsed;
+            }
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    // Table-driven registration for non-background color properties
+    auto registerColorProp = [this](
+        char const* name,
+        std::optional<ColorSpec> PromptColorOverrides::* field)
+    {
+        _runtime.registerProperty(name, CoreVM::LiteralType::String)
+            .onGet([this, field](CoreVM::Params& args) {
+                auto const& ov = prompt.promptConfig().colorOverrides;
+                args.setResult((ov.*field) ? formatColorSpec(*(ov.*field)) : std::string("theme"));
+            })
+            .onSet([this, field](CoreVM::Params& args) {
+                auto const& value = args.getString(1);
+                auto config = prompt.promptConfig();
+                if (value == "theme" || value == "reset")
+                    (config.colorOverrides.*field).reset();
+                else if (auto parsed = parseColorSpec(value))
+                    config.colorOverrides.*field = *parsed;
+                prompt.setPromptConfig(std::move(config));
+            });
+    };
+
+    registerColorProp("shell_prompt_color_path",            &PromptColorOverrides::path);
+    registerColorProp("shell_prompt_color_git_clean",       &PromptColorOverrides::gitClean);
+    registerColorProp("shell_prompt_color_git_dirty",       &PromptColorOverrides::gitDirty);
+    registerColorProp("shell_prompt_color_git_staged",      &PromptColorOverrides::gitStaged);
+    registerColorProp("shell_prompt_color_indicator",       &PromptColorOverrides::indicator);
+    registerColorProp("shell_prompt_color_indicator_error", &PromptColorOverrides::indicatorError);
+    registerColorProp("shell_prompt_color_exit_code",       &PromptColorOverrides::exitCode);
+    registerColorProp("shell_prompt_color_duration",        &PromptColorOverrides::duration);
+    registerColorProp("shell_prompt_color_hostname",        &PromptColorOverrides::hostname);
+    registerColorProp("shell_prompt_color_separator",       &PromptColorOverrides::separator);
+    registerColorProp("shell_prompt_color_badge",           &PromptColorOverrides::badge);
+    registerColorProp("shell_prompt_color_badge_text",      &PromptColorOverrides::badgeText);
+    registerColorProp("shell_prompt_color_clock",           &PromptColorOverrides::clock);
     // clang-format on
 }
 

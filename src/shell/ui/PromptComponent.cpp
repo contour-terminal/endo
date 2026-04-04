@@ -22,6 +22,7 @@
 #include <utility>
 
 #include "Gradient.hpp"
+#include "PromptColorResolver.hpp"
 #include "modules/BatteryModule.hpp"
 #include "modules/ClockModule.hpp"
 #include "modules/DurationModule.hpp"
@@ -78,6 +79,8 @@ auto PromptComponent::PromptTextDecorator::background(int displayCol) const -> s
     auto const idx = displayCol + bgOffset;
     if (bgColors && !bgColors->empty() && idx >= 0 && std::cmp_less(idx, bgColors->size()))
         return (*bgColors)[static_cast<std::size_t>(idx)];
+    if (transparentBg)
+        return std::nullopt; // Let terminal default show through
     return flatBg;
 }
 
@@ -145,6 +148,27 @@ void PromptComponent::updateModuleCache(std::vector<std::string> const& moduleNa
 std::vector<PromptSegments> PromptComponent::buildModuleVector(
     std::vector<std::string> const& moduleNames) const
 {
+    // Map module names to their resolved ColorSpec for gradient detection
+    auto const colorSpecForModule = [this](std::string const& name) -> ColorSpec const* {
+        if (!_context.resolvedColors)
+            return nullptr;
+        auto const& rc = *_context.resolvedColors;
+        if (name == "path")
+            return &rc.path;
+        if (name == "exit_status")
+            return &rc.exitCode;
+        if (name == "duration")
+            return &rc.duration;
+        if (name == "hostname")
+            return &rc.hostname;
+        if (name == "clock")
+            return &rc.clock;
+        if (name == "shell_level" || name == "battery")
+            return &rc.badge;
+        // git, fsharp_mode, structured_output, toolchain: no single color mapping
+        return nullptr;
+    };
+
     auto results = std::vector<PromptSegments> {};
     for (auto const& name: moduleNames)
     {
@@ -152,13 +176,16 @@ std::vector<PromptSegments> PromptComponent::buildModuleVector(
         if (it == _moduleCache.end() || !it->second.visible || it->second.segments.empty())
             continue;
 
-        // Apply gradient to path module when configured; otherwise use cached segments directly.
-        if (_config.useGradientPath && name == "path")
+        // Apply gradient when the resolved ColorSpec has multiple stops
+        auto const* spec = colorSpecForModule(name);
+        if (spec && spec->isGradient())
         {
-            std::string pathText;
+            // Combine all segment text for gradient application
+            auto combinedText = std::string {};
             for (auto const& seg: it->second.segments)
-                pathText += seg.text;
-            auto gradientSegments = gradient(_config.gradientStart, _config.gradientEnd, pathText);
+                combinedText += seg.text;
+            auto gradientSegments = gradient(spec->colors, combinedText);
+            // Transfer style attributes (bold, etc.) from original segments
             for (auto& seg: gradientSegments)
                 seg.style.bold = true;
             results.push_back(std::move(gradientSegments));
@@ -241,11 +268,17 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Effective content width (excluding margins)
     auto const contentWidth = canvasWidth - (2 * HorizontalMargin);
 
-    // Use theme-based colors
-    auto const& pc = theme.promptColors;
+    // Resolve prompt colors: merge overrides with theme defaults.
+    // Stored as a local; the pointer in _context is valid only for this render frame.
+    auto const resolved = resolvePromptColors(_config.colorOverrides, theme.promptColors);
+    _context.resolvedColors = &resolved;
+    // Guard: null out after render scope (see end of this function).
+
+    // Resolve concrete background (nullptr when transparent)
+    auto const* concreteBg = std::get_if<tui::RgbColor>(&resolved.background);
 
     // Build aurora background color cache when configured
-    auto const hasAurora = !_config.auroraBackground.empty();
+    auto const hasAurora = !_config.auroraBackground.empty() && !_config.colorOverrides.transparentBackground;
     auto bgColors = std::vector<tui::RgbColor> {};
     if (hasAurora && contentWidth > 0)
     {
@@ -256,35 +289,46 @@ void PromptComponent::render(tui::Canvas& canvas)
             bgColors[static_cast<std::size_t>(c)] = multiStopGradient(_config.auroraBackground, t);
         }
     }
-    /// @brief Returns the aurora background color at the given absolute column,
-    /// or falls back to the flat theme background.
-    auto const bgAt = [&](int col) -> tui::RgbColor {
+    // Returns the aurora bg color at the given column, or the flat bg (nullopt when transparent).
+    auto const bgAt = [&](int col) -> std::optional<tui::RgbColor> {
         auto const idx = col - HorizontalMargin;
         if (!bgColors.empty() && idx >= 0 && std::cmp_less(idx, bgColors.size()))
             return bgColors[static_cast<std::size_t>(idx)];
-        return pc.background;
+        if (concreteBg)
+            return *concreteBg;
+        return std::nullopt;
     };
 
     // Create styles
     auto const dimChrome = !_terminalFocused; // Dim decorative elements when terminal unfocused
 
     tui::Style bgStyle;
-    bgStyle.bg = pc.background;
+    if (concreteBg)
+        bgStyle.bg = *concreteBg;
 
     tui::Style leftBarStyle;
-    leftBarStyle.fg = pc.separator;
-    leftBarStyle.bg = pc.background;
+    leftBarStyle.fg = resolved.separator.solid();
+    if (concreteBg)
+        leftBarStyle.bg = *concreteBg;
     leftBarStyle.dim = dimChrome;
 
     tui::Style promptStyle;
-    promptStyle.fg = pc.badgeText;
-    promptStyle.bg = pc.background;
+    promptStyle.fg = resolved.badgeText.solid();
+    if (concreteBg)
+        promptStyle.bg = *concreteBg;
     promptStyle.dim = dimChrome;
 
     tui::Style ghostStyle;
-    ghostStyle.fg = pc.badgeText;
-    ghostStyle.bg = pc.background;
+    ghostStyle.fg = resolved.badgeText.solid();
+    if (concreteBg)
+        ghostStyle.bg = *concreteBg;
     ghostStyle.dim = true;
+
+    // Helper: apply optional background to a style
+    auto const applyBg = [](tui::Style& style, std::optional<tui::RgbColor> const& bg) {
+        if (bg)
+            style.bg = *bg;
+    };
 
     // Calculate padding, aurora, and chrome height
     auto const topPad = topPadding();
@@ -357,7 +401,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                 canvas.put(infoLineRow, HorizontalMargin + c, " ", cellStyle);
             }
         }
-        else
+        else if (concreteBg)
         {
             canvas.fill(
                 tui::Rect { .x = HorizontalMargin, .y = infoLineRow, .width = contentWidth, .height = 1 },
@@ -370,24 +414,24 @@ void PromptComponent::render(tui::Canvas& canvas)
         // Info line separator
         if (_config.separator == SeparatorStyle::Bar)
         {
-            leftBarStyle.bg = bgAt(col);
+            applyBg(leftBarStyle, bgAt(col));
             col += canvas.putString(infoLineRow, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
             tui::Style spStyle;
-            spStyle.bg = bgAt(col);
+            applyBg(spStyle, bgAt(col));
             canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
             tui::Style sepStyle;
-            sepStyle.fg = pc.separator;
-            sepStyle.bg = bgAt(col);
+            sepStyle.fg = resolved.separator.solid();
+            applyBg(sepStyle, bgAt(col));
             sepStyle.dim = dimChrome;
             col += canvas.putString(infoLineRow, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
-            sepStyle.bg = bgAt(col);
+            applyBg(sepStyle, bgAt(col));
             col += canvas.putString(infoLineRow, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
             tui::Style spStyle;
-            spStyle.bg = bgAt(col);
+            applyBg(spStyle, bgAt(col));
             canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
         }
@@ -401,22 +445,22 @@ void PromptComponent::render(tui::Canvas& canvas)
                 {
                     // Dim │ pipe separator between module groups
                     tui::Style spStyle;
-                    spStyle.bg = bgAt(col);
+                    applyBg(spStyle, bgAt(col));
                     canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                     tui::Style dimPipeStyle;
-                    dimPipeStyle.fg = pc.separator;
-                    dimPipeStyle.bg = bgAt(col);
+                    dimPipeStyle.fg = resolved.separator.solid();
+                    applyBg(dimPipeStyle, bgAt(col));
                     dimPipeStyle.dim = true;
                     col += canvas.putString(infoLineRow, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
-                    spStyle.bg = bgAt(col);
+                    applyBg(spStyle, bgAt(col));
                     canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                 }
                 else
                 {
                     tui::Style spStyle;
-                    spStyle.bg = bgAt(col);
+                    applyBg(spStyle, bgAt(col));
                     canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                 }
@@ -424,7 +468,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             for (auto const& seg: infoModules[i])
             {
                 auto segStyle = seg.style;
-                segStyle.bg = bgAt(col);
+                applyBg(segStyle, bgAt(col));
                 col += canvas.putString(infoLineRow, col, seg.text, segStyle);
             }
         }
@@ -450,14 +494,14 @@ void PromptComponent::render(tui::Canvas& canvas)
                     if (i > 0)
                     {
                         tui::Style spStyle;
-                        spStyle.bg = bgAt(rightCol);
+                        applyBg(spStyle, bgAt(rightCol));
                         canvas.put(infoLineRow, rightCol, " ", spStyle);
                         ++rightCol;
                     }
                     for (auto const& seg: rightModules[i])
                     {
                         auto segStyle = seg.style;
-                        segStyle.bg = bgAt(rightCol);
+                        applyBg(segStyle, bgAt(rightCol));
                         rightCol += canvas.putString(infoLineRow, rightCol, seg.text, segStyle);
                     }
                 }
@@ -519,7 +563,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                 canvas.put(row, HorizontalMargin + c, " ", cellStyle);
             }
         }
-        else
+        else if (concreteBg)
         {
             canvas.fill(tui::Rect { .x = HorizontalMargin, .y = row, .width = contentWidth, .height = 1 },
                         ' ',
@@ -529,19 +573,20 @@ void PromptComponent::render(tui::Canvas& canvas)
         // Draw separator on input lines
         if (_config.separator == SeparatorStyle::Bar)
         {
-            leftBarStyle.bg = bgAt(HorizontalMargin);
-            canvas.put(row, HorizontalMargin, "\xe2\x96\x8e", leftBarStyle); // U+258E
+            auto barStyle = leftBarStyle;
+            applyBg(barStyle, bgAt(HorizontalMargin));
+            canvas.put(row, HorizontalMargin, "\xe2\x96\x8e", barStyle); // U+258E
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
             tui::Style sepStyle;
-            sepStyle.fg = pc.separator;
-            sepStyle.bg = bgAt(HorizontalMargin);
+            sepStyle.fg = resolved.separator.solid();
+            applyBg(sepStyle, bgAt(HorizontalMargin));
             sepStyle.dim = dimChrome;
             if (lineIndex == 0)
             {
                 canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
-                sepStyle.bg = bgAt(HorizontalMargin + 1);
+                applyBg(sepStyle, bgAt(HorizontalMargin + 1));
                 canvas.putString(row, HorizontalMargin + 1, "\xe2\x94\x80", sepStyle); // U+2500 ─
             }
             else
@@ -550,7 +595,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         else if (_config.separator == SeparatorStyle::None)
         {
             tui::Style spStyle;
-            spStyle.bg = bgAt(HorizontalMargin);
+            applyBg(spStyle, bgAt(HorizontalMargin));
             canvas.put(row, HorizontalMargin, " ", spStyle);
         }
 
@@ -558,7 +603,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         {
             auto const padCol = HorizontalMargin + leftBarWidth();
             tui::Style padStyle;
-            padStyle.bg = bgAt(padCol);
+            applyBg(padStyle, bgAt(padCol));
             canvas.put(row, padCol, " ", padStyle);
         }
     }
@@ -586,7 +631,8 @@ void PromptComponent::render(tui::Canvas& canvas)
     _decorator.highlightMap = &_highlightCacheMap;
     _decorator.errorMap = &_errorMap;
     _decorator.bgColors = bgColors.empty() ? nullptr : &bgColors;
-    _decorator.flatBg = pc.background;
+    _decorator.flatBg = concreteBg ? *concreteBg : tui::RgbColor {};
+    _decorator.transparentBg = !concreteBg && !hasAurora;
     _decorator.bgOffset = fieldOriginCol - HorizontalMargin; // Map field col 0 to aurora col offset
     _decorator.theme = &theme;
     _inputField.setTextDecorator(&_decorator);
@@ -684,6 +730,9 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Mark bottom padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < botPad; ++i)
         canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
+
+    // Null out the dangling pointer to the stack-local resolved colors.
+    _context.resolvedColors = nullptr;
 }
 
 tui::Size PromptComponent::preferredSize() const

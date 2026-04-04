@@ -348,6 +348,7 @@ class PromptComponent: public tui::Component
         std::vector<bool> const* errorMap = nullptr;              ///< Per-grapheme error flags.
         std::vector<tui::RgbColor> const* bgColors = nullptr;     ///< Aurora gradient (per display col).
         tui::RgbColor flatBg {};                                  ///< Fallback background color.
+        bool transparentBg = false;                               ///< True when background is transparent.
         int bgOffset = 0;                                         ///< Column offset into bgColors.
         tui::Theme const* theme = nullptr;
 

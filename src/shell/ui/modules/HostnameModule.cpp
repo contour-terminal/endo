@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HostnameModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -14,7 +15,9 @@ bool HostnameModule::shouldShow(PromptContext const& ctx) const
 PromptSegments HostnameModule::evaluate(PromptContext const& ctx) const
 {
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->hostname.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.hostname;
     style.bold = true;
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "BatteryModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -70,14 +71,23 @@ PromptSegments BatteryModule::evaluate(PromptContext const& ctx) const
         icon = "\xe2\x9a\xa1"; // U+26A1 lightning bolt
 
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
     {
         if (info.percentage <= 20)
-            style.fg = ctx.theme->promptColors.exitCode; // Red for low battery
+            style.fg = ctx.resolvedColors->exitCode.solid(); // Red for low battery
         else if (info.percentage <= 50)
-            style.fg = ctx.theme->promptColors.duration; // Orange for medium
+            style.fg = ctx.resolvedColors->duration.solid(); // Orange for medium
         else
-            style.fg = ctx.theme->promptColors.gitClean; // Green for high
+            style.fg = ctx.resolvedColors->gitClean.solid(); // Green for high
+    }
+    else if (ctx.theme)
+    {
+        if (info.percentage <= 20)
+            style.fg = ctx.theme->promptColors.exitCode;
+        else if (info.percentage <= 50)
+            style.fg = ctx.theme->promptColors.duration;
+        else
+            style.fg = ctx.theme->promptColors.gitClean;
     }
 
     return { PromptSegment { .text = std::string(icon) + " " + std::to_string(info.percentage) + "%",
