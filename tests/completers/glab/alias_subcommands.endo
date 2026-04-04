@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: alias subcommands
+# source-file: data/completers/glab.endo
+# expect: delete
+# expect: list
+# expect: set
+# expect:
+
+let _ = glab_complete ["alias"] "" |> each println

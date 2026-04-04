@@ -609,12 +609,18 @@ void TestRuntime::dummyCallProcPiped(CoreVM::Params& params)
 
 void TestRuntime::builtinPrint(CoreVM::Params& params)
 {
-    capturedOutput += params.getString(1);
+    auto rawVal = static_cast<uint64_t>(params.getInt(1));
+    capturedOutput += builtins::valueToString(rawVal, params.caller());
 }
 
 void TestRuntime::builtinPrintln(CoreVM::Params& params)
 {
-    capturedOutput += params.getString(1);
+    // Use runtime value-to-string dispatch to handle all types safely.
+    // When `each println` iterates lists from match expressions with mixed return types
+    // (CompletionEntry vs String), the Number-typed values may be string or object pointers
+    // that N2S converts incorrectly. valueToString() handles all cases.
+    auto rawVal = static_cast<uint64_t>(params.getInt(1));
+    capturedOutput += builtins::valueToString(rawVal, params.caller());
     capturedOutput += '\n';
 }
 
@@ -1017,6 +1023,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
         if (!targetProgram)
             return std::unexpected(TestError::CodeGenerationFailed);
 
+        builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+
         // Link
         if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
             return std::unexpected(TestError::LinkFailed);
@@ -1091,6 +1099,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts,
         auto targetProgram = codegen.generate(ir.get());
         if (!targetProgram)
             return std::unexpected(TestError::CodeGenerationFailed);
+
+        builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
 
         // Link
         if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))

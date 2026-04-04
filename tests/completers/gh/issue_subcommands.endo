@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: issue subcommands
+# source-file: data/completers/gh.endo
+# expect: close
+# expect: comment
+# expect: create
+# expect: delete
+# expect: develop
+# expect: edit
+# expect: list
+# expect: lock
+# expect: pin
+# expect: reopen
+# expect: status
+# expect: transfer
+# expect: unpin
+# expect: unlock
+# expect: view
+# expect:
+
+let _ = gh_complete ["issue"] "" |> each println

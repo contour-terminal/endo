@@ -1,8 +1,23 @@
 let cmake_complete args prefix =
     let options = [
-        "--preset"; "--list-presets"; "--build"; "--install"; "-S"; "-B"; "-G"; "-D"; "--parallel";
-        "-j"; "--target"; "-t"; "--config"; "--clean-first"; "--verbose"; "-v"; "--version";
-        "--help"
+        Completion.described "--preset" "Use a configure preset";
+        Completion.described "--list-presets" "List available presets";
+        Completion.described "--build" "Build a project";
+        Completion.described "--install" "Install a project";
+        Completion.described "-S" "Source directory";
+        Completion.described "-B" "Build directory";
+        Completion.described "-G" "Generator name";
+        Completion.described "-D" "Define a variable";
+        Completion.described "--parallel" "Parallel build jobs";
+        Completion.described "-j" "Parallel build jobs";
+        Completion.described "--target" "Build target";
+        Completion.described "-t" "Build target";
+        Completion.described "--config" "Build configuration";
+        Completion.described "--clean-first" "Clean before building";
+        Completion.described "--verbose" "Enable verbose output";
+        Completion.described "-v" "Enable verbose output";
+        Completion.described "--version" "Show version";
+        Completion.described "--help" "Show help"
     ]
     let generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
@@ -23,4 +38,4 @@ let cmake_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-register_completer "cmake" cmake_complete
+Completion.register "cmake" cmake_complete

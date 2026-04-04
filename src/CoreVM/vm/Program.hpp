@@ -148,6 +148,18 @@ class ConstantPool
 
     [[nodiscard]] const CoreString& getString(size_t id) const { return _strings[id]; }
 
+    /// @brief Returns the number of constant strings in the pool.
+    [[nodiscard]] size_t stringCount() const noexcept { return _strings.size(); }
+
+    /// @brief Checks if the given pointer points to a constant string in this pool.
+    [[nodiscard]] bool ownsString(CoreString const* ptr) const noexcept
+    {
+        for (auto const& s: _strings)
+            if (ptr == &s)
+                return true;
+        return false;
+    }
+
     [[nodiscard]] const util::IPAddress& getIPAddress(size_t id) const { return _ipaddrs[id]; }
 
     [[nodiscard]] const util::Cidr& getCidr(size_t id) const { return _cidrs[id]; }

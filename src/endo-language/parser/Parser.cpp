@@ -795,6 +795,42 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                              : savedRange;
                         return stmt;
                     }
+                    // Module-dot syntax at statement level: PascalCase identifier followed by
+                    // a dot-prefixed identifier (e.g., Completion .register in shell mode where
+                    // the lexer tokenizes "." + "register" as ".register").
+                    // Detect this pattern and re-parse in F# mode for proper module dispatch.
+                    {
+                        auto const& nextLit = _lexer.currentLiteral();
+                        if (!savedLiteral.empty()
+                            && std::isupper(static_cast<unsigned char>(savedLiteral[0]))
+                            && _lexer.currentToken() == Token::Identifier && !nextLit.empty()
+                            && nextLit[0] == '.')
+                        {
+                            auto memberName = nextLit.substr(1); // strip leading dot
+                            _lexer.nextToken();                  // consume ".member" token
+                            auto moduleIdent =
+                                std::make_unique<ast::IdentifierExpr>(std::string(savedLiteral));
+                            moduleIdent->location = savedRange;
+                            auto fieldAccess = std::make_unique<ast::FieldAccessExpr>(
+                                std::move(moduleIdent), std::move(memberName));
+                            fieldAccess->location = savedRange;
+                            // Parse remaining arguments in F# mode
+                            _lexer.enterFSharpExpr();
+                            std::unique_ptr<ast::Expr> expr = std::move(fieldAccess);
+                            while (isFSharpPrimary())
+                            {
+                                auto arg = parseFSharpPrimary();
+                                if (!arg)
+                                    break;
+                                auto app = std::make_unique<ast::ApplicationExpr>(
+                                    std::move(expr), std::move(arg));
+                                expr = std::move(app);
+                            }
+                            _lexer.leaveFSharpExpr();
+                            auto stmt = std::make_unique<ast::ExprStmt>(std::move(expr), false);
+                            return stmt;
+                        }
+                    }
                     // Not a mutable assignment — we consumed the identifier, need to push it back.
                     // Instead, we inject it as the command name and continue parsing.
                     // The identifier was consumed; fall through to command parsing by

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: cache subcommands
+# source-file: data/completers/gh.endo
+# expect: delete
+# expect: list
+# expect:
+
+let _ = gh_complete ["cache"] "" |> each println

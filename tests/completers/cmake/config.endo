@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CMake completer: config options
+# source-file: data/completers/cmake.endo
+# expect: Debug
+# expect: Release
+# expect: RelWithDebInfo
+# expect: MinSizeRel
+# expect:
+
+let _ = cmake_complete ["--config"] "" |> each println

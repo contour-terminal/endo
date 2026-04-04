@@ -1,16 +1,55 @@
 let flatpak_complete args prefix =
     let subcommands = [
-        "run"; "install"; "uninstall"; "update"; "list"; "info"; "search"; "override"; "remotes";
-        "remote-add"; "remote-delete"; "remote-modify"; "remote-ls"; "remote-info"; "config";
-        "repair"; "history"; "ps"; "kill"; "enter"; "mask"; "pin"; "make-current"; "create-usb";
-        "repo"; "documents"; "document-export"; "document-unexport"; "document-info";
-        "permission-reset"; "permission-remove"; "permission-set"; "permission-show"
+        Completion.described "run" "Run an application";
+        Completion.described "install" "Install an application";
+        Completion.described "uninstall" "Uninstall an application";
+        Completion.described "update" "Update applications";
+        Completion.described "list" "List installed apps";
+        Completion.described "info" "Show app info";
+        Completion.described "search" "Search for apps";
+        Completion.described "override" "Override app permissions";
+        Completion.described "remotes" "List remotes";
+        Completion.described "remote-add" "Add a remote";
+        Completion.described "remote-delete" "Delete a remote";
+        Completion.described "remote-modify" "Modify a remote";
+        Completion.described "remote-ls" "List remote refs";
+        Completion.described "remote-info" "Show remote ref info";
+        Completion.described "config" "Manage configuration";
+        Completion.described "repair" "Repair installation";
+        Completion.described "history" "Show history";
+        Completion.described "ps" "List running instances";
+        Completion.described "kill" "Kill a running instance";
+        Completion.described "enter" "Enter a running instance";
+        Completion.described "mask" "Mask updates"; Completion.described "pin" "Pin a runtime";
+        Completion.described "make-current" "Set default version";
+        Completion.described "create-usb" "Copy refs to USB";
+        Completion.described "repo" "Show repo info";
+        Completion.described "documents" "List exported documents";
+        Completion.described "document-export" "Export a document";
+        Completion.described "document-unexport" "Unexport a document";
+        Completion.described "document-info" "Show document info";
+        Completion.described "permission-reset" "Reset permissions";
+        Completion.described "permission-remove" "Remove permissions";
+        Completion.described "permission-set" "Set permissions";
+        Completion.described "permission-show" "Show permissions"
     ]
     let options = [
-        "--user"; "--system"; "--installation"; "--verbose"; "-v"; "--help"; "-h"; "--version"
+        Completion.described "--user" "User installation";
+        Completion.described "--system" "System installation";
+        Completion.described "--installation" "Named installation";
+        Completion.described "--verbose" "Verbose output";
+        Completion.described "-v" "Verbose output"; Completion.described "--help" "Show help";
+        Completion.described "-h" "Show help"; Completion.described "--version" "Show version"
     ]
     let run_options = [
-        "--branch"; "--arch"; "--command"; "--runtime"; "--user"; "--system"; "--verbose"; "-v"
+        Completion.described "--branch" "Branch to use";
+        Completion.described "--arch" "Architecture";
+        Completion.described "--command" "Command to run";
+        Completion.described "--runtime" "Runtime to use";
+        Completion.described "--user" "User installation";
+        Completion.described "--system" "System installation";
+        Completion.described "--verbose" "Verbose output";
+        Completion.described "-v" "Verbose output"
     ]
     match args with
     | [] when startsWith "-" prefix -> options
@@ -27,4 +66,4 @@ let flatpak_complete args prefix =
         |> filter (_ != "")
     | _ -> []
 
-register_completer "flatpak" flatpak_complete
+Completion.register "flatpak" flatpak_complete

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: release subcommands
+# source-file: data/completers/gh.endo
+# expect: create
+# expect: delete
+# expect: delete-asset
+# expect: download
+# expect: edit
+# expect: list
+# expect: upload
+# expect: view
+# expect:
+
+let _ = gh_complete ["release"] "" |> each println

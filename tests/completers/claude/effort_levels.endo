@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: effort level completions
+# source-file: data/completers/claude.endo
+# expect: low
+# expect: medium
+# expect: high
+# expect: auto
+# expect:
+
+let _ = claude_complete ["--effort"] "" |> each println

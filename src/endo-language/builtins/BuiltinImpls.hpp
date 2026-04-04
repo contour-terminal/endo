@@ -383,6 +383,23 @@ void processSignal(CoreVM::Params& args);
 void refWriteBarrier(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Completion module constructors
+// ---------------------------------------------------------------------------
+
+/// completion_entry(text) -> CompletionEntry: Creates a plain completion entry.
+void completionEntry(CoreVM::Params& args);
+
+/// completion_text(entry) -> string: Extracts the text from a CompletionEntry.
+void completionText(CoreVM::Params& args);
+
+/// completion_described(text, description) -> CompletionEntry: Creates a completion with description.
+void completionDescribed(CoreVM::Params& args);
+
+/// completion_detailed(text, description, detail) -> CompletionEntry: Creates a completion with
+/// description and markdown detail.
+void completionDetailed(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

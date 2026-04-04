@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: snippet subcommands
+# source-file: data/completers/glab.endo
+# expect: create
+# expect: delete
+# expect: list
+# expect: view
+# expect:
+
+let _ = glab_complete ["snippet"] "" |> each println

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: subcommands with no args
+# source-file: data/completers/claude.endo
+# expect: mcp
+# expect: auth
+# expect: doctor
+# expect: install
+# expect: plugin
+# expect: setup-token
+# expect: update
+# expect:
+
+let _ = claude_complete [] "" |> each println

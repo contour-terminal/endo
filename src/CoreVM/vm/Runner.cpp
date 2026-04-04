@@ -367,7 +367,17 @@ bool Runner::isKnownString(uint64_t rawValue) const noexcept
         return false;
 
     auto const* ptr = reinterpret_cast<CoreString const*>(static_cast<uintptr_t>(rawValue));
-    return _knownStrings.contains(ptr);
+
+    // Check runtime-allocated strings (from newString())
+    if (_knownStrings.contains(ptr))
+        return true;
+
+    // Check constant pool strings (from IR ConstantString values).
+    // These are stored in Program::_strings and not in the Runner's _knownStrings set.
+    if (_program)
+        return _program->constants().ownsString(ptr);
+
+    return false;
 }
 
 void Runner::releaseAndFree(TypedObject* obj)

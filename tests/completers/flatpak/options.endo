@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Flatpak completer: global option completion
+# source-file: data/completers/flatpak.endo
+# expect: --user
+# expect: --system
+# expect: --installation
+# expect: --verbose
+# expect: -v
+# expect: --help
+# expect: -h
+# expect: --version
+# expect:
+
+let _ = flatpak_complete [] "-" |> each println

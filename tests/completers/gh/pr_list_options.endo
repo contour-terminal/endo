@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: pr list options
+# source-file: data/completers/gh.endo
+# expect: --state
+# expect: --label
+# expect: --assignee
+# expect: --author
+# expect: --base
+# expect: --head
+# expect: --limit
+# expect: --search
+# expect: --draft
+# expect: --json
+# expect: --web
+# expect:
+
+let _ = gh_complete ["pr"; "list"] "-" |> each println

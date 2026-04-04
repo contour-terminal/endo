@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CTest completer: config via --build-config
+# source-file: data/completers/ctest.endo
+# expect: Debug
+# expect: Release
+# expect: RelWithDebInfo
+# expect: MinSizeRel
+# expect:
+
+let _ = ctest_complete ["--build-config"] "" |> each println

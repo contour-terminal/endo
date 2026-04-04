@@ -205,6 +205,17 @@ std::string formatRef(CoreVM::TypedObject const& obj, CoreVM::Runner* runner)
     return "ref " + slotValueToString(obj.getSlot(0), innerType, runner);
 }
 
+std::string formatCompletionEntry(CoreVM::TypedObject const& obj, [[maybe_unused]] CoreVM::Runner* runner)
+{
+    // When printed, a CompletionEntry displays only its text field (slot 0).
+    // The description (slot 1) and detail (slot 2) are structural metadata
+    // accessed by the completion bridge (__collect_completions).
+    auto const slot0 = obj.getSlot(0);
+    if (slot0 == 0)
+        return {};
+    return *reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slot0));
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -212,7 +223,7 @@ std::string formatRef(CoreVM::TypedObject const& obj, CoreVM::Runner* runner)
 void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
 {
     // Compile-time check: update this when adding new builtin type IDs
-    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 22,
+    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 23,
                   "New BuiltinTypeId added — update registerBuiltinFormatters() with a formatter");
 
     // Helper to set formatFn on a builtin type descriptor
@@ -244,6 +255,7 @@ void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
     setFormatter(CoreVM::BuiltinTypeId::Json, formatProduct);
     setFormatter(CoreVM::BuiltinTypeId::Process, formatProduct);
     setFormatter(CoreVM::BuiltinTypeId::Ref, formatRef);
+    setFormatter(CoreVM::BuiltinTypeId::CompletionEntry, formatCompletionEntry);
 
     // Runtime assertion: all builtins 1..LastBuiltin must have a formatter
     for (uint16_t id = 1; id <= CoreVM::BuiltinTypeId::LastBuiltin; ++id)

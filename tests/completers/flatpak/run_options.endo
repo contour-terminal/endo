@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Flatpak completer: run subcommand option completion
+# source-file: data/completers/flatpak.endo
+# expect: --branch
+# expect: --arch
+# expect: --command
+# expect: --runtime
+# expect: --user
+# expect: --system
+# expect: --verbose
+# expect: -v
+# expect:
+
+let _ = flatpak_complete ["run"] "-" |> each println

@@ -7,6 +7,15 @@
 namespace endo
 {
 
+namespace
+{
+    /// Checks if a pattern is a wildcard (no binding, no constraint).
+    [[nodiscard]] bool isWildcard(pattern::Pattern const* pat) noexcept
+    {
+        return dynamic_cast<pattern::WildcardPattern const*>(pat) != nullptr;
+    }
+} // namespace
+
 PatternIRGenerator::PatternIRGenerator(CoreVM::IRBuilder& builder): _builder(builder)
 {
 }
@@ -329,13 +338,21 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
     auto* savedStorage = _scrutineeStorage;
     auto* finalSuccess = _successBlock;
 
+    // Use a private alloca for tail traversal so we don't corrupt the shared scrutinee
+    // storage when this arm fails and control falls through to subsequent arms.
+    CoreVM::AllocaInstr* traversalStorage = savedStorage;
+    if (pat.elements.size() > 1)
+    {
+        traversalStorage = createAllocaInEntryBlock(currentScrutinee->type(), "list.pat.traversal");
+        _builder.createStore(traversalStorage, currentScrutinee, "list.pat.traversal.init");
+    }
+
     for (size_t i = 0; i < pat.elements.size(); ++i)
     {
         bool isLast = (i + 1 == pat.elements.size());
 
-        // Check that current scrutinee is Cons (tag == 1)
-        auto* scrutineeVal =
-            (i > 0 && savedStorage) ? _builder.createLoad(savedStorage, "list.pat.reload") : currentScrutinee;
+        auto* scrutineeVal = (i > 0) ? _builder.createLoad(traversalStorage, "list.pat.reload")
+                                      : currentScrutinee;
 
         auto* tag = _builder.createObjGetTag(scrutineeVal, "list.pat.tag." + std::to_string(i));
         auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "list.pat.isCons");
@@ -344,36 +361,35 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         _builder.createCondBr(isCons, consBlock, _failureBlock);
         _builder.setInsertPoint(consBlock);
 
-        // Reload scrutinee and extract head (slot 0)
-        auto* reloaded = _builder.createLoad(savedStorage, "list.pat.head.reload." + std::to_string(i));
-        auto* headVal = _builder.createObjGetSlot(
-            reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
+        bool const elemIsWildcard = isWildcard(pat.elements[i].get());
 
-        // For the element sub-pattern: create success block that chains to next element or final check
-        CoreVM::BasicBlock* elemSuccess = nullptr;
-        if (isLast)
+        auto* elemSuccess = _builder.createBlock(
+            isLast ? "list.pat.tail.check" : "list.pat.next." + std::to_string(i + 1));
+
+        if (elemIsWildcard)
         {
-            // After last element, verify tail is Nil
-            elemSuccess = _builder.createBlock("list.pat.tail.check");
+            // Skip head extraction — dead ObjGetSlot values corrupt the VM stack.
+            _builder.createBr(elemSuccess);
         }
         else
         {
-            elemSuccess = _builder.createBlock("list.pat.next." + std::to_string(i + 1));
-        }
+            auto* reloaded =
+                _builder.createLoad(traversalStorage, "list.pat.head.reload." + std::to_string(i));
+            auto* headVal = _builder.createObjGetSlot(
+                reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
 
-        // Match head element with sub-pattern
-        _scrutinee = headVal;
-        _scrutineeStorage = nullptr;
-        _successBlock = elemSuccess;
-        pat.elements[i]->accept(*this);
+            _scrutinee = headVal;
+            _scrutineeStorage = nullptr;
+            _successBlock = elemSuccess;
+            pat.elements[i]->accept(*this);
+        }
 
         _builder.setInsertPoint(elemSuccess);
 
         if (isLast)
         {
-            // Check that tail is Nil (tag == 0)
             auto* tailReloaded =
-                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+                _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
             auto* tailVal = _builder.createObjGetSlot(
                 tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
             auto* tailTag = _builder.createObjGetTag(tailVal, "list.pat.tail.tag");
@@ -383,14 +399,12 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         }
         else
         {
-            // Move scrutinee to tail (slot 1) for next iteration
             auto* tailReloaded =
-                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+                _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
             auto* tailVal = _builder.createObjGetSlot(
                 tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
-
-            // Store tail as new scrutinee for the next iteration
-            _builder.createStore(savedStorage, tailVal, "list.pat.next.store");
+            // Store in private traversal storage (NOT the shared scrutinee storage)
+            _builder.createStore(traversalStorage, tailVal, "list.pat.next.store");
         }
     }
 
@@ -410,8 +424,8 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
         return;
     }
 
-    bool const headIsWildcard = dynamic_cast<pattern::WildcardPattern const*>(pat.head.get()) != nullptr;
-    bool const tailIsWildcard = dynamic_cast<pattern::WildcardPattern const*>(pat.tail.get()) != nullptr;
+    bool const headIsWildcard = isWildcard(pat.head.get());
+    bool const tailIsWildcard = isWildcard(pat.tail.get());
 
     // Check tag == 1 (Cons)
     auto* tag = _builder.createObjGetTag(_scrutinee, "cons.pat.tag");
@@ -712,7 +726,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
         {
             // Wildcard payload (Ok _, Error _, Some _): skip extraction to avoid
             // dead ObjGetSlot values on the stack that corrupt subsequent code.
-            if (dynamic_cast<pattern::WildcardPattern const*>(pat.payload->get()))
+            if (isWildcard(pat.payload->get()))
             {
                 _builder.createBr(_successBlock);
             }

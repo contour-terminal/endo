@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: SCP completer: option completion with dash prefix
+# session-separator: ---
+# source-file: data/completers/scp.endo
+# expect: -P
+# expect: -i
+# expect: -F
+# expect: -o
+# expect: -r
+# expect: -v
+# expect: -C
+# expect: -q
+# expect: -4
+# expect: -6
+# expect: -3
+# expect:
+
+let ssh_hosts _ = ["server1"; "server2"; "gateway"]
+
+# ---
+let _ = scp_complete [] "-" |> each println

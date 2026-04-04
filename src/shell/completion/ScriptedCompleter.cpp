@@ -49,8 +49,11 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
             // Reuse cached results with current prefix for fuzzy scoring
             std::vector<CompletionCandidate> candidates;
             candidates.reserve(it->second.results.size());
-            for (auto const& text: it->second.results)
-                candidates.push_back({ .text = text, .kind = CompletionKind::EnumValue });
+            for (auto const& entry: it->second.results)
+                candidates.push_back({ .text = entry.text,
+                                       .description = entry.description,
+                                       .detail = entry.detail,
+                                       .kind = CompletionKind::EnumValue });
             return applyFuzzyScoring(candidates, context.prefix, 60);
         }
     }
@@ -61,14 +64,18 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
     // Capture any errors for later display
     _lastErrors = std::move(result.errors);
 
-    // Cache the results
-    _cache[cacheKey] = CacheEntry { .results = result.completions, .timestamp = now };
+    // Cache the results (move completions into cache, then reference from there)
+    auto& cached = _cache[cacheKey];
+    cached = CacheEntry { .results = std::move(result.completions), .timestamp = now };
 
     // Convert to CompletionCandidates and apply fuzzy scoring
     std::vector<CompletionCandidate> candidates;
-    candidates.reserve(result.completions.size());
-    for (auto& text: result.completions)
-        candidates.push_back({ .text = std::move(text), .kind = CompletionKind::EnumValue });
+    candidates.reserve(cached.results.size());
+    for (auto const& entry: cached.results)
+        candidates.push_back({ .text = entry.text,
+                               .description = entry.description,
+                               .detail = entry.detail,
+                               .kind = CompletionKind::EnumValue });
 
     return applyFuzzyScoring(candidates, context.prefix, 60);
 }

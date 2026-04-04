@@ -1,10 +1,21 @@
 let ssh_complete args prefix =
     let ssh_options = [
-        "-p"; "-i"; "-l"; "-L"; "-R"; "-D"; "-J"; "-F"; "-o"; "-N"; "-T"; "-t"; "-v"; "-X"; "-A";
-        "-C"; "-q"; "-4"; "-6"
+        Completion.described "-p" "Port number"; Completion.described "-i" "Identity file";
+        Completion.described "-l" "Login name";
+        Completion.described "-L" "Local port forwarding";
+        Completion.described "-R" "Remote port forwarding";
+        Completion.described "-D" "Dynamic port forwarding";
+        Completion.described "-J" "Jump host"; Completion.described "-F" "Config file";
+        Completion.described "-o" "SSH option"; Completion.described "-N" "No remote command";
+        Completion.described "-T" "Disable pseudo-tty";
+        Completion.described "-t" "Force pseudo-tty"; Completion.described "-v" "Verbose mode";
+        Completion.described "-X" "Enable X11 forwarding";
+        Completion.described "-A" "Enable agent forwarding";
+        Completion.described "-C" "Enable compression"; Completion.described "-q" "Quiet mode";
+        Completion.described "-4" "Force IPv4"; Completion.described "-6" "Force IPv6"
     ]
     match args with
     | _ when startsWith "-" prefix -> ssh_options
     | _ -> ssh_hosts ()
 
-register_completer "ssh" ssh_complete
+Completion.register "ssh" ssh_complete

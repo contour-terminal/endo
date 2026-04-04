@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: top-level commands
+# source-file: data/completers/gh.endo
+# expect: auth
+# expect: browse
+# expect: codespace
+# expect: gist
+# expect: issue
+# expect: pr
+# expect: project
+# expect: release
+# expect: repo
+# expect: run
+# expect: workflow
+# expect: cache
+# expect: alias
+# expect: api
+# expect: config
+# expect: label
+# expect: search
+# expect: secret
+# expect: ssh-key
+# expect: status
+# expect: variable
+# expect: extension
+# expect: gpg-key
+# expect: completion
+# expect: attestation
+# expect: ruleset
+# expect: copilot
+# expect: org
+# expect:
+
+let _ = gh_complete [] "" |> each println

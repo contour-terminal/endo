@@ -1,51 +1,175 @@
 let glab_complete args prefix =
     let commands = [
-        "alias"; "api"; "auth"; "check-update"; "ci"; "completion"; "config"; "help"; "incident";
-        "issue"; "label"; "mr"; "release"; "repo"; "schedule"; "snippet"; "ssh-key"; "user";
-        "variable"; "version"
+        Completion.described "alias" "Manage aliases";
+        Completion.described "api" "Make API requests";
+        Completion.described "auth" "Authenticate with GitLab";
+        Completion.described "check-update" "Check for updates";
+        Completion.described "ci" "Manage CI/CD pipelines";
+        Completion.described "completion" "Generate shell completions";
+        Completion.described "config" "Manage configuration";
+        Completion.described "help" "Show help";
+        Completion.described "incident" "Manage incidents";
+        Completion.described "issue" "Manage issues";
+        Completion.described "label" "Manage labels";
+        Completion.described "mr" "Manage merge requests";
+        Completion.described "release" "Manage releases";
+        Completion.described "repo" "Manage repositories";
+        Completion.described "schedule" "Manage schedules";
+        Completion.described "snippet" "Manage snippets";
+        Completion.described "ssh-key" "Manage SSH keys";
+        Completion.described "user" "Manage users";
+        Completion.described "variable" "Manage variables";
+        Completion.described "version" "Show version"
     ]
-    let global_options = ["--help"; "--version"; "-R"; "--repo"]
+    let global_options = [
+        Completion.described "--help" "Show help";
+        Completion.described "--version" "Show version";
+        Completion.described "-R" "Select repository";
+        Completion.described "--repo" "Select repository"
+    ]
     let mr_subcommands = [
-        "approve"; "checkout"; "close"; "create"; "delete"; "diff"; "for"; "issues"; "list";
-        "merge"; "note"; "rebase"; "reopen"; "revoke"; "subscribe"; "todo"; "unsubscribe";
-        "update"; "view"
+        Completion.described "approve" "Approve an MR";
+        Completion.described "checkout" "Check out an MR";
+        Completion.described "close" "Close an MR";
+        Completion.described "create" "Create an MR";
+        Completion.described "delete" "Delete an MR";
+        Completion.described "diff" "View MR diff";
+        Completion.described "for" "Create MR for issue";
+        Completion.described "issues" "List MR issues"; Completion.described "list" "List MRs";
+        Completion.described "merge" "Merge an MR"; Completion.described "note" "Add a note";
+        Completion.described "rebase" "Rebase an MR";
+        Completion.described "reopen" "Reopen an MR";
+        Completion.described "revoke" "Revoke MR approval";
+        Completion.described "subscribe" "Subscribe to MR";
+        Completion.described "todo" "Add MR to todos";
+        Completion.described "unsubscribe" "Unsubscribe from MR";
+        Completion.described "update" "Update an MR"; Completion.described "view" "View an MR"
     ]
     let issue_subcommands = [
-        "board"; "close"; "create"; "delete"; "list"; "note"; "reopen"; "subscribe"; "unsubscribe";
-        "update"; "view"
+        Completion.described "board" "View issue board";
+        Completion.described "close" "Close an issue";
+        Completion.described "create" "Create an issue";
+        Completion.described "delete" "Delete an issue";
+        Completion.described "list" "List issues"; Completion.described "note" "Add a note";
+        Completion.described "reopen" "Reopen an issue";
+        Completion.described "subscribe" "Subscribe to issue";
+        Completion.described "unsubscribe" "Unsubscribe from issue";
+        Completion.described "update" "Update an issue";
+        Completion.described "view" "View an issue"
     ]
     let ci_subcommands = [
-        "artifact"; "delete"; "get"; "lint"; "list"; "retry"; "run"; "status"; "trace"; "trigger";
-        "view"
+        Completion.described "artifact" "Download artifacts";
+        Completion.described "delete" "Delete a pipeline";
+        Completion.described "get" "Get pipeline details";
+        Completion.described "lint" "Lint CI config";
+        Completion.described "list" "List pipelines";
+        Completion.described "retry" "Retry a pipeline";
+        Completion.described "run" "Run a pipeline";
+        Completion.described "status" "Show pipeline status";
+        Completion.described "trace" "Trace a job";
+        Completion.described "trigger" "Trigger a pipeline";
+        Completion.described "view" "View a pipeline"
     ]
     let repo_subcommands = [
-        "archive"; "clone"; "contributors"; "create"; "delete"; "fork"; "list"; "mirror"; "search";
-        "transfer"; "unarchive"; "view"
+        Completion.described "archive" "Archive a repo";
+        Completion.described "clone" "Clone a repo";
+        Completion.described "contributors" "List contributors";
+        Completion.described "create" "Create a repo";
+        Completion.described "delete" "Delete a repo";
+        Completion.described "fork" "Fork a repo"; Completion.described "list" "List repos";
+        Completion.described "mirror" "Mirror a repo";
+        Completion.described "search" "Search repos";
+        Completion.described "transfer" "Transfer a repo";
+        Completion.described "unarchive" "Unarchive a repo";
+        Completion.described "view" "View a repo"
     ]
-    let release_subcommands = ["create"; "delete"; "download"; "list"; "upload"; "view"]
-    let auth_subcommands = ["login"; "logout"; "status"]
-    let config_subcommands = ["get"; "set"]
-    let alias_subcommands = ["delete"; "list"; "set"]
-    let snippet_subcommands = ["create"; "delete"; "list"; "view"]
-    let variable_subcommands = ["delete"; "export"; "get"; "list"; "set"; "update"]
-    let schedule_subcommands = ["create"; "delete"; "list"; "run"]
-    let incident_subcommands = ["list"]
+    let release_subcommands = [
+        Completion.described "create" "Create a release";
+        Completion.described "delete" "Delete a release";
+        Completion.described "download" "Download release assets";
+        Completion.described "list" "List releases";
+        Completion.described "upload" "Upload release assets";
+        Completion.described "view" "View a release"
+    ]
+    let auth_subcommands = [
+        Completion.described "login" "Log in"; Completion.described "logout" "Log out";
+        Completion.described "status" "Show auth status"
+    ]
+    let config_subcommands = [
+        Completion.described "get" "Get a config value";
+        Completion.described "set" "Set a config value"
+    ]
+    let alias_subcommands = [
+        Completion.described "delete" "Delete an alias";
+        Completion.described "list" "List aliases"; Completion.described "set" "Set an alias"
+    ]
+    let snippet_subcommands = [
+        Completion.described "create" "Create a snippet";
+        Completion.described "delete" "Delete a snippet";
+        Completion.described "list" "List snippets";
+        Completion.described "view" "View a snippet"
+    ]
+    let variable_subcommands = [
+        Completion.described "delete" "Delete a variable";
+        Completion.described "export" "Export variables";
+        Completion.described "get" "Get a variable";
+        Completion.described "list" "List variables";
+        Completion.described "set" "Set a variable";
+        Completion.described "update" "Update a variable"
+    ]
+    let schedule_subcommands = [
+        Completion.described "create" "Create a schedule";
+        Completion.described "delete" "Delete a schedule";
+        Completion.described "list" "List schedules";
+        Completion.described "run" "Run a schedule"
+    ]
+    let incident_subcommands = [Completion.described "list" "List incidents"]
     let mr_create_options = [
-        "--title"; "--description"; "--source-branch"; "--target-branch"; "--label"; "--assignee";
-        "--reviewer"; "--milestone"; "--draft"; "--squash-before-merge"; "--remove-source-branch";
-        "--web"; "--fill"
+        Completion.described "--title" "MR title";
+        Completion.described "--description" "MR description";
+        Completion.described "--source-branch" "Source branch";
+        Completion.described "--target-branch" "Target branch";
+        Completion.described "--label" "Add label";
+        Completion.described "--assignee" "Assign user";
+        Completion.described "--reviewer" "Request reviewer";
+        Completion.described "--milestone" "Set milestone";
+        Completion.described "--draft" "Create as draft";
+        Completion.described "--squash-before-merge" "Squash commits";
+        Completion.described "--remove-source-branch" "Delete source branch";
+        Completion.described "--web" "Open in browser";
+        Completion.described "--fill" "Fill from commits"
     ]
     let mr_list_options = [
-        "--state"; "--label"; "--assignee"; "--author"; "--source-branch"; "--target-branch";
-        "--milestone"; "--draft"; "--per-page"; "--page"
+        Completion.described "--state" "Filter by state";
+        Completion.described "--label" "Filter by label";
+        Completion.described "--assignee" "Filter by assignee";
+        Completion.described "--author" "Filter by author";
+        Completion.described "--source-branch" "Filter by source branch";
+        Completion.described "--target-branch" "Filter by target branch";
+        Completion.described "--milestone" "Filter by milestone";
+        Completion.described "--draft" "Filter drafts";
+        Completion.described "--per-page" "Results per page";
+        Completion.described "--page" "Page number"
     ]
     let issue_create_options = [
-        "--title"; "--description"; "--label"; "--assignee"; "--milestone"; "--confidential";
-        "--web"; "--weight"
+        Completion.described "--title" "Issue title";
+        Completion.described "--description" "Issue description";
+        Completion.described "--label" "Add label";
+        Completion.described "--assignee" "Assign user";
+        Completion.described "--milestone" "Set milestone";
+        Completion.described "--confidential" "Mark confidential";
+        Completion.described "--web" "Open in browser";
+        Completion.described "--weight" "Set weight"
     ]
     let issue_list_options = [
-        "--state"; "--label"; "--assignee"; "--author"; "--milestone"; "--confidential";
-        "--per-page"; "--page"
+        Completion.described "--state" "Filter by state";
+        Completion.described "--label" "Filter by label";
+        Completion.described "--assignee" "Filter by assignee";
+        Completion.described "--author" "Filter by author";
+        Completion.described "--milestone" "Filter by milestone";
+        Completion.described "--confidential" "Filter confidential";
+        Completion.described "--per-page" "Results per page";
+        Completion.described "--page" "Page number"
     ]
     let resolve_alias cmd =
         match cmd with
@@ -82,4 +206,4 @@ let glab_complete args prefix =
     | _ when startsWith "-" prefix -> global_options
     | _ -> []
 
-register_completer "glab" glab_complete
+Completion.register "glab" glab_complete

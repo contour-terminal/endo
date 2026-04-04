@@ -1,0 +1,20 @@
+let is_file_option_last args =
+    match last args with
+    | Some "-i" -> true
+    | Some "-F" -> true
+    | Some "-t" -> true
+    | _ -> false
+
+let ssh_copy_id_complete args prefix =
+    let options = [
+        Completion.described "-F" "Config file"; Completion.described "-f" "Force mode";
+        Completion.described "-h" "Show help"; Completion.described "-i" "Identity file";
+        Completion.described "-n" "Dry run"; Completion.described "-o" "SSH option";
+        Completion.described "-p" "Port number"; Completion.described "-s" "Use sftp";
+        Completion.described "-t" "Key type"; Completion.described "-x" "Extra options"
+    ]
+    match args with
+    | _ when is_file_option_last args -> []
+    | _ -> options @ (ssh_hosts ())
+
+Completion.register "ssh-copy-id" ssh_copy_id_complete

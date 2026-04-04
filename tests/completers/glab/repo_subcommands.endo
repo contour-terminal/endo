@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: repo subcommands
+# source-file: data/completers/glab.endo
+# expect: archive
+# expect: clone
+# expect: contributors
+# expect: create
+# expect: delete
+# expect: fork
+# expect: list
+# expect: mirror
+# expect: search
+# expect: transfer
+# expect: unarchive
+# expect: view
+# expect:
+
+let _ = glab_complete ["repo"] "" |> each println

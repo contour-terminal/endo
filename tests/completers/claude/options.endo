@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: options with dash prefix
+# source-file: data/completers/claude.endo
+# expect: --help
+# expect: -h
+# expect: --version
+# expect: --verbose
+# expect: -v
+# expect: --debug
+# expect: --model
+# expect: --fallback-model
+# expect: --permission-mode
+# expect: --resume
+# expect: -r
+# expect: --continue
+# expect: -c
+# expect: --print
+# expect: -p
+# expect: --output-format
+# expect: --input-format
+# expect: --max-turns
+# expect: --system-prompt
+# expect: --append-system-prompt
+# expect: --allowedTools
+# expect: --disallowedTools
+# expect: --mcp-config
+# expect: --no-cache
+# expect: --no-profile
+# expect: --profile
+# expect: --effort
+# expect: --yes
+# expect: -y
+# expect:
+
+let _ = claude_complete [] "-" |> each println

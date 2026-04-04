@@ -21,6 +21,13 @@ namespace
         return sv;
     }
 
+    /// Strips a single trailing newline from a string, if present.
+    void stripTrailingNewline(std::string& s) noexcept
+    {
+        if (!s.empty() && s.back() == '\n')
+            s.pop_back();
+    }
+
     /// Attempts to parse a directive value from a comment line.
     /// Returns the value if the line matches "# key: value", std::nullopt otherwise.
     [[nodiscard]] std::optional<std::string_view> parseDirective(std::string_view line,
@@ -75,8 +82,7 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
             if (inAuxFile && !currentAuxFileName.empty())
             {
                 auto content = currentAuxContent.str();
-                if (!content.empty() && content.back() == '\n')
-                    content.pop_back();
+                stripTrailingNewline(content);
                 result.auxiliaryFiles.emplace_back(std::move(currentAuxFileName), std::move(content));
                 currentAuxContent.str("");
                 currentAuxContent.clear();
@@ -93,8 +99,7 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
             if (inAuxFile && !currentAuxFileName.empty())
             {
                 auto content = currentAuxContent.str();
-                if (!content.empty() && content.back() == '\n')
-                    content.pop_back();
+                stripTrailingNewline(content);
                 result.auxiliaryFiles.emplace_back(std::move(currentAuxFileName), std::move(content));
                 currentAuxContent.str("");
                 currentAuxContent.clear();
@@ -207,6 +212,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.modulePaths.emplace_back(*val);
                 continue;
             }
+            if (auto val = parseDirective(line, "source-file"))
+            {
+                result.sourceFiles.emplace_back(*val);
+                continue;
+            }
 
             // Unknown directive or plain comment — skip
             continue;
@@ -228,8 +238,7 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
     result.source = sourceStream.str();
 
     // Remove trailing newline if present
-    if (!result.source.empty() && result.source.back() == '\n')
-        result.source.pop_back();
+    stripTrailingNewline(result.source);
 
     // Split source into session prompts if session-separator was specified
     if (result.isSessionTest && !sessionSeparator.empty())
@@ -244,8 +253,7 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
             if (trim(sourceLine) == separatorLine)
             {
                 auto prompt = currentPrompt.str();
-                if (!prompt.empty() && prompt.back() == '\n')
-                    prompt.pop_back();
+                stripTrailingNewline(prompt);
                 if (!prompt.empty())
                     result.sessionPrompts.push_back(std::move(prompt));
                 currentPrompt.str("");
@@ -259,10 +267,52 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
 
         // Add the last prompt
         auto lastPrompt = currentPrompt.str();
-        if (!lastPrompt.empty() && lastPrompt.back() == '\n')
-            lastPrompt.pop_back();
+        stripTrailingNewline(lastPrompt);
         if (!lastPrompt.empty())
             result.sessionPrompts.push_back(std::move(lastPrompt));
+    }
+
+    // Load external source files and inject as session prompts
+    if (!result.sourceFiles.empty())
+    {
+        std::vector<std::string> sourceFileContents;
+        for (auto const& sourcePath: result.sourceFiles)
+        {
+#ifdef ENDO_SOURCE_DIR
+            auto fullPath = std::filesystem::path(ENDO_SOURCE_DIR) / sourcePath;
+#else
+            auto fullPath = std::filesystem::path(sourcePath);
+#endif
+            std::ifstream srcFile(fullPath);
+            if (!srcFile.is_open())
+                return std::nullopt; // Source file not found — treat as parse failure
+            auto content = std::string(std::istreambuf_iterator<char>(srcFile), {});
+            stripTrailingNewline(content);
+            sourceFileContents.push_back(std::move(content));
+        }
+
+        if (!sourceFileContents.empty())
+        {
+            if (result.isSessionTest && !result.sessionPrompts.empty())
+            {
+                // Insert source files AFTER any manual prompts that precede the test call,
+                // but BEFORE the last prompt (the test invocation).
+                auto lastPrompt = std::move(result.sessionPrompts.back());
+                result.sessionPrompts.pop_back();
+                for (auto& content: sourceFileContents)
+                    result.sessionPrompts.push_back(std::move(content));
+                result.sessionPrompts.push_back(std::move(lastPrompt));
+            }
+            else
+            {
+                // No session separator — create implicit session: [sourceFiles..., testSource]
+                result.isSessionTest = true;
+                result.sessionPrompts.clear();
+                for (auto& content: sourceFileContents)
+                    result.sessionPrompts.push_back(std::move(content));
+                result.sessionPrompts.push_back(result.source);
+            }
+        }
     }
 
     return result;

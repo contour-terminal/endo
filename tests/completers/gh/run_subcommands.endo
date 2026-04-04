@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: run subcommands
+# source-file: data/completers/gh.endo
+# expect: cancel
+# expect: delete
+# expect: download
+# expect: list
+# expect: rerun
+# expect: view
+# expect: watch
+# expect:
+
+let _ = gh_complete ["run"] "" |> each println

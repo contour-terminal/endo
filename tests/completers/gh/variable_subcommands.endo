@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: variable subcommands
+# source-file: data/completers/gh.endo
+# expect: delete
+# expect: get
+# expect: list
+# expect: set
+# expect:
+
+let _ = gh_complete ["variable"] "" |> each println

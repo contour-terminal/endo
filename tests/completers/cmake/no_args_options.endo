@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: CMake completer: option completion with no prior args
+# source-file: data/completers/cmake.endo
+# expect: --preset
+# expect: --list-presets
+# expect: --build
+# expect: --install
+# expect: -S
+# expect: -B
+# expect: -G
+# expect: -D
+# expect: --parallel
+# expect: -j
+# expect: --target
+# expect: -t
+# expect: --config
+# expect: --clean-first
+# expect: --verbose
+# expect: -v
+# expect: --version
+# expect: --help
+# expect:
+
+let _ = cmake_complete [] "-" |> each println

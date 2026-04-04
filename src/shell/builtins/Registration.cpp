@@ -13,6 +13,9 @@
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 
+#include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypedObject.hpp>
+
 #include <agent/auth/OAuthFlow.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/WebSearchTool.hpp>
@@ -1450,14 +1453,68 @@ void Shell::registerMcpBuiltins()
 void Shell::registerCompleterBuiltins()
 {
     // clang-format off
+    auto completerRegisterCallback = [this](CoreVM::Params& args) {
+        auto command = std::string(args.getString(1));
+        auto functionName = std::string(args.getString(2));
+        _completerFunctions.registerFunction(std::move(command), std::move(functionName));
+    };
+
+    // Completion.register dispatches to this (new canonical name)
+    _runtime.registerFunction("completer_register")
+        .param<CoreVM::CoreString>("command")
+        .param<CoreVM::CoreString>("function_name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(completerRegisterCallback);
+
+    // Backward compatibility alias
     _runtime.registerFunction("register_completer")
         .param<CoreVM::CoreString>("command")
         .param<CoreVM::CoreString>("function_name")
         .returnType(CoreVM::LiteralType::Void)
+        .bind(completerRegisterCallback);
+
+    // Bridge function: walks a list and collects completions into _collectedCompletions.
+    // Handles both List<String> (backward compat) and List<CompletionEntry> (new).
+    _runtime.registerFunction("__collect_completions")
+        .param(CoreVM::LiteralType::Number, "list")
+        .returnType(CoreVM::LiteralType::Void)
         .bind([this](CoreVM::Params& args) {
-            auto command = std::string(args.getString(1));
-            auto functionName = std::string(args.getString(2));
-            _completerFunctions.registerFunction(std::move(command), std::move(functionName));
+            _collectedCompletions.clear();
+            auto const rawList = static_cast<uint64_t>(args.getInt(1));
+            auto* runner = args.caller();
+            if (!runner->isKnownObject(rawList))
+                return;
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawList));
+            while (list && list->type->id == CoreVM::BuiltinTypeId::List && list->tag == 1)
+            {
+                auto const head = list->getSlot(0);
+                if (runner->isKnownString(head))
+                {
+                    auto const* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(head));
+                    _collectedCompletions.push_back({ .text = *str });
+                }
+                else if (runner->isKnownObject(head))
+                {
+                    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(head));
+                    if (obj->type->id == CoreVM::BuiltinTypeId::CompletionEntry)
+                    {
+                        auto const* text = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+                        CollectedCompletion entry { .text = *text };
+                        if (obj->tag >= 1)
+                        {
+                            auto const* desc = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(1)));
+                            entry.description = *desc;
+                        }
+                        if (obj->tag >= 2)
+                        {
+                            auto const* detail = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(2)));
+                            entry.detail = *detail;
+                        }
+                        _collectedCompletions.push_back(std::move(entry));
+                    }
+                }
+                list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(list->getSlot(1)));
+            }
         });
     // clang-format on
 }

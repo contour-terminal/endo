@@ -1,53 +1,206 @@
 let gh_complete args prefix =
     let commands = [
-        "auth"; "browse"; "codespace"; "gist"; "issue"; "pr"; "project"; "release"; "repo"; "run";
-        "workflow"; "cache"; "alias"; "api"; "config"; "label"; "search"; "secret"; "ssh-key";
-        "status"; "variable"; "extension"; "gpg-key"; "completion"; "attestation"; "ruleset";
-        "copilot"; "org"
+        Completion.described "auth" "Authenticate with GitHub";
+        Completion.described "browse" "Open repo in browser";
+        Completion.described "codespace" "Manage codespaces";
+        Completion.described "gist" "Manage gists";
+        Completion.described "issue" "Manage issues";
+        Completion.described "pr" "Manage pull requests";
+        Completion.described "project" "Manage projects";
+        Completion.described "release" "Manage releases";
+        Completion.described "repo" "Manage repositories";
+        Completion.described "run" "Manage workflow runs";
+        Completion.described "workflow" "Manage workflows";
+        Completion.described "cache" "Manage caches";
+        Completion.described "alias" "Manage aliases";
+        Completion.described "api" "Make API requests";
+        Completion.described "config" "Manage configuration";
+        Completion.described "label" "Manage labels";
+        Completion.described "search" "Search GitHub";
+        Completion.described "secret" "Manage secrets";
+        Completion.described "ssh-key" "Manage SSH keys";
+        Completion.described "status" "Show status";
+        Completion.described "variable" "Manage variables";
+        Completion.described "extension" "Manage extensions";
+        Completion.described "gpg-key" "Manage GPG keys";
+        Completion.described "completion" "Generate shell completions";
+        Completion.described "attestation" "Manage attestations";
+        Completion.described "ruleset" "Manage rulesets";
+        Completion.described "copilot" "Use GitHub Copilot";
+        Completion.described "org" "Manage organizations"
     ]
-    let global_options = ["--help"; "--version"; "-R"; "--repo"]
+    let global_options = [
+        Completion.described "--help" "Show help";
+        Completion.described "--version" "Show version";
+        Completion.described "-R" "Select repository";
+        Completion.described "--repo" "Select repository"
+    ]
     let pr_subcommands = [
-        "checkout"; "checks"; "close"; "comment"; "create"; "diff"; "edit"; "list"; "merge";
-        "ready"; "reopen"; "review"; "status"; "view"
+        Completion.described "checkout" "Check out a PR";
+        Completion.described "checks" "Show PR checks";
+        Completion.described "close" "Close a PR";
+        Completion.described "comment" "Comment on a PR";
+        Completion.described "create" "Create a PR";
+        Completion.described "diff" "View PR diff"; Completion.described "edit" "Edit a PR";
+        Completion.described "list" "List PRs"; Completion.described "merge" "Merge a PR";
+        Completion.described "ready" "Mark PR as ready";
+        Completion.described "reopen" "Reopen a PR";
+        Completion.described "review" "Review a PR";
+        Completion.described "status" "Show PR status"; Completion.described "view" "View a PR"
     ]
     let issue_subcommands = [
-        "close"; "comment"; "create"; "delete"; "develop"; "edit"; "list"; "lock"; "pin"; "reopen";
-        "status"; "transfer"; "unpin"; "unlock"; "view"
+        Completion.described "close" "Close an issue";
+        Completion.described "comment" "Comment on an issue";
+        Completion.described "create" "Create an issue";
+        Completion.described "delete" "Delete an issue";
+        Completion.described "develop" "Develop an issue";
+        Completion.described "edit" "Edit an issue"; Completion.described "list" "List issues";
+        Completion.described "lock" "Lock an issue"; Completion.described "pin" "Pin an issue";
+        Completion.described "reopen" "Reopen an issue";
+        Completion.described "status" "Show issue status";
+        Completion.described "transfer" "Transfer an issue";
+        Completion.described "unpin" "Unpin an issue";
+        Completion.described "unlock" "Unlock an issue";
+        Completion.described "view" "View an issue"
     ]
     let repo_subcommands = [
-        "archive"; "clone"; "create"; "delete"; "deploy-key"; "edit"; "fork"; "list"; "rename";
-        "set-default"; "sync"; "unarchive"; "view"
+        Completion.described "archive" "Archive a repo";
+        Completion.described "clone" "Clone a repo";
+        Completion.described "create" "Create a repo";
+        Completion.described "delete" "Delete a repo";
+        Completion.described "deploy-key" "Manage deploy keys";
+        Completion.described "edit" "Edit a repo"; Completion.described "fork" "Fork a repo";
+        Completion.described "list" "List repos";
+        Completion.described "rename" "Rename a repo";
+        Completion.described "set-default" "Set default repo";
+        Completion.described "sync" "Sync a repo";
+        Completion.described "unarchive" "Unarchive a repo";
+        Completion.described "view" "View a repo"
     ]
     let release_subcommands = [
-        "create"; "delete"; "delete-asset"; "download"; "edit"; "list"; "upload"; "view"
+        Completion.described "create" "Create a release";
+        Completion.described "delete" "Delete a release";
+        Completion.described "delete-asset" "Delete a release asset";
+        Completion.described "download" "Download release assets";
+        Completion.described "edit" "Edit a release";
+        Completion.described "list" "List releases";
+        Completion.described "upload" "Upload release assets";
+        Completion.described "view" "View a release"
     ]
-    let workflow_subcommands = ["disable"; "enable"; "list"; "run"; "view"]
-    let run_subcommands = ["cancel"; "delete"; "download"; "list"; "rerun"; "view"; "watch"]
-    let gist_subcommands = ["clone"; "create"; "delete"; "edit"; "list"; "rename"; "view"]
+    let workflow_subcommands = [
+        Completion.described "disable" "Disable a workflow";
+        Completion.described "enable" "Enable a workflow";
+        Completion.described "list" "List workflows";
+        Completion.described "run" "Run a workflow";
+        Completion.described "view" "View a workflow"
+    ]
+    let run_subcommands = [
+        Completion.described "cancel" "Cancel a run";
+        Completion.described "delete" "Delete a run";
+        Completion.described "download" "Download run artifacts";
+        Completion.described "list" "List runs"; Completion.described "rerun" "Rerun a run";
+        Completion.described "view" "View a run"; Completion.described "watch" "Watch a run"
+    ]
+    let gist_subcommands = [
+        Completion.described "clone" "Clone a gist";
+        Completion.described "create" "Create a gist";
+        Completion.described "delete" "Delete a gist";
+        Completion.described "edit" "Edit a gist"; Completion.described "list" "List gists";
+        Completion.described "rename" "Rename a gist";
+        Completion.described "view" "View a gist"
+    ]
     let codespace_subcommands = [
-        "code"; "cp"; "create"; "delete"; "edit"; "jupyter"; "list"; "logs"; "ports"; "rebuild";
-        "ssh"; "stop"; "view"
+        Completion.described "code" "Open in VS Code"; Completion.described "cp" "Copy files";
+        Completion.described "create" "Create a codespace";
+        Completion.described "delete" "Delete a codespace";
+        Completion.described "edit" "Edit a codespace";
+        Completion.described "jupyter" "Open in Jupyter";
+        Completion.described "list" "List codespaces";
+        Completion.described "logs" "View codespace logs";
+        Completion.described "ports" "Manage ports";
+        Completion.described "rebuild" "Rebuild a codespace";
+        Completion.described "ssh" "SSH into a codespace";
+        Completion.described "stop" "Stop a codespace";
+        Completion.described "view" "View a codespace"
     ]
-    let auth_subcommands = ["login"; "logout"; "refresh"; "setup-git"; "status"; "switch"; "token"]
-    let config_subcommands = ["get"; "list"; "set"; "clear-cache"]
-    let search_subcommands = ["code"; "commits"; "issues"; "prs"; "repos"]
-    let cache_subcommands = ["delete"; "list"]
-    let secret_subcommands = ["delete"; "list"; "set"]
-    let variable_subcommands = ["delete"; "get"; "list"; "set"]
+    let auth_subcommands = [
+        Completion.described "login" "Log in"; Completion.described "logout" "Log out";
+        Completion.described "refresh" "Refresh credentials";
+        Completion.described "setup-git" "Configure git";
+        Completion.described "status" "Show auth status";
+        Completion.described "switch" "Switch account";
+        Completion.described "token" "Print auth token"
+    ]
+    let config_subcommands = [
+        Completion.described "get" "Get a config value";
+        Completion.described "list" "List config values";
+        Completion.described "set" "Set a config value";
+        Completion.described "clear-cache" "Clear cache"
+    ]
+    let search_subcommands = [
+        Completion.described "code" "Search code";
+        Completion.described "commits" "Search commits";
+        Completion.described "issues" "Search issues"; Completion.described "prs" "Search PRs";
+        Completion.described "repos" "Search repos"
+    ]
+    let cache_subcommands = [
+        Completion.described "delete" "Delete a cache";
+        Completion.described "list" "List caches"
+    ]
+    let secret_subcommands = [
+        Completion.described "delete" "Delete a secret";
+        Completion.described "list" "List secrets"; Completion.described "set" "Set a secret"
+    ]
+    let variable_subcommands = [
+        Completion.described "delete" "Delete a variable";
+        Completion.described "get" "Get a variable";
+        Completion.described "list" "List variables";
+        Completion.described "set" "Set a variable"
+    ]
     let pr_create_options = [
-        "--title"; "--body"; "--base"; "--head"; "--draft"; "--fill"; "--label"; "--assignee";
-        "--reviewer"; "--milestone"; "--project"; "--web"
+        Completion.described "--title" "PR title"; Completion.described "--body" "PR body";
+        Completion.described "--base" "Base branch";
+        Completion.described "--head" "Head branch";
+        Completion.described "--draft" "Create as draft";
+        Completion.described "--fill" "Fill from commits";
+        Completion.described "--label" "Add label";
+        Completion.described "--assignee" "Assign user";
+        Completion.described "--reviewer" "Request reviewer";
+        Completion.described "--milestone" "Set milestone";
+        Completion.described "--project" "Add to project";
+        Completion.described "--web" "Open in browser"
     ]
     let pr_list_options = [
-        "--state"; "--label"; "--assignee"; "--author"; "--base"; "--head"; "--limit"; "--search";
-        "--draft"; "--json"; "--web"
+        Completion.described "--state" "Filter by state";
+        Completion.described "--label" "Filter by label";
+        Completion.described "--assignee" "Filter by assignee";
+        Completion.described "--author" "Filter by author";
+        Completion.described "--base" "Filter by base branch";
+        Completion.described "--head" "Filter by head branch";
+        Completion.described "--limit" "Max results";
+        Completion.described "--search" "Search query";
+        Completion.described "--draft" "Filter drafts";
+        Completion.described "--json" "JSON output fields";
+        Completion.described "--web" "Open in browser"
     ]
     let issue_create_options = [
-        "--title"; "--body"; "--label"; "--assignee"; "--milestone"; "--project"; "--web"
+        Completion.described "--title" "Issue title";
+        Completion.described "--body" "Issue body"; Completion.described "--label" "Add label";
+        Completion.described "--assignee" "Assign user";
+        Completion.described "--milestone" "Set milestone";
+        Completion.described "--project" "Add to project";
+        Completion.described "--web" "Open in browser"
     ]
     let issue_list_options = [
-        "--state"; "--label"; "--assignee"; "--author"; "--milestone"; "--limit"; "--search";
-        "--json"; "--web"
+        Completion.described "--state" "Filter by state";
+        Completion.described "--label" "Filter by label";
+        Completion.described "--assignee" "Filter by assignee";
+        Completion.described "--author" "Filter by author";
+        Completion.described "--milestone" "Filter by milestone";
+        Completion.described "--limit" "Max results";
+        Completion.described "--search" "Search query";
+        Completion.described "--json" "JSON output fields";
+        Completion.described "--web" "Open in browser"
     ]
     match args with
     | [] when startsWith "-" prefix -> global_options
@@ -76,4 +229,4 @@ let gh_complete args prefix =
     | _ when startsWith "-" prefix -> global_options
     | _ -> []
 
-register_completer "gh" gh_complete
+Completion.register "gh" gh_complete

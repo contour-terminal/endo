@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: auth subcommands
+# source-file: data/completers/glab.endo
+# expect: login
+# expect: logout
+# expect: status
+# expect:
+
+let _ = glab_complete ["auth"] "" |> each println

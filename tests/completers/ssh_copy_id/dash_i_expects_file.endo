@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ssh-copy-id completer: -i expects file completion
+# session-separator: ---
+# source-file: data/completers/ssh-copy-id.endo
+# expect-exit: 0
+# expect:
+
+let ssh_hosts _ = ["server1"; "server2"; "gateway"]
+
+# ---
+let _ = ssh_copy_id_complete ["-i"] "" |> each println

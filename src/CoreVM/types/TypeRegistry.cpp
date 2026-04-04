@@ -372,6 +372,37 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(refType));
 
+    // CompletionEntry: Entry (tag=0) | Described (tag=1) | Detailed (tag=2)
+    // Used by scripted completers to attach descriptions/detail to completion candidates.
+    // Slots: 0=text, 1=description, 2=detail (all String, traced as fixed object slots).
+    auto completionEntryType = std::make_unique<TypeDescriptor>();
+    completionEntryType->kind = TypeKind::Sum;
+    completionEntryType->id = BuiltinTypeId::CompletionEntry;
+    completionEntryType->name = "Completion";
+    completionEntryType->slotCount = 3; // 3 payload slots (no type tag needed — all String)
+    completionEntryType->variants = {
+        { "Entry", 1 },    // tag 0: text only
+        { "Described", 2 }, // tag 1: text + description
+        { "Detailed", 3 },  // tag 2: text + description + detail
+    };
+    completionEntryType->moduleFunctions = {
+        { "register", "str -> str -> unit — register a completion function for a command" },
+        { "entry", "str -> Completion — plain text completion" },
+        { "described", "str -> str -> Completion — text with short description" },
+        { "detailed", "str -> str -> str -> Completion — text, description, and markdown detail" },
+        { "text", "Completion -> str — extract text from a completion entry" },
+    };
+    // SlotTraceInfo: all payload slots are string pointers (traced as fixed object slots).
+    // Entry uses only slot 0, Described uses 0-1, Detailed uses 0-2.
+    // Unused slots are zero-initialized and safe to trace (null is not a valid object).
+    completionEntryType->traceInfo.variantFixedSlots = {
+        { 0 },       // Entry: slot 0
+        { 0, 1 },    // Described: slots 0-1
+        { 0, 1, 2 }, // Detailed: slots 0-2
+    };
+    completionEntryType->traceInfo.variantDynamicSlots = { {}, {}, {} };
+    addType(std::move(completionEntryType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

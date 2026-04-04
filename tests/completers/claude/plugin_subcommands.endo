@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Claude completer: plugin subcommands
+# source-file: data/completers/claude.endo
+# expect: install
+# expect: list
+# expect: enable
+# expect: disable
+# expect: uninstall
+# expect: update
+# expect: info
+# expect:
+
+let _ = claude_complete ["plugin"] "" |> each println

@@ -1680,6 +1680,81 @@ void refWriteBarrier(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
+// Completion module constructors
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// Allocates a CompletionEntry object with the given tag and string slots.
+    CoreVM::TypedObject* makeCompletionEntry(CoreVM::Runner* runner,
+                                             uint8_t tag,
+                                             CoreVM::CoreString const* text,
+                                             CoreVM::CoreString const* desc = nullptr,
+                                             CoreVM::CoreString const* detail = nullptr)
+    {
+        auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::CompletionEntry);
+        obj->tag = tag;
+        obj->setSlot(0, reinterpret_cast<uint64_t>(text));
+        if (desc)
+            obj->setSlot(1, reinterpret_cast<uint64_t>(desc));
+        if (detail)
+            obj->setSlot(2, reinterpret_cast<uint64_t>(detail));
+        return obj;
+    }
+} // namespace
+
+void completionEntry(CoreVM::Params& args)
+{
+    auto* text = args.caller()->newString(args.getString(1));
+    auto* obj = makeCompletionEntry(args.caller(), 0, text);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void completionDescribed(CoreVM::Params& args)
+{
+    auto* text = args.caller()->newString(args.getString(1));
+    auto* desc = args.caller()->newString(args.getString(2));
+    auto* obj = makeCompletionEntry(args.caller(), 1, text, desc);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void completionText(CoreVM::Params& args)
+{
+    auto const rawVal = static_cast<uint64_t>(args.getInt(1));
+    auto* runner = args.caller();
+
+    // If it's a string, return it as-is
+    if (runner->isKnownString(rawVal))
+    {
+        args.setResult(reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal)));
+        return;
+    }
+
+    // If it's a CompletionEntry object, extract the text slot
+    if (runner->isKnownObject(rawVal))
+    {
+        auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawVal));
+        if (obj->type->id == CoreVM::BuiltinTypeId::CompletionEntry)
+        {
+            args.setResult(
+                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0))));
+            return;
+        }
+    }
+
+    args.setResult(runner->newString(""));
+}
+
+void completionDetailed(CoreVM::Params& args)
+{
+    auto* text = args.caller()->newString(args.getString(1));
+    auto* desc = args.caller()->newString(args.getString(2));
+    auto* detail = args.caller()->newString(args.getString(3));
+    auto* obj = makeCompletionEntry(args.caller(), 2, text, desc, detail);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver — delegates to StdlibDescriptors table
 // ---------------------------------------------------------------------------
 

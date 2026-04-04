@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GH completer: repo subcommands
+# source-file: data/completers/gh.endo
+# expect: archive
+# expect: clone
+# expect: create
+# expect: delete
+# expect: deploy-key
+# expect: edit
+# expect: fork
+# expect: list
+# expect: rename
+# expect: set-default
+# expect: sync
+# expect: unarchive
+# expect: view
+# expect:
+
+let _ = gh_complete ["repo"] "" |> each println

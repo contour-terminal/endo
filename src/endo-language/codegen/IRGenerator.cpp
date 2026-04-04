@@ -3319,6 +3319,12 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
             if (*innerType == CoreVM::LiteralType::Float)
                 return _builder.createF2S(value, std::string(label) + ".f2s");
         }
+        // Fallback: use object_to_string for runtime dispatch. This handles Number values
+        // that are actually typed object pointers (e.g., CompletionEntry) or string pointers
+        // (from match expression type mismatch). valueToString() safely handles all types.
+        if (auto* callback = findCallback("object_to_string(I)S"))
+            return _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".n2s.rt");
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::Float)
@@ -3461,22 +3467,14 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                     _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
             }
         }
-        // Check for record types
-        if (objTypeId)
+        // Typed objects (tuples, options, results, records, CompletionEntry, etc.)
+        // dispatch to object_to_string for runtime formatting via formatFn.
+        if (objTypeId && *objTypeId != CoreVM::BuiltinTypeId::List)
         {
-            for (auto const& [name, info]: _sema.types().records())
-            {
-                if (info.typeId == *objTypeId)
-                {
-                    auto* callback = findCallback("object_to_string(I)S");
-                    if (callback)
-                    {
-                        return _builder.createCallFunction(
-                            _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".rec2s");
-                    }
-                    break;
-                }
-            }
+            auto* callback = findCallback("object_to_string(I)S");
+            if (callback)
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".obj2s");
         }
         // Fallback for unannotated Void values: use N2S (number-to-string) which is safe
         // for raw numbers extracted from ObjGetSlot. The previous object_to_string fallback
@@ -7073,6 +7071,62 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 }
             }
 
+            // Completion module dispatch
+            if (modIdent->name == "Completion")
+            {
+                if (method == "register" && argExprs.size() == 2)
+                {
+                    auto* cmdArg = codegen(argExprs[0]);
+                    auto* funcArg = codegen(argExprs[1]);
+                    if (cmdArg && funcArg && tryGenerateNativeCall("completer_register", { cmdArg, funcArg }))
+                        return;
+                }
+                else if (method == "entry" && argExprs.size() == 1)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    if (textArg && tryGenerateNativeCall("completion_entry", { textArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "described" && argExprs.size() == 2)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    auto* descArg = codegen(argExprs[1]);
+                    if (textArg && descArg
+                        && tryGenerateNativeCall("completion_described", { textArg, descArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "detailed" && argExprs.size() == 3)
+                {
+                    auto* textArg = codegen(argExprs[0]);
+                    auto* descArg = codegen(argExprs[1]);
+                    auto* detailArg = codegen(argExprs[2]);
+                    if (textArg && descArg && detailArg
+                        && tryGenerateNativeCall("completion_detailed", { textArg, descArg, detailArg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::CompletionEntry);
+                        return;
+                    }
+                }
+                else if (method == "text" && argExprs.size() == 1)
+                {
+                    auto* entryArg = codegen(argExprs[0]);
+                    if (entryArg && tryGenerateNativeCall("completion_text", { entryArg }))
+                        return;
+                }
+                else
+                {
+                    reportTypeError("Completion.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
+                }
+            }
+
             // User-defined module function call: Module.func args
             if (auto modIt = _loadedModules.find(modIdent->name); modIt != _loadedModules.end())
             {
@@ -8633,6 +8687,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
     // Annotate list element literal type if all elements share the same type
     if (auto commonType = determineCommonLiteralType(elemValues))
         annotateListElementLiteralType(_result, *commonType);
+
+    // Propagate element objectTypeId (e.g., CompletionEntry) so HOFs can dispatch correctly
+    if (auto elemObjTypeId = getObjectTypeId(elemValues[0]))
+        annotateListElementTypeId(_result, *elemObjTypeId);
 }
 
 void IRGenerator::visit(ast::ConsExpr const& node)
@@ -10460,6 +10518,21 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 }
             }
             reportTypeError("Process has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "Completion")
+        {
+            static constexpr std::string_view completionMethods[] = { "register", "entry", "described",
+                                                                      "detailed", "text" };
+            for (auto const& m: completionMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    reportTypeError("Completion.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
+            }
+            reportTypeError("Completion has no member '{}'", std::string_view(node.fieldName));
             return;
         }
 

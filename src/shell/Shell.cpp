@@ -1057,8 +1057,10 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
                                                          std::vector<std::string> const& args,
                                                          std::string_view prefix)
 {
-    // Build the expression: funcName [arg1; arg2; ...] "prefix" |> each println
-    std::string expr;
+    // Build the expression: __collect_completions (funcName [args] "prefix")
+    // Uses direct function application instead of pipeline because the |> handler
+    // only resolves F# user functions, not native Runtime functions.
+    std::string expr = "__collect_completions (";
     expr += funcName;
     expr += " [";
     for (size_t i = 0; i < args.size(); ++i)
@@ -1066,7 +1068,6 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
         if (i > 0)
             expr += "; ";
         expr += '"';
-        // Escape quotes in args
         for (auto c: args[i])
         {
             if (c == '"')
@@ -1088,16 +1089,10 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
         else
             expr += c;
     }
-    expr += "\" |> each println";
+    expr += "\")";
 
-    // Capture stdout via pipe
-    auto pipeResult = createPipe();
-    if (!pipeResult.has_value())
-        return {};
-
-    auto& pipe = pipeResult.value();
-    auto const savedStdout = _currentPipelineBuilder.defaultStdoutFd;
-    _currentPipelineBuilder.defaultStdoutFd = pipe->writer();
+    // Clear collection buffer
+    _collectedCompletions.clear();
 
     // Use buffering report to capture errors instead of writing to stderr
     BufferingConsoleReport bufferingReport;
@@ -1110,34 +1105,9 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
-    _currentPipelineBuilder.defaultStdoutFd = savedStdout;
-    pipe->closeWriter();
-
-    // Read captured output
-    std::string output;
-    char buf[4096];
-    while (true)
-    {
-        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
-        if (n <= 0)
-            break;
-        output.append(buf, static_cast<size_t>(n));
-    }
-    pipe->closeReader();
-
-    // Split by newlines
+    // Collect results from the bridge function
     CompleterExecutionResult result;
-    size_t pos = 0;
-    while (pos < output.size())
-    {
-        auto const nl = output.find('\n', pos);
-        auto line = (nl == std::string::npos) ? output.substr(pos) : output.substr(pos, nl - pos);
-        if (!line.empty())
-            result.completions.push_back(std::move(line));
-        if (nl == std::string::npos)
-            break;
-        pos = nl + 1;
-    }
+    result.completions = std::move(_collectedCompletions);
 
     // Capture any compilation/link errors
     if (bufferingReport.hasMessages())

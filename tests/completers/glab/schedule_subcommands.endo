@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: schedule subcommands
+# source-file: data/completers/glab.endo
+# expect: create
+# expect: delete
+# expect: list
+# expect: run
+# expect:
+
+let _ = glab_complete ["schedule"] "" |> each println

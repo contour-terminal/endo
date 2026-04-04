@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: GLab completer: fallback options for deep unknown context
+# source-file: data/completers/glab.endo
+# expect: --help
+# expect: --version
+# expect: -R
+# expect: --repo
+# expect:
+
+let _ = glab_complete ["mr"; "create"; "x"] "-" |> each println

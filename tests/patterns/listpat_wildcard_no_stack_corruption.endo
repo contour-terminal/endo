@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ListPattern wildcard element does not corrupt subsequent arms
+# expect: specific
+# expect:
+
+let f args prefix =
+    let c = ["z"]
+    let mcp_sub = ["specific"]
+    match args with
+    | [_; "--model"] -> c
+    | [_] when startsWith "-" prefix -> c
+    | ["mcp"] -> mcp_sub
+    | _ -> []
+
+f ["mcp"] "" |> each println

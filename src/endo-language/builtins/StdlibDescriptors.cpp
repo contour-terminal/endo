@@ -52,6 +52,11 @@ static constexpr ParamDescriptor fetchTwoParams[] = { { .name="url", .type=LT::S
 static constexpr ParamDescriptor jsonQueryParams[] = { { .name="path", .type=LT::String }, { .name="json", .type=LT::String } };
 static constexpr ParamDescriptor registerCompleterParams[] = { { .name="command", .type=LT::String }, { .name="function_name", .type=LT::String } };
 
+// Completion module params
+static constexpr ParamDescriptor completionEntryParams[] = { { .name="text", .type=LT::String } };
+static constexpr ParamDescriptor completionDescribedParams[] = { { .name="text", .type=LT::String }, { .name="description", .type=LT::String } };
+static constexpr ParamDescriptor completionDetailedParams[] = { { .name="text", .type=LT::String }, { .name="description", .type=LT::String }, { .name="detail", .type=LT::String } };
+
 // File I/O params
 static constexpr ParamDescriptor fileOpenParams[] = { { .name="path", .type=LT::String }, { .name="mode", .type=LT::String } };
 static constexpr ParamDescriptor fdNumberParam[] = { { .name="fd", .type=LT::Number } };
@@ -301,12 +306,10 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="fetch", .vmName="fetch", .returnType=LT::Number, .params=urlStringParam, .sharedImpl=nullptr,
         .description="fetch url -> result<string, string>",
         .detail="**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
-    StdlibDescriptor { .userFacingName="register_completer", .vmName="", .returnType=LT::Void, .params=registerCompleterParams, .sharedImpl=nullptr,
-        .description="register_completer command function_name -> unit",
-        .detail="**register_completer** `command function_name -> unit`\n\n"
-                "Registers a custom tab-completion function for a shell command.\n\n"
-                "```endo\nlet complete_myapp args prefix =\n  [\"build\"; \"test\"; \"run\"]\n\n"
-                "register_completer \"myapp\" complete_myapp\n```" },
+    // register_completer — kept for backward compatibility but no longer user-facing
+    // (use Completion.register instead)
+    StdlibDescriptor { .userFacingName="", .vmName="", .returnType=LT::Void, .params=registerCompleterParams, .sharedImpl=nullptr,
+        .description="", .detail="" },
 
     // -----------------------------------------------------------------------
     // Internal-only entries (no user-facing name)
@@ -321,6 +324,14 @@ static const std::array descriptors = {
 
     // display_result — Shell/REPL only
     StdlibDescriptor { .userFacingName="", .vmName="display_result", .returnType=LT::Void, .params=valueNumberParam, .sharedImpl=nullptr, .description="", .detail="" },
+
+    // Completion module constructors (accessed via Completion.entry/described/detailed)
+    StdlibDescriptor { .userFacingName="", .vmName="completer_register", .returnType=LT::Void, .params=registerCompleterParams,
+        .sharedImpl=[](CoreVM::Params&){}, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="completion_entry", .returnType=LT::Number, .params=completionEntryParams, .sharedImpl=&builtins::completionEntry, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="completion_described", .returnType=LT::Number, .params=completionDescribedParams, .sharedImpl=&builtins::completionDescribed, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="completion_detailed", .returnType=LT::Number, .params=completionDetailedParams, .sharedImpl=&builtins::completionDetailed, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="completion_text", .returnType=LT::String, .params=objNumberParam, .sharedImpl=&builtins::completionText, .description="", .detail="" },
 
     // Multi-arity overloads
     StdlibDescriptor { .userFacingName="", .vmName="format_number", .returnType=LT::String, .params=formatNumberOneParams, .sharedImpl=&builtins::formatNumberWithLocale, .description="", .detail="" },

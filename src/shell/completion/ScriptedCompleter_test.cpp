@@ -35,6 +35,12 @@ bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string_vi
     return std::ranges::any_of(items, [text](auto const& item) { return item.text == text; });
 }
 
+/// @brief Helper to create a CollectedCompletion from a plain string.
+endo::CollectedCompletion cc(std::string text)
+{
+    return { .text = std::move(text) };
+}
+
 /// @brief Mock execution callback returning predetermined completions.
 auto createMockCallback() -> endo::CompleterExecutionCallback
 {
@@ -44,16 +50,16 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
         if (funcName == "flatpak_complete")
         {
             if (args.empty())
-                return { .completions = { "run", "install", "uninstall", "update", "list", "info", "search" },
+                return { .completions = { cc("run"), cc("install"), cc("uninstall"), cc("update"),
+                                          cc("list"), cc("info"), cc("search") },
                          .errors = {} };
             if (args.size() == 1 && args[0] == "run")
-                return { .completions = { "com.visualstudio.code",
-                                          "org.mozilla.firefox",
-                                          "org.gnome.Calculator",
-                                          "io.github.sxyazi.yazi" },
+                return { .completions = { cc("com.visualstudio.code"), cc("org.mozilla.firefox"),
+                                          cc("org.gnome.Calculator"), cc("io.github.sxyazi.yazi") },
                          .errors = {} };
             if (args.size() == 1 && args[0] == "--")
-                return { .completions = { "--user", "--system", "--verbose", "-v" }, .errors = {} };
+                return { .completions = { cc("--user"), cc("--system"), cc("--verbose"), cc("-v") },
+                         .errors = {} };
         }
         return {};
     };
@@ -180,7 +186,7 @@ TEST_CASE("ScriptedCompleter.cache_reuse")
                                          std::vector<std::string> const& /*args*/,
                                          std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
-        return { .completions = { "run", "install", "update" }, .errors = {} };
+        return { .completions = { cc("run"), cc("install"), cc("update") }, .errors = {} };
     };
 
     endo::CompleterFunctionRegistry registry;
@@ -213,7 +219,7 @@ TEST_CASE("ScriptedCompleter.args_extraction")
                                std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
         capturedArgs = args;
-        return { .completions = { "result" }, .errors = {} };
+        return { .completions = { cc("result") }, .errors = {} };
     };
 
     endo::CompleterFunctionRegistry registry;
