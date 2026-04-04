@@ -17,6 +17,7 @@ using crispy::escape;
 
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/completion/LetBindingCompleter.hpp>
+#include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/TableFormatter.hpp>
 
@@ -4788,4 +4789,139 @@ TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
     CHECK(shell.env.get("ENDO_TEST_NEW").value_or("") == "new_value");
 
     std::filesystem::remove(scriptPath);
+}
+
+// ============================================================================
+// Scripted Completer Integration Tests
+// ============================================================================
+
+namespace
+{
+
+/// @brief Checks if any completion in the result has the given text.
+bool hasResult(std::vector<endo::CollectedCompletion> const& completions, std::string_view text)
+{
+    return std::ranges::any_of(completions, [text](auto const& c) { return c.text == text; });
+}
+
+/// @brief Registers a test completer that returns subcommands or options based on prefix.
+void registerTestCompleter(TestShell& ts)
+{
+    ts(R"(
+        let test_complete args prefix =
+            match args with
+            | [] when startsWith "-" prefix -> ["--help"; "--version"; "--verbose"]
+            | [] -> ["run"; "install"; "update"]
+            | _ -> []
+
+        Completion.register "testcmd" test_complete
+    )");
+}
+
+} // namespace
+
+TEST_CASE("shell.completion.executeCompleterFunction_subcommands")
+{
+    TestShell ts;
+    registerTestCompleter(ts);
+    CHECK(ts.exitCode == 0);
+
+    auto result = ts.shell.executeCompleterFunction("test_complete", {}, "");
+    REQUIRE_FALSE(result.completions.empty());
+    CHECK(hasResult(result.completions, "run"));
+    CHECK(hasResult(result.completions, "install"));
+    CHECK(hasResult(result.completions, "update"));
+}
+
+TEST_CASE("shell.completion.executeCompleterFunction_options")
+{
+    TestShell ts;
+    registerTestCompleter(ts);
+    CHECK(ts.exitCode == 0);
+
+    auto result = ts.shell.executeCompleterFunction("test_complete", {}, "--");
+    REQUIRE_FALSE(result.completions.empty());
+    CHECK(hasResult(result.completions, "--help"));
+}
+
+TEST_CASE("shell.completion.Completion_register_populates_registry")
+{
+    TestShell ts;
+    ts(R"(
+        let my_complete args prefix = ["--help"]
+        Completion.register "mycmd" my_complete
+    )");
+    CHECK(ts.exitCode == 0);
+    CHECK(ts.shell.completerFunctions().hasCommand("mycmd"));
+}
+
+TEST_CASE("shell.completion.register_completer_populates_registry")
+{
+    TestShell ts;
+    ts(R"(
+        let my_complete args prefix = ["--help"]
+        register_completer "mycmd2" my_complete
+    )");
+    CHECK(ts.exitCode == 0);
+    CHECK(ts.shell.completerFunctions().hasCommand("mycmd2"));
+}
+
+TEST_CASE("shell.completion.executeCompleterFunction_separate_execute")
+{
+    TestShell ts;
+
+    // Define function in one execute call, invoke in a separate context
+    ts(R"(
+        let my_complete args prefix =
+            match args with
+            | [] -> [Completion.described "--help" "Show help"; Completion.described "--version" "Show version"]
+            | _ -> []
+    )");
+    CHECK(ts.exitCode == 0);
+
+    auto result = ts.shell.executeCompleterFunction("my_complete", {}, "");
+    CHECK_FALSE(result.completions.empty());
+}
+
+TEST_CASE("shell.completion.loadCompleters_populates_registry")
+{
+    TestShell ts;
+
+    ts.shell.completer =
+        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    ts.shell.loadCompleters();
+
+    auto const& registry = ts.shell.completerFunctions();
+    CHECK(registry.hasCommand("cmake"));
+    CHECK(registry.hasCommand("claude"));
+    CHECK(registry.hasCommand("ssh"));
+    CHECK(registry.hasCommand("gh"));
+    CHECK(registry.hasCommand("flatpak"));
+
+    // Verify the claude completer works through the full pipeline
+    auto claudeResult = ts.shell.executeCompleterFunction("claude_complete", {}, "");
+    REQUIRE_FALSE(claudeResult.completions.empty());
+    CHECK(hasResult(claudeResult.completions, "mcp"));
+    CHECK(hasResult(claudeResult.completions, "auth"));
+}
+
+TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
+{
+    TestShell ts;
+
+    ts(R"(
+        let test_complete args prefix =
+            [Completion.described "--help" "Show help"; Completion.described "--version" "Show version"]
+
+        Completion.register "testcmd" test_complete
+    )");
+    CHECK(ts.exitCode == 0);
+
+    auto result = ts.shell.executeCompleterFunction("test_complete", {}, "");
+    REQUIRE_FALSE(result.completions.empty());
+    CHECK(hasResult(result.completions, "--help"));
+
+    // Verify description is carried through the bridge
+    auto const it = std::ranges::find_if(result.completions, [](auto const& c) { return c.text == "--help"; });
+    CHECK(it->description == "Show help");
 }

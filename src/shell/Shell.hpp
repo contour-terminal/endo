@@ -137,6 +137,12 @@ class Shell final: public SignalCallback
     /// @brief Returns a mutable reference to the F# persistent state.
     [[nodiscard]] FSharpPersistentState& fsharpState() noexcept { return _fsharpState; }
 
+    /// @brief Returns the completer function registry (for testing/diagnostics).
+    [[nodiscard]] CompleterFunctionRegistry const& completerFunctions() const noexcept
+    {
+        return _completerFunctions;
+    }
+
     /// @brief Called when the working directory changes, to load/unload directory configs.
     void onDirectoryChanged();
 
@@ -218,6 +224,8 @@ class Shell final: public SignalCallback
     void registerCompleterBuiltins();
     void registerDirectoryConfigBuiltins(); // builtins/DirectoryConfigBuiltins.cpp
 
+    // --- Data-driven inline builtin dispatch (builtins/InlineCommandDescriptors.cpp) ---
+  public:
     /// @brief Loads .endo completer scripts from user and system directories.
     void loadCompleters();
 
@@ -229,9 +237,6 @@ class Shell final: public SignalCallback
     [[nodiscard]] CompleterExecutionResult executeCompleterFunction(std::string_view funcName,
                                                                     std::vector<std::string> const& args,
                                                                     std::string_view prefix);
-
-    // --- Data-driven inline builtin dispatch (builtins/InlineCommandDescriptors.cpp) ---
-  public:
     /// @brief Returns the sorted descriptor table of all inline builtins.
     [[nodiscard]] static std::span<struct InlineCommandDescriptor const> inlineCommandDescriptors();
 

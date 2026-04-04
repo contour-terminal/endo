@@ -42,13 +42,17 @@ endo::CollectedCompletion cc(std::string text)
 }
 
 /// @brief Mock execution callback returning predetermined completions.
+/// Mimics real .endo scripts that use prefix to distinguish options vs subcommands.
 auto createMockCallback() -> endo::CompleterExecutionCallback
 {
     return [](std::string_view funcName,
               std::vector<std::string> const& args,
-              std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+              std::string_view prefix) -> endo::CompleterExecutionResult {
         if (funcName == "flatpak_complete")
         {
+            if (args.empty() && !prefix.empty() && prefix[0] == '-')
+                return { .completions = { cc("--user"), cc("--system"), cc("--verbose"), cc("-v") },
+                         .errors = {} };
             if (args.empty())
                 return { .completions = { cc("run"), cc("install"), cc("uninstall"), cc("update"),
                                           cc("list"), cc("info"), cc("search") },
@@ -56,9 +60,6 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
             if (args.size() == 1 && args[0] == "run")
                 return { .completions = { cc("com.visualstudio.code"), cc("org.mozilla.firefox"),
                                           cc("org.gnome.Calculator"), cc("io.github.sxyazi.yazi") },
-                         .errors = {} };
-            if (args.size() == 1 && args[0] == "--")
-                return { .completions = { cc("--user"), cc("--system"), cc("--verbose"), cc("-v") },
                          .errors = {} };
         }
         return {};
@@ -207,6 +208,78 @@ TEST_CASE("ScriptedCompleter.cache_reuse")
     auto ctx3 = makeContext("flatpak run ");
     auto r3 = completer.complete(ctx3);
     CHECK(callCount == 2); // Cache miss: different args
+}
+
+TEST_CASE("ScriptedCompleter.option_context_completion")
+{
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("flatpak", "flatpak_complete");
+    endo::ScriptedCompleter completer(registry, createMockCallback());
+
+    // Option context: "flatpak --" with prefix "--"
+    auto ctx = endo::CompletionContext {
+        .type = endo::CompletionContextType::Option,
+        .prefix = "--",
+        .prefixStart = 8,
+        .cursorPosition = 10,
+        .command = "flatpak",
+        .fullInput = "flatpak --",
+    };
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "--user"));
+    CHECK(hasCompletion(results, "--system"));
+    CHECK(hasCompletion(results, "--verbose"));
+}
+
+TEST_CASE("ScriptedCompleter.cache_invalidation_on_option_prefix_change")
+{
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& args,
+                                 std::string_view prefix) -> endo::CompleterExecutionResult {
+        ++callCount;
+        if (!prefix.empty() && prefix[0] == '-')
+            return { .completions = { cc("--user"), cc("--system") }, .errors = {} };
+        return { .completions = { cc("run"), cc("install") }, .errors = {} };
+    };
+
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("flatpak", "flatpak_complete");
+    endo::ScriptedCompleter completer(registry, callback);
+
+    // First call: argument completion (no option prefix)
+    auto ctx1 = makeContext("flatpak ", "");
+    auto r1 = completer.complete(ctx1);
+    CHECK(callCount == 1);
+    CHECK(hasCompletion(r1, "run"));
+
+    // Second call: option completion (option prefix) — must NOT reuse cache
+    auto ctx2 = endo::CompletionContext {
+        .type = endo::CompletionContextType::Option,
+        .prefix = "--",
+        .prefixStart = 8,
+        .cursorPosition = 10,
+        .command = "flatpak",
+        .fullInput = "flatpak --",
+    };
+    auto r2 = completer.complete(ctx2);
+    CHECK(callCount == 2); // Cache miss: different prefix category
+    CHECK(hasCompletion(r2, "--user"));
+
+    // Third call: same option prefix, more typed — should reuse cache
+    auto ctx3 = endo::CompletionContext {
+        .type = endo::CompletionContextType::Option,
+        .prefix = "--us",
+        .prefixStart = 8,
+        .cursorPosition = 12,
+        .command = "flatpak",
+        .fullInput = "flatpak --us",
+    };
+    auto r3 = completer.complete(ctx3);
+    CHECK(callCount == 2); // Cache hit: same prefix category
+    CHECK(hasCompletion(r3, "--user"));
 }
 
 TEST_CASE("ScriptedCompleter.args_extraction")
