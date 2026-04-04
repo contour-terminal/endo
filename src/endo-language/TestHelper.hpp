@@ -68,6 +68,7 @@ struct TestRuntime
     std::string capturedOutput;                           ///< Buffer for captured output from print/println
     std::unordered_map<std::string, std::string> mockEnv; ///< Mock environment variables for env builtin
     std::unordered_map<std::string, std::string> mockWhichPaths; ///< Mock program paths for which builtin
+    std::unordered_map<std::string, std::string> registeredCompleters; ///< Mock completer registry
     std::string mockCmdName;                                     ///< Current shell command being built
     std::vector<std::string> mockCmdArgs;                        ///< Arguments for the current shell command
     bool mockSubstActive = false; ///< True when in subst_start/subst_end capture mode

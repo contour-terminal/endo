@@ -7077,9 +7077,24 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 if (method == "register" && argExprs.size() == 2)
                 {
                     auto* cmdArg = codegen(argExprs[0]);
-                    auto* funcArg = codegen(argExprs[1]);
-                    if (cmdArg && funcArg && tryGenerateNativeCall("completer_register", { cmdArg, funcArg }))
+                    // Extract function name as string (native callback expects the name, not the value)
+                    auto const* identExpr = dynamic_cast<ast::IdentifierExpr const*>(argExprs[1]);
+                    if (!identExpr)
+                    {
+                        reportTypeError("Completion.register: second argument must be a function identifier");
                         return;
+                    }
+                    if (!lookupFSharpFunction(identExpr->name))
+                    {
+                        reportTypeError("Completion.register: function '{}' is not defined", identExpr->name);
+                        return;
+                    }
+                    auto* funcNameStr = _builder.get(CoreVM::CoreString(identExpr->name));
+                    if (cmdArg && funcNameStr
+                        && tryGenerateNativeCall("register_completer", { cmdArg, funcNameStr }))
+                        return;
+                    reportTypeError("Completion.register: native call generation failed");
+                    return;
                 }
                 else if (method == "entry" && argExprs.size() == 1)
                 {

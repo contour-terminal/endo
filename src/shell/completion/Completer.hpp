@@ -9,7 +9,6 @@
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/completion/HistoryCompleter.hpp>
 #include <shell/completion/LetBindingCompleter.hpp>
-#include <shell/completion/OptionCompleter.hpp>
 #include <shell/completion/VariableCompleter.hpp>
 #include <shell/history/History.hpp>
 

@@ -3,7 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "Completer.hpp"
+#include "ScriptedCompleter.hpp"
 #include <platform/testing/TestEnvironmentProvider.hpp>
+
+#include <algorithm>
 
 using namespace std::string_literals;
 
@@ -120,6 +123,44 @@ TEST_CASE("Completer.suggest.history_full_line_over_variable_word")
     auto result = completer.suggest("$PATH", 5);
     REQUIRE(result.has_value());
     CHECK(*result == "/bin/something");
+}
+
+// =============================================================================
+// Exclusivity tests
+// =============================================================================
+
+TEST_CASE("Completer.complete.exclusive_provider_suppresses_higher_priority_results")
+{
+    endo::InMemoryHistory history;
+    endo::TestEnvironment env;
+    env.set("PATH", ""); // No PATH commands
+    endo::FSharpPersistentState fsharpState;
+
+    // Add a user-defined function so LetBindingCompleter has something to contribute
+    fsharpState.functions["myHelper"] = endo::FSharpPersistentState::PersistedFunction {
+        .parameters = { "x" },
+        .parameterTypes = { std::nullopt },
+    };
+
+    endo::Completer completer(env, history, fsharpState);
+
+    // Register a scripted completer for "testcmd" that claims exclusivity
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("testcmd", "testcmd_complete");
+    auto callback = [](std::string_view /*funcName*/,
+                       std::vector<std::string> const& /*args*/,
+                       std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        return { .completions = { { .text = "subA" }, { .text = "subB" } }, .errors = {} };
+    };
+    completer.addProvider(std::make_unique<endo::ScriptedCompleter>(registry, callback));
+
+    // Complete "testcmd " — ScriptedCompleter is exclusive for this command.
+    // LetBindingCompleter (higher priority) should NOT pollute results.
+    auto const results = completer.complete("testcmd ", 8);
+
+    CHECK(results.size() == 2);
+    CHECK(std::ranges::any_of(results, [](auto const& item) { return item.text == "subA"; }));
+    CHECK(std::ranges::any_of(results, [](auto const& item) { return item.text == "subB"; }));
 }
 
 // =============================================================================

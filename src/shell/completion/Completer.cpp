@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <unordered_set>
 
 namespace endo
 {
@@ -35,7 +36,6 @@ Completer::Completer(EnvironmentProvider const& env,
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
-    _providers.push_back(std::make_unique<OptionCompleter>());
     _providers.push_back(std::make_unique<FileCompleter>());
     _providers.push_back(std::make_unique<HistoryCompleter>(history));
 
@@ -121,6 +121,7 @@ CompletionContext Completer::analyzeContext(std::string_view input, size_t curso
 std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const& ctx) const
 {
     std::vector<CompletionItem> allResults;
+    std::unordered_set<std::string> seenTexts;
 
     for (auto const& provider: _providers)
     {
@@ -128,27 +129,25 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
             continue;
 
         auto results = provider->complete(ctx);
-        for (auto& item: results)
-        {
-            // Avoid duplicates
-            bool isDuplicate = false;
-            for (auto const& existing: allResults)
-            {
-                if (existing.text == item.text)
-                {
-                    isDuplicate = true;
-                    break;
-                }
-            }
 
-            if (!isDuplicate)
-                allResults.push_back(std::move(item));
+        // If this provider claims exclusivity and returned results, discard all
+        // previously accumulated results from higher-priority non-exclusive providers
+        // and use only this provider's results.
+        if (!results.empty() && provider->isExclusiveFor(ctx))
+        {
+            seenTexts.clear();
+            for (auto const& item: results)
+                seenTexts.insert(item.text);
+            allResults = std::move(results);
+            break;
         }
 
-        // If this provider claims exclusivity and returned results, stop querying others.
-        // Empty results don't suppress lower-priority providers (e.g. FileCompleter).
-        if (!results.empty() && provider->isExclusiveFor(ctx))
-            break;
+        for (auto& item: results)
+        {
+            if (auto [_, inserted] = seenTexts.insert(item.text); !inserted)
+                continue;
+            allResults.push_back(std::move(item));
+        }
     }
 
     // Sort by score (descending), then alphabetically
