@@ -191,9 +191,8 @@ void TerminalInput::writeProtocol(std::string_view data) const
 void TerminalInput::enableProtocols()
 {
     writeProtocol(protocols::EnableCsiU);
-    writeProtocol(protocols::EnableSGRMouse);
-    writeProtocol(protocols::EnablePassiveMouseTracking);
-    writeProtocol(protocols::EnableAnyMotionTracking);
+    writeProtocol(
+        protocols::EnablePassiveMouseTracking); // Implicitly enables SGR (1006) + button tracking (1002)
     writeProtocol(protocols::EnableBracketedPaste);
     writeProtocol(protocols::EnableColorSchemeNotify);
     writeProtocol(protocols::QueryColorScheme);
@@ -205,9 +204,7 @@ void TerminalInput::disableProtocols()
     writeProtocol(protocols::DisableFocusTracking);
     writeProtocol(protocols::DisableColorSchemeNotify);
     writeProtocol(protocols::DisableBracketedPaste);
-    writeProtocol(protocols::DisableAnyMotionTracking);
-    writeProtocol(protocols::DisablePassiveMouseTracking);
-    writeProtocol(protocols::DisableSGRMouse);
+    writeProtocol(protocols::DisablePassiveMouseTracking); // Also clears implicit mouse modes
     writeProtocol(protocols::DisableCsiU);
 }
 
