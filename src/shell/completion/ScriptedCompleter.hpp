@@ -73,11 +73,13 @@ class ScriptedCompleter: public CompletionProvider
     };
 
     static constexpr auto cacheTTL = std::chrono::milliseconds { 2000 };
+    static constexpr size_t maxCacheEntries = 32;
     mutable std::unordered_map<std::string, CacheEntry> _cache;
 
     /// @brief Builds a cache key from function name and args.
     [[nodiscard]] static std::string makeCacheKey(std::string_view funcName,
-                                                  std::vector<std::string> const& args);
+                                                  std::vector<std::string> const& args,
+                                                  bool optionPrefix);
 
     /// @brief Extracts argument tokens from the full input, excluding command and current word.
     [[nodiscard]] static std::vector<std::string> extractArgs(std::string_view fullInput,

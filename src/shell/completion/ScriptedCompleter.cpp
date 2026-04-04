@@ -38,7 +38,8 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
         return {};
 
     auto const args = extractArgs(context.fullInput, *context.command, context.prefix);
-    auto const cacheKey = makeCacheKey(*funcName, args);
+    auto const optionPrefix = !context.prefix.empty() && context.prefix[0] == '-';
+    auto const cacheKey = makeCacheKey(*funcName, args, optionPrefix);
 
     // Check cache
     auto const now = std::chrono::steady_clock::now();
@@ -57,6 +58,10 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
             return applyFuzzyScoring(candidates, context.prefix, 60);
         }
     }
+
+    // Evict expired entries when cache exceeds size threshold
+    if (_cache.size() > maxCacheEntries)
+        std::erase_if(_cache, [now](auto const& entry) { return now - entry.second.timestamp >= cacheTTL; });
 
     // Execute the completer function
     auto result = _callback(*funcName, args, context.prefix);
@@ -85,13 +90,20 @@ std::vector<std::string> ScriptedCompleter::takeLastErrors()
     return std::exchange(_lastErrors, {});
 }
 
-std::string ScriptedCompleter::makeCacheKey(std::string_view funcName, std::vector<std::string> const& args)
+std::string ScriptedCompleter::makeCacheKey(std::string_view funcName,
+                                            std::vector<std::string> const& args,
+                                            bool optionPrefix)
 {
     std::string key(funcName);
     for (auto const& arg: args)
     {
         key += '\0';
         key += arg;
+    }
+    if (optionPrefix)
+    {
+        key += '\0';
+        key += '-';
     }
     return key;
 }
