@@ -100,7 +100,7 @@ Completion.entry "text"
 ```
 
 Creates a plain completion entry with no description. Equivalent to returning a bare
-string, but wrapped in the `CompletionEntry` type.
+string, but wrapped in the `Completion` type.
 
 #### `Completion.described`
 

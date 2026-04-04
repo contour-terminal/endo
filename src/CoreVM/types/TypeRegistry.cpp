@@ -374,7 +374,7 @@ void TypeRegistry::registerBuiltins()
 
     // CompletionEntry: Entry (tag=0) | Described (tag=1) | Detailed (tag=2)
     // Used by scripted completers to attach descriptions/detail to completion candidates.
-    // Slots: 0=text, 1=description, 2=detail, 3=packed type tag for GC.
+    // Slots: 0=text, 1=description, 2=detail (all String, traced as fixed object slots).
     auto completionEntryType = std::make_unique<TypeDescriptor>();
     completionEntryType->kind = TypeKind::Sum;
     completionEntryType->id = BuiltinTypeId::CompletionEntry;
@@ -387,10 +387,10 @@ void TypeRegistry::registerBuiltins()
     };
     completionEntryType->moduleFunctions = {
         { "register", "str -> str -> unit — register a completion function for a command" },
-        { "entry", "str -> CompletionEntry — plain text completion" },
-        { "described", "str -> str -> CompletionEntry — text with short description" },
-        { "detailed", "str -> str -> str -> CompletionEntry — text, description, and markdown detail" },
-        { "text", "CompletionEntry -> str — extract text from a completion entry" },
+        { "entry", "str -> Completion — plain text completion" },
+        { "described", "str -> str -> Completion — text with short description" },
+        { "detailed", "str -> str -> str -> Completion — text, description, and markdown detail" },
+        { "text", "Completion -> str — extract text from a completion entry" },
     };
     // SlotTraceInfo: all payload slots are string pointers (traced as fixed object slots).
     // Entry uses only slot 0, Described uses 0-1, Detailed uses 0-2.
