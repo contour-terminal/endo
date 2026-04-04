@@ -84,8 +84,6 @@ add_library(endo-shell STATIC
     completion/HistoryCompleter.cpp
     completion/LetBindingCompleter.hpp
     completion/LetBindingCompleter.cpp
-    completion/OptionCompleter.hpp
-    completion/OptionCompleter.cpp
     completion/VariableCompleter.hpp
     completion/VariableCompleter.cpp
     completion/CommandLineParser.hpp
