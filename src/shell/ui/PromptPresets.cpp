@@ -16,6 +16,7 @@ static std::vector<PromptConfig> presets = {
         .indicator = "\xe2\x9d\xaf ", // ❯
         .infoLineModules = {},
         .rightPromptModules = {},
+        .colorOverrides = { .transparentBackground = true },
     },
     PromptConfig {
         .name = "lambda-clean"sv,
@@ -73,9 +74,7 @@ static std::vector<PromptConfig> presets = {
         .indicator = "\xe2\x9e\xa4\xe2\x9e\xa4\xe2\x9e\xa4 ", // ➤➤➤
         .infoLineModules = { "path", "git" },
         .rightPromptModules = {},
-        .useGradientPath = true,
-        .gradientStart = 0x5078FF_rgb, // Blue
-        .gradientEnd = 0x00DCC8_rgb,   // Teal
+        .colorOverrides = { .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } } }, // Blue → Teal gradient
     },
     PromptConfig {
         .name = "context-adaptive"sv,
@@ -92,9 +91,6 @@ static std::vector<PromptConfig> presets = {
         .indicator = "|> ",
         .infoLineModules = { "path", "git", "fsharp_mode", "structured_output" },
         .rightPromptModules = { "duration", "exit_status", "shell_level", "battery", "clock" },
-        .useGradientPath = true,
-        .gradientStart = 0x5078FF_rgb, // Blue
-        .gradientEnd = 0x00DCC8_rgb,   // Teal
         .auroraBackground = {
             0x252545_rgb, // deep indigo
             0x1E3840_rgb, // dark teal
@@ -103,6 +99,7 @@ static std::vector<PromptConfig> presets = {
             0x252545_rgb, // deep indigo (wrap)
         },
         .enableSixelFade = false,
+        .colorOverrides = { .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } } }, // Blue → Teal gradient
     },
 };
 
@@ -111,8 +108,7 @@ static void applyLightOverrides(PromptConfig& config)
 {
     if (config.name == "endo-signature"sv)
     {
-        config.gradientStart = 0x3060D8_rgb; // Darker blue (readable on light bg)
-        config.gradientEnd = 0x009688_rgb;   // Darker teal (readable on light bg)
+        config.colorOverrides.path = ColorSpec { { 0x3060D8_rgb, 0x009688_rgb } }; // Darker blue → teal
         config.auroraBackground = {
             0xD8DCF0_rgb, // soft lavender
             0xCCE8E8_rgb, // soft teal
@@ -123,8 +119,7 @@ static void applyLightOverrides(PromptConfig& config)
     }
     else if (config.name == "gradient-glow"sv)
     {
-        config.gradientStart = 0x3060D8_rgb; // Darker blue
-        config.gradientEnd = 0x009688_rgb;   // Darker teal
+        config.colorOverrides.path = ColorSpec { { 0x3060D8_rgb, 0x009688_rgb } }; // Darker blue → teal
     }
 }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "DurationModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -31,7 +32,9 @@ PromptSegments DurationModule::evaluate(PromptContext const& ctx) const
     }
 
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->duration.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.duration;
 
     return { PromptSegment { .text = std::move(text), .style = style } };

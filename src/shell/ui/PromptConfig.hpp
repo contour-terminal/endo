@@ -4,6 +4,7 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,50 @@ enum class TransientMode : std::uint8_t
     Arrow,   ///< Replace with simple arrow indicator.
 };
 
+/// @brief A color specification: solid color or multi-stop gradient.
+///
+/// When a single color is provided, the text is rendered with that solid color.
+/// When multiple colors are provided, the text is rendered with a gradient
+/// interpolated across the color stops.
+struct ColorSpec
+{
+    std::vector<tui::RgbColor> colors; ///< 1 color = solid, 2+ = gradient stops.
+
+    /// @brief Returns whether this color spec represents a gradient.
+    [[nodiscard]] bool isGradient() const noexcept { return colors.size() > 1; }
+
+    /// @brief Returns the solid color (first stop), or black if empty.
+    [[nodiscard]] tui::RgbColor solid() const noexcept
+    {
+        return colors.empty() ? tui::RgbColor {} : colors.front();
+    }
+};
+
+/// @brief Optional per-color overrides for prompt theming.
+///
+/// Each field, when set, overrides the corresponding value from the theme's
+/// PromptColorPalette. When unset (nullopt), the theme default applies.
+/// Color specs may be solid colors or gradients (multi-stop).
+struct PromptColorOverrides
+{
+    std::optional<ColorSpec> path;           ///< Path module text color.
+    std::optional<ColorSpec> gitClean;       ///< Git branch name when clean.
+    std::optional<ColorSpec> gitDirty;       ///< Git branch name when dirty.
+    std::optional<ColorSpec> gitStaged;      ///< Git indicator when staged.
+    std::optional<ColorSpec> indicator;      ///< Input line indicator.
+    std::optional<ColorSpec> indicatorError; ///< Indicator color when last command failed.
+    std::optional<ColorSpec> exitCode;       ///< Exit code badge color.
+    std::optional<ColorSpec> duration;       ///< Duration badge color.
+    std::optional<ColorSpec> hostname;       ///< Hostname text color.
+    std::optional<ColorSpec>
+        background; ///< Prompt background (solid only; gradient bg uses auroraBackground).
+    std::optional<ColorSpec> separator; ///< Separator/bar color.
+    std::optional<ColorSpec> badge;     ///< Badge background color.
+    std::optional<ColorSpec> badgeText; ///< Badge text color.
+    std::optional<ColorSpec> clock;     ///< Clock text color.
+    bool transparentBackground = false; ///< When true, background = terminal default (no bg color emitted).
+};
+
 /// @brief Configuration for prompt rendering.
 ///
 /// Specifies which modules to display, the layout style, separator style,
@@ -52,13 +97,11 @@ struct PromptConfig
     std::vector<std::string> rightPromptModules;                  ///< Modules for the right-aligned section.
     int promptSpacing = 1;              ///< Number of blank lines above and below the prompt (0 or 1).
     int64_t durationThresholdMs = 2000; ///< Min duration (ms) to show duration module.
-    bool useGradientPath = false;       ///< Enable gradient coloring for path module.
-    tui::RgbColor gradientStart {};     ///< Gradient start color.
-    tui::RgbColor gradientEnd {};       ///< Gradient end color.
     std::vector<tui::RgbColor> auroraBackground; ///< Multi-stop background gradient (empty = flat bg).
     bool enableSixelFade = false;                ///< Enable sixel aurora fade above prompt.
     int64_t exitConfirmTimeoutMs =
         1000; ///< Timeout (ms) for double Ctrl+D exit confirmation (0 = immediate exit).
+    PromptColorOverrides colorOverrides; ///< Per-color overrides (empty = use theme defaults).
 };
 
 } // namespace endo

@@ -216,6 +216,120 @@ This is useful in `init.endo` to conditionally apply settings that only make sen
 interactive mode (prompt customization, key bindings, etc.). The property is read-only;
 attempting to assign to it produces a compile-time error.
 
+### Prompt Color Customization
+
+Endo's prompt colors can be fully customized. Each color property accepts:
+
+- **`"#RRGGBB"`** -- a solid hex color (e.g., `"#FF6600"`)
+- **`"#RRGGBB:#RRGGBB:..."`** -- a gradient with colon-separated color stops
+- **`"transparent"`** -- use the terminal's default background (background only)
+- **`"theme"`** -- reset to the current theme's default color
+
+#### Background Color
+
+The prompt background can be set to a solid color, made transparent (showing the
+terminal's default background), or reset to the theme default:
+
+```endo
+# Transparent background (terminal default shows through)
+shell_prompt_color_background <- "transparent"
+
+# Custom solid background
+shell_prompt_color_background <- "#1E1E2E"
+
+# Reset to theme default
+shell_prompt_color_background <- "theme"
+```
+
+!!! tip
+    Transparent backgrounds work best with the `minimal-arrow` preset or single-line
+    layouts. Multi-line presets with aurora gradients override the background with their
+    own gradient colors regardless of this setting.
+
+#### Solid Colors
+
+Set any prompt element to a solid hex color:
+
+```endo
+# Path in bright orange
+shell_prompt_color_path <- "#FF6600"
+
+# Green indicator
+shell_prompt_color_indicator <- "#50FA7B"
+
+# Red separator bar
+shell_prompt_color_separator <- "#FF5555"
+```
+
+#### Gradient Colors
+
+Any color property (except background) can be set to a multi-stop gradient.
+Gradient stops are separated by colons. The gradient is interpolated linearly
+across the text of the corresponding prompt module:
+
+```endo
+# Blue-to-teal gradient on path (like endo-signature preset)
+shell_prompt_color_path <- "#5078FF:#00DCC8"
+
+# Three-stop rainbow gradient on git branch when clean
+shell_prompt_color_git_clean <- "#00FF00:#00FFFF:#0000FF"
+
+# Warm gradient for the duration badge
+shell_prompt_color_duration <- "#FFB86C:#FF5555"
+```
+
+#### Available Color Properties
+
+| Property | Description |
+|----------|-------------|
+| `shell_prompt_color_background` | Prompt background (supports `transparent`) |
+| `shell_prompt_color_path` | Current directory path text |
+| `shell_prompt_color_git_clean` | Git branch when repository is clean |
+| `shell_prompt_color_git_dirty` | Git branch when unstaged changes exist |
+| `shell_prompt_color_git_staged` | Git indicator when staged changes exist |
+| `shell_prompt_color_indicator` | Input line indicator (e.g., `|> `) |
+| `shell_prompt_color_indicator_error` | Indicator when last command failed |
+| `shell_prompt_color_exit_code` | Exit code badge |
+| `shell_prompt_color_duration` | Command duration badge |
+| `shell_prompt_color_hostname` | Hostname (shown in SSH sessions) |
+| `shell_prompt_color_separator` | Left bar / separator |
+| `shell_prompt_color_badge` | Badge background (F# mode, structured output) |
+| `shell_prompt_color_badge_text` | Badge text |
+| `shell_prompt_color_clock` | Clock module text |
+
+#### Preset Interaction
+
+Color overrides are applied **on top of** the selected preset. When you switch presets,
+all color overrides are reset to the preset's defaults:
+
+```endo
+# Start with a preset, then customize individual colors
+shell_prompt_preset <- "endo-signature"
+shell_prompt_color_background <- "transparent"
+shell_prompt_color_path <- "#FF6600:#FFFF00"
+
+# Switching presets resets all overrides
+shell_prompt_preset <- "powerline"  # colors reset to powerline defaults
+```
+
+#### Example: Custom Theme
+
+```endo
+# ~/.config/endo/init.endo
+
+# Start with a clean base
+shell_prompt_preset <- "opencode-bar"
+
+# Custom color scheme
+shell_prompt_color_background <- "#1A1B26"
+shell_prompt_color_path <- "#7AA2F7:#BB9AF7"
+shell_prompt_color_git_clean <- "#9ECE6A"
+shell_prompt_color_git_dirty <- "#F7768E"
+shell_prompt_color_separator <- "#565F89"
+shell_prompt_color_indicator <- "#7DCFFF"
+shell_prompt_color_indicator_error <- "#F7768E"
+```
+
 ### Reading Property Values
 
 All prompt properties can be read as expressions:
@@ -223,6 +337,9 @@ All prompt properties can be read as expressions:
 ```endo
 # Print current preset
 print shell_prompt_preset
+
+# Print current path color
+print shell_prompt_color_path
 
 # Use in conditionals
 if shell_prompt_spacing == 0 then println "Compact mode"
@@ -394,5 +511,5 @@ All bindable action names for use with `bind`:
 | History | `history-prev`, `history-next` |
 
 !!! note "Under Development"
-    Some configuration features (such as vi mode and configurable color schemes) are still
-    under development. See the [Roadmap](../roadmap/index.md) for planned features.
+    Some configuration features (such as vi mode) are still under development.
+    See the [Roadmap](../roadmap/index.md) for planned features.

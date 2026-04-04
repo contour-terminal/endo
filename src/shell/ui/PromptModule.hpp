@@ -17,6 +17,7 @@ struct Theme;
 namespace endo
 {
 
+struct ResolvedPromptColors;
 class FSharpPersistentState;
 class OutputDefinitionRegistry;
 
@@ -65,14 +66,16 @@ using PromptSegments = std::vector<PromptSegment>;
 /// @brief Context information available to prompt modules during evaluation.
 struct PromptContext
 {
-    std::string cwd;                                      ///< Current working directory.
-    std::string homePath;                                 ///< User's home directory path.
-    int lastExitCode = 0;                                 ///< Exit code of the last command.
-    std::chrono::milliseconds lastDuration { 0 };         ///< Duration of the last command.
-    int terminalWidth = 80;                               ///< Terminal width in columns.
-    bool isSSH = false;                                   ///< Whether running inside an SSH session.
-    std::string hostname;                                 ///< Hostname of the machine.
-    tui::Theme const* theme = nullptr;                    ///< Current TUI theme.
+    std::string cwd;                              ///< Current working directory.
+    std::string homePath;                         ///< User's home directory path.
+    int lastExitCode = 0;                         ///< Exit code of the last command.
+    std::chrono::milliseconds lastDuration { 0 }; ///< Duration of the last command.
+    int terminalWidth = 80;                       ///< Terminal width in columns.
+    bool isSSH = false;                           ///< Whether running inside an SSH session.
+    std::string hostname;                         ///< Hostname of the machine.
+    tui::Theme const* theme = nullptr;            ///< Current TUI theme.
+    ResolvedPromptColors const* resolvedColors =
+        nullptr; ///< Resolved prompt colors (overrides merged with theme).
     FSharpPersistentState const* fsharpState = nullptr;   ///< F# persistent state (functions, bindings).
     OutputDefinitionRegistry const* outputDefs = nullptr; ///< Output definitions for structured commands.
     int cellPixelWidth = 0;                               ///< Cell width in pixels (0 if unknown).

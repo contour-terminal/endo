@@ -22,6 +22,16 @@ namespace endo
 /// @return A vector of PromptSegments, one per grapheme cluster.
 [[nodiscard]] PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text);
 
+/// @brief Produces gradient-colored prompt segments for the given text using N color stops.
+///
+/// Iterates grapheme clusters and interpolates RGB color across the color stops
+/// using multiStopGradient(). Falls back to solid color for single-stop spans.
+///
+/// @param stops The color stops, evenly spaced along the text.
+/// @param text The text to apply the gradient to.
+/// @return A vector of PromptSegments, one per grapheme cluster.
+[[nodiscard]] PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view text);
+
 /// @brief Interpolates across evenly-spaced color stops at parameter t in [0, 1].
 ///
 /// When stops is empty, returns black. When a single stop, returns that stop for any t.

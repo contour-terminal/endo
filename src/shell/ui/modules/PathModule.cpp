@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PathModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -19,7 +20,9 @@ PromptSegments PathModule::evaluate(PromptContext const& ctx) const
     }
 
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->path.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.path;
     style.bold = true;
 

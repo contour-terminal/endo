@@ -768,10 +768,11 @@ namespace
 std::vector<BuiltinInfo> userFacingBuiltins()
 {
     auto const& inlineBuiltins = registeredInlineBuiltins();
+    auto const stdlibDescs = stdlibDescriptors();
 
     std::vector<BuiltinInfo> result;
-    result.reserve(shellBuiltinDescriptors.size() + inlineBuiltins.size() + keywordDescriptors.size()
-                   + allPropertyDescriptors().size());
+    result.reserve(shellBuiltinDescriptors.size() + inlineBuiltins.size() + stdlibDescs.size()
+                   + keywordDescriptors.size() + allPropertyDescriptors().size());
 
     // Shell builtins (non-inline)
     for (auto const& desc: shellBuiltinDescriptors)
@@ -781,6 +782,14 @@ std::vector<BuiltinInfo> userFacingBuiltins()
     // Inline builtins (registered at startup from InlineCommandDescriptors)
     for (auto const& info: inlineBuiltins)
         result.push_back(info);
+
+    // Stdlib functions (length, map, filter, fold, ...)
+    for (auto const& desc: stdlibDescs)
+        if (!desc.userFacingName.empty())
+            result.push_back({ std::string(desc.userFacingName),
+                               std::string(desc.description),
+                               false,
+                               std::string(desc.detail) });
 
     // Keywords
     for (auto const& desc: keywordDescriptors)

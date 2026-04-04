@@ -1028,8 +1028,8 @@ TEST_CASE("CompletionCandidates.builtinCandidates.shell_builtin_count_stability"
     for (auto const& b: builtins)
         if (b.kind == CompletionKind::Builtin)
             ++nonPropertyCount;
-    // 70 shell builtins + 11 shell keywords = 81
-    CHECK(nonPropertyCount == 81);
+    // 70 shell builtins + 11 shell keywords + 64 stdlib functions = 145
+    CHECK(nonPropertyCount == 145);
 }
 
 // =============================================================================

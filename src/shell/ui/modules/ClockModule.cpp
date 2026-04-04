@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ClockModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <tui/Theme.hpp>
 
@@ -18,7 +19,9 @@ PromptSegments ClockModule::evaluate(PromptContext const& ctx) const
     auto text = std::format("{:02d}:{:02d}:{:02d}", tm->tm_hour, tm->tm_min, tm->tm_sec);
 
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+        style.fg = ctx.resolvedColors->clock.solid();
+    else if (ctx.theme)
         style.fg = ctx.theme->promptColors.clock;
     style.dim = true;
 

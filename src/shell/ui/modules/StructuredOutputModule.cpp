@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "StructuredOutputModule.hpp"
+#include <shell/ui/PromptColorResolver.hpp>
 
 #include <endo-language/codegen/IRGenerator.hpp>
 
@@ -23,7 +24,12 @@ bool StructuredOutputModule::shouldShow(PromptContext const& ctx) const
 PromptSegments StructuredOutputModule::evaluate(PromptContext const& ctx) const
 {
     auto style = tui::Style {};
-    if (ctx.theme)
+    if (ctx.resolvedColors)
+    {
+        style.fg = ctx.resolvedColors->badgeText.solid();
+        style.bg = ctx.resolvedColors->badge.solid();
+    }
+    else if (ctx.theme)
     {
         style.fg = ctx.theme->promptColors.badgeText;
         style.bg = ctx.theme->promptColors.badge;
