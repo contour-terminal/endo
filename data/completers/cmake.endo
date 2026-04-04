@@ -38,4 +38,4 @@ let cmake_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-Completion .register "cmake" cmake_complete
+Completion.register "cmake" cmake_complete

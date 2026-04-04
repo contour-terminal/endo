@@ -82,4 +82,4 @@ let claude_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-Completion .register "claude" claude_complete
+Completion.register "claude" claude_complete

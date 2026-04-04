@@ -18,4 +18,4 @@ let ssh_complete args prefix =
     | _ when startsWith "-" prefix -> ssh_options
     | _ -> ssh_hosts ()
 
-Completion .register "ssh" ssh_complete
+Completion.register "ssh" ssh_complete

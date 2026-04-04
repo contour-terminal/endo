@@ -5,5 +5,5 @@
 
 let my_complete args prefix = ["--help"; "--version"]
 
-Completion .register "mytest" my_complete
+Completion.register "mytest" my_complete
 print "ok"

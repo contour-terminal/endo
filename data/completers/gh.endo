@@ -229,4 +229,4 @@ let gh_complete args prefix =
     | _ when startsWith "-" prefix -> global_options
     | _ -> []
 
-Completion .register "gh" gh_complete
+Completion.register "gh" gh_complete

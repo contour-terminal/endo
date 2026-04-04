@@ -66,4 +66,4 @@ let flatpak_complete args prefix =
         |> filter (_ != "")
     | _ -> []
 
-Completion .register "flatpak" flatpak_complete
+Completion.register "flatpak" flatpak_complete

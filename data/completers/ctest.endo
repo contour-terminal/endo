@@ -33,4 +33,4 @@ let ctest_complete args prefix =
     | _ when startsWith "-" prefix -> options
     | _ -> []
 
-Completion .register "ctest" ctest_complete
+Completion.register "ctest" ctest_complete

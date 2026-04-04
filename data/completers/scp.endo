@@ -11,4 +11,4 @@ let scp_complete args prefix =
     | _ when startsWith "-" prefix -> scp_options
     | _ -> ssh_hosts ()
 
-Completion .register "scp" scp_complete
+Completion.register "scp" scp_complete

@@ -206,4 +206,4 @@ let glab_complete args prefix =
     | _ when startsWith "-" prefix -> global_options
     | _ -> []
 
-Completion .register "glab" glab_complete
+Completion.register "glab" glab_complete
