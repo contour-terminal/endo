@@ -1,0 +1,246 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    name: Create draft release
+    steps:
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ env.RELEASE_TAG }}" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            || gh release create "${{ env.RELEASE_TAG }}" \
+                 --repo "${{ github.repository }}" \
+                 --draft \
+                 --title "Endo ${RELEASE_TAG#v}" \
+                 --generate-notes
+
+  linux:
+    needs: create-release
+    runs-on: ubuntu-24.04
+    name: Linux (static)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Install Clang 21
+        run: wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y ninja-build libc6-dev
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ccache-release-linux-static
+          max-size: 256M
+
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1
+
+      - name: "Fetch vendored libraries (crispy & vtparser)"
+        run: python3 scripts/get_contour_dirs.py
+
+      - name: Configure
+        run: >
+          cmake --preset clang-release-static
+          -DCMAKE_C_COMPILER=clang-21
+          -DCMAKE_CXX_COMPILER=clang++-21
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build --preset clang-release-static
+
+      - name: Verify static binary
+        run: |
+          set -e
+          echo "--- file output ---"
+          file build/clang-release-static/src/shell/endo
+          echo "--- ldd output ---"
+          ldd build/clang-release-static/src/shell/endo 2>&1 && echo "ERROR: binary is dynamically linked" && exit 1 || echo "OK: binary is statically linked"
+
+      - name: Test
+        run: ctest --preset clang-release-static
+        timeout-minutes: 5
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${RELEASE_TAG#v}
+          cp build/clang-release-static/src/shell/endo endo-${VERSION}-linux-x86_64
+          gh release upload ${{ env.RELEASE_TAG }} endo-${VERSION}-linux-x86_64 --clobber
+
+  macos:
+    needs: create-release
+    runs-on: macos-14
+    name: macOS (ARM64)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Install Homebrew dependencies
+        run: |
+          brew install llvm ninja
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ccache-release-macos-arm64
+          max-size: 256M
+
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1
+
+      - name: "Fetch vendored libraries (crispy & vtparser)"
+        run: python3 scripts/get_contour_dirs.py
+
+      - name: Configure
+        run: cmake --preset clang-release
+
+      - name: Build
+        run: cmake --build --preset clang-release
+
+      - name: Test
+        working-directory: build/clang-release
+        run: ctest --output-on-failure
+        timeout-minutes: 5
+
+      - name: Build DMG installer
+        working-directory: build/clang-release
+        run: cpack -G DragNDrop
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${RELEASE_TAG#v}
+          cp build/clang-release/src/shell/endo endo-${VERSION}-macos-arm64
+          gh release upload ${{ env.RELEASE_TAG }} \
+            endo-${VERSION}-macos-arm64 \
+            build/clang-release/endo-*.dmg \
+            --clobber
+
+  windows:
+    needs: create-release
+    runs-on: windows-latest
+    name: Windows (x86_64)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: "Fetch vendored libraries (crispy & vtparser)"
+        run: python scripts/get_contour_dirs.py
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '1e199d32ad53aab1defda61ce41c380302e3f95c'
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake --preset clangcl-release
+
+      - name: Build
+        run: cmake --build --preset clangcl-release
+
+      - name: Test
+        working-directory: build/clangcl-release
+        run: ctest --output-on-failure --build-config Release
+        timeout-minutes: 5
+
+      - name: Build MSI installer
+        working-directory: build/clangcl-release
+        shell: bash
+        run: |
+          cpack -G WIX || (cat _CPack_Packages/win64/WIX/wix.log 2>/dev/null; exit 1)
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $version = "${{ env.RELEASE_TAG }}" -replace '^v', ''
+          Copy-Item build/clangcl-release/src/shell/endo.exe "endo-${version}-windows-x86_64.exe"
+          gh release upload ${{ env.RELEASE_TAG }} `
+            "endo-${version}-windows-x86_64.exe" `
+            (Get-Item build/clangcl-release/endo-*.msi) `
+            --clobber
+
+  vscode-extension:
+    needs: create-release
+    runs-on: ubuntu-latest
+    name: VS Code Extension
+
+    defaults:
+      run:
+        working-directory: editors/vscode
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Package .vsix
+        run: npm run package
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: editors/vscode
+        run: |
+          VERSION=${RELEASE_TAG#v}
+          mv *.vsix endo-${VERSION}.vsix
+          gh release upload ${{ env.RELEASE_TAG }} endo-${VERSION}.vsix --clobber
