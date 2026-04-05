@@ -202,6 +202,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.expectNonEmptyOutput = true;
                 continue;
             }
+            if (auto val = parseDirective(line, "expect-expr"))
+            {
+                result.expectExpr = std::string(*val);
+                continue;
+            }
             if (parseDirective(line, "unused-detection"))
             {
                 result.unusedValueDetection = true;

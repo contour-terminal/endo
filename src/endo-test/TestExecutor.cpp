@@ -79,6 +79,51 @@ namespace
         return result;
     }
 
+    /// Escapes a string for safe embedding in an endo string literal.
+    [[nodiscard]] std::string escapeForEndoString(std::string_view s)
+    {
+        std::string result;
+        result.reserve(s.size());
+        for (auto c: s)
+        {
+            switch (c)
+            {
+                case '\\': result += "\\\\"; break;
+                case '"': result += "\\\""; break;
+                case '\n': result += "\\n"; break;
+                case '\t': result += "\\t"; break;
+                case '\r': result += "\\r"; break;
+                default: result += c; break;
+            }
+        }
+        return result;
+    }
+
+    /// Evaluates an expect-expr directive against actual output.
+    /// Constructs and runs an endo program that binds _ to the trimmed output
+    /// and prints the boolean result of the expression.
+    /// @return std::nullopt on success, or a failure message string.
+    [[nodiscard]] std::optional<std::string> evaluateExpectExpr(std::string_view expr,
+                                                                std::string_view actualOutput)
+    {
+        auto const trimmedOutput = rtrimNewlines(actualOutput);
+        auto const escaped = escapeForEndoString(trimmedOutput);
+        auto const program = std::format("let _ = \"{}\"\nprint ({})", escaped, expr);
+
+        auto evalResult = executeSource(program);
+        if (!evalResult.has_value())
+            return std::format("expect-expr evaluation failed: {}", toString(evalResult.error()));
+
+        auto const evalOutput = rtrimNewlines(evalResult->output);
+        if (evalOutput != "true")
+            return std::format("expect-expr failed: `{}` evaluated to `{}` (output was \"{}\")",
+                               expr,
+                               evalOutput,
+                               escapeForDisplay(trimmedOutput));
+
+        return std::nullopt;
+    }
+
 } // namespace
 
 TestResult TestExecutor::run(TestFile const& testFile)
@@ -279,6 +324,17 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 }
             }
 
+            // Check expect-expr assertion
+            if (testFile.expectExpr.has_value())
+            {
+                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                {
+                    result.outcome = TestOutcome::Fail;
+                    result.failureMessage = std::move(*msg);
+                    return result;
+                }
+            }
+
             // Clean up mocks
             if (!testFile.mockEnv.empty() || !testFile.mockWhichPaths.empty())
             {
@@ -402,6 +458,17 @@ TestResult TestExecutor::run(TestFile const& testFile)
                         std::format("Output mismatch:\n        Expected: \"{}\"\n        Actual:   \"{}\"",
                                     escapeForDisplay(rtrimNewlines(expected)),
                                     escapeForDisplay(rtrimNewlines(result.actualOutput)));
+                    return result;
+                }
+            }
+
+            // Check expect-expr assertion
+            if (testFile.expectExpr.has_value())
+            {
+                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                {
+                    result.outcome = TestOutcome::Fail;
+                    result.failureMessage = std::move(*msg);
                     return result;
                 }
             }
