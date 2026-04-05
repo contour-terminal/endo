@@ -126,6 +126,28 @@ Available directives:
 | `# mock-which: PROG=/path` | Set mock which path |
 | `# expect-env: KEY=VALUE` | Verify environment variable after execution |
 | `# expect-nonempty` | Assert output is non-empty |
+| `# expect-expr: <expr>` | Assert endo expression evaluates to `true` against output |
+
+#### The `expect-expr` directive
+
+The `# expect-expr:` directive evaluates an endo expression against the test's actual output.
+The variable `_` is bound to the trimmed output (trailing newlines stripped), and the expression
+must evaluate to `true`.
+
+This is useful when the exact output varies across machines (e.g., CPU count, timestamps) but
+a property of the output can be verified.
+
+**Example:**
+
+```
+# description: nproc prints a positive number
+# expect-expr: (int_of_string _) > 0
+
+nproc
+```
+
+Here `_` is bound to the output of `nproc` (e.g., `"8"`), `int_of_string` converts it to an
+integer, and the expression checks that it is positive.
 
 ### Test directory structure
 

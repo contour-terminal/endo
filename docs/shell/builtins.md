@@ -1351,6 +1351,44 @@ uname -sm
 
 ---
 
+## nproc
+
+Print the number of available processing units.
+
+**Syntax:**
+
+```
+nproc [OPTIONS]
+```
+
+**Description:** Prints the number of processing units (CPU cores/threads) available on the
+system. Cross-platform: uses `std::thread::hardware_concurrency()` on all supported platforms
+(Linux, macOS, Windows). Compatible with Linux's `/usr/bin/nproc`.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `--all` | Print the number of installed processors (default) |
+| `--ignore=N` | Exclude N processing units (result is at least 1) |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+nproc
+# 8
+
+nproc --ignore=2
+# 6
+
+# Use in command substitution
+let cores = $(nproc)
+```
+
+---
+
 ## basename
 
 Strip directory and suffix from pathnames.

@@ -2644,6 +2644,58 @@ int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle
 }
 
 // ---------------------------------------------------------------------------
+// nproc
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    unsigned ignore = 0;
+
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# nproc\n"
+                                      "\n"
+                                      "Print the number of available processing units.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`nproc [OPTIONS]`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `--all` | Print the number of installed processors |\n"
+                                      "| `--ignore=N` | Exclude N processing units |\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+        if (arg == "--all")
+            continue; // --all is the default behavior
+        if (arg.starts_with("--ignore="))
+        {
+            auto const valStr = arg.substr(9);
+            auto const [ptr, ec] = std::from_chars(valStr.data(), valStr.data() + valStr.size(), ignore);
+            if (ec != std::errc())
+            {
+                error("nproc: invalid number: '{}'", valStr);
+                return 1;
+            }
+            continue;
+        }
+        error("nproc: unrecognized option: '{}'", arg);
+        return 1;
+    }
+
+    auto const total = std::thread::hardware_concurrency();
+    auto const available = (total > ignore) ? (total - ignore) : 1u;
+    auto output = std::format("{}\n", available);
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // hostname
 // ---------------------------------------------------------------------------
 

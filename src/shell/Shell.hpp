@@ -280,6 +280,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the uname builtin. Returns exit code.
     [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the nproc builtin. Returns exit code.
+    [[nodiscard]] int executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the basename builtin. Returns exit code.
     [[nodiscard]] int executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the dirname builtin. Returns exit code.
@@ -531,8 +533,8 @@ class Shell final: public SignalCallback
     TTY& _tty;
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
-    CompleterFunctionRegistry _completerFunctions;           ///< Scripted completer function registry
-    std::vector<CollectedCompletion> _collectedCompletions; ///< Buffer for __collect_completions bridge
+    CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry
+    std::vector<CollectedCompletion> _collectedCompletions;    ///< Buffer for __collect_completions bridge
     std::unique_ptr<DirectoryConfigManager> _dirConfigManager; ///< Per-directory config manager
 
     ProcessManager& _processManager;
