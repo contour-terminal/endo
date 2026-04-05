@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/builtins/InlineCommandDescriptor.hpp>
-
 #include <shell/Shell.hpp>
+#include <shell/builtins/InlineCommandDescriptor.hpp>
 
 #include <algorithm>
 #include <array>
@@ -61,6 +60,11 @@ static constexpr InlineOptionDef kUnameOptions[] = {
     { .shortFlag = "-r", .longFlag = {}, .description = "Print kernel release" },
     { .shortFlag = "-m", .longFlag = {}, .description = "Print machine hardware name" },
     { .shortFlag = "-a", .longFlag = {}, .description = "Print all information" },
+};
+
+static constexpr InlineOptionDef kNprocOptions[] = {
+    { .shortFlag = {}, .longFlag = "--all",    .description = "Print the number of installed processors" },
+    { .shortFlag = {}, .longFlag = "--ignore", .description = "Exclude N processing units", .takesValue = true },
 };
 
 static constexpr InlineOptionDef kTouchOptions[] = {
@@ -207,6 +211,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "mv [OPTIONS] SOURCE... DEST",
           .options = kMvOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineMv },
+        { .name = "nproc",    .briefDescription = "Print the number of available processing units.",
+          .usageLine = "nproc [OPTIONS]",
+          .options = kNprocOptions,
+          .noStdinFn = &Shell::executeInlineNproc },
         { .name = "realpath",  .briefDescription = "Resolve path to absolute canonical form.",
           .usageLine = "realpath PATH...",
           .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = true,
