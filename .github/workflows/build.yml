@@ -16,93 +16,104 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
 
-    name: "${{ matrix.os }}-${{ matrix.build_type }}"
+    name: "${{ matrix.name }}"
 
     strategy:
-      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
       fail-fast: false
-
-      # Set up a matrix to run the following 3 configurations:
-      # 1. <Windows, Release, latest MSVC compiler toolchain on the default runner image, default generator>
-      # 2. <Linux, Release, latest GCC compiler toolchain on the default runner image, default generator>
-      # 3. <Linux, Release, latest Clang compiler toolchain on the default runner image, default generator>
-      #
-      # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
-        os: [ubuntu-latest]
-        build_type: [RelWithDebInfo]
+        include:
+          - name: Linux x86_64
+            os: ubuntu-latest
+            build_dir: build/clang-release
+          - name: macOS ARM64
+            os: macos-14
+            build_dir: build/clang-release
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
+    # ── Compiler installation (platform-specific) ──
+
+    - name: Install clang (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 21
+
+    - name: Install Homebrew dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install llvm ninja
+        echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+    # ── Common setup ──
 
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        key: ccache-${{ matrix.os }}-${{ matrix.c_compiler }}
+        key: ccache-${{ matrix.os }}
         max-size: 256M
-    - name: Set reusable strings
-      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
-      id: strings
-      shell: bash
-      run: |
-        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-
-    - name: "Get library crispy & vtparser"
-      run: python3 scripts/get_contour_dirs.py
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
 
-    - name: Check cmake version
-      run: cmake --version
-
-    - name: Install Ninja
+    - name: Install Ninja (Linux)
+      if: runner.os == 'Linux'
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: Check Ninja version
-      run: ninja --version
+    - name: "Get library crispy & vtparser"
+      run: python3 scripts/get_contour_dirs.py
 
-    - name: Install clang
-      run: |
-            wget https://apt.llvm.org/llvm.sh
-            chmod +x llvm.sh
-            sudo ./llvm.sh 21
+    # ── Configure ──
 
-    - name: Check clang version
-      run: clang++ --version
+    - name: Configure CMake (Linux)
+      if: runner.os == 'Linux'
+      run: cmake --preset clang-release -DCMAKE_C_COMPILER=clang-21 -DCMAKE_CXX_COMPILER=clang++-21
 
-    - name: Check clang version
-      run: clang++-21 --version
+    - name: Configure CMake (macOS)
+      if: runner.os == 'macOS'
+      run: cmake --preset clang-release
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: >
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=clang++-21
-        -DCMAKE_C_COMPILER=clang-21
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -GNinja
-        -S ${{ github.workspace }}
+    # ── Build & Test ──
 
     - name: Build
-      # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+      run: cmake --build ${{ matrix.build_dir }}
 
     - name: Check endo formatting
+      if: runner.os == 'Linux'
       run: |
         find . -name '*.endo' -not -path './tmp/*' -not -path './build/*' \
-          | xargs ${{ steps.strings.outputs.build-output-dir }}/src/shell/endo format --check
+          | xargs ${{ matrix.build_dir }}/src/shell/endo format --check
       timeout-minutes: 2
 
     - name: Test
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      # Execute tests defined by the CMake configuration.
-      # Note that --build-config is needed because the default Windows generator is
-      # a multi-config generator (Visual Studio generator).
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure --build-config ${{ matrix.build_type }}
-      timeout-minutes: 1
+      working-directory: ${{ matrix.build_dir }}
+      run: ctest --output-on-failure
+      timeout-minutes: 5
+
+    # ── macOS packaging ──
+
+    - name: Build DMG installer
+      if: runner.os == 'macOS'
+      working-directory: ${{ matrix.build_dir }}
+      run: cpack -G DragNDrop
+
+    - name: Upload macOS binary
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-macos-arm64
+        path: ${{ matrix.build_dir }}/src/shell/endo
+        retention-days: 30
+
+    - name: Upload DMG installer
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-macos-arm64-dmg
+        path: ${{ matrix.build_dir }}/endo-*.dmg
+        retention-days: 30
 
   static-build:
     runs-on: ubuntu-latest
@@ -214,67 +225,6 @@ jobs:
       with:
         name: endo-windows-x86_64-msi
         path: build/clangcl-release/endo-*.msi
-        retention-days: 30
-
-  macos-arm64:
-    runs-on: macos-14
-    name: "macOS ARM64 Release"
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Homebrew dependencies
-      run: brew install llvm ninja ccache
-
-    - name: Set up Homebrew LLVM on PATH
-      run: |
-        LLVM_PREFIX="$(brew --prefix llvm)"
-        echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
-
-    - name: Verify compiler
-      run: |
-        which clang++
-        clang++ --version
-
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: ccache-macos-arm64
-        max-size: 256M
-
-    - name: Install CMake
-      uses: ssrobins/install-cmake@v1
-
-    - name: "Get library crispy & vtparser"
-      run: python3 scripts/get_contour_dirs.py
-
-    - name: Configure CMake
-      run: cmake --preset clang-release
-
-    - name: Build
-      run: cmake --build build/clang-release --config Release
-
-    - name: Test
-      working-directory: build/clang-release
-      run: ctest --output-on-failure --build-config Release
-      timeout-minutes: 5
-
-    - name: Build DMG installer
-      working-directory: build/clang-release
-      run: cpack -G DragNDrop
-
-    - name: Upload macOS binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: endo-macos-arm64
-        path: build/clang-release/src/shell/endo
-        retention-days: 30
-
-    - name: Upload DMG installer
-      uses: actions/upload-artifact@v4
-      with:
-        name: endo-macos-arm64-dmg
-        path: build/clang-release/endo-*.dmg
         retention-days: 30
 
   vscode-extension:

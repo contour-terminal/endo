@@ -223,9 +223,7 @@ void TerminalInput::enableProtocols()
 {
     writeProtocol(protocols::EnableWin32InputMode);
     writeProtocol(protocols::EnableCsiU);
-    writeProtocol(protocols::EnableSGRMouse);
     writeProtocol(protocols::EnablePassiveMouseTracking);
-    writeProtocol(protocols::EnableAnyMotionTracking);
     writeProtocol(protocols::EnableBracketedPaste);
     writeProtocol(protocols::EnableColorSchemeNotify);
     writeProtocol(protocols::QueryColorScheme);
@@ -235,9 +233,7 @@ void TerminalInput::disableProtocols()
 {
     writeProtocol(protocols::DisableColorSchemeNotify);
     writeProtocol(protocols::DisableBracketedPaste);
-    writeProtocol(protocols::DisableAnyMotionTracking);
     writeProtocol(protocols::DisablePassiveMouseTracking);
-    writeProtocol(protocols::DisableSGRMouse);
     writeProtocol(protocols::DisableWin32InputMode);
     writeProtocol(protocols::DisableCsiU);
 }
