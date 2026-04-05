@@ -355,6 +355,68 @@ namespace
         return (unicodeHint >= 32) ? static_cast<char32_t>(unicodeHint) : ncp;
     }
 
+    /// @brief Removes Win32 input mode sequences (CSI Vk;Sc;Uc;Kd;Cs;Rc _) from a paste buffer,
+    /// replacing key-down events with their Unicode character and stripping key-up events entirely.
+    ///
+    /// Windows Terminal may emit Win32 input mode sequences for newlines and other keys
+    /// inside bracketed paste regions when both modes are active simultaneously.
+    /// @param buf The raw paste buffer content.
+    /// @return Cleaned string with Win32 sequences replaced by their actual characters.
+    auto sanitizeWin32PasteSequences(std::string_view buf) -> std::string
+    {
+        auto result = std::string {};
+        result.reserve(buf.size());
+
+        std::size_t i = 0;
+        while (i < buf.size())
+        {
+            // Look for ESC [ ... _ pattern (Win32 input mode sequence)
+            if (buf[i] == '\x1b' && i + 1 < buf.size() && buf[i + 1] == '[')
+            {
+                // Find the end of the CSI sequence: scan for the final byte '_'
+                auto const seqStart = i;
+                auto j = i + 2; // skip ESC [
+
+                // Collect parameter bytes (digits and semicolons)
+                while (j < buf.size() && ((buf[j] >= '0' && buf[j] <= '9') || buf[j] == ';'))
+                    ++j;
+
+                // Check if this CSI sequence ends with '_' (Win32 input mode finalizer)
+                if (j < buf.size() && buf[j] == '_')
+                {
+                    // Parse the parameters: Vk;Sc;Uc;Kd;Cs;Rc
+                    auto const paramStr = buf.substr(seqStart + 2, j - (seqStart + 2));
+                    auto const params = parseCsiParams(paramStr);
+
+                    auto const unicodeChar = paramAt(params, 2);
+                    auto const keyDown = paramAt(params, 3);
+
+                    if (keyDown != 0 && unicodeChar > 0)
+                    {
+                        // Key-down with a character: emit the actual character.
+                        // CR (13) → '\n' for proper line separation.
+                        if (unicodeChar == '\r')
+                            result += '\n';
+                        else
+                            result += static_cast<char>(unicodeChar);
+                    }
+                    // Key-up events (keyDown==0) and modifier-only keys (unicodeChar==0)
+                    // are silently dropped.
+
+                    i = j + 1; // advance past the '_' finalizer
+                    continue;
+                }
+
+                // Not a Win32 input mode sequence — fall through to copy the ESC literally
+            }
+
+            result += buf[i];
+            ++i;
+        }
+
+        return result;
+    }
+
 } // namespace
 
 auto VtParser::feed(std::string_view data) -> std::vector<InputEvent>
@@ -558,7 +620,10 @@ void VtParser::processPaste(std::uint8_t byte, std::vector<InputEvent>& events)
     {
         // Remove the end sequence from the paste buffer
         _pasteBuf.resize(_pasteBuf.size() - PasteEnd.size());
-        events.emplace_back(PasteEvent { .text = std::move(_pasteBuf) });
+        // Strip Win32 input mode sequences that Windows Terminal may embed
+        // inside bracketed paste regions (e.g. Enter key as CSI 13;28;13;1;0;1 _).
+        auto cleaned = sanitizeWin32PasteSequences(_pasteBuf);
+        events.emplace_back(PasteEvent { .text = std::move(cleaned) });
         _pasteBuf.clear();
         _state = State::Ground;
     }

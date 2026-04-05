@@ -711,3 +711,91 @@ TEST_CASE("VtParser.DECRQM.different_mode", "[tui,vtparser]")
     CHECK(report->mode == 1004);
     CHECK(report->status == 1);
 }
+
+// ============================================================================
+// Bracketed paste tests
+// ============================================================================
+
+TEST_CASE("VtParser.Paste.basic_text", "[tui,vtparser]")
+{
+    // Basic bracketed paste: ESC[200~ text ESC[201~
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~hello world\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "hello world");
+}
+
+TEST_CASE("VtParser.Paste.multiline_raw_newlines", "[tui,vtparser]")
+{
+    // Multi-line paste with raw newlines (no Win32 input mode sequences)
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~line1\nline2\nline3\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "line1\nline2\nline3");
+}
+
+TEST_CASE("VtParser.Paste.win32_enter_key_replaced_with_newline", "[tui,vtparser]")
+{
+    // Windows Terminal sends Enter as Win32 input mode sequences inside bracketed paste.
+    // Key-down: CSI 13;28;13;1;0;1 _ → should become '\n'
+    // Key-up:   CSI 13;28;13;0;0;1 _ → should be stripped
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~"
+                                    "let name = \"world\""
+                                    "\033[13;28;13;1;0;1_" // Enter key-down
+                                    "\033[13;28;13;0;0;1_" // Enter key-up
+                                    "println $\"Hello, {name}!\""
+                                    "\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "let name = \"world\"\nprintln $\"Hello, {name}!\"");
+}
+
+TEST_CASE("VtParser.Paste.win32_keyup_events_stripped", "[tui,vtparser]")
+{
+    // Key-up events (Kd=0) within paste should be silently removed
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~"
+                                    "abc"
+                                    "\033[65;30;97;0;0;1_" // 'a' key-up (Kd=0)
+                                    "def"
+                                    "\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "abcdef");
+}
+
+TEST_CASE("VtParser.Paste.win32_modifier_only_stripped", "[tui,vtparser]")
+{
+    // Modifier-only keys (unicodeChar=0) within paste should be silently removed
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~"
+                                    "text"
+                                    "\033[16;42;0;1;0;1_" // Shift key-down (Vk=0x10, Uc=0)
+                                    "\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "text");
+}
+
+TEST_CASE("VtParser.Paste.win32_printable_chars_replaced", "[tui,vtparser]")
+{
+    // Win32 input mode sequences for printable chars should be replaced with the character
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[200~"
+                                    "before"
+                                    "\033[9;15;9;1;0;1_" // Tab key-down (Vk=9, Uc=9)
+                                    "after"
+                                    "\033[201~");
+    REQUIRE(events.size() == 1);
+    auto const* paste = std::get_if<PasteEvent>(events.data());
+    REQUIRE(paste != nullptr);
+    CHECK(paste->text == "before\tafter");
+}
