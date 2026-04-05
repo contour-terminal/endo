@@ -143,10 +143,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION=${RELEASE_TAG#v}
-          cp build/clang-release/src/shell/endo endo-${VERSION}-macos-arm64
           gh release upload ${{ env.RELEASE_TAG }} \
-            endo-${VERSION}-macos-arm64 \
             build/clang-release/endo-*.dmg \
             --clobber
 
@@ -200,10 +197,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $version = "${{ env.RELEASE_TAG }}" -replace '^v', ''
-          Copy-Item build/clangcl-release/src/shell/endo.exe "endo-${version}-windows-x86_64.exe"
           gh release upload ${{ env.RELEASE_TAG }} `
-            "endo-${version}-windows-x86_64.exe" `
             (Get-Item build/clangcl-release/endo-*.msi) `
             --clobber
 

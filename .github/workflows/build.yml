@@ -99,14 +99,6 @@ jobs:
       working-directory: ${{ matrix.build_dir }}
       run: cpack -G DragNDrop
 
-    - name: Upload macOS binary
-      if: runner.os == 'macOS'
-      uses: actions/upload-artifact@v4
-      with:
-        name: endo-macos-arm64
-        path: ${{ matrix.build_dir }}/src/shell/endo
-        retention-days: 30
-
     - name: Upload DMG installer
       if: runner.os == 'macOS'
       uses: actions/upload-artifact@v4
@@ -212,13 +204,6 @@ jobs:
       shell: bash
       run: |
         cpack -G WIX || (cat _CPack_Packages/win64/WIX/wix.log 2>/dev/null; exit 1)
-
-    - name: Upload Windows binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: endo-windows-x86_64
-        path: build/clangcl-release/src/shell/endo.exe
-        retention-days: 30
 
     - name: Upload MSI installer
       uses: actions/upload-artifact@v4
