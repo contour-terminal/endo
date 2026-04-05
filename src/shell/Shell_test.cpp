@@ -3583,6 +3583,22 @@ TEST_CASE("shell.bare_expr.unit_suppressed")
     CHECK(escape(shell.output()) == escape("hello"));
 }
 
+TEST_CASE("shell.bare_expr.println_unit_suppressed")
+{
+    TestShell shell;
+    shell("println \"hello\"");
+    // println outputs "hello\n" but should NOT auto-display extra "0"
+    CHECK(escape(shell.output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.bare_expr.println_pipeline_unit_suppressed")
+{
+    TestShell shell;
+    shell("3 |> fun n -> println $\"count: {n}\"");
+    // Pipeline ending in println should NOT auto-display extra "0"
+    CHECK(escape(shell.output()) == escape("count: 3\n"));
+}
+
 TEST_CASE("shell.bare_expr.unit_function_no_display")
 {
     TestShell shell;
@@ -4887,8 +4903,7 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer =
-        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    ts.shell.completer = std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();
@@ -4922,6 +4937,7 @@ TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
     CHECK(hasResult(result.completions, "--help"));
 
     // Verify description is carried through the bridge
-    auto const it = std::ranges::find_if(result.completions, [](auto const& c) { return c.text == "--help"; });
+    auto const it =
+        std::ranges::find_if(result.completions, [](auto const& c) { return c.text == "--help"; });
     CHECK(it->description == "Show help");
 }
