@@ -219,11 +219,20 @@ void TerminalInput::writeProtocol(std::string_view data) const
     WriteFile(_hStdout, data.data(), static_cast<DWORD>(data.size()), &written, nullptr);
 }
 
+void TerminalInput::setAnyMotionTracking(bool enabled)
+{
+    _anyMotionTracking = enabled;
+    if (_rawMode)
+        writeProtocol(enabled ? protocols::EnableAnyMotionTracking : protocols::DisableAnyMotionTracking);
+}
+
 void TerminalInput::enableProtocols()
 {
     writeProtocol(protocols::EnableWin32InputMode);
     writeProtocol(protocols::EnableCsiU);
     writeProtocol(protocols::EnablePassiveMouseTracking);
+    if (_anyMotionTracking)
+        writeProtocol(protocols::EnableAnyMotionTracking);
     writeProtocol(protocols::EnableBracketedPaste);
     writeProtocol(protocols::EnableColorSchemeNotify);
     writeProtocol(protocols::QueryColorScheme);
@@ -233,6 +242,8 @@ void TerminalInput::disableProtocols()
 {
     writeProtocol(protocols::DisableColorSchemeNotify);
     writeProtocol(protocols::DisableBracketedPaste);
+    if (_anyMotionTracking)
+        writeProtocol(protocols::DisableAnyMotionTracking);
     writeProtocol(protocols::DisablePassiveMouseTracking);
     writeProtocol(protocols::DisableWin32InputMode);
     writeProtocol(protocols::DisableCsiU);

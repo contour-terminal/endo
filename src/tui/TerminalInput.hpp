@@ -80,6 +80,15 @@ class TerminalInput
     /// @brief Returns whether the terminal is currently suspended.
     [[nodiscard]] auto isSuspended() const noexcept -> bool;
 
+    /// @brief Enables or disables any-motion mouse tracking (mode 1003).
+    ///
+    /// When enabled, the terminal reports all mouse movements (not just button presses),
+    /// which is required for hover tooltip support. This should only be enabled after
+    /// confirming passive mouse tracking (mode 2029) support via DECRQPM, to avoid
+    /// capturing the mouse in terminals that don't support passive tracking.
+    /// @param enabled True to enable, false to disable.
+    void setAnyMotionTracking(bool enabled);
+
     /// @brief Sets a cross-platform wakeup handle for poll() integration.
     ///
     /// When set, poll() will also monitor the wakeup's native handle alongside
@@ -91,7 +100,8 @@ class TerminalInput
   private:
     VtParser _parser;
     bool _rawMode = false;
-    bool _suspended = false; ///< True when suspended for external command execution.
+    bool _suspended = false;         ///< True when suspended for external command execution.
+    bool _anyMotionTracking = false; ///< True when any-motion tracking (mode 1003) should be enabled.
 
 #if defined(_WIN32)
     HANDLE _hStdin = INVALID_HANDLE_VALUE;
@@ -100,8 +110,8 @@ class TerminalInput
     DWORD _originalOutputMode = 0;
     HANDLE _resizeEvent = nullptr; ///< Manual-reset event for resize notification.
 #else
-    int _fd = 0;        // STDIN_FILENO
-    int _outFd = 1;     // STDOUT_FILENO
+    int _fd = 0;    // STDIN_FILENO
+    int _outFd = 1; // STDOUT_FILENO
     struct termios _origTermios {};
     int _resizePipe[2] = { -1, -1 }; ///< Self-pipe for SIGWINCH.
 #endif
