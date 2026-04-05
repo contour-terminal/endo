@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
 
-project(endo VERSION "0.0.0" LANGUAGES CXX)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+include(Version)
+GetVersionInformation(ENDO_VERSION ENDO_VERSION_STRING)
+
+project(endo VERSION "${ENDO_VERSION}" LANGUAGES CXX)
 
 include(GNUInstallDirs)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 
 # setting defaults
