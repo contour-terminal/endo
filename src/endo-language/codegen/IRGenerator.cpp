@@ -781,6 +781,10 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         }
     }
 
+    // Lambda: result type is determined by the body expression
+    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(expr))
+        return isUnitProducingExprImpl(lambda->body.get(), visited);
+
     // Pipeline: result type is determined by the rightmost function
     if (auto const* pipeline = dynamic_cast<ast::PipelineExpr const*>(expr))
         return isUnitProducingExprImpl(pipeline->function.get(), visited);
@@ -10537,8 +10541,9 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         }
         if (modIdent->name == "Completion")
         {
-            static constexpr std::string_view completionMethods[] = { "register", "entry", "described",
-                                                                      "detailed", "text" };
+            static constexpr std::string_view completionMethods[] = {
+                "register", "entry", "described", "detailed", "text"
+            };
             for (auto const& m: completionMethods)
             {
                 if (node.fieldName == m)

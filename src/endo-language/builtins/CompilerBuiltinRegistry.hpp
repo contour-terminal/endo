@@ -48,8 +48,8 @@ struct CompilerBuiltinEntry
 /// 2. Implement codegen in the appropriate visitor(s).
 /// 3. Parser dispatch and isUnitProducing checks will automatically pick it up.
 inline constexpr std::array compilerBuiltins = {
-    CompilerBuiltinEntry { .name = "print",              .stmtStrategy = StmtParseStrategy::FSharpSimple },
-    CompilerBuiltinEntry { .name = "println",            .stmtStrategy = StmtParseStrategy::FSharpSimple },
+    CompilerBuiltinEntry { .name = "print",              .stmtStrategy = StmtParseStrategy::FSharpSimple, .unitProducing = true },
+    CompilerBuiltinEntry { .name = "println",            .stmtStrategy = StmtParseStrategy::FSharpSimple, .unitProducing = true },
     CompilerBuiltinEntry { .name = "each",               .stmtStrategy = StmtParseStrategy::FSharpSimple },
     CompilerBuiltinEntry { .name = "ignore",             .stmtStrategy = StmtParseStrategy::FSharpSimple,       .excludeFromPrimary = true, .unitProducing = true },
     CompilerBuiltinEntry { .name = "rand",               .stmtStrategy = StmtParseStrategy::FSharpWithPipeline },
