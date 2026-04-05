@@ -242,5 +242,7 @@ jobs:
         working-directory: editors/vscode
         run: |
           VERSION=${RELEASE_TAG#v}
-          mv *.vsix endo-${VERSION}.vsix
-          gh release upload ${{ env.RELEASE_TAG }} endo-${VERSION}.vsix --clobber
+          VSIX=$(ls *.vsix | head -1)
+          TARGET="endo-${VERSION}.vsix"
+          [ "$VSIX" != "$TARGET" ] && mv "$VSIX" "$TARGET"
+          gh release upload ${{ env.RELEASE_TAG }} "$TARGET" --clobber
