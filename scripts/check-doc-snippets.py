@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract and validate ```endo code blocks from documentation markdown files.
+"""Extract and validate ```endo and ```fsharp code blocks from markdown files.
 
 Usage:
     python3 scripts/check-doc-snippets.py [OPTIONS] [FILES...]
@@ -7,7 +7,7 @@ Usage:
 Options:
     --endo-path PATH   Path to endo binary (auto-detected if omitted)
     -v, --verbose      Show all blocks (not just failures)
-    FILES              Specific .md files (default: all docs/**/*.md)
+    FILES              Specific .md files (default: README.md + all docs/**/*.md)
 
 Markers:
     <!-- endo-no-check -->       Skip the following code block entirely
@@ -107,19 +107,22 @@ def parse_file_annotation(source: str) -> tuple[str | None, str]:
     return None, source
 
 
-def extract_code_blocks(filepath: Path) -> list[dict]:
-    """Extract all ```endo code blocks from a markdown file.
+def extract_code_blocks(filepath: Path, extra_fences: list[str] | None = None) -> list[dict]:
+    """Extract ```endo code blocks (and optional extra fences) from a markdown file.
 
     Returns a list of dicts with keys: source, line, skip, filename.
     Blocks preceded by <!-- endo-no-check --> on the previous non-empty line are marked skip.
     Blocks whose first line is '# file: Name.endo' are module definitions (filename is set).
     """
+    fences = ["```endo"]
+    for fence in (extra_fences or []):
+        fences.append(f"```{fence}")
     blocks = []
     lines = filepath.read_text(encoding="utf-8").splitlines()
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
-        if stripped.startswith("```endo"):
+        if any(stripped.startswith(f) for f in fences):
             # Check if previous non-empty line is the skip marker
             skip = False
             for j in range(i - 1, -1, -1):
@@ -242,7 +245,7 @@ def run_block(source: str, endo_path: Path, tmp_dir: Path,
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Check ```endo code blocks in documentation for validity."
+        description="Check ```endo and ```fsharp code blocks in documentation for validity."
     )
     parser.add_argument(
         "--endo-path",
@@ -288,6 +291,9 @@ def main() -> int:
         md_files = sorted(args.files)
     else:
         md_files = sorted((root / "docs").rglob("*.md"))
+        readme = root / "README.md"
+        if readme.is_file():
+            md_files.insert(0, readme)
 
     # Use project-local tmp/ directory
     tmp_dir = root / "tmp"
@@ -300,7 +306,9 @@ def main() -> int:
     failures = []
 
     for md_file in md_files:
-        blocks = extract_code_blocks(md_file)
+        # README.md uses ```fsharp as a GitHub syntax-highlighting workaround for endo code
+        extra_fences = ["fsharp"] if md_file.name == "README.md" else None
+        blocks = extract_code_blocks(md_file, extra_fences=extra_fences)
 
         # Track virtual modules accumulated across blocks in this file
         virtual_modules: dict[str, str] = {}

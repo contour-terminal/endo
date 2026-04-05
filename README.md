@@ -2,14 +2,12 @@
 
 # Endo
 
-**A modern, cross-platform shell where functional programming meets everyday productivity.**
+**A cross-platform shell with F#-inspired functional programming.**
 
 [![Linux](https://img.shields.io/badge/Linux-supported-brightgreen?logo=linux&logoColor=white)](#installation)
 [![macOS](https://img.shields.io/badge/macOS-supported-brightgreen?logo=apple&logoColor=white)](#installation)
 [![Windows](https://img.shields.io/badge/Windows-supported-brightgreen?logo=windows&logoColor=white)](#installation)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
-
-*The shell you always wanted — F#-inspired, Bash-convenient, everywhere.*
 
 ---
 
@@ -17,75 +15,76 @@
 
 </div>
 
-> **Early Development** — Endo is under active development and has not yet had an official release.
-> The language, builtins, and APIs may change. That said, there is already a lot to explore — dive in and share your feedback!
+> **Early Development** — Endo is under active development. The language, builtins, and APIs
+> may change. Feedback and contributions are very welcome!
 
-## Why Endo?
+## What Is Endo?
 
-Shells haven't evolved. You're still gluing strings together, guessing at exit codes, and writing
-brittle pipelines. **Endo changes that.** It brings the expressive power of functional programming
-to your terminal — without sacrificing the quick-and-dirty convenience you rely on every day.
+Endo is an interactive shell and scripting language that combines familiar command-line
+conventions with ideas from functional programming — primarily F#. It runs natively on
+Linux, macOS, and Windows.
 
-- **Pipelines that carry structured data**, not just text
-- **Pattern matching and algebraic types** right at your prompt
-- **Type inference** that stays out of your way until you need it
-- **One shell, every platform** — no more `#!/bin/bash` on machines that don't have it
+- **Structured pipelines** — data flows as typed records, not only plain text
+- **Pattern matching and algebraic types** — `Option`, `Result`, discriminated unions
+- **Type inference** — types are checked but rarely need to be written
+- **Bash compatibility** — redirects, globs, `&&`/`||`, and command execution work as expected
 
 ## Features
 
-### Functional at Its Core
+### F#-Inspired Language
 
-Endo's language is heavily inspired by F#. Pipe operators, pattern matching, immutable-by-default
-bindings, and first-class functions are not bolted on — they're the foundation.
+Pipe operators, pattern matching, immutable-by-default bindings, and first-class functions
+form the core of the language.
 
-### Bash-Like When You Need It
+### Familiar Shell Conventions
 
-Run commands, redirect output, glob files, chain with `&&` and `||`. If your muscle memory
-speaks Bash, Endo understands.
+Run commands, redirect output, glob files, chain with `&&` and `||`. Everyday shell usage
+works the way you'd expect.
 
 ### Structured Pipelines
 
-Stop parsing `grep | awk | sed` chains. Endo pipelines pass typed records between stages,
-so data stays intact from source to sink.
+Pipelines pass typed records between stages, so data stays intact from source to sink.
 
-### Cross-Platform, No Compromises
+### Cross-Platform
 
-Native support for Linux, macOS, and Windows. Write scripts once, run them everywhere —
-no compatibility layers, no emulation.
+Runs natively on Linux, macOS, and Windows from the same source — scripts are portable
+without compatibility layers.
 
-### Intelligent Completions
+### Context-Aware Completions
 
-Context-aware tab completions powered by the type system. Endo knows what a command expects
-before you finish typing it.
+Tab completions are informed by the type system, offering relevant suggestions based on
+what a command or function expects.
 
-### Sane Error Handling
+### Explicit Error Handling
 
-No more silent failures. Endo uses result types inspired by `Result<T, E>`, giving you
-explicit, composable error handling without the ceremony.
+Result types (`Ok`/`Error`) and option types (`Some`/`None`) make error paths visible
+and composable.
 
 ## Examples
 
-**Familiar commands, elevated syntax:**
+**Basic usage:**
 
 ```bash
 # It's still a shell — run anything
 ls -la
 git status && echo "All clean"
+```
 
+```fsharp
 # F#-style bindings and string interpolation
 let name = "world"
 println $"Hello, {name}!"
 ```
 
-**Shell output meets functional pipelines:**
+**Shell commands in functional pipelines:**
 
 ```fsharp
-# Pipe shell command output straight into F# transforms — it's still a shell
-ps aux |> lines |> filter (contains "nginx" _) |> length
-|> fun n -> println $"Found {n} nginx processes"
+# Structured builtins return typed records — no text parsing needed
+ps |> filter (_.command |> contains "endo") |> length
+|> fun n -> println $"Found {n} endo processes"
 
-# Process git history with functional pipelines
-git log --oneline |> lines |> take 5 |> each println
+# git log returns structured commit data
+git log |> take 5 |> each (fun c -> println c.message)
 ```
 
 **Functional data processing:**
@@ -183,8 +182,7 @@ sudo cmake --install build/clang-release
 
 ## Contributing
 
-Contributions are welcome. Whether it's a bug report, a feature request, or a pull request —
-every bit helps shape Endo into the shell it should be.
+Contributions are welcome — bug reports, feature ideas, documentation improvements, or code.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-thing`)
@@ -201,6 +199,6 @@ Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**Endo** — *Stop parsing. Start piping.*
+[endo-lang.org](https://endo-lang.org/)
 
 </div>
