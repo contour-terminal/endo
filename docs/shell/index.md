@@ -1,15 +1,14 @@
 ---
 title: Shell Overview
-description: Endo as an interactive shell -- what makes it different and how to use it.
+description: Endo as an interactive shell — features and usage.
 ---
 
 # Shell Overview
 
-Endo is not just a programming language -- it is a fully interactive shell designed for
-daily use. It combines the familiarity of Bash with the expressive power of F#-inspired
-functional programming.
+Endo is a fully interactive shell designed for daily use. It combines familiar shell
+conventions with F#-inspired functional programming.
 
-## What Makes Endo Different?
+## Key Concepts
 
 ### Dual-Mode Prompt
 

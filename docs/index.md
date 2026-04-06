@@ -1,17 +1,13 @@
 ---
 title: Endo Shell
-description: A modern, cross-platform shell where functional programming meets everyday productivity.
+description: A cross-platform shell with F#-inspired functional programming.
 ---
 
 <div class="hero" markdown>
 
 # **Endo**
 
-## Stop parsing. Start piping.
-
-A modern, cross-platform shell where functional programming meets everyday productivity.
-
-*The shell you always wanted -- F#-inspired, Bash-convenient, everywhere.*
+A cross-platform shell with F#-inspired functional programming.
 
 [Get Started](getting-started.md){ .md-button .md-button--primary }
 [Language Reference](language/index.md){ .md-button }
@@ -22,59 +18,57 @@ A modern, cross-platform shell where functional programming meets everyday produ
 
 !!! warning "Early Development"
 
-    Endo is under active development and has not yet had an official release.
-    The language, builtins, and APIs may change. That said, there is already a lot to explore — dive in and share your feedback!
+    Endo is under active development. The language, builtins, and APIs may change.
+    Feedback and contributions are very welcome!
 
-## Why Endo?
+## What Is Endo?
 
-Shells haven't evolved. You're still gluing strings together, guessing at exit codes, and
-writing brittle pipelines. **Endo changes that.** It brings the expressive power of functional
-programming to your terminal -- without sacrificing the quick-and-dirty convenience you rely
-on every day.
+Endo is an interactive shell and scripting language that combines familiar command-line
+conventions with ideas from functional programming — primarily F#. It runs natively on
+Linux, macOS, and Windows.
 
 <div class="grid cards" markdown>
 
--   :material-function-variant: **Functional Core**
+-   :material-function-variant: **F#-Inspired Language**
 
     ---
 
-    F#-inspired language with pipe operators, pattern matching, immutable-by-default bindings,
-    and first-class functions built into the foundation.
+    Pipe operators, pattern matching, immutable-by-default bindings, and first-class
+    functions form the core of the language.
 
--   :material-bash: **Bash Compatible**
+-   :material-bash: **Familiar Shell Conventions**
 
     ---
 
-    Run commands, redirect output, glob files, chain with `&&` and `||`. If your muscle memory
-    speaks Bash, Endo understands.
+    Run commands, redirect output, glob files, chain with `&&` and `||`. Everyday shell
+    usage works the way you'd expect.
 
 -   :material-pipe: **Structured Pipelines**
 
     ---
 
-    Stop parsing `grep | awk | sed` chains. Endo pipelines pass typed records between stages,
-    so data stays intact from source to sink.
+    Pipelines pass typed records between stages, so data stays intact from source to sink.
 
 -   :material-laptop: **Cross-Platform**
 
     ---
 
-    Native support for Linux, macOS, and Windows. Write scripts once, run them everywhere --
-    no compatibility layers, no emulation.
+    Runs natively on Linux, macOS, and Windows from the same source — scripts are portable
+    without compatibility layers.
 
--   :material-tab: **Intelligent Completions**
-
-    ---
-
-    Context-aware tab completions powered by the type system. Endo knows what a command expects
-    before you finish typing it.
-
--   :material-alert-circle-check: **Sane Error Handling**
+-   :material-tab: **Context-Aware Completions**
 
     ---
 
-    No more silent failures. Result and Option types give you explicit, composable error
-    handling without the ceremony.
+    Tab completions are informed by the type system, offering relevant suggestions based on
+    what a command or function expects.
+
+-   :material-alert-circle-check: **Explicit Error Handling**
+
+    ---
+
+    Result types (`Ok`/`Error`) and option types (`Some`/`None`) make error paths visible
+    and composable.
 
 </div>
 
@@ -82,7 +76,7 @@ on every day.
 
 ## A Quick Taste
 
-**Familiar commands, elevated syntax:**
+**Basic usage:**
 
 ```endo
 # It's still a shell -- run anything
@@ -94,16 +88,16 @@ let name = "world"
 println $"Hello, {name}!"
 ```
 
-**Shell output meets functional pipelines:**
+**Shell commands in functional pipelines:**
 
 <!-- endo-no-check -->
 ```endo
-# Pipe shell command output straight into F# transforms
-ps aux |> lines |> filter (contains "nginx" _) |> length
-|> fun n -> println $"Found {n} nginx processes"
+# Structured builtins return typed records — no text parsing needed
+ps |> filter (_.command |> contains "endo") |> length
+|> fun n -> println $"Found {n} endo processes"
 
-# Process git history with functional pipelines
-git log --oneline |> lines |> take 5 |> each println
+# git log returns structured commit data
+git log |> take 5 |> each (fun c -> println c.message)
 ```
 
 **Functional data processing:**

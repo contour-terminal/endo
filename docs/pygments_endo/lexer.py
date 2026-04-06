@@ -1,7 +1,7 @@
 """
 Pygments lexer for the Endo language.
 
-Endo is a modern shell language that blends POSIX shell semantics with
+Endo is a shell language that blends POSIX shell semantics with
 F#-style functional programming constructs.
 """
 

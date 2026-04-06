@@ -1,6 +1,6 @@
 # Philosophy & Goals
 
-The Endo Language Reference documents the complete specification of the Endo programming language — a modern shell that combines F#-inspired functional programming with bash-compatible shell scripting.
+The Endo Language Reference documents the complete specification of the Endo programming language — a cross-platform shell that combines F#-inspired functional programming with bash-compatible shell scripting.
 
 ### Core Principles
 

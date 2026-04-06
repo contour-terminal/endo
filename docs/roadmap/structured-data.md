@@ -13,8 +13,8 @@ particularly records and union types.
 
 The goal is to evolve Endo from a shell that primarily deals with streams of text to one
 that can natively understand and manipulate streams of structured objects. This enables
-more powerful, reliable, and developer-friendly automation, akin to PowerShell but with a
-modern, functional approach.
+more powerful, reliable, and composable automation, akin to PowerShell but with a
+functional approach.
 
 Instead of parsing text with `awk`, `sed`, and `grep`:
 

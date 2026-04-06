@@ -1,13 +1,13 @@
 ---
 title: AI Agent Overview
-description: LLM-powered coding assistant built into the Endo shell -- setup, providers, and quick start.
+description: Built-in AI agent — setup, providers, and quick start.
 ---
 
 # AI Agent Overview
 
-Endo includes a built-in AI agent -- an LLM-powered coding assistant that lives inside your
-shell. It can read and edit files, run commands, search your codebase, execute Endo scripts,
-and connect to external tool servers via [MCP](configuration.md#mcp-server-configuration).
+Endo includes a built-in AI agent that can read and edit files, run commands, search your
+codebase, execute Endo scripts, and connect to external tool servers via
+[MCP](configuration.md#mcp-server-configuration).
 
 ## Quick Start
 

@@ -5,9 +5,9 @@ description: How Endo compares to Bash, Fish, Nushell, Elvish, and Zsh.
 
 # How Endo Compares
 
-Endo occupies a unique position in the shell landscape: it combines **Bash-compatible command
-execution** with **F#-inspired functional programming**. This page offers an honest comparison
-with other shells to help you decide if Endo is right for you.
+Endo combines **Bash-compatible command execution** with **F#-inspired functional
+programming**. This page compares it with other shells to help you decide if it fits
+your workflow.
 
 ## Quick Comparison
 
@@ -90,9 +90,9 @@ on their foundation:
 - **Structured output.** Builtins like `ls` and `ps` return typed records instead of
   formatted text.
 - **IDE features.** Full LSP server, semantic syntax highlighting, and source formatting.
-- **Modern error handling.** Result/Option types with `?` propagation instead of exit codes.
+- **Explicit error handling.** Result/Option types with `?` propagation instead of exit codes.
 - **Type inference.** Automatic type deduction with optional annotations.
-- **Modern debugger.** Integrated DAP server with conditional breakpoints, watch
+- **Integrated debugger.** DAP server with conditional breakpoints, watch
   expressions, disassembly, and expression evaluation. Bash has bashdb and a VS Code DAP
   extension, but Endo's debugger is built-in and requires no external tools.
 
@@ -107,18 +107,15 @@ on their foundation:
 
 Endo is a great fit if you:
 
-- Want your shell prompt to feel like an IDE -- hover tooltips, real-time diagnostics,
-  semantic syntax highlighting, and go-to-definition right at the command line
+- Want IDE features at the command line — hover tooltips, real-time diagnostics,
+  semantic syntax highlighting, and go-to-definition
 - Want functional programming at your prompt without leaving shell mode
-- Are tired of `grep | awk | sed` chains and want typed pipelines
-- Value a first-class graphical terminal experience with elevated UX out of the box
+- Prefer typed pipelines over text-parsing chains
 - Need an integrated script debugger with breakpoints, stepping, and variable inspection
 - Are comfortable with F#, OCaml, Haskell, or similar syntax
 - Want a single shell that works on Linux, macOS, and Windows
 
 ## When to Choose Something Else
-
-Be honest with yourself:
 
 - **Need maximum script compatibility?** Stick with Bash or Zsh.
 - **Want the largest community and plugin ecosystem?** Choose Fish or Zsh.
@@ -127,6 +124,4 @@ Be honest with yourself:
 - **Prefer minimal learning curve?** Fish is friendlier for non-programmers.
 
 Endo is new (0.1.0). It is well-tested (1,500+ integration tests) and suitable for daily
-use, but it does not yet have the ecosystem depth of more established shells. If you are
-willing to adopt early, you get a unique combination of shell convenience and functional
-programming power that no other shell offers.
+use, but it does not yet have the ecosystem depth of more established shells.

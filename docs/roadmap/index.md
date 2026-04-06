@@ -5,17 +5,16 @@ description: Development roadmap and progress for the Endo project.
 
 # Roadmap
 
-Endo is an actively developed project with a clear vision: a modern, cross-platform shell
-that combines the convenience of Bash with the expressive power of F#-inspired functional
-programming.
+Endo is a cross-platform shell that combines familiar shell conventions with F#-inspired
+functional programming.
 
 ## Vision
 
-- **Modern UX** -- Rich text editing, mouse support, LSP-like completions, and syntax
+- **Interactive UX** -- Rich text editing, mouse support, LSP-like completions, and syntax
   highlighting directly in the shell
 - **AI-Powered** -- Natural language command generation with provider abstraction (local
   LLMs and cloud APIs)
-- **Cross-Platform** -- First-class Linux, macOS, and Windows support
+- **Cross-Platform** -- Linux, macOS, and Windows support
 - **Developer-Friendly** -- Debug Adapter Protocol (DAP) integration for script debugging
 
 ## Status Overview
