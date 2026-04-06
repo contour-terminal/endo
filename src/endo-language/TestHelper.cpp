@@ -18,6 +18,7 @@
 #include <filesystem>
 
 #include <platform/GlobMatch.hpp>
+#include <platform/NativeFileSystem.hpp>
 
 namespace endo::test
 {
@@ -773,7 +774,8 @@ bool generatesIRWithError(std::string const& source,
 
     // Create persistent state with module loader
     FSharpPersistentState fsharpState;
-    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    fsharpState.moduleLoader =
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 
@@ -874,7 +876,8 @@ ExecutionResult executeSource(std::string const& source,
 
     // Create persistent state with module loader
     FSharpPersistentState fsharpState;
-    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    fsharpState.moduleLoader =
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 
@@ -992,7 +995,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
 {
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
-    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    fsharpState.moduleLoader =
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
 
     ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
 
@@ -1067,7 +1071,8 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts,
 {
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
-    fsharpState.moduleLoader = std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report);
+    fsharpState.moduleLoader =
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 

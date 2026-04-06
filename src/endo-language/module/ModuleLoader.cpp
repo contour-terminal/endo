@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <ranges>
 #include <string>
 
@@ -17,8 +16,8 @@ namespace endo
 
 namespace fs = std::filesystem;
 
-ModuleLoader::ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report):
-    _runtime(runtime), _report(report)
+ModuleLoader::ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report, FileSystem& fs):
+    _fs(fs), _runtime(runtime), _report(report)
 {
 }
 
@@ -75,7 +74,7 @@ ModuleDescriptor const* ModuleLoader::loadModule(std::string const& dottedName,
     }
 
     // Check cache by resolved path (same file via different relative paths)
-    auto const canonicalPath = fs::canonical(*resolved).string();
+    auto const canonicalPath = _fs.weaklyCanonical(*resolved).string();
     if (auto pathIt = _cacheByPath.find(canonicalPath); pathIt != _cacheByPath.end())
         return pathIt->second;
 
@@ -114,16 +113,16 @@ std::optional<fs::path> ModuleLoader::resolveModulePath(std::string const& dotte
     {
         auto const dir = relativeTo->parent_path();
         auto const candidate = dir / relPath;
-        if (fs::exists(candidate))
-            return fs::canonical(candidate);
+        if (_fs.exists(candidate))
+            return _fs.weaklyCanonical(candidate);
     }
 
     // 2. Search paths (includes project modules/, user modules, system stdlib)
     for (auto const& searchPath: _searchPaths)
     {
         auto const candidate = searchPath / relPath;
-        if (fs::exists(candidate))
-            return fs::canonical(candidate);
+        if (_fs.exists(candidate))
+            return _fs.weaklyCanonical(candidate);
     }
 
     return std::nullopt;
@@ -168,15 +167,18 @@ std::vector<std::string> ModuleLoader::availableModuleNames() const
     auto fsNames = std::vector<std::string> {};
     for (auto const& searchPath: _searchPaths)
     {
-        if (!fs::exists(searchPath) || !fs::is_directory(searchPath))
+        if (!_fs.exists(searchPath) || !_fs.isDirectory(searchPath))
             continue;
-        for (auto const& entry: fs::recursive_directory_iterator(searchPath))
+        auto entries = _fs.listDirectoryRecursive(searchPath);
+        if (!entries)
+            continue;
+        for (auto const& entry: *entries)
         {
-            if (!entry.is_regular_file() || entry.path().extension() != ".endo")
+            if (entry.isDirectory || entry.path.extension() != ".endo")
                 continue;
 
             // Build dotted name from relative path (e.g., "Geometry/Circle.endo" -> "Geometry.Circle")
-            auto const relPath = fs::relative(entry.path(), searchPath);
+            auto const relPath = entry.path.lexically_relative(searchPath);
             std::string dottedName;
             bool allPascalCase = true;
 
@@ -220,13 +222,13 @@ std::vector<std::string> ModuleLoader::availableModuleNames() const
 std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const& name, fs::path const& path)
 {
     // Read source file
-    auto ifs = std::ifstream(path);
-    if (!ifs)
+    auto content = _fs.readFile(path);
+    if (!content)
     {
         _report.syntaxError(CoreVM::SourceLocation {}, "Cannot open module file: {}", path.string());
         return nullptr;
     }
-    auto source = std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+    auto source = std::move(*content);
 
     // Parse the module source
     auto lexerSource = std::make_unique<StringSource>(source);
@@ -240,7 +242,7 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
     // Create descriptor
     auto descriptor = std::make_unique<ModuleDescriptor>();
     descriptor->name = name;
-    descriptor->sourcePath = fs::canonical(path);
+    descriptor->sourcePath = _fs.weaklyCanonical(path);
 
     // Extract private names from the AST before IR generation
     if (auto const* compound = dynamic_cast<ast::CompoundStmt const*>(ast.get()))
@@ -292,9 +294,10 @@ std::unique_ptr<ModuleDescriptor> ModuleLoader::compileModule(std::string const&
     // Validate against signature file (.endoi) if present
     auto sigPath = path;
     sigPath.replace_extension(".endoi");
-    if (fs::exists(sigPath))
+    if (_fs.exists(sigPath))
     {
-        if (auto sig = parseModuleSignature(sigPath))
+        auto sigContent = _fs.readFile(sigPath);
+        if (auto sig = sigContent ? parseModuleSignature(sigPath.stem().string(), *sigContent) : std::nullopt)
         {
             for (auto const& warning: sig->warnings)
                 _report.syntaxError(CoreVM::SourceLocation {}, "Signature warning: {}", warning);

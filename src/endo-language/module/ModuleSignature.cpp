@@ -17,17 +17,14 @@ bool ModuleSignature::declares(std::string const& name) const
     return std::ranges::any_of(entries, [&](auto const& e) { return e.name == name; });
 }
 
-std::optional<ModuleSignature> parseModuleSignature(std::filesystem::path const& path)
+std::optional<ModuleSignature> parseModuleSignature(std::string_view moduleName, std::string_view content)
 {
-    auto ifs = std::ifstream(path);
-    if (!ifs)
-        return std::nullopt;
-
     auto sig = ModuleSignature {};
-    sig.moduleName = path.stem().string();
+    sig.moduleName = std::string(moduleName);
 
+    auto iss = std::istringstream(std::string(content));
     auto line = std::string {};
-    while (std::getline(ifs, line))
+    while (std::getline(iss, line))
     {
         // Skip empty lines and comments
         auto const trimStart = line.find_first_not_of(" \t");
@@ -101,6 +98,15 @@ std::optional<ModuleSignature> parseModuleSignature(std::filesystem::path const&
     }
 
     return sig;
+}
+
+std::optional<ModuleSignature> parseModuleSignature(std::filesystem::path const& path)
+{
+    auto ifs = std::ifstream(path);
+    if (!ifs)
+        return std::nullopt;
+    auto content = std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+    return parseModuleSignature(path.stem().string(), content);
 }
 
 std::vector<std::string> validateSignature(ModuleDescriptor const& descriptor,
