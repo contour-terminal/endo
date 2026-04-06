@@ -1,42 +1,253 @@
-# Endo Language & documentation
-- The endo language specification is in `docs/language/` (split across 15 pages)
-- The status of the endo language implementation is tracked in `ROADMAP-Language.md`
-- Be humble and open in the documentation and specification. Avoid marketing language and exaggerations. Focus on the facts and be transparent about the current state of the implementation, its limitations, and future plans.
+# Endo — Agent Guidelines
 
-# User-facing built-ins and language syntax / semantics
-- User-facing builtin functions and properties must be fully documented and available to the LSP and shell completion system
-- language syntax and semantics changes must be fully documented in the language specification and available to the LSP
+## Project Architecture
 
-# Building
-- Use CMake with preset "clang-debug" for building and testing on Linux with Clang in debug mode.
-- Use CMake with preset "clang-release" for performance testing on Linux with Clang in release mode.
+Endo is a modern interactive shell combining F#-style functional programming with bash-style shell scripting.
 
-# Testing
-- Write tests via e2e tests in `tests` directory to be executed via `endo-test` if possible - use catch2 only if not possible as e2e test.
-- Run the tests using `ctest --preset=clang-debug` or `ctest --preset=clang-release` depending on the build type.
+### Compilation Pipeline
 
-# C++ Coding Guidelines
-- Use data driven design and avoid hardcoding values in the code.
-- Use dependency injection to decouple components and improve testability.
-- Document new functions, parameters, returns, classes, structs, and their members using Doxygen style comments.
-- Use const correctness throughout the codebase.
-- Prefer C++23 with constexpr, std::ranges, std::format, where applicable.
-- C-style loops are forbidden; use range-based for loops instead.
-- Use std::views::iota and other views for generating and transforming ranges.
-- Use std::span for passing arrays and contiguous sequences.
-- Use std::expected for error handling and its functional style methods like and_then, or_else, transform, transform_error, etc.
-- Use range based for loop, structured bindings, and algorithms from the standard library.
-- Use clang-format after changes to format code according to project style.
-- Use auto-type declaration for variables to improve code readability.
-- Ensure changes are covered by unit tests and aim always for increased code coverage.
-- Reports from clang-tidy should not be cast away via NOLINT comments; instead, address the underlying issues.
+```
+Source → Lexer → Parser → AST → Semantic Analysis → Code Generation → CoreVM (bytecode execution)
+```
 
-# Workflow
-- When done implementing the changes, always update the ROADMAP.md file to reflect the current state.
-- Extend the documentation according to the language or CLI changes, if any.
-- When `.endo` files were created or updated, make sure they're formatted according to the endo language specification and that they pass the endo format tool.
-- When done with the code changes, execute /simplify command and also avoid code duplications.
-- Always mention the performance impact in detail in the summary, if any.
-- Always perform and add risk assessment in the summary, if possible.
-- Always run full test suite when done.
-- Always report the code coverage results in the summary.
+### Component Map
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/CoreVM/` | Bytecode virtual machine, IR, type system, garbage collector, runtime |
+| `src/endo-language/` | Compiler frontend: lexer, parser, AST, semantic analysis, codegen, formatter, IDE support |
+| `src/shell/` | Interactive shell: builtins, job control, completion, history, TTY abstraction |
+| `src/lsp/` | Language Server Protocol implementation (50+ providers across 4 tiers) |
+| `src/platform/` | OS abstraction: `ProcessProvider`, `FileInfoProvider`, `EnvironmentProvider`, `FileSystem` |
+| `src/agent/` | AI agent integration (LLM providers, MCP client) |
+| `src/dap/` | Debug Adapter Protocol |
+| `src/editor-protocol/` | Editor communication abstractions (`DocumentStore`, JSON transport) |
+| `src/tui/` | Terminal UI components |
+| `src/http/` | HTTP client abstraction (for `fetch` builtin) |
+| `src/endo-test/` | E2E test runner for `.endo` test files |
+| `src/testing/` | Shared testing utilities (test helpers, dialog suppression) |
+| `src/crispy/` | Vendored utility library (from Contour Terminal) |
+| `src/vtparser/` | Vendored VT terminal sequence parser (from Contour Terminal) |
+| `tests/` | E2E test files organized by category (37+ subdirectories) |
+| `docs/language/` | Language specification (18 pages, MkDocs site) |
+
+---
+
+## Design Patterns & Principles
+
+### Dependency Injection via Constructor Injection
+
+All OS, file system, network, and I/O access is abstracted behind interfaces and injected via constructors. Never hard-code side effects.
+
+Canonical examples:
+- `src/shell/TTY.hpp` — abstract terminal interface with `PosixTTY` / `WindowsTTY` implementations
+- `src/platform/FileSystem.hpp` — file system abstraction (exists, read, write, list, metadata)
+- `src/platform/ProcessProvider.hpp` — process listing abstraction (Linux, Darwin, Windows)
+- `src/platform/EnvironmentProvider.hpp` — env var access abstraction (POSIX, Windows)
+- `src/http/HttpClient.hpp` — HTTP abstraction injected into `ProviderFactory`, `McpClient`
+
+When adding new functionality that touches the OS or network, define an abstract interface in `src/platform/` (or the relevant component), implement per-platform, and inject it.
+
+### Error Handling: `std::expected<T, E>`
+
+Use `std::expected` for all fallible operations. Prefer monadic chaining (`and_then`, `or_else`, `transform`, `transform_error`) over if/else chains. Do not use `crispy::result` — `std::expected` is the standard.
+
+Example:
+```cpp
+return sendRequest("initialize", std::move(params))
+    .and_then([this](nlohmann::json const& result) -> std::expected<Capabilities, Error> {
+        // ...
+    });
+```
+
+Exceptions are reserved for truly exceptional, unrecoverable situations (e.g., `QuotaExceeded` in the VM).
+
+### AST Visitor Pattern
+
+Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern::PatternVisitor`. Follow this pattern for new language features (see `src/endo-language/format/SourceFormatter.cpp` as a canonical example).
+
+### Memory Management
+
+- Smart pointers (`std::unique_ptr`, `std::shared_ptr`) for ownership
+- RAII for resource management
+- Mark-and-sweep garbage collection exists **only inside CoreVM** for cyclic references among `TypedObject` instances — do not use or extend it elsewhere
+
+### Data-Driven Design
+
+- Avoid hardcoding values; use configuration, tables, or descriptors
+- Builtin metadata is declared in descriptor tables that drive dispatch, arg parsing, help generation, completion, and LSP (see `src/shell/builtins/InlineCommandDescriptors.cpp`)
+
+---
+
+## C++ Coding Guidelines
+
+- Prefer C++23: `constexpr`, `std::ranges`, `std::format`, `std::expected`, structured bindings
+- C-style loops are forbidden; use range-based for loops exclusively
+- Use `std::views::iota` and other views for generating and transforming ranges
+- Use `std::span` for passing arrays and contiguous sequences
+- Use `auto` type deduction to improve readability
+- Use `const` correctness throughout (refs, pointers, member functions)
+- Mark return values `[[nodiscard]]` where ignoring the result would be a bug
+- Document new public functions, classes, structs, and their members using Doxygen style:
+  ```cpp
+  /// Short description.
+  /// @param name Description.
+  /// @return Description.
+  ```
+- Naming conventions and static analysis rules are defined in `.clang-tidy` (authoritative source); clang-tidy runs automatically in debug builds
+- Code formatting rules are defined in `.clang-format`; run `clang-format` after changes
+- Do not suppress clang-tidy warnings with `NOLINT` comments; fix the underlying issue
+- Use smart pointers for ownership; do not use raw owning pointers
+- Do not introduce new third-party dependencies without strong justification
+- Do not bypass the platform abstraction layer in `src/platform/`
+
+---
+
+## Endo Language & Documentation
+
+- The language specification lives in `docs/language/` (multiple pages covering types, functions, pattern matching, error handling, etc.)
+- Implementation status is tracked in `ROADMAP-Language.md`
+- Be humble and factual in documentation. Avoid marketing language. Be transparent about limitations and current state.
+
+---
+
+## Building
+
+```bash
+# Configure (debug with ASAN, UBSAN, clang-tidy)
+cmake --preset clang-debug
+
+# Build
+cmake --build --preset clang-debug
+
+# Run all tests
+ctest --preset clang-debug
+
+# Coverage
+cmake --preset clang-coverage
+cmake --build --preset clang-coverage --target coverage
+# HTML report in build/clang-coverage/coverage/
+
+# Release (for performance testing)
+cmake --preset clang-release
+cmake --build --preset clang-release
+```
+
+---
+
+## Testing
+
+### Prefer endo-test (E2E tests)
+
+Write E2E tests as `.endo` files in the `tests/` directory. Organize by category (e.g., `tests/builtins/`, `tests/control-flow/`, `tests/patterns/`).
+
+**Test file format** — directives at top, source code below:
+
+```endo
+# description: What this test verifies
+# expect: expected output line (repeatable, joined with \n)
+# expect-exit: 0
+# mode: execute
+
+let x = 42
+println x
+```
+
+**Key directives:**
+
+| Directive | Purpose |
+|-----------|---------|
+| `# description: <text>` | Human-readable test description |
+| `# expect: <line>` | Expected output line (repeatable) |
+| `# expect-exit: <code>` | Expected exit code (default: 0) |
+| `# expect-error: <substring>` | Expected compilation error (repeatable) |
+| `# expect-nonempty` | Assert output is non-empty |
+| `# mode: <mode>` | `execute` (default), `ir-only`, `parse-only`, `structured`, `shell` |
+| `# skip: <reason>` | Skip this test |
+| `# mock-env: KEY=VALUE` | Set mock environment variable |
+| `# mock-which: PROG=/path` | Set mock which path |
+| `# expect-env: KEY=VALUE` | Verify environment variable after execution |
+| `# aux-file: <filename>` | Start auxiliary file section (multi-file/module tests) |
+| `# main-file:` | End aux file section |
+| `# module-path: <path>` | Add module search path |
+| `# session-separator: <sep>` | Split source into REPL prompts |
+| `# source-file: <path>` | Load external file as session prompt |
+| `# unused-detection` | Enable unused value detection |
+
+**Test modes:**
+- `execute` — full pipeline: parse, analyze, codegen, run (default)
+- `ir-only` — parse and generate IR only, no execution
+- `parse-only` — parse only, verify no parse errors
+- `structured` — execute with pre-populated structured command state
+- `shell` — execute through a real Shell instance (for script/module tests)
+
+### Use Catch2 only when endo-test cannot cover it
+
+Catch2 unit tests go in the source tree as `*_test.cpp` files. Use them for:
+- Internal data structures (PrefixTree, Cidr, ObjectPool)
+- Parsing logic that needs programmatic assertions (InlineArgParser, FindExpression)
+- Components that don't produce observable output (GarbageCollector, TypeSystem)
+
+If the behavior can be expressed as "given this source, expect this output/error", use endo-test instead.
+
+### Formatting `.endo` files
+
+Configuration is in `.endo-format`. When `.endo` files are created or updated, format them:
+```bash
+endo format <file.endo>       # format in place
+endo format --check <file>    # verify formatting (used in CI)
+```
+
+---
+
+## Adding Features
+
+### New Builtin Function
+
+1. **Register** the builtin in `src/shell/builtins/Registration.cpp` using the method-chaining API:
+   ```cpp
+   _runtime.registerFunction("name")
+       .param<CoreVM::CoreNumber>("arg")
+       .returnType(CoreVM::LiteralType::Void)
+       .bind(&Shell::builtinName, this);
+   ```
+2. For inline builtins (commands with options/flags), add a descriptor entry in `src/shell/builtins/InlineCommandDescriptors.cpp` — this drives dispatch, arg parsing, help text, and completion
+3. **Document** in `docs/language/standard-library.md` and ensure the builtin metadata provides description text for LSP hover/completion
+4. **Register for LSP** via `src/endo-language/builtins/BuiltinSignatures.hpp` (`registerInlineBuiltins()`)
+5. **Test** with endo-test E2E tests in `tests/builtins/`
+
+### New Language Syntax / Semantics
+
+1. **Specify** in the relevant `docs/language/` page
+2. **Lexer** — add tokens in `src/endo-language/lexer/`
+3. **Parser** — add AST nodes and parsing in `src/endo-language/parser/`
+4. **Semantic analysis** — add type checking in `src/endo-language/sema/`
+5. **Code generation** — emit bytecode in `src/endo-language/codegen/`
+6. **Formatter** — handle the new AST nodes in `src/endo-language/format/SourceFormatter.cpp`
+7. **LSP providers** — update relevant providers (completion, hover, semantic tokens, etc.) in `src/lsp/`
+8. **Test** with endo-test E2E tests covering happy path, errors, and edge cases
+
+### New Platform Feature
+
+1. Define an abstract interface in `src/platform/` (or the relevant component)
+2. Implement per-platform in `src/platform/linux/`, `src/platform/darwin/`, `src/platform/windows/`, `src/platform/posix/`
+3. Inject via constructor — never `#ifdef` platform checks in business logic
+
+---
+
+## Workflow (post-implementation checklist)
+
+1. Run `clang-format` on added/changed C++ files
+2. Run `endo format` on added/changed `.endo` files
+3. Run the full test suite: `ctest --preset clang-debug`
+4. Update the relevant roadmap file(s):
+   - `ROADMAP.md` — general features and milestones
+   - `ROADMAP-Language.md` — language feature implementation status
+   - `ROADMAP-LSP.md`, `ROADMAP-DAP.md`, `ROADMAP-AGENT.md`, etc. — if applicable
+5. Extend documentation in `docs/` for any language, CLI, or user-facing changes
+6. Execute `/simplify` to reduce code duplication and quality issues
+   - If the simplify command finds issues that are out of scope, then **ask** the user whether or not to address them. If they say yes, then address them and include the changes in the PR. If they say no, then ignore them and move on.
+7. In the summary, include:
+   - Performance impact assessment (if any)
+   - Risk assessment
+   - Code coverage results
