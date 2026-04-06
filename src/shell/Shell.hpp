@@ -19,6 +19,7 @@
 #include <optional>
 #include <print>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -357,6 +358,14 @@ class Shell final: public SignalCallback
     /// Executes an .endo script file in the current shell context (like source).
     /// @return Exit code of the script.
     [[nodiscard]] int executeEndoScript(std::filesystem::path const& scriptPath);
+
+    /// Executes an .endo script file with positional parameters.
+    ///
+    /// Sets $0 to the script path and $1.. to the given arguments.
+    /// Saves and restores the caller's positional parameters.
+    /// @return Exit code of the script.
+    [[nodiscard]] int executeEndoScript(std::filesystem::path const& scriptPath,
+                                        std::span<std::string const> args);
 
     void builtinCallProcess(CoreVM::Params& context);
     void builtinCallProcessShellPiped(CoreVM::Params& context);

@@ -58,9 +58,23 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
     }
 
     auto const savedSourceFile = _fsharpState.sourceFilePath;
-    _fsharpState.sourceFilePath = std::filesystem::weakly_canonical(scriptPath);
+    _fsharpState.sourceFilePath = _fs.weaklyCanonical(scriptPath);
     auto const result = executeConfigScript(*content, scriptPath.string());
     _fsharpState.sourceFilePath = savedSourceFile;
+    return result;
+}
+
+int Shell::executeEndoScript(std::filesystem::path const& scriptPath, std::span<std::string const> args)
+{
+    auto savedPositionalParams = _positionalParameters;
+    _positionalParameters.clear();
+    _positionalParameters.push_back(scriptPath.string());
+    for (auto const& arg: args)
+        _positionalParameters.push_back(arg);
+
+    auto const result = executeEndoScript(scriptPath);
+
+    _positionalParameters = std::move(savedPositionalParams);
     return result;
 }
 
@@ -162,7 +176,8 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     // .endo files are executed in-process rather than spawned as external commands.
     if (programPath->extension() == ".endo")
     {
-        _exitCode = executeEndoScript(*programPath);
+        auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
+        _exitCode = executeEndoScript(*programPath, scriptArgs);
         context.setResult(CoreVM::CoreNumber(_exitCode));
         return;
     }
@@ -251,7 +266,8 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     // .endo files are executed in-process rather than spawned as external commands.
     if (programPath->extension() == ".endo")
     {
-        _exitCode = executeEndoScript(*programPath);
+        auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
+        _exitCode = executeEndoScript(*programPath, scriptArgs);
         context.setResult(CoreVM::CoreNumber(_exitCode));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;

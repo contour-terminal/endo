@@ -3875,7 +3875,9 @@ int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle
                                   "| `-h`, `--help` | Display this help |\n");
 
     auto const filePath = std::string(firstArg);
-    return executeEndoScript(std::filesystem::path(filePath));
+    // args[0] = "source"/"."; args[1] = filename; args[2..] = script arguments
+    auto scriptArgs = std::vector<std::string>(args.begin() + 2, args.end());
+    return executeEndoScript(std::filesystem::path(filePath), scriptArgs);
 }
 
 // ---------------------------------------------------------------------------
