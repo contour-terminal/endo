@@ -362,7 +362,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                             auto const nextTok = _lexer.currentToken();
                             auto const nextLit = std::string(_lexer.currentLiteral());
                             auto const nextRange = _lexer.currentRange();
-                            if (nextTok == Token::Identifier && !nextLit.starts_with("-"))
+                            if ((nextTok == Token::Identifier && !nextLit.starts_with("-"))
+                                || nextTok == Token::Tilde)
                             {
                                 // Unquoted path arg — peek one more token to check for redirects
                                 // (e.g. `ls /path 2>&1` should fall through to shell mode).
@@ -801,8 +802,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     // Detect this pattern and re-parse in F# mode for proper module dispatch.
                     {
                         auto const& nextLit = _lexer.currentLiteral();
-                        if (!savedLiteral.empty()
-                            && std::isupper(static_cast<unsigned char>(savedLiteral[0]))
+                        if (!savedLiteral.empty() && std::isupper(static_cast<unsigned char>(savedLiteral[0]))
                             && _lexer.currentToken() == Token::Identifier && !nextLit.empty()
                             && nextLit[0] == '.')
                         {
@@ -811,8 +811,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                             auto moduleIdent =
                                 std::make_unique<ast::IdentifierExpr>(std::string(savedLiteral));
                             moduleIdent->location = savedRange;
-                            auto fieldAccess = std::make_unique<ast::FieldAccessExpr>(
-                                std::move(moduleIdent), std::move(memberName));
+                            auto fieldAccess = std::make_unique<ast::FieldAccessExpr>(std::move(moduleIdent),
+                                                                                      std::move(memberName));
                             fieldAccess->location = savedRange;
                             // Parse remaining arguments in F# mode
                             _lexer.enterFSharpExpr();
@@ -822,8 +822,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                 auto arg = parseFSharpPrimary();
                                 if (!arg)
                                     break;
-                                auto app = std::make_unique<ast::ApplicationExpr>(
-                                    std::move(expr), std::move(arg));
+                                auto app =
+                                    std::make_unique<ast::ApplicationExpr>(std::move(expr), std::move(arg));
                                 expr = std::move(app);
                             }
                             _lexer.leaveFSharpExpr();
@@ -2542,12 +2542,16 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
     // Handle builtin commands that don't participate in pipelines
     if (_lexer.isDirective("exit"))
     {
+        auto const exitLoc = _lexer.currentRange();
         _lexer.nextToken();
         std::unique_ptr<ast::Expr> code;
         if (!isEndOfStmt())
             code = parseParameter();
+        auto const endLoc = code && code->location ? code->location->end : exitLoc.end;
         assert(_runtime.find("exit(I)V") != nullptr);
-        return std::make_unique<ast::BuiltinExitStmt>(*_runtime.find("exit(I)V"), std::move(code));
+        auto node = std::make_unique<ast::BuiltinExitStmt>(*_runtime.find("exit(I)V"), std::move(code));
+        node->location = SourceLocationRange { .begin = exitLoc.begin, .end = endLoc };
+        return node;
     }
     else if (_lexer.isDirective("read"))
     {

@@ -1,0 +1,13 @@
+# description: Nested script execution preserves each script's arguments
+# mode: shell
+# expect: outer:top_arg
+# expect: inner:nested_arg
+# expect: outer_after:top_arg
+# aux-file: inner.endo
+echo "inner:$1"
+# aux-file: outer.endo
+echo "outer:$1"
+./inner.endo nested_arg
+echo "outer_after:$1"
+# main-file:
+./outer.endo top_arg

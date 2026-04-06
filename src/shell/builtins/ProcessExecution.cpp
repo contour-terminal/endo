@@ -35,6 +35,57 @@ namespace endo
 {
 
 // ---------------------------------------------------------------------------
+// .endo script execution (invoked when a command resolves to a .endo file)
+// ---------------------------------------------------------------------------
+
+int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
+{
+    auto content = _fs.readFile(scriptPath.string());
+    if (!content)
+    {
+        error("{}: {}", scriptPath.string(), content.error());
+        return EXIT_FAILURE;
+    }
+
+    // Strip shebang line if present
+    if (content->starts_with("#!"))
+    {
+        auto const pos = content->find('\n');
+        if (pos != std::string::npos)
+            *content = content->substr(pos + 1);
+        else
+            content->clear();
+    }
+
+    auto const savedSourceFile = _fsharpState.sourceFilePath;
+    _fsharpState.sourceFilePath = _fs.weaklyCanonical(scriptPath);
+    auto const result = executeConfigScript(*content, scriptPath.string());
+    _fsharpState.sourceFilePath = savedSourceFile;
+    return result;
+}
+
+int Shell::executeEndoScript(std::filesystem::path const& scriptPath, std::span<std::string const> args)
+{
+    auto savedPositionalParams = _positionalParameters;
+    _positionalParameters.clear();
+    _positionalParameters.push_back(scriptPath.string());
+    for (auto const& arg: args)
+        _positionalParameters.push_back(arg);
+
+    auto const result = executeEndoScript(scriptPath);
+
+    _positionalParameters = std::move(savedPositionalParams);
+    return result;
+}
+
+void Shell::builtinRunScript(CoreVM::Params& context)
+{
+    auto const& path = context.getString(1);
+    auto const exitCode = executeEndoScript(std::filesystem::path(path));
+    context.setResult(CoreVM::CoreNumber(exitCode));
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch: non-piped commands
 // ---------------------------------------------------------------------------
 
@@ -122,6 +173,15 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    // .endo files are executed in-process rather than spawned as external commands.
+    if (programPath->extension() == ".endo")
+    {
+        auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
+        _exitCode = executeEndoScript(*programPath, scriptArgs);
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     SpawnConfig config;
     config.program = *programPath;
     config.arguments = std::vector<std::string>(args.begin() + 1, args.end());
@@ -199,6 +259,16 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         }
         _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        _currentPipelineBuilder.closePipeFdsInParent();
+        return;
+    }
+
+    // .endo files are executed in-process rather than spawned as external commands.
+    if (programPath->extension() == ".endo")
+    {
+        auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
+        _exitCode = executeEndoScript(*programPath, scriptArgs);
+        context.setResult(CoreVM::CoreNumber(_exitCode));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }

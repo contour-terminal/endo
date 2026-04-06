@@ -661,7 +661,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
 
     // Initialize module loader for import/open support
     {
-        _fsharpState.moduleLoader = std::make_shared<endo::ModuleLoader>(_runtime, _moduleReport);
+        _fsharpState.moduleLoader = std::make_shared<endo::ModuleLoader>(_runtime, _moduleReport, _fs);
 
         // Add search paths: user modules, then system stdlib
         if (auto const home = _env.get("HOME"); home && !home->empty())
@@ -826,6 +826,11 @@ void Shell::addModuleSearchPath(std::filesystem::path path)
 {
     if (_fsharpState.moduleLoader)
         _fsharpState.moduleLoader->addSearchPath(std::move(path));
+}
+
+void Shell::setSourceFile(std::filesystem::path path)
+{
+    _fsharpState.sourceFilePath = std::move(path);
 }
 
 void Shell::setInteractive(bool interactive)

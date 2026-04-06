@@ -1,0 +1,7 @@
+# description: source builtin passes arguments to the script
+# mode: shell
+# expect: hello world
+# aux-file: greet.endo
+echo $1 $2
+# main-file:
+source ./greet.endo hello world

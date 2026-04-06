@@ -1,0 +1,9 @@
+# description: Script arguments are accessible via $1 and $2
+# mode: shell
+# expect: hello
+# expect: world
+# aux-file: greet.endo
+echo $1
+echo $2
+# main-file:
+./greet.endo hello world

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace endo
@@ -41,7 +42,15 @@ struct ModuleSignature
     [[nodiscard]] bool declares(std::string const& name) const;
 };
 
-/// Parses a module signature (.endoi) file.
+/// Parses a module signature from string content.
+///
+/// @param moduleName The module name (typically the stem of the .endoi filename)
+/// @param content    The signature file content
+/// @return Parsed signature, or std::nullopt on parse failure
+[[nodiscard]] std::optional<ModuleSignature> parseModuleSignature(std::string_view moduleName,
+                                                                  std::string_view content);
+
+/// Parses a module signature (.endoi) file from disk.
 ///
 /// @param path Path to the `.endoi` file
 /// @return Parsed signature, or std::nullopt on parse failure

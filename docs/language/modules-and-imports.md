@@ -221,7 +221,27 @@ let size = File.size "data.txt"
 
 User-defined modules require explicit `import` or inline `module ... =` definitions.
 
-### 12.13 Creating Your Own Modules
+### 12.13 Running Scripts
+
+Endo provides several ways to run `.endo` scripts:
+
+| Method | Syntax | Context |
+|--------|--------|---------|
+| CLI | `endo script.endo` | Runs in a new shell session |
+| Shell mode | `./script.endo` or `path/to/script.endo` | Executes in-process (current context) |
+| `source` | `source script.endo` | Shell builtin, current context |
+| `run_script` | `run_script "script.endo"` | F# callable, current context |
+
+All methods set the source file path so that `import` statements within the script
+resolve relative to the script's location.
+
+Additional module search paths can be added via the CLI:
+
+```bash
+endo --module-path=./libs script.endo
+```
+
+### 12.14 Creating Reusable Modules
 
 To create a reusable module, write a `.endo` file with a PascalCase name and place it
 in one of the module search paths (e.g., `~/.config/endo/modules/`).

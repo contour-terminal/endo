@@ -1,0 +1,7 @@
+# description: Basic .endo script execution via ./script.endo
+# mode: shell
+# expect: hello from script
+# aux-file: hello.endo
+echo hello from script
+# main-file:
+./hello.endo

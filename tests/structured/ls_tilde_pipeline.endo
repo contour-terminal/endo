@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with tilde path piped into F# pipeline
+# mode: structured
+# expect-nonempty
+
+ls ~ |> length |> print

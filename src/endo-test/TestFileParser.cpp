@@ -161,6 +161,8 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                     result.mode = TestMode::ParseOnly;
                 else if (modeStr == "structured")
                     result.mode = TestMode::Structured;
+                else if (modeStr == "shell")
+                    result.mode = TestMode::Shell;
                 else
                     result.mode = TestMode::Execute;
                 continue;

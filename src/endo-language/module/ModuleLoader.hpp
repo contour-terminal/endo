@@ -13,6 +13,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <platform/FileSystem.hpp>
+
 namespace endo
 {
 
@@ -24,8 +26,8 @@ namespace endo
 class ModuleLoader: public std::enable_shared_from_this<ModuleLoader>
 {
   public:
-    /// Constructs a module loader with the given runtime and diagnostics report.
-    ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report);
+    /// Constructs a module loader with the given runtime, diagnostics report, and filesystem.
+    ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report, FileSystem& fs);
 
     /// Adds a directory to the module search path.
     void addSearchPath(std::filesystem::path path);
@@ -92,6 +94,7 @@ class ModuleLoader: public std::enable_shared_from_this<ModuleLoader>
     /// Cached available module names. Invalidated when search paths change.
     mutable std::optional<std::vector<std::string>> _availableModulesCache;
 
+    FileSystem& _fs;                      // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::Runtime& _runtime;            // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::diagnostics::Report& _report; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 };

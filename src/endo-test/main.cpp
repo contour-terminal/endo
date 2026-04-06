@@ -57,7 +57,7 @@ Test File Format:
     # expect: <line>             Expected output line (repeatable, joined with \n)
     # expect-exit: <code>        Expected exit code (default: 0)
     # expect-error: <substring>  Expected compilation error (repeatable, empty = any error)
-    # mode: <mode>               execute (default), ir-only, parse-only, structured
+    # mode: <mode>               execute (default), ir-only, parse-only, structured, shell
     # skip: <reason>             Skip this test
     # session-separator: <sep>   Split source into REPL prompts at "# <sep>" lines
     # mock-env: KEY=VALUE        Set mock environment variable

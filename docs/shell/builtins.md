@@ -1147,6 +1147,41 @@ source ~/.config/endo/utils.endo
     environment. For importing environment variables from external shell scripts (bash, zsh,
     PowerShell), use [`source-env`](#source-env) instead.
 
+!!! note
+    You can also run `.endo` files directly in shell mode by typing their path:
+    `./script.endo` or `path/to/script.endo`. Endo detects the `.endo` extension and
+    executes the file in-process instead of spawning it as an external command.
+
+---
+
+## run_script
+
+Execute an `.endo` script file in the current shell context (F# callable).
+
+**Syntax:**
+
+```endo
+run_script "path/to/file.endo"
+```
+
+**Description:** Reads and executes an `.endo` script file in the current shell context,
+similar to `source`. Unlike `source`, `run_script` is an F# function and can be called
+from within expressions, pipelines, and function bodies. Returns the exit code as an integer.
+
+Module imports within the executed script resolve relative to the script's location.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+# Execute a script
+run_script "setup.endo"
+
+# Check exit code
+let result = run_script "tests/validate.endo"
+if result <> 0 then println "validation failed"
+```
+
 ---
 
 ## rand

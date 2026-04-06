@@ -1587,6 +1587,12 @@ void Shell::registerCompleterBuiltins()
             }
         });
     // clang-format on
+
+    // run_script -- execute an .endo script in the current shell context
+    _runtime.registerFunction("run_script")
+        .param<CoreVM::CoreString>("path")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinRunScript, this);
 }
 
 } // namespace endo

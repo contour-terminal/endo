@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TestExecutor.hpp"
+#include <shell/Shell.hpp>
+#include <shell/TTY.hpp>
 
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
@@ -8,6 +10,9 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+
+#include <platform/testing/InMemoryFileSystem.hpp>
+#include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace endo::test
 {
@@ -498,6 +503,97 @@ TestResult TestExecutor::run(TestFile const& testFile)
             {
                 testRuntime.clearMockEnvVars();
                 testRuntime.clearMockWhichPaths();
+            }
+
+            result.outcome = TestOutcome::Pass;
+            return result;
+        }
+
+        case TestMode::Shell: {
+            // Create in-memory filesystem and populate with auxiliary files
+            InMemoryFileSystem fs;
+            fs.addDirectory("/test");
+            fs.setCurrentPath("/test");
+
+            if (!testFile.auxiliaryFiles.empty())
+            {
+                for (auto const& [filename, content]: testFile.auxiliaryFiles)
+                {
+                    auto filePath = std::filesystem::path("/test") / filename;
+                    // Create parent directories for nested paths
+                    if (filePath.has_parent_path() && filePath.parent_path() != "/test")
+                        fs.addDirectory(filePath.parent_path());
+                    fs.addFile(filePath, content);
+                }
+            }
+
+            // Create test shell with isolated environment
+            TestPTY pty;
+            TestEnvironment env;
+
+            // Seed essential variables from real environment
+            if (auto const* path = std::getenv("PATH"))
+                env.set("PATH", path);
+            if (auto const* home = std::getenv("HOME"))
+                env.set("HOME", home);
+            env.set("PWD", "/test");
+
+            Shell shell(pty, env, fs);
+            shell.addModuleSearchPath("/test");
+
+            // Execute the test source through the shell
+            auto const exitCode = shell.execute(testFile.source);
+
+            auto const endTime = std::chrono::steady_clock::now();
+            result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+
+            result.actualOutput = std::string(pty.output());
+            result.actualExitCode = exitCode;
+
+            // Check exit code
+            if (result.actualExitCode != testFile.expectedExitCode)
+            {
+                result.outcome = TestOutcome::Fail;
+                result.failureMessage =
+                    std::format("Exit code mismatch: expected {}, got {}\n        Output: \"{}\"",
+                                testFile.expectedExitCode,
+                                result.actualExitCode,
+                                escapeForDisplay(result.actualOutput));
+                return result;
+            }
+
+            // Check non-empty output assertion
+            if (testFile.expectNonEmptyOutput && result.actualOutput.empty())
+            {
+                result.outcome = TestOutcome::Fail;
+                result.failureMessage = "Expected non-empty output, but output was empty";
+                return result;
+            }
+
+            // Check output if expected (trailing newlines are normalized)
+            if (!testFile.expectedOutput.empty())
+            {
+                auto const expected = joinExpectedOutput(testFile.expectedOutput);
+                if (rtrimNewlines(result.actualOutput) != rtrimNewlines(expected))
+                {
+                    result.outcome = TestOutcome::Fail;
+                    result.failureMessage =
+                        std::format("Output mismatch:\n        Expected: \"{}\"\n        Actual:   \"{}\"",
+                                    escapeForDisplay(rtrimNewlines(expected)),
+                                    escapeForDisplay(rtrimNewlines(result.actualOutput)));
+                    return result;
+                }
+            }
+
+            // Check expect-expr assertion
+            if (testFile.expectExpr.has_value())
+            {
+                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                {
+                    result.outcome = TestOutcome::Fail;
+                    result.failureMessage = std::move(*msg);
+                    return result;
+                }
             }
 
             result.outcome = TestOutcome::Pass;

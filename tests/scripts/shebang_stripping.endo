@@ -1,0 +1,8 @@
+# description: Shebang line is stripped before script execution
+# mode: shell
+# expect: after shebang
+# aux-file: shebang.endo
+#!/usr/bin/env endo
+echo after shebang
+# main-file:
+./shebang.endo

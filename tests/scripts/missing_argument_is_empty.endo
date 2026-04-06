@@ -1,0 +1,9 @@
+# description: Missing positional argument expands to empty string
+# mode: shell
+# expect: [only_one]
+# expect: []
+# aux-file: check.endo
+echo "[$1]"
+echo "[$2]"
+# main-file:
+./check.endo only_one
