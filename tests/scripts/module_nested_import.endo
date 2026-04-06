@@ -4,10 +4,14 @@
 # expect: 125
 # aux-file: Math.endo
 let square (x: int): int = x * x
+
 let cube (x: int): int = x * x * x
+
 # aux-file: Science.endo
 import Math
+
 let volume (side: int): int = Math.cube side
+
 # aux-file: compute.endo
 import Science
 println (Science.volume 5)

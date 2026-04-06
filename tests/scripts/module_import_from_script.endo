@@ -3,6 +3,7 @@
 # expect: 36
 # aux-file: Math.endo
 let square (x: int): int = x * x
+
 # aux-file: compute.endo
 import Math
 println (Math.square 6)

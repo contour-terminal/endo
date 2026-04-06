@@ -96,7 +96,7 @@ namespace
             auto const& f = allFiles[i];
 
             // Filter: directory path returns all, glob filters by pattern, else exact name match.
-            if (!path.empty() && path != "." && path != "/tmp")
+            if (!path.empty() && path != "." && path != "/tmp" && !path.starts_with("/home/testuser"))
             {
                 auto const nameOrPattern = std::filesystem::path(path).filename().string();
                 if (hasGlob)
@@ -514,6 +514,19 @@ TestRuntime::TestRuntime()
             });
         if (name == "getvar.exitstatus" && arity == 0)
             return Functor([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); });
+
+        // --- Tilde expansion (stateless) ---
+        if (name == "expand.tilde" && arity == 1)
+            return Functor([](CoreVM::Params& args) {
+                auto const suffix = std::string(args.getString(1));
+                args.setResult(args.caller()->newString("/home/testuser" + suffix));
+            });
+        if (name == "expand.tilde_user" && arity == 2)
+            return Functor([](CoreVM::Params& args) {
+                auto const user = std::string(args.getString(1));
+                auto const suffix = std::string(args.getString(2));
+                args.setResult(args.caller()->newString("/home/" + user + suffix));
+            });
 
         // --- Structured mock data (stateless) ---
         if (name == "structured_ps" && arity == 0)
