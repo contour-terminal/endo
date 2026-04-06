@@ -74,6 +74,35 @@ struct ParsedArgs
     bool noProfile = false;                    ///< Skip loading init.endo profile.
 };
 
+/// Tries to extract the value for a long option.
+///
+/// Supports both `--key=value` (returns the part after '=') and `--key value`
+/// (consumes the next argument). Returns std::nullopt when the option name does
+/// not match. Prints an error and exits when the option matches but no value is
+/// available.
+std::optional<std::string_view> consumeOptionValue(std::string_view arg,
+                                                   std::string_view name,
+                                                   size_t& i,
+                                                   std::span<char const* const> args)
+{
+    // --key=value form
+    if (arg.starts_with(name) && arg.size() > name.size() && arg[name.size()] == '=')
+        return arg.substr(name.size() + 1);
+
+    // --key value form
+    if (arg == name)
+    {
+        if (i + 1 < args.size())
+            return std::string_view(args[++i]);
+
+        std::print(stderr, "{} requires a value\n", name);
+        std::print(stderr, "Try '--help' for more information.\n");
+        std::exit(EXIT_FAILURE);
+    }
+
+    return std::nullopt;
+}
+
 ParsedArgs parseArguments(std::span<char const* const> args)
 {
     ParsedArgs result;
@@ -114,25 +143,25 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.agentTracePath = ""; // Empty = auto-generate path.
         }
-        else if (arg.starts_with("--agent-trace="))
+        else if (auto val = consumeOptionValue(arg, "--agent-trace", i, args))
         {
-            result.agentTracePath = std::string(arg.substr(14));
+            result.agentTracePath = std::string(*val);
         }
-        else if (arg.starts_with("--log-file="))
+        else if (auto val = consumeOptionValue(arg, "--log-file", i, args))
         {
-            result.logFile = std::string(arg.substr(11));
+            result.logFile = std::string(*val);
         }
-        else if (arg.starts_with("--log="))
+        else if (auto val = consumeOptionValue(arg, "--log", i, args))
         {
-            result.logPatterns = arg.substr(6);
+            result.logPatterns = *val;
         }
         else if (arg == "--no-profile")
         {
             result.noProfile = true;
         }
-        else if (arg == "--module-path" && i + 1 < args.size())
+        else if (auto val = consumeOptionValue(arg, "--module-path", i, args))
         {
-            result.modulePaths.emplace_back(args[++i]);
+            result.modulePaths.emplace_back(*val);
         }
         else if (arg == "-c" && i + 1 < args.size())
         {

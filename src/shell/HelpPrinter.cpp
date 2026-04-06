@@ -275,13 +275,13 @@ void printHelp()
             h.raw(Reset);
             h.raw(" ");
             h.raw(sgrSequence(taglineStyle));
-            h.raw("\u2014 A modern shell with functional programming");
+            h.raw("\u2014 A cross-platform shell with F#-inspired functional programming");
             h.raw(Reset);
             h.raw("\n");
         }
         else
         {
-            h.text("endo \u2014 A modern shell with functional programming");
+            h.text("endo \u2014 A cross-platform shell with F#-inspired functional programming");
         }
     }
 
@@ -301,7 +301,7 @@ void printHelp()
     h.option("--dap", "Launch Debug Adapter Protocol server");
     h.option("--log-file=FILE", "Log protocol messages to FILE");
     h.option("--no-profile", "Skip loading ~/.config/endo/init.endo on startup");
-    h.option("--module-path DIR", "Add DIR to module search path");
+    h.option("--module-path=DIR", "Add DIR to module search path");
     h.option("--log=PATTERNS", "Enable logging for matching categories (comma-separated)");
     h.option("--log-list", "List all available log categories and exit");
 
