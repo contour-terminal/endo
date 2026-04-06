@@ -1,0 +1,10 @@
+# description: Script can import and call a module function
+# mode: shell
+# expect: 36
+# aux-file: Math.endo
+let square (x: int): int = x * x
+# aux-file: compute.endo
+import Math
+println (Math.square 6)
+# main-file:
+./compute.endo

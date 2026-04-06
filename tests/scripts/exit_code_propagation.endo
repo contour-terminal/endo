@@ -1,0 +1,7 @@
+# description: Script exit code propagates to the caller
+# mode: shell
+# expect-exit: 42
+# aux-file: fail.endo
+exit 42
+# main-file:
+./fail.endo

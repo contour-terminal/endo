@@ -1,0 +1,15 @@
+# description: Module can import another module from the same directory
+# mode: shell
+# skip: Nested module imports from scripts require cross-module function resolution work
+# expect: 125
+# aux-file: Math.endo
+let square (x: int): int = x * x
+let cube (x: int): int = x * x * x
+# aux-file: Science.endo
+import Math
+let volume (side: int): int = Math.cube side
+# aux-file: compute.endo
+import Science
+println (Science.volume 5)
+# main-file:
+./compute.endo
