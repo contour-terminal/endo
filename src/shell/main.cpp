@@ -228,14 +228,17 @@ int executeScript(endo::Shell& shell,
     // 3. Set up non-interactive mode
     shell.setInteractive(false);
 
-    // 4. Set positional parameters ($0 = script, $1... = args)
+    // 4. Set source file path for relative module resolution
+    shell.setSourceFile(std::filesystem::canonical(scriptPathStr));
+
+    // 5. Set positional parameters ($0 = script, $1... = args)
     std::vector<std::string> params;
     params.emplace_back(scriptPath);
     for (auto const& arg: scriptArgs)
         params.emplace_back(arg);
     shell.setPositionalParameters(std::move(params));
 
-    // 5. Execute (parser validates entire script before execution)
+    // 6. Execute (parser validates entire script before execution)
     return shell.execute(content);
 }
 

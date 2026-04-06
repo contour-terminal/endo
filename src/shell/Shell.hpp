@@ -101,6 +101,9 @@ class Shell final: public SignalCallback
     /// Adds an additional module search path (for --module-path CLI option).
     void addModuleSearchPath(std::filesystem::path path);
 
+    /// Sets the source file path for relative module resolution.
+    void setSourceFile(std::filesystem::path path);
+
     /// Disables loading of init.endo profile on startup.
     void setNoProfile(bool noProfile) noexcept { _noProfile = noProfile; }
 
@@ -351,8 +354,15 @@ class Shell final: public SignalCallback
                                                              NativeHandle outputFd,
                                                              NativeHandle inputFd);
 
+    /// Executes an .endo script file in the current shell context (like source).
+    /// @return Exit code of the script.
+    [[nodiscard]] int executeEndoScript(std::filesystem::path const& scriptPath);
+
     void builtinCallProcess(CoreVM::Params& context);
     void builtinCallProcessShellPiped(CoreVM::Params& context);
+
+    /// F# builtin: run_script "path/to/file.endo"
+    void builtinRunScript(CoreVM::Params& context);
 
     // --- Environment builtins (builtins/Environment.cpp) ---
     void builtinExit(CoreVM::Params& context);

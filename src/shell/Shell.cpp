@@ -828,6 +828,11 @@ void Shell::addModuleSearchPath(std::filesystem::path path)
         _fsharpState.moduleLoader->addSearchPath(std::move(path));
 }
 
+void Shell::setSourceFile(std::filesystem::path path)
+{
+    _fsharpState.sourceFilePath = std::move(path);
+}
+
 void Shell::setInteractive(bool interactive)
 {
     _interactive = interactive;

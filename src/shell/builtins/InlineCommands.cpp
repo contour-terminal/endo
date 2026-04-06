@@ -3875,14 +3875,7 @@ int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle
                                   "| `-h`, `--help` | Display this help |\n");
 
     auto const filePath = std::string(firstArg);
-    auto content = _fs.readFile(filePath);
-    if (!content)
-    {
-        error("{}: {}: {}", args.at(0), filePath, content.error());
-        return 1;
-    }
-
-    return executeConfigScript(*content, filePath);
+    return executeEndoScript(std::filesystem::path(filePath));
 }
 
 // ---------------------------------------------------------------------------
