@@ -144,7 +144,7 @@ endif()
 # ==============================================================================
 # libunicode - Unicode library
 # ==============================================================================
-set(LIBUNICODE_REQUIRED_VERSION "0.8.0")
+set(LIBUNICODE_REQUIRED_VERSION "0.9.0")
 if(NOT ENABLE_STATIC_LINKING)
     find_package(libunicode ${LIBUNICODE_REQUIRED_VERSION} QUIET)
 endif()
