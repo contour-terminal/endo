@@ -793,10 +793,16 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
         auto& mgr = tui::ThemeManager::instance();
         mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
         prompt.setTheme(mgr.current());
-        // Re-apply prompt preset with appropriate colors for new color scheme
+        // Re-apply prompt preset with appropriate colors for new color scheme,
+        // but preserve user color overrides (e.g., from init.endo or interactive config).
         auto const& currentName = prompt.promptConfig().name;
         if (!currentName.empty())
-            prompt.setPromptConfig(promptPreset(currentName, scheme));
+        {
+            auto savedOverrides = prompt.promptConfig().colorOverrides;
+            auto config = promptPreset(currentName, scheme);
+            config.colorOverrides = std::move(savedOverrides);
+            prompt.setPromptConfig(std::move(config));
+        }
     });
 }
 
@@ -1159,11 +1165,6 @@ int Shell::run()
 
     ensureInteractiveReady();
 
-    if (!_noProfile)
-        loadInitScript();
-    loadCompleters();
-    onDirectoryChanged();
-
     // Set up command palette registry for shell mode
     auto shellCommandRegistry = tui::CommandRegistry {};
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -1190,6 +1191,9 @@ int Shell::run()
 
     // Ensure terminal is initialized (raw mode, ECHO off) before sending
     // any terminal queries that produce response bytes.
+    // This must happen before loadInitScript() so that color scheme detection
+    // (which fires onColorSchemeChanged and re-applies the preset) completes
+    // before user overrides from init.endo are applied on top.
     prompt.ensureInitialized();
 
     // Enable semantic block query extension (DEC mode 2034) for error recovery.
@@ -1201,6 +1205,11 @@ int Shell::run()
             std::make_unique<tui::SemanticBlockClient>(prompt.terminal().output(), prompt.terminal().input());
         (void) _semanticBlockClient->enable(); // Silently ignore failure (unsupported terminal).
     }
+
+    if (!_noProfile)
+        loadInitScript();
+    loadCompleters();
+    onDirectoryChanged();
 
 #if !defined(_WIN32)
     pollfd fds[2];
