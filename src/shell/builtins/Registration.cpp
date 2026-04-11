@@ -17,9 +17,11 @@
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
-#include <agent/auth/OAuthFlow.hpp>
-#include <agent/providers/ProviderFactory.hpp>
-#include <agent/tools/WebSearchTool.hpp>
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <agent/auth/OAuthFlow.hpp>
+    #include <agent/providers/ProviderFactory.hpp>
+    #include <agent/tools/WebSearchTool.hpp>
+#endif
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
 
@@ -1102,6 +1104,7 @@ void Shell::registerPromptBuiltins()
     // clang-format on
 }
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
 void Shell::registerAgentConfigBuiltins()
 {
     // clang-format off
@@ -1463,7 +1466,77 @@ void Shell::registerAgentConfigBuiltins()
         .onSet([this](CoreVM::Params& args) { agentConfig.local.chatTemplate = std::string(args.getString(1)); _agentProviderFactory.reset(); });
     // clang-format on
 }
+#else  // !ENDO_ENABLE_AGENT — register no-op stubs so init.endo scripts don't break
+void Shell::registerAgentConfigBuiltins()
+{
+    // clang-format off
+    auto noopSet = [](CoreVM::Params&) {};
 
+    auto registerStringProp = [&](char const* name) {
+        _runtime.registerProperty(name, CoreVM::LiteralType::String)
+            .onGet([](CoreVM::Params& args) { args.setResult(std::string {}); })
+            .onSet(noopSet);
+    };
+    auto registerNumberProp = [&](char const* name) {
+        _runtime.registerProperty(name, CoreVM::LiteralType::Number)
+            .onGet([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); })
+            .onSet(noopSet);
+    };
+    auto registerBoolProp = [&](char const* name) {
+        _runtime.registerProperty(name, CoreVM::LiteralType::Boolean)
+            .onGet([](CoreVM::Params& args) { args.setResult(false); })
+            .onSet(noopSet);
+    };
+    auto registerObjectProp = [&](char const* name) {
+        _runtime.registerProperty(name, CoreVM::LiteralType::Number)
+            .onGet([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); })
+            .onSet(noopSet);
+    };
+
+    for (auto const* name : {
+        "agent_provider", "agent_prompt_indicator",
+        "agent_claude_api_key", "agent_claude_api_key_env", "agent_claude_model",
+        "agent_claude_thinking_mode", "agent_claude_auth_type",
+        "agent_openai_api_key", "agent_openai_api_key_env", "agent_openai_model",
+        "agent_openai_base_url", "agent_openai_thinking_mode",
+        "agent_openai_compat_api_key", "agent_openai_compat_api_key_env",
+        "agent_openai_compat_model", "agent_openai_compat_base_url",
+        "agent_openai_compat_thinking_mode",
+        "agent_gemini_api_key", "agent_gemini_api_key_env", "agent_gemini_model",
+        "agent_gemini_thinking_mode",
+        "agent_permissions_policy",
+        "agent_web_search_engine", "agent_web_search_api_key", "agent_web_search_cx",
+        "agent_error_recovery_action", "agent_error_recovery_model",
+        "agent_local_model_path", "agent_local_model_dir", "agent_local_chat_template",
+        "agent_trace_default_path",
+    }) registerStringProp(name);
+
+    for (auto const* name : {
+        "agent_max_tool_result_size",
+        "agent_claude_max_tokens", "agent_openai_max_tokens",
+        "agent_openai_compat_max_tokens", "agent_gemini_max_tokens",
+        "agent_plan_mode_max_exploration_turns", "agent_explore_max_turns",
+        "agent_trace_max_files", "agent_web_search_max_results",
+        "agent_local_gpu_layers", "agent_local_context_size",
+        "agent_local_threads", "agent_local_batch_size",
+        "agent_local_temperature", "agent_local_max_tokens",
+    }) registerNumberProp(name);
+
+    for (auto const* name : {
+        "agent_log_tool_uses", "agent_claude_prompt_caching",
+        "agent_plan_mode_enabled", "agent_plan_mode_pause_between_steps",
+        "agent_auto_resume", "agent_session_replay",
+        "agent_trace_enabled", "agent_trace_terminal",
+        "agent_local_flash_attention",
+    }) registerBoolProp(name);
+
+    registerObjectProp("agent_trusted_tool");
+    registerObjectProp("agent_blocked_pattern");
+    // clang-format on
+}
+#endif // ENDO_ENABLE_AGENT
+
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
 void Shell::registerMcpBuiltins()
 {
     // clang-format off
@@ -1519,6 +1592,30 @@ void Shell::registerMcpBuiltins()
         });
     // clang-format on
 }
+#else  // !ENDO_ENABLE_AGENT — register no-op MCP stubs
+void Shell::registerMcpBuiltins()
+{
+    // clang-format off
+    _runtime.registerFunction("add_mcp_server")
+        .param<CoreVM::CoreString>("name")
+        .param<CoreVM::CoreString>("command_line")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([](CoreVM::Params&) {});
+
+    _runtime.registerFunction("set_mcp_env")
+        .param<CoreVM::CoreString>("server_name")
+        .param<CoreVM::CoreString>("key")
+        .param<CoreVM::CoreString>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([](CoreVM::Params&) {});
+
+    _runtime.registerFunction("remove_mcp_server")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([](CoreVM::Params&) {});
+    // clang-format on
+}
+#endif // ENDO_ENABLE_AGENT
 
 void Shell::registerCompleterBuiltins()
 {

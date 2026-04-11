@@ -47,50 +47,52 @@
 
 #include "Error.hpp"
 #include "TTY.hpp"
-#include <agent/AgentConfig.hpp>
-#include <agent/HeadlessRunner.hpp>
-#include <agent/PermissionManager.hpp>
-#include <agent/RunCommand.hpp>
-#include <agent/commands/AgentHistoryProvider.hpp>
-#include <agent/commands/FilePathCompleter.hpp>
-#include <agent/commands/SlashCommandCompleter.hpp>
-#include <agent/commands/SlashCommandRegistry.hpp>
-#include <agent/commands/SlashCommands.hpp>
-#include <agent/context/FileReferenceExpander.hpp>
-#include <agent/context/ProjectContextLoader.hpp>
-#include <agent/context/SystemPromptBuilder.hpp>
-#include <agent/conversation/ConversationHistoryStore.hpp>
-#include <agent/conversation/SessionManager.hpp>
-#include <agent/mcp/McpToolAdapter.hpp>
-#include <agent/providers/ProviderFactory.hpp>
-#include <agent/providers/ProviderModels.hpp>
-#include <agent/session/AgentMessages.hpp>
-#include <agent/session/AgentSession.hpp>
-#include <agent/session/AgentWorker.hpp>
-#include <agent/session/PlanExecutor.hpp>
-#include <agent/tools/AskUserTool.hpp>
-#include <agent/tools/DiffRenderer.hpp>
-#include <agent/tools/EditFileTool.hpp>
-#include <agent/tools/EndoExecuteTool.hpp>
-#include <agent/tools/ExploreTool.hpp>
-#include <agent/tools/GitTool.hpp>
-#include <agent/tools/GlobTool.hpp>
-#include <agent/tools/GrepTool.hpp>
-#include <agent/tools/ListDirectoryTool.hpp>
-#include <agent/tools/ReadFileTool.hpp>
-#include <agent/tools/SaveMemoryTool.hpp>
-#include <agent/tools/SearchTool.hpp>
-#include <agent/tools/ShellExecuteTool.hpp>
-#include <agent/tools/SubmitPlanTool.hpp>
-#include <agent/tools/ToolRegistry.hpp>
-#include <agent/tools/WebFetchTool.hpp>
-#include <agent/tools/WebSearchTool.hpp>
-#include <agent/tools/WriteFileTool.hpp>
-#include <agent/tracing/AgentTracer.hpp>
-#include <agent/tracing/TraceTerminalRenderer.hpp>
-#include <agent/ui/AgentInputComponent.hpp>
-#include <agent/ui/AgentResponseRenderer.hpp>
-#include <agent/ui/ToolStatusComponent.hpp>
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <agent/AgentConfig.hpp>
+    #include <agent/HeadlessRunner.hpp>
+    #include <agent/PermissionManager.hpp>
+    #include <agent/RunCommand.hpp>
+    #include <agent/commands/AgentHistoryProvider.hpp>
+    #include <agent/commands/FilePathCompleter.hpp>
+    #include <agent/commands/SlashCommandCompleter.hpp>
+    #include <agent/commands/SlashCommandRegistry.hpp>
+    #include <agent/commands/SlashCommands.hpp>
+    #include <agent/context/FileReferenceExpander.hpp>
+    #include <agent/context/ProjectContextLoader.hpp>
+    #include <agent/context/SystemPromptBuilder.hpp>
+    #include <agent/conversation/ConversationHistoryStore.hpp>
+    #include <agent/conversation/SessionManager.hpp>
+    #include <agent/mcp/McpToolAdapter.hpp>
+    #include <agent/providers/ProviderFactory.hpp>
+    #include <agent/providers/ProviderModels.hpp>
+    #include <agent/session/AgentMessages.hpp>
+    #include <agent/session/AgentSession.hpp>
+    #include <agent/session/AgentWorker.hpp>
+    #include <agent/session/PlanExecutor.hpp>
+    #include <agent/tools/AskUserTool.hpp>
+    #include <agent/tools/DiffRenderer.hpp>
+    #include <agent/tools/EditFileTool.hpp>
+    #include <agent/tools/EndoExecuteTool.hpp>
+    #include <agent/tools/ExploreTool.hpp>
+    #include <agent/tools/GitTool.hpp>
+    #include <agent/tools/GlobTool.hpp>
+    #include <agent/tools/GrepTool.hpp>
+    #include <agent/tools/ListDirectoryTool.hpp>
+    #include <agent/tools/ReadFileTool.hpp>
+    #include <agent/tools/SaveMemoryTool.hpp>
+    #include <agent/tools/SearchTool.hpp>
+    #include <agent/tools/ShellExecuteTool.hpp>
+    #include <agent/tools/SubmitPlanTool.hpp>
+    #include <agent/tools/ToolRegistry.hpp>
+    #include <agent/tools/WebFetchTool.hpp>
+    #include <agent/tools/WebSearchTool.hpp>
+    #include <agent/tools/WriteFileTool.hpp>
+    #include <agent/tracing/AgentTracer.hpp>
+    #include <agent/tracing/TraceTerminalRenderer.hpp>
+    #include <agent/ui/AgentInputComponent.hpp>
+    #include <agent/ui/AgentResponseRenderer.hpp>
+    #include <agent/ui/ToolStatusComponent.hpp>
+#endif
 #include <nlohmann/json.hpp>
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
@@ -152,7 +154,8 @@ struct ScopeGuard
     ScopeGuard& operator=(ScopeGuard const&) = delete;
 };
 
-#if !defined(_WIN32)
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #if !defined(_WIN32)
 auto shellExecImpl(std::string const& shellPath,
                    std::string const& command,
                    std::chrono::milliseconds timeout) -> endo::agent::ShellExecResult
@@ -247,7 +250,7 @@ auto shellExecImpl(std::string const& shellPath,
 
     return endo::agent::ShellExecResult { .output = std::move(output), .exitCode = exitCode };
 }
-#else
+    #else
 auto shellExecImpl(std::string const& command, std::chrono::milliseconds timeout)
     -> endo::agent::ShellExecResult
 {
@@ -351,7 +354,8 @@ auto shellExecImpl(std::string const& command, std::chrono::milliseconds timeout
     return endo::agent::ShellExecResult { .output = std::move(output),
                                           .exitCode = static_cast<int>(exitCode) };
 }
-#endif
+    #endif
+#endif // ENDO_ENABLE_AGENT (shellExecImpl)
 
 } // namespace
 
@@ -816,10 +820,12 @@ void Shell::setOptimize(bool optimize)
     _optimize = optimize;
 }
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
 void Shell::setAgentTracePath(std::string path)
 {
     _agentTracePath = std::move(path);
 }
+#endif
 
 // NOLINTNEXTLINE(readability-make-member-function-const)
 void Shell::addModuleSearchPath(std::filesystem::path path)
@@ -934,8 +940,10 @@ void Shell::emitWindowTitle(std::string_view title)
 
 void Shell::loadInitScript()
 {
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     // Load API keys from agent.yml (init.endo overrides all other settings).
     agentConfig = agent::loadAgentConfig();
+#endif
 
     // Auto-execute init.endo if it exists.
     if (auto const configDir = platform::configHome())
@@ -1158,6 +1166,7 @@ int Shell::run()
 
     // Set up command palette registry for shell mode
     auto shellCommandRegistry = tui::CommandRegistry {};
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     shellCommandRegistry.add({
         .id = "shell.enter_agent_mode",
         .label = "Enter Agent Mode",
@@ -1167,6 +1176,7 @@ int Shell::run()
         .context = tui::CommandContext::Shell,
         .action = [] {}, // Handled via Action::AgentMode
     });
+#endif
     shellCommandRegistry.add({
         .id = "shell.clear_screen",
         .label = "Clear Screen",
@@ -1280,6 +1290,7 @@ int Shell::run()
             auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
+    #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
             // Check if the user wants to enter agent mode
             if (prompt.lastAction() == PromptComponent::Action::AgentMode)
             {
@@ -1291,6 +1302,7 @@ int Shell::run()
                 prompt.terminal().output().updateDimensions();
                 continue;
             }
+    #endif
 
             // Add non-empty commands to history
             if (!lineBuffer.empty())
@@ -1321,6 +1333,7 @@ int Shell::run()
                 names.insert(binding.name);
             prompt.setKnownFSharpNames(std::move(names));
 
+    #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
             // Offer error recovery if command failed.
             if (_exitCode != 0 && !lineBuffer.empty())
             {
@@ -1330,6 +1343,7 @@ int Shell::run()
                 if (effectiveAction != agent::ErrorRecoveryAction::Ignore)
                     offerErrorRecovery(_exitCode, lineBuffer);
             }
+    #endif
         }
     }
 
@@ -1387,6 +1401,7 @@ int Shell::run()
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
 
+    #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
         // Check if the user wants to enter agent mode
         if (prompt.lastAction() == PromptComponent::Action::AgentMode)
         {
@@ -1398,6 +1413,7 @@ int Shell::run()
             prompt.terminal().output().updateDimensions();
             continue;
         }
+    #endif
 
         // Add non-empty commands to history
         if (!lineBuffer.empty())
@@ -1428,6 +1444,7 @@ int Shell::run()
             names.insert(binding.name);
         prompt.setKnownFSharpNames(std::move(names));
 
+    #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
         // Offer error recovery if command failed.
         if (_exitCode != 0 && !lineBuffer.empty())
         {
@@ -1437,6 +1454,7 @@ int Shell::run()
             if (effectiveAction != agent::ErrorRecoveryAction::Ignore)
                 offerErrorRecovery(_exitCode, lineBuffer);
         }
+    #endif
     }
 #endif
 
@@ -1738,6 +1756,7 @@ void Shell::trace(CoreVM::Instruction instr, size_t ip, size_t sp)
     traceLog()()("{}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
 }
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
 // ========================================================================
 // Agent mode
 // ========================================================================
@@ -2045,22 +2064,22 @@ namespace
     [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
     {
         auto result = std::string {};
-#if defined(_WIN32)
+    #if defined(_WIN32)
         auto* fp = _popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-#else
+    #else
         auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-#endif
+    #endif
         if (!fp)
             return result;
 
         auto buf = std::array<char, 256> {};
         while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
             result += buf.data();
-#if defined(_WIN32)
+    #if defined(_WIN32)
         _pclose(fp); // NOLINT(cert-env33-c)
-#else
+    #else
         pclose(fp); // NOLINT(cert-env33-c)
-#endif
+    #endif
 
         while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
             result.pop_back();
@@ -2113,21 +2132,21 @@ namespace
         {
             // Fallback: query git directly (e.g., first agent entry before prompt displayed)
             auto const cwdStr = cwd.string();
-#if defined(_WIN32)
+    #if defined(_WIN32)
             gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
-#else
+    #else
             gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-#endif
+    #endif
             if (!gitBranch.empty())
             {
                 promptBuilder.setGitBranch(gitBranch);
-#if defined(_WIN32)
+    #if defined(_WIN32)
                 auto const gitStatus =
                     runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>NUL");
-#else
+    #else
                 auto const gitStatus =
                     runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>/dev/null");
-#endif
+    #endif
                 promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
             }
         }
@@ -2228,7 +2247,7 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     // --- Tool registration (same tools as interactive mode) ---
     auto toolRegistry = agent::ToolRegistry {};
 
-#if !defined(_WIN32)
+    #if !defined(_WIN32)
     auto const shellPath = [&]() -> std::string {
         if (access("/bin/bash", X_OK) == 0)
             return "/bin/bash";
@@ -2290,7 +2309,7 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
 
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
-#else
+    #else
     auto shellExecCb = [](std::string const& command,
                           std::chrono::milliseconds timeout) -> agent::ShellExecResult {
         return shellExecImpl(command, timeout);
@@ -2301,7 +2320,7 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
         auto const exitCode = this->execute(source);
         return agent::EndoExecResult { .output = {}, .exitCode = exitCode };
     };
-#endif
+    #endif
 
     toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
     toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
@@ -2801,7 +2820,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
 
-#if !defined(_WIN32)
+    #if !defined(_WIN32)
     auto const shellPath = [&]() -> std::string {
         if (access("/bin/bash", X_OK) == 0)
             return "/bin/bash";
@@ -2863,7 +2882,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
-#else
+    #else
     auto shellExecCb = [](std::string const& command,
                           std::chrono::milliseconds timeout) -> agent::ShellExecResult {
         return shellExecImpl(command, timeout);
@@ -2874,7 +2893,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         auto const exitCode = this->execute(source);
         return agent::EndoExecResult { .output = {}, .exitCode = exitCode };
     };
-#endif
+    #endif
 
     toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
     toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
@@ -3297,11 +3316,11 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 const auto* const active = (meta.name == _activeSessionName) ? "\xe2\x97\x8f" : "";
                 auto const tt = std::chrono::system_clock::to_time_t(meta.updatedAt);
                 auto tm = std::tm {};
-#if defined(_WIN32)
+    #if defined(_WIN32)
                 localtime_s(&tm, &tt);
-#else
+    #else
                 localtime_r(&tt, &tm);
-#endif
+    #endif
                 auto timeBuf = std::array<char, 32> {};
                 std::strftime(timeBuf.data(), timeBuf.size(), "%Y-%m-%d %H:%M", &tm);
                 md += std::format("| {} | {} | ~{}k | {} | {} |\n",
@@ -4861,5 +4880,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         }
     }
 }
+
+#endif // ENDO_ENABLE_AGENT
 
 } // namespace endo

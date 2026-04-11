@@ -291,9 +291,9 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # ==============================================================================
-# llama.cpp - Local LLM inference library
+# llama.cpp - Local LLM inference library (only needed with agent support)
 # ==============================================================================
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND ENDO_ENABLE_AGENT)
     if(NOT ENABLE_STATIC_LINKING)
         find_package(llama QUIET)
     endif()
