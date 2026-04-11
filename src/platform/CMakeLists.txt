@@ -22,6 +22,8 @@ add_library(endo-platform STATIC
     FileInfoProvider.hpp
     GlobMatch.hpp
     GlobMatch.cpp
+    ProjectFileTree.hpp
+    ProjectFileTree.cpp
     SignalHandler.hpp
     SignalHandler.cpp
     InstallPaths.hpp
@@ -102,6 +104,7 @@ add_executable(test-endo-platform
     FileInfoProvider_test.cpp
     Wakeup_test.cpp
     MessageQueue_test.cpp
+    ProjectFileTree_test.cpp
     WindowsPlatform_test.cpp
     LinuxProcessProvider_test.cpp
     DarwinProcessProvider_test.cpp

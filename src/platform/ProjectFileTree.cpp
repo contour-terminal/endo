@@ -9,9 +9,9 @@
 #include <sstream>
 #include <unordered_set>
 
-#include <agent/context/ProjectFileTree.hpp>
+#include <platform/ProjectFileTree.hpp>
 
-namespace endo::agent
+namespace endo::platform
 {
 
 namespace
@@ -76,8 +76,8 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
         // Also include root-level files that may be excluded via .git/info/exclude
         // but are still useful navigation targets (e.g. TODO.md, CLAUDE.md).
         auto const fileSet = std::unordered_set<std::string>(files.begin(), files.end());
-        for (auto const& entry: std::filesystem::directory_iterator(rootPath,
-                                                                     std::filesystem::directory_options::skip_permission_denied))
+        for (auto const& entry: std::filesystem::directory_iterator(
+                 rootPath, std::filesystem::directory_options::skip_permission_denied))
         {
             if (files.size() >= FilePathLimit)
                 break;
@@ -274,4 +274,4 @@ auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> 
     return buildTreeFromPaths(paths);
 }
 
-} // namespace endo::agent
+} // namespace endo::platform

@@ -6,7 +6,7 @@
 #include <sstream>
 
 #include <agent/context/ProjectContextLoader.hpp>
-#include <agent/context/ProjectFileTree.hpp>
+#include <platform/ProjectFileTree.hpp>
 #include <platform/UserPaths.hpp>
 
 namespace endo::agent
@@ -66,7 +66,7 @@ auto ProjectContextLoader::load(std::filesystem::path const& projectRoot) -> Pro
     auto context = ProjectContext {};
 
     // Generate file tree and collect flat file paths for @-mention completion
-    auto treeGen = ProjectFileTree {};
+    auto treeGen = platform::ProjectFileTree {};
     context.fileTree = treeGen.generate(projectRoot);
     context.filePaths = treeGen.filePaths(projectRoot);
 
