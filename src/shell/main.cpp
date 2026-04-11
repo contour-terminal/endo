@@ -27,10 +27,12 @@
 #include "FormatCommand.hpp"
 #include "HelpPrinter.hpp"
 #include "Shell.hpp"
-#include <agent/RunCommand.hpp>
-#include <agent/auth/LoginCommand.hpp>
-#include <agent/providers/local/ModelsCommand.hpp>
-#include <agent/tracing/TraceReplay.hpp>
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <agent/RunCommand.hpp>
+    #include <agent/auth/LoginCommand.hpp>
+    #include <agent/providers/local/ModelsCommand.hpp>
+    #include <agent/tracing/TraceReplay.hpp>
+#endif
 
 using namespace std::string_view_literals;
 
@@ -67,8 +69,10 @@ struct ParsedArgs
     std::string_view command;
     std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
     std::string_view scriptFile;
-    std::vector<std::string_view> scriptArgs;  ///< Arguments after script file ($1, $2, ...)
+    std::vector<std::string_view> scriptArgs; ///< Arguments after script file ($1, $2, ...)
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     std::optional<std::string> agentTracePath; ///< Agent trace file path (nullopt = disabled).
+#endif
     std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
     std::vector<std::string_view> modulePaths; ///< Additional module search paths (--module-path).
     bool noProfile = false;                    ///< Skip loading init.endo profile.
@@ -139,6 +143,7 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.unusedDetection = true;
         }
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
         else if (arg == "--agent-trace")
         {
             result.agentTracePath = ""; // Empty = auto-generate path.
@@ -147,6 +152,7 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.agentTracePath = std::string(*val);
         }
+#endif
         else if (auto val = consumeOptionValue(arg, "--log-file", i, args))
         {
             result.logFile = std::string(*val);
@@ -274,8 +280,15 @@ int main(int argc, char const* argv[])
         return endo::format::runFormatCommand(args.subspan(2));
 
     // Handle `endo agent <subcommand>` before general argument parsing
-    if (args.size() >= 3 && std::string_view(args[1]) == "agent"sv)
+    if (args.size() >= 2 && std::string_view(args[1]) == "agent"sv)
     {
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+        if (args.size() < 3)
+        {
+            std::print(stderr, "Usage: {} agent <command>\n", programName);
+            std::print(stderr, "Available commands: login, status, logout, models, trace, run\n");
+            return EXIT_FAILURE;
+        }
         auto const subcommand = std::string_view(args[2]);
         auto const hint = (args.size() >= 4) ? std::string_view(args[3]) : ""sv;
         if (subcommand == "login")
@@ -310,6 +323,10 @@ int main(int argc, char const* argv[])
         std::print(stderr, "Unknown agent command: {}\n", subcommand);
         std::print(stderr, "Available commands: login, status, logout, models, trace, run\n");
         return EXIT_FAILURE;
+#else
+        std::print(stderr, "endo: agent features are not available in this build\n");
+        return EXIT_FAILURE;
+#endif
     }
 
     auto const parsed = parseArguments(args);
@@ -368,8 +385,10 @@ int main(int argc, char const* argv[])
     for (auto const& mp: parsed.modulePaths)
         shell.addModuleSearchPath(std::filesystem::path(mp));
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     if (parsed.agentTracePath.has_value())
         shell.setAgentTracePath(*parsed.agentTracePath);
+#endif
 
     if (parsed.checkOnly)
         shell.setCheckOnly(true);

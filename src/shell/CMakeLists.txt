@@ -204,7 +204,11 @@ else()
     endif()
 endif()
 
-target_link_libraries(endo-shell PUBLIC endo-platform yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http endo-agent)
+target_link_libraries(endo-shell PUBLIC endo-platform yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+if(ENDO_ENABLE_AGENT)
+    target_link_libraries(endo-shell PUBLIC endo-agent)
+    target_compile_definitions(endo-shell PUBLIC ENDO_ENABLE_AGENT=1)
+endif()
 
 # C++23 std::stacktrace may require -lstdc++exp (GCC/Clang with libstdc++)
 include(CheckCXXSourceCompiles)

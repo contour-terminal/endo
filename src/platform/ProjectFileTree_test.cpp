@@ -5,9 +5,9 @@
 #include <filesystem>
 #include <fstream>
 
-#include <agent/context/ProjectFileTree.hpp>
+#include <platform/ProjectFileTree.hpp>
 
-using namespace endo::agent;
+using namespace endo::platform;
 
 namespace
 {
@@ -38,7 +38,7 @@ struct TempProjectDir
 };
 } // namespace
 
-TEST_CASE("ProjectFileTree.generates_from_directory", "[agent]")
+TEST_CASE("ProjectFileTree.generates_from_directory", "[platform]")
 {
     auto dir = TempProjectDir {};
     auto config = FileTreeConfig { .respectGitignore = false };
@@ -50,7 +50,7 @@ TEST_CASE("ProjectFileTree.generates_from_directory", "[agent]")
     CHECK(result.find("README.md") != std::string::npos);
 }
 
-TEST_CASE("ProjectFileTree.respects_depth_limit", "[agent]")
+TEST_CASE("ProjectFileTree.respects_depth_limit", "[platform]")
 {
     auto dir = TempProjectDir {};
     auto config = FileTreeConfig { .maxDepth = 1, .respectGitignore = false };
@@ -66,7 +66,7 @@ TEST_CASE("ProjectFileTree.respects_depth_limit", "[agent]")
     CHECK(result.find("Agent.hpp") == std::string::npos);
 }
 
-TEST_CASE("ProjectFileTree.respects_entry_limit", "[agent]")
+TEST_CASE("ProjectFileTree.respects_entry_limit", "[platform]")
 {
     auto dir = TempProjectDir {};
     auto config = FileTreeConfig { .maxEntries = 3, .respectGitignore = false };
@@ -84,7 +84,7 @@ TEST_CASE("ProjectFileTree.respects_entry_limit", "[agent]")
     CHECK(lineCount <= 5); // Allow for directories that contain the entries
 }
 
-TEST_CASE("ProjectFileTree.empty_directory", "[agent]")
+TEST_CASE("ProjectFileTree.empty_directory", "[platform]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-filetree-empty";
     std::filesystem::remove_all(tmpDir);
@@ -99,7 +99,7 @@ TEST_CASE("ProjectFileTree.empty_directory", "[agent]")
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ProjectFileTree.filePaths_includes_files_and_directories", "[agent]")
+TEST_CASE("ProjectFileTree.filePaths_includes_files_and_directories", "[platform]")
 {
     auto dir = TempProjectDir {};
     auto config = FileTreeConfig { .respectGitignore = false };
@@ -118,7 +118,7 @@ TEST_CASE("ProjectFileTree.filePaths_includes_files_and_directories", "[agent]")
     CHECK(std::ranges::find(paths, "docs/") != paths.end());
 }
 
-TEST_CASE("ProjectFileTree.tree_format_verification", "[agent]")
+TEST_CASE("ProjectFileTree.tree_format_verification", "[platform]")
 {
     auto dir = TempProjectDir {};
     auto config = FileTreeConfig { .respectGitignore = false };

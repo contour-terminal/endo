@@ -35,7 +35,7 @@
 #include "modules/ShellLevelModule.hpp"
 #include "modules/StructuredOutputModule.hpp"
 #include "modules/ToolchainModule.hpp"
-#include <agent/context/ProjectFileTree.hpp>
+#include <platform/ProjectFileTree.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
@@ -1077,10 +1077,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             }
         }
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
         // '#' on empty input enters agent mode
         if (key->codepoint == '#' && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
             && _inputField.text().empty())
             return Action::AgentMode;
+#endif
     }
 
     // Process through InputField
@@ -1314,8 +1316,8 @@ void PromptComponent::dismissPopup()
 
 void PromptComponent::triggerFuzzyFileFinder()
 {
-    auto tree =
-        endo::agent::ProjectFileTree(endo::agent::FileTreeConfig { .maxDepth = 20, .maxEntries = 10000 });
+    auto tree = endo::platform::ProjectFileTree(
+        endo::platform::FileTreeConfig { .maxDepth = 20, .maxEntries = 10000 });
     auto files = tree.filePaths(std::filesystem::current_path());
     if (!files.empty())
         _fuzzyFileFinder.show(std::move(files), "File> ");

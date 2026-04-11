@@ -308,6 +308,7 @@ void printHelp()
     // Subcommands
     h.header("SUBCOMMANDS");
     h.subcommand("format FILE...", "Format Endo source files (see: endo format --help)");
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     h.subcommand("agent COMMAND", "Manage AI agent providers and models");
 
     // Agent Commands
@@ -320,6 +321,7 @@ void printHelp()
     h.subcommand("agent run", "Run agent in headless mode");
     h.subcommand("agent trace replay FILE", "Replay a tool trace JSONL file");
     h.option("--agent-trace[=FILE]", "Enable tool I/O tracing (auto-generated path if omitted)");
+#endif
 
     // Script Execution
     h.header("SCRIPT EXECUTION");

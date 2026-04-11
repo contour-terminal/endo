@@ -93,6 +93,8 @@ if(WIN32)
 endif()
 
 
+option(ENDO_ENABLE_AGENT "Build with AI agent support (LLM providers, agent mode, MCP)" ON)
+
 if(NOT DEFINED ENDO_TRACE_VM)
     option(ENDO_TRACE_VM "Enables debug output" OFF)
     if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace endo::agent
+namespace endo::platform
 {
 
 /// Configuration for project file tree generation.
@@ -59,4 +59,4 @@ class ProjectFileTree
     FileTreeConfig _config;
 };
 
-} // namespace endo::agent
+} // namespace endo::platform

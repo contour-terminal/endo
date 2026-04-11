@@ -23,11 +23,13 @@
 #include <string>
 #include <vector>
 
-#include <agent/AgentConfig.hpp>
-#include <agent/context/ProjectContextLoader.hpp>
 #include <platform/EnvironmentProvider.hpp>
 #include <platform/FileSystem.hpp>
 #include <platform/Wakeup.hpp>
+
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <agent/AgentConfig.hpp>
+    #include <agent/context/ProjectContextLoader.hpp>
 
 namespace endo::agent
 {
@@ -36,6 +38,7 @@ class AgentWorker;
 class ProviderFactory;
 struct AgentRunOptions;
 } // namespace endo::agent
+#endif
 
 #include <shell/DirectoryConfig.hpp>
 #include <shell/completion/Completer.hpp>
@@ -48,8 +51,10 @@ struct AgentRunOptions;
 
 #include "Job.hpp"
 #include "TTY.hpp"
-#include <agent/mcp/ServerManager.hpp>
-#include <agent/tools/WebSearchTool.hpp>
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <agent/mcp/ServerManager.hpp>
+    #include <agent/tools/WebSearchTool.hpp>
+#endif
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
@@ -95,9 +100,11 @@ class Shell final: public SignalCallback
     /// Enable or disable unused-value detection for F# bindings.
     void setUnusedValueDetection(bool enabled) noexcept { _unusedValueDetection = enabled; }
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     /// @brief Sets the trace file path for agent tool I/O tracing.
     /// @param path File path for JSONL trace output. Empty triggers auto-generated path.
     void setAgentTracePath(std::string path);
+#endif
 
     /// Adds an additional module search path (for --module-path CLI option).
     void addModuleSearchPath(std::filesystem::path path);
@@ -150,10 +157,12 @@ class Shell final: public SignalCallback
     /// @brief Called when the working directory changes, to load/unload directory configs.
     void onDirectoryChanged();
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     /// @brief Runs the agent in headless/batch mode (no TUI).
     /// @param options Parsed command-line options for the headless run.
     /// @return Exit code (0 = success, non-zero = failure).
     int runAgentHeadless(agent::AgentRunOptions const& options);
+#endif
 
     /// Updates LINES and COLUMNS environment variables from current TTY size.
     void updateTerminalSizeEnv();
@@ -193,6 +202,7 @@ class Shell final: public SignalCallback
     PersistentHistory history { _fs };    ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
 
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     /// Agent configuration loaded from agent.yml (API keys) and overridden by init.endo builtins.
     agent::AgentConfig agentConfig;
 
@@ -203,6 +213,7 @@ class Shell final: public SignalCallback
     /// MCP server configurations collected from init.endo builtins.
     /// Servers are spawned when entering agent mode.
     std::vector<agent::mcp::McpServerConfig> mcpServerConfigs;
+#endif
 
   private:
     /// @brief Lazily initializes interactive-mode subsystems (history, completer, directory config).
@@ -522,6 +533,9 @@ class Shell final: public SignalCallback
         _tty.writeToStderr(text);
     }
 
+    std::unique_ptr<tui::SemanticBlockClient> _semanticBlockClient;
+
+#if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     // --- Agent mode ---
     void runAgentMode(std::optional<std::string> initialMessage = std::nullopt);
 
@@ -530,7 +544,6 @@ class Shell final: public SignalCallback
     /// @param command The command text that failed.
     void offerErrorRecovery(int exitCode, std::string const& command);
 
-    std::unique_ptr<tui::SemanticBlockClient> _semanticBlockClient;
     agent::ErrorRecoveryAction _sessionErrorRecoveryOverride =
         agent::ErrorRecoveryAction::Ignore; ///< Session-level override (set by user choice).
     bool _hasSessionOverride = false;       ///< Whether the user made a session-level choice.
@@ -545,6 +558,7 @@ class Shell final: public SignalCallback
     std::optional<std::string> _agentTracePath; ///< Trace file path for agent tool I/O (nullopt = disabled).
     std::string _activeSessionName; ///< Name of the active agent session (persists across re-entries).
     std::chrono::system_clock::time_point _sessionCreatedAt; ///< Creation time of the active session.
+#endif
 
     CoreVM::Runtime _runtime;
     CoreVM::diagnostics::BufferedReport _moduleReport; ///< Diagnostics report for module loading
