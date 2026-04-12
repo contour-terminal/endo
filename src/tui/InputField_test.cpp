@@ -1713,3 +1713,53 @@ TEST_CASE("InputField.history_cycling_strips_newlines_in_single_line_mode")
     (void) field.processEvent(specialKey(KeyCode::Down));
     CHECK(field.text() == "multi line entry");
 }
+
+// ============================================================================
+// Ghost text trimming tests
+// ============================================================================
+
+TEST_CASE("InputField.ghost_text_trimmed_on_matching_char")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    field.setGhostText("bar");
+    (void) field.processEvent(charKey('b'));
+    CHECK(field.text() == "foob");
+    CHECK(field.ghostText() == "ar");
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_non_matching_char")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    field.setGhostText("bar");
+    (void) field.processEvent(charKey('x'));
+    CHECK(field.text() == "foox");
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_cleared_when_cursor_not_at_end")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    field.setGhostText("bar");
+    // Move cursor to start
+    (void) field.processEvent(specialKey(KeyCode::Home));
+    (void) field.processEvent(charKey('x'));
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_trim_respects_capitalization")
+{
+    InputField field;
+    field.setText("H");
+    field.setCursor(1);
+    field.setGhostText("ello");
+    // Type 'e' with Shift → becomes 'E', does not match ghost text starting with 'e'
+    (void) field.processEvent(charKey('e', Modifier::Shift));
+    CHECK(field.text() == "HE");
+    CHECK(field.ghostText().empty());
+}

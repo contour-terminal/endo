@@ -949,11 +949,13 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
     {
         // Save undo state before any changes
         saveUndoState();
-        clearGhostText(); // User input clears ghost suggestion
 
         // Delete selection first if any (typing replaces selection)
         if (hasSelection())
+        {
+            clearGhostText();
             deleteSelection();
+        }
 
         auto cp = key.codepoint;
         // Handle Shift and CapsLock modifiers for letter capitalization
@@ -963,6 +965,23 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
         bool const shouldCapitalize = (shift != capsActive); // XOR logic
         if (shouldCapitalize && cp >= 'a' && cp <= 'z')
             cp = cp - 'a' + 'A';
+
+        // Smart ghost text trimming: if typing at end and character matches ghost prefix, trim it;
+        // otherwise clear the now-stale ghost text. This avoids the visual flicker caused by
+        // clearing ghost text immediately and only recomputing it after the debounce delay.
+        if (!_ghostText.empty() && _cursor == _buffer.size())
+        {
+            auto const typed = encodeUtf8(cp);
+            if (_ghostText.starts_with(typed))
+                _ghostText.erase(0, typed.size());
+            else
+                clearGhostText();
+        }
+        else
+        {
+            clearGhostText();
+        }
+
         insertCodepoint(cp);
         _lastWasKill = false;
         return InputFieldAction::Changed;
