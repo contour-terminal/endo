@@ -1163,7 +1163,6 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 _exitHintVisible = false;
                 _inputField.clearGhostText();
             }
-            _inputField.clearGhostText(); // Remove stale suggestion immediately
             _ghostTextDirty = true;
             _ghostTextPendingSince = std::chrono::steady_clock::now();
             // If popup was visible and dismissed by typing, re-filter instead of hiding

@@ -473,7 +473,6 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             dismissPopup();
             return Action::Abort;
         case tui::InputFieldAction::Changed:
-            _inputField.clearGhostText();
             _ghostTextDirty = true;
             _ghostTextPendingSince = std::chrono::steady_clock::now();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
