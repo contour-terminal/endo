@@ -235,5 +235,77 @@ Endo accepts forward slashes in paths on Windows for convenience.
 | Tilde expansion (`~`) | Full support | Full support |
 | Tilde expansion (`~user`) | Full support | Heuristic-based |
 | Signal handling | Native signals | Windows API equivalents |
+| Default shell | `chsh` | Registry (OpenSSH) / Windows Terminal profile |
 | Tab completion | Full support | Full support |
 | Syntax highlighting | Full support | Full support |
+
+---
+
+## Setting Endo as the Default Shell
+
+### POSIX (Linux, macOS)
+
+On POSIX systems, use `chsh` to change your login shell. Endo must first be listed in
+`/etc/shells`:
+
+```bash
+# Add Endo to the list of allowed login shells (requires root)
+echo /usr/local/bin/endo | sudo tee -a /etc/shells
+
+# Change your default shell
+chsh -s /usr/local/bin/endo
+```
+
+The change takes effect on your next login. Adjust the path if you installed Endo to a
+different location (e.g. `/usr/bin/endo`).
+
+!!! warning
+    Make sure Endo is working correctly before setting it as your login shell. A broken
+    login shell can lock you out of your account. Keep a root shell or recovery option
+    available.
+
+### Windows
+
+Windows does not have a single "default shell" concept like POSIX. Instead, different
+contexts use different configuration mechanisms.
+
+#### Windows Terminal Default Profile
+
+To launch Endo when you open a new tab in Windows Terminal:
+
+1. Open **Windows Terminal** and go to **Settings** (Ctrl+,).
+2. Select **Add a new profile** and configure it:
+    - **Name**: Endo
+    - **Command line**: `C:\path\to\endo.exe`
+    - **Starting directory**: `%USERPROFILE%`
+3. Optionally set the new profile as the **Default profile** under **Startup**.
+
+#### OpenSSH Default Shell
+
+To make Endo the default shell for incoming SSH connections, set the `DefaultShell`
+registry value under `HKLM:\SOFTWARE\OpenSSH`. Run the following in an **elevated**
+(administrator) PowerShell prompt:
+
+```powershell
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
+    -Value "C:\path\to\endo.exe" -PropertyType String -Force
+```
+
+No restart of the SSH service is required -- the change takes effect on the next SSH login.
+
+To verify the current setting:
+
+```powershell
+Get-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell
+```
+
+To revert to the Windows default (cmd.exe), remove the registry value:
+
+```powershell
+Remove-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell
+```
+
+!!! tip
+    Replace `C:\path\to\endo.exe` with the actual installation path of the Endo
+    executable. If you built from source without installing, this may be inside your
+    build directory (e.g. `D:\endo\build\clang-release\src\shell\endo.exe`).
