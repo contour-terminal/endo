@@ -192,6 +192,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                     result.mockWhichPaths.emplace_back(sv.substr(0, eqPos), sv.substr(eqPos + 1));
                 continue;
             }
+            if (auto val = parseDirective(line, "mock-cwd"))
+            {
+                result.mockCwd = std::string(*val);
+                continue;
+            }
             if (auto val = parseDirective(line, "expect-env"))
             {
                 auto sv = *val;

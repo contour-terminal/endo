@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: pwd prints the current working directory
+# mock-cwd: /home/alice/projects
+# expect: /home/alice/projects
+
+pwd

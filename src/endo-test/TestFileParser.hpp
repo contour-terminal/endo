@@ -37,6 +37,7 @@ struct TestFile
     bool isSessionTest = false;              ///< True if session-separator was specified
     std::vector<std::pair<std::string, std::string>> mockEnv;        ///< Mock environment variables
     std::vector<std::pair<std::string, std::string>> mockWhichPaths; ///< Mock which paths
+    std::optional<std::string> mockCwd;                              ///< Mock working directory for pwd
     std::vector<std::pair<std::string, std::string>> expectedEnv;    ///< Expected env vars after execution
     bool expectNonEmptyOutput = false; ///< Assert output is non-empty (no exact match)
     std::optional<std::string>

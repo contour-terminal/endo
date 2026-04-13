@@ -68,11 +68,12 @@ struct TestRuntime
     std::string capturedOutput;                           ///< Buffer for captured output from print/println
     std::unordered_map<std::string, std::string> mockEnv; ///< Mock environment variables for env builtin
     std::unordered_map<std::string, std::string> mockWhichPaths; ///< Mock program paths for which builtin
+    std::string mockCwd = "/home/testuser"; ///< Mock current working directory for pwd builtin
     std::unordered_map<std::string, std::string> registeredCompleters; ///< Mock completer registry
-    std::string mockCmdName;                                     ///< Current shell command being built
-    std::vector<std::string> mockCmdArgs;                        ///< Arguments for the current shell command
-    bool mockSubstActive = false; ///< True when in subst_start/subst_end capture mode
-    std::string mockSubstBuffer;  ///< Buffer for captured output during subst mode
+    std::string mockCmdName;                                           ///< Current shell command being built
+    std::vector<std::string> mockCmdArgs; ///< Arguments for the current shell command
+    bool mockSubstActive = false;         ///< True when in subst_start/subst_end capture mode
+    std::string mockSubstBuffer;          ///< Buffer for captured output during subst mode
 
     TestRuntime();
 
@@ -95,6 +96,12 @@ struct TestRuntime
 
     /// Clears all mock which paths.
     void clearMockWhichPaths();
+
+    /// Sets the mock current working directory for the pwd builtin.
+    void setMockCwd(std::string const& path);
+
+    /// Resets the mock current working directory to the default.
+    void clearMockCwd();
 
     /// Returns the mock environment map (for verifying export behavior in tests).
     [[nodiscard]] std::unordered_map<std::string, std::string> const& env() const { return mockEnv; }

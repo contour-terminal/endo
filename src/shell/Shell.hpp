@@ -297,6 +297,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the nproc builtin. Returns exit code.
     [[nodiscard]] int executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the pwd builtin, printing the current working directory. Returns exit code.
+    [[nodiscard]] int executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the basename builtin. Returns exit code.
     [[nodiscard]] int executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the dirname builtin. Returns exit code.
