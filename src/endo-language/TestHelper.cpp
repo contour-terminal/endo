@@ -603,6 +603,14 @@ void TestRuntime::dummyCallProc(CoreVM::Params& params)
         else
             capturedOutput += output;
     }
+    else if (!args.empty() && args[0] == "pwd")
+    {
+        auto output = mockCwd + '\n';
+        if (mockSubstActive)
+            mockSubstBuffer += output;
+        else
+            capturedOutput += output;
+    }
     params.setResult(CoreVM::CoreNumber(0));
 }
 
@@ -620,6 +628,14 @@ void TestRuntime::dummyCallProcPiped(CoreVM::Params& params)
             output += args[i];
         }
         output += '\n';
+        if (mockSubstActive)
+            mockSubstBuffer += output;
+        else
+            capturedOutput += output;
+    }
+    else if (!args.empty() && args[0] == "pwd")
+    {
+        auto output = mockCwd + '\n';
         if (mockSubstActive)
             mockSubstBuffer += output;
         else
@@ -654,6 +670,16 @@ void TestRuntime::setMockEnvVar(std::string const& key, std::string const& value
 void TestRuntime::clearMockEnvVars()
 {
     mockEnv.clear();
+}
+
+void TestRuntime::setMockCwd(std::string const& path)
+{
+    mockCwd = path;
+}
+
+void TestRuntime::clearMockCwd()
+{
+    mockCwd = "/home/testuser";
 }
 
 void TestRuntime::setMockWhichPath(std::string const& program, std::string const& path)

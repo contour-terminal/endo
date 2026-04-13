@@ -167,6 +167,10 @@ TestResult TestExecutor::run(TestFile const& testFile)
             testRuntime.setMockWhichPath(prog, path);
     }
 
+    // Apply mock working directory
+    if (testFile.mockCwd.has_value())
+        testRuntime.setMockCwd(*testFile.mockCwd);
+
     // Materialize auxiliary files to a temp directory if present
     std::optional<TempTestDir> auxDir;
     if (!testFile.auxiliaryFiles.empty())
@@ -346,6 +350,8 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 testRuntime.clearMockEnvVars();
                 testRuntime.clearMockWhichPaths();
             }
+            if (testFile.mockCwd.has_value())
+                testRuntime.clearMockCwd();
 
             result.outcome = TestOutcome::Pass;
             return result;
@@ -504,6 +510,8 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 testRuntime.clearMockEnvVars();
                 testRuntime.clearMockWhichPaths();
             }
+            if (testFile.mockCwd.has_value())
+                testRuntime.clearMockCwd();
 
             result.outcome = TestOutcome::Pass;
             return result;
@@ -529,14 +537,15 @@ TestResult TestExecutor::run(TestFile const& testFile)
 
             // Create test shell with isolated environment
             TestPTY pty;
-            TestEnvironment env;
+            auto const initialCwd = testFile.mockCwd.value_or("/test");
+            TestEnvironment env(initialCwd);
 
             // Seed essential variables from real environment
             if (auto const* path = std::getenv("PATH"))
                 env.set("PATH", path);
             if (auto const* home = std::getenv("HOME"))
                 env.set("HOME", home);
-            env.set("PWD", "/test");
+            env.set("PWD", initialCwd);
 
             Shell shell(pty, env, fs);
             shell.addModuleSearchPath("/test");

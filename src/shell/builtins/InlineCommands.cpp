@@ -2743,6 +2743,37 @@ int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHand
 }
 
 // ---------------------------------------------------------------------------
+// pwd
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    for (auto const i: std::views::iota(1uz, args.size()))
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(outputFd,
+                                      "# pwd\n"
+                                      "\n"
+                                      "Print the current working directory.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`pwd`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-h`, `--help` | Display this help |\n");
+    }
+
+    auto output = std::format("{}\n", _env.currentDirectory());
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // date
 // ---------------------------------------------------------------------------
 
