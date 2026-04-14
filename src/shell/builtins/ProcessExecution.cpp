@@ -7,6 +7,8 @@
 
 #include <endo-language/LogCategories.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 
 #include <format>
@@ -43,7 +45,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
     auto content = _fs.readFile(scriptPath.string());
     if (!content)
     {
-        error("{}: {}", scriptPath.string(), content.error());
+        error("{}: {}", platform::normalizePath(scriptPath), content.error());
         return EXIT_FAILURE;
     }
 
@@ -59,7 +61,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
 
     auto const savedSourceFile = _fsharpState.sourceFilePath;
     _fsharpState.sourceFilePath = _fs.weaklyCanonical(scriptPath);
-    auto const result = executeConfigScript(*content, scriptPath.string());
+    auto const result = executeConfigScript(*content, platform::normalizePath(scriptPath));
     _fsharpState.sourceFilePath = savedSourceFile;
     return result;
 }
@@ -68,7 +70,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath, std::span<
 {
     auto savedPositionalParams = _positionalParameters;
     _positionalParameters.clear();
-    _positionalParameters.push_back(scriptPath.string());
+    _positionalParameters.push_back(platform::normalizePath(scriptPath));
     for (auto const& arg: args)
         _positionalParameters.push_back(arg);
 

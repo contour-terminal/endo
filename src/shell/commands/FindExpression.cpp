@@ -2,6 +2,8 @@
 #include <shell/commands/FindExpression.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -408,7 +410,7 @@ bool NameExpr::evaluate(FindEntry const& entry) const
 
 bool PathExpr::evaluate(FindEntry const& entry) const
 {
-    auto const pathStr = entry.path.string();
+    auto const pathStr = platform::normalizePath(entry.path);
     if (caseInsensitive)
         return globMatch(toLower(pathStr), toLower(pattern));
     return globMatch(pathStr, pattern);

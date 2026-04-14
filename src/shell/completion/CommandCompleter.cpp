@@ -6,6 +6,8 @@
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <crispy/utils.h>
 
 #include <algorithm>
@@ -195,7 +197,7 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
 
             // Use stem (without extension) as command name
             auto const cmdName = path.stem().string();
-            commands.try_emplace(cmdName, path.string());
+            commands.try_emplace(cmdName, platform::normalizePath(path));
 #else
             // Check if executable (on POSIX)
             auto status = std::filesystem::status(path, ec);
@@ -209,7 +211,7 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
                 || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
 
             if (isExecutable)
-                commands.try_emplace(path.filename().string(), path.string());
+                commands.try_emplace(path.filename().string(), platform::normalizePath(path));
 #endif
         }
     }

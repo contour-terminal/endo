@@ -3,6 +3,7 @@
 #include <endo-language/lexer/Lexer.hpp>
 
 #include <algorithm>
+#include <cctype>
 
 namespace endo
 {
@@ -311,6 +312,16 @@ bool CompletionContextAnalyzer::looksLikeFilePath(std::string_view prefix)
     // Contains a path separator
     if (prefix.find('/') != std::string_view::npos)
         return true;
+
+#if defined(_WIN32)
+    // Backslash is a path separator on Windows
+    if (prefix.find('\\') != std::string_view::npos)
+        return true;
+
+    // Drive letter prefix (e.g., "C:" or "D:\")
+    if (prefix.size() >= 2 && std::isalpha(static_cast<unsigned char>(prefix[0])) && prefix[1] == ':')
+        return true;
+#endif
 
     return false;
 }

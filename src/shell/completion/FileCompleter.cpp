@@ -25,7 +25,10 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
     if (context.command.has_value() && isBuiltinWithArgumentCompletion(*context.command))
         return {};
 
-    auto const& prefix = context.prefix;
+    // Normalize backslashes to forward slashes on Windows so that user-typed
+    // backslash paths are handled correctly in all slash-related logic below.
+    auto const normalizedPrefix = platform::normalizePath(std::string(context.prefix));
+    std::string_view const prefix = normalizedPrefix;
 
     if (prefix.empty())
     {

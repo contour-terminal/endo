@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GlobMatcher.hpp"
 
+#include <platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <ranges>
@@ -53,7 +55,7 @@ std::vector<std::string> expandGlobPattern(std::string_view pattern)
             if (dirPath == ".")
                 results.push_back(filename);
             else
-                results.push_back(entry.path().string());
+                results.push_back(platform::normalizePath(entry.path()));
         }
     }
 
@@ -94,7 +96,7 @@ std::vector<std::string> expandRecursiveGlob(std::string_view pattern)
         if (!entry.is_regular_file())
             continue;
 
-        std::string filePath = entry.path().string();
+        std::string filePath = platform::normalizePath(entry.path());
         std::string filename = entry.path().filename().string();
 
         if (!suffixPattern.empty())

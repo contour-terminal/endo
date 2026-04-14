@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -64,7 +66,7 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
     auto const result = _env.changeDirectory(path);
     if (!result.has_value())
     {
-        error("Failed to change directory to '{}': {}", path.string(), toString(result.error()));
+        error("Failed to change directory to '{}': {}", platform::normalizePath(path), toString(result.error()));
         _exitCode = 1;
     }
     else
@@ -289,7 +291,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     // 1. Validate script exists
     if (!std::filesystem::exists(scriptPath))
     {
-        error("source-env: script not found: {}", scriptPath.string());
+        error("source-env: script not found: {}", platform::normalizePath(scriptPath));
         return EXIT_FAILURE;
     }
 
@@ -379,7 +381,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         auto ofs = std::ofstream(wrapperPath, std::ios::binary);
         if (!ofs)
         {
-            error("source-env: failed to create temp wrapper: {}", wrapperPath.string());
+            error("source-env: failed to create temp wrapper: {}", platform::normalizePath(wrapperPath));
             return EXIT_FAILURE;
         }
         ofs << wrapperContent;
@@ -437,7 +439,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     }
     else
     {
-        error("source-env: failed to spawn interpreter: {}", interpreter.string());
+        error("source-env: failed to spawn interpreter: {}", platform::normalizePath(interpreter));
         return EXIT_FAILURE;
     }
 

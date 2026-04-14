@@ -6,6 +6,8 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <filesystem>
 #include <ranges>
 
@@ -61,7 +63,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
                 {
                     auto const fileStatus = fs::status(canonicalSearch, ec);
                     matches.push_back({
-                        .path = canonicalSearch.string(),
+                        .path = platform::normalizePath(canonicalSearch),
                         .size = entry.size,
                         .mode = static_cast<uint64_t>(fileStatus.permissions()),
                         .mtime = static_cast<int64_t>(
@@ -116,7 +118,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
             {
                 auto const fileStatus = dirEntry.status(ec);
                 matches.push_back({
-                    .path = dirEntry.path().string(),
+                    .path = platform::normalizePath(dirEntry.path()),
                     .size = entry.size,
                     .mode = static_cast<uint64_t>(ec ? fs::perms::none : fileStatus.permissions()),
                     .mtime = static_cast<int64_t>(

@@ -959,14 +959,14 @@ void Shell::loadInitScript()
         {
             if (auto content = _fs.readFile(initPath))
             {
-                if (auto const initResult = executeConfigScript(*content, initPath.string()); initResult != 0)
+                if (auto const initResult = executeConfigScript(*content, platform::normalizePath(initPath)); initResult != 0)
                     _tty.writeToStderr(
                         std::format("endo: warning: init.endo exited with code {}\n", initResult));
             }
             else
             {
                 _tty.writeToStderr(
-                    std::format("endo: warning: error loading {}: {}\n", initPath.string(), content.error()));
+                    std::format("endo: warning: error loading {}: {}\n", platform::normalizePath(initPath), content.error()));
             }
         }
     }
@@ -1031,19 +1031,19 @@ void Shell::loadCompleters()
 
         for (auto const& path: files)
         {
-            auto const basename = path.filename().string();
+            auto const basename = path.filename().string(); // no separators in filename
             if (seenBasenames.contains(basename))
                 continue;
             seenBasenames.insert(basename);
 
             if (auto content = _fs.readFile(path))
             {
-                (void) executeConfigScript(*content, path.string());
+                (void) executeConfigScript(*content, platform::normalizePath(path));
             }
             else
             {
                 _tty.writeToStderr(std::format(
-                    "endo: warning: error loading completer {}: {}\n", path.string(), content.error()));
+                    "endo: warning: error loading completer {}: {}\n", platform::normalizePath(path), content.error()));
             }
         }
     };
@@ -1236,7 +1236,7 @@ int Shell::run()
         // Populate prompt context for module evaluation
         {
             auto ctx = PromptContext {};
-            ctx.cwd = _fs.currentPath().string();
+            ctx.cwd = platform::normalizePath(_fs.currentPath());
             emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
@@ -1376,7 +1376,7 @@ int Shell::run()
         // Populate prompt context for module evaluation
         {
             auto ctx = PromptContext {};
-            ctx.cwd = _fs.currentPath().string();
+            ctx.cwd = platform::normalizePath(_fs.currentPath());
             emitWindowTitle(ctx.cwd);
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
@@ -2120,7 +2120,7 @@ namespace
             cachedContext ? std::move(*cachedContext) : agent::ProjectContextLoader::load(cwd);
 
         auto promptBuilder = agent::SystemPromptBuilder {};
-        promptBuilder.setWorkingDirectory(cwd.string());
+        promptBuilder.setWorkingDirectory(platform::normalizePath(cwd));
         promptBuilder.setShellInfo("endo");
         promptBuilder.setProjectRules(projectContext.rulesFiles);
         promptBuilder.setGlobalRules(projectContext.globalRules);
@@ -2140,7 +2140,7 @@ namespace
         else
         {
             // Fallback: query git directly (e.g., first agent entry before prompt displayed)
-            auto const cwdStr = cwd.string();
+            auto const cwdStr = platform::normalizePath(cwd);
     #if defined(_WIN32)
             gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
     #else
@@ -2161,14 +2161,14 @@ namespace
         }
 
         // Tilde-contract the project path for display
-        auto projectPath = cwd.string();
+        auto projectPath = platform::normalizePath(cwd);
         if (auto const home = platform::homeDirectory())
         {
-            auto const homeStr = home->string();
+            auto const homeStr = platform::normalizePath(*home);
             if (projectPath.starts_with(homeStr))
             {
                 auto contracted = "~" + projectPath.substr(homeStr.size());
-                if (contracted.size() == 1 || contracted[1] == '/' || contracted[1] == '\\')
+                if (contracted.size() == 1 || contracted[1] == '/')
                     projectPath = std::move(contracted);
             }
         }
@@ -2182,7 +2182,7 @@ namespace
             "Be thorough but concise. Reference file paths with line numbers. "
             "Do not ask follow-up questions — produce a complete answer. "
             "Do not suggest code changes — only report findings.");
-        explorePromptBuilder.setWorkingDirectory(cwd.string());
+        explorePromptBuilder.setWorkingDirectory(platform::normalizePath(cwd));
         explorePromptBuilder.setShellInfo("endo");
         explorePromptBuilder.setProjectRules(projectContext.rulesFiles);
         explorePromptBuilder.setGlobalRules(projectContext.globalRules);
@@ -2966,7 +2966,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             auto const now = std::chrono::system_clock::now();
             auto const timestamp =
                 std::format("{:%Y%m%d-%H%M%S}", std::chrono::floor<std::chrono::seconds>(now));
-            tracePath = (traceDir / ("agent-trace-" + timestamp + ".jsonl")).string();
+            tracePath = platform::normalizePath(traceDir / ("agent-trace-" + timestamp + ".jsonl"));
         }
 
         auto tracerResult = agent::AgentTracer::create(tracePath);

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PosixEnvironmentProvider.hpp"
 
+#include <platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <filesystem>
 
@@ -79,7 +81,7 @@ std::expected<void, PlatformError> PosixEnvironmentProvider::changeDirectory(
 
 std::string PosixEnvironmentProvider::currentDirectory() const
 {
-    return std::filesystem::current_path().string();
+    return normalizePath(std::filesystem::current_path());
 }
 
 } // namespace endo::platform

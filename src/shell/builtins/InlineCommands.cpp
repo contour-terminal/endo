@@ -5,6 +5,8 @@
 #include <shell/commands/KillCommand.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
 #include <tui/MarkdownRenderer.hpp>
@@ -1201,12 +1203,12 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
                             if (!removeResult.has_value() || !removeResult.value())
                             {
                                 error("rm: cannot remove '{}': {}",
-                                      entry.string(),
+                                      platform::normalizePath(entry),
                                       removeResult.has_value() ? "Unknown error" : removeResult.error());
                                 allOk = false;
                                 break;
                             }
-                            writeOutput(std::format("removed '{}'\n", entry.string()));
+                            writeOutput(std::format("removed '{}'\n", platform::normalizePath(entry)));
                         }
                         if (!allOk)
                         {
@@ -1516,7 +1518,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
     if (sources.size() > 1 && !destIsDir)
     {
-        error("cp: target '{}' is not a directory", dest.string());
+        error("cp: target '{}' is not a directory", platform::normalizePath(dest));
         return 1;
     }
 
@@ -1555,7 +1557,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
             // Create the top-level target directory
             if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
             {
-                error("cp: cannot create directory '{}': {}", target.string(), mkResult.error());
+                error("cp: cannot create directory '{}': {}", platform::normalizePath(target), mkResult.error());
                 success = false;
                 continue;
             }
@@ -1569,7 +1571,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                 {
                     if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
                     {
-                        error("cp: cannot create directory '{}': {}", entryTarget.string(), mkResult.error());
+                        error("cp: cannot create directory '{}': {}", platform::normalizePath(entryTarget), mkResult.error());
                         success = false;
                     }
                 }
@@ -1584,7 +1586,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                         !mkResult.has_value())
                     {
                         error("cp: cannot create directory '{}': {}",
-                              entryTarget.parent_path().string(),
+                              platform::normalizePath(entryTarget.parent_path()),
                               mkResult.error());
                         success = false;
                         continue;
@@ -1592,12 +1594,12 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                     if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, overwrite);
                         !cpResult.has_value())
                     {
-                        error("cp: cannot copy '{}': {}", entry.path.string(), cpResult.error());
+                        error("cp: cannot copy '{}': {}", platform::normalizePath(entry.path), cpResult.error());
                         success = false;
                         continue;
                     }
                     if (verbose)
-                        writeOutput(std::format("'{}' -> '{}'\n", entry.path.string(), entryTarget.string()));
+                        writeOutput(std::format("'{}' -> '{}'\n", platform::normalizePath(entry.path), platform::normalizePath(entryTarget)));
                 }
             }
         }
@@ -1609,13 +1611,13 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (auto const cpResult = _fs.copyFile(srcPath, target, overwrite); !cpResult.has_value())
             {
-                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), cpResult.error());
+                error("cp: cannot copy '{}' to '{}': {}", src, platform::normalizePath(target), cpResult.error());
                 success = false;
                 continue;
             }
 
             if (verbose)
-                writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
+                writeOutput(std::format("'{}' -> '{}'\n", src, platform::normalizePath(target)));
         }
     }
 
@@ -1747,7 +1749,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
 
     if (sources.size() > 1 && !destIsDir)
     {
-        error("mv: target '{}' is not a directory", dest.string());
+        error("mv: target '{}' is not a directory", platform::normalizePath(dest));
         return 1;
     }
 
@@ -1773,7 +1775,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (interactive && !force)
             {
-                auto const prompt = std::format("mv: overwrite '{}'? ", target.string());
+                auto const prompt = std::format("mv: overwrite '{}'? ", platform::normalizePath(target));
                 [[maybe_unused]] auto w = platformWrite(standardError(), prompt.data(), prompt.size());
                 if (!_tty.isTerminal())
                     continue;
@@ -1795,7 +1797,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                                        || renameError.find("EXDEV") != std::string::npos;
             if (!isCrossDevice)
             {
-                error("mv: cannot move '{}' to '{}': {}", src, target.string(), renameError);
+                error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), renameError);
                 success = false;
                 continue;
             }
@@ -1808,14 +1810,14 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                 // Recursive directory copy
                 if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
                 {
-                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), mkResult.error());
+                    error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), mkResult.error());
                     success = false;
                     continue;
                 }
                 auto const listResult = _fs.listDirectoryRecursive(srcPath);
                 if (!listResult.has_value())
                 {
-                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), listResult.error());
+                    error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), listResult.error());
                     success = false;
                     continue;
                 }
@@ -1862,7 +1864,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (copyFailed)
             {
-                error("mv: cannot move '{}' to '{}': {}", src, target.string(), copyError);
+                error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), copyError);
                 success = false;
                 continue;
             }
@@ -1872,7 +1874,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             {
                 error("mv: moved '{}' to '{}' but failed to remove source: {}",
                       src,
-                      target.string(),
+                      platform::normalizePath(target),
                       removeResult.error());
                 success = false;
                 continue;
@@ -1880,7 +1882,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         }
 
         if (verbose)
-            writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
+            writeOutput(std::format("'{}' -> '{}'\n", src, platform::normalizePath(target)));
     }
 
     return success ? 0 : 1;
@@ -2021,7 +2023,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
         {
             if (!_fs.exists(searchPath))
             {
-                error("find: '{}': No such file or directory", searchPath.string());
+                error("find: '{}': No such file or directory", platform::normalizePath(searchPath));
                 continue;
             }
 
@@ -2042,7 +2044,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
             if (!expression || expression->evaluate(entry))
             {
-                auto const output = searchPath.string() + std::string(separator);
+                auto const output = platform::normalizePath(searchPath) + std::string(separator);
                 platformWrite(outputFd, output.data(), output.size());
             }
         }
@@ -2083,7 +2085,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
             if (!expression || expression->evaluate(entry))
             {
-                auto const output = dirEntry.path.string() + std::string(separator);
+                auto const output = platform::normalizePath(dirEntry.path) + std::string(separator);
                 platformWrite(outputFd, output.data(), output.size());
             }
         }
@@ -2248,7 +2250,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             if (!fileStream || !fileStream->good())
             {
                 if (!opts.suppressErrors)
-                    error("grep: {}: Permission denied", filePath.string());
+                    error("grep: {}: Permission denied", platform::normalizePath(filePath));
                 hasError = true;
                 continue;
             }
@@ -2263,7 +2265,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             }
 
             auto const matches =
-                grep::searchLines(lines, *regex, opts, filePath.string(), showFilename, useColor, writer);
+                grep::searchLines(lines, *regex, opts, platform::normalizePath(filePath), showFilename, useColor, writer);
             totalMatches += matches;
 
             // For -q, bail out early on first match
@@ -3143,7 +3145,7 @@ int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandl
                                       "| `--help` | Display this help |\n");
     }
 
-    auto parent = std::filesystem::path(args.at(1)).parent_path().string();
+    auto parent = platform::normalizePath(std::filesystem::path(args.at(1)).parent_path());
     if (parent.empty())
         parent = ".";
 
@@ -3194,7 +3196,7 @@ int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHand
             exitCode = 1;
             continue;
         }
-        auto output = std::format("{}\n", canonical.string());
+        auto output = std::format("{}\n", platform::normalizePath(canonical));
         [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
     }
     return exitCode;
@@ -3436,7 +3438,7 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         std::filesystem::create_directories(path, ec);
         if (ec)
         {
-            error("mktemp: failed to create directory '{}': {}", path.string(), ec.message());
+            error("mktemp: failed to create directory '{}': {}", platform::normalizePath(path), ec.message());
             return 1;
         }
     }
@@ -3445,12 +3447,12 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         std::ofstream ofs(path);
         if (!ofs)
         {
-            error("mktemp: failed to create file '{}'", path.string());
+            error("mktemp: failed to create file '{}'", platform::normalizePath(path));
             return 1;
         }
     }
 
-    auto output = std::format("{}\n", path.string());
+    auto output = std::format("{}\n", platform::normalizePath(path));
     [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
