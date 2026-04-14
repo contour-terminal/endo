@@ -3,6 +3,8 @@
 
 #if defined(_WIN32)
 
+    #include <platform/PathUtils.hpp>
+
     #include <algorithm>
     #include <cctype>
     #include <filesystem>
@@ -115,7 +117,7 @@ std::expected<void, PlatformError> WindowsEnvironmentProvider::changeDirectory(
 
 std::string WindowsEnvironmentProvider::currentDirectory() const
 {
-    return std::filesystem::current_path().string();
+    return normalizePath(std::filesystem::current_path());
 }
 
 } // namespace endo::platform

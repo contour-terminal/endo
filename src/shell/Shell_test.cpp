@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <platform/PathUtils.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -4009,7 +4011,7 @@ TEST_CASE("shell.builtin.find_basic")
     shell(std::format("find {}", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
-    CHECK(out.find(testDir.string()) != std::string::npos);
+    CHECK(out.find(endo::platform::normalizePath(testDir)) != std::string::npos);
     CHECK(out.find("a.txt") != std::string::npos);
     CHECK(out.find("b.txt") != std::string::npos);
     CHECK(out.find("sub") != std::string::npos);
