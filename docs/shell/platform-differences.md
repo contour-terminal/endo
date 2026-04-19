@@ -215,10 +215,50 @@ Endo normalizes path handling across platforms, but some differences are visible
 |--------|-------|---------|
 | Separator | `/` | `\` (but `/` also works) |
 | Root | `/` | `C:\` (or other drive letter) |
-| Null device | `/dev/null` | `NUL` |
+| Null device | `/dev/null` | `NUL` (Endo also accepts `/dev/null`) |
 | Path length limit | ~4096 bytes | ~260 characters (32,767 with long path support) |
 
 Endo accepts forward slashes in paths on Windows for convenience.
+
+### Null-device portability (`/dev/null` on Windows)
+
+On POSIX systems, the null device is a regular file at `/dev/null`. On Windows the
+equivalent is the reserved device name `NUL`, which is not a filesystem path and has
+no counterpart under `C:\`. Shell scripts and pipelines that target `/dev/null` are
+therefore not portable in general.
+
+To keep commands portable between platforms, Endo rewrites the literal path
+`/dev/null` to `NUL` on Windows at the point where a file is opened. This applies
+consistently across:
+
+- **Builtins that open user-supplied paths** — `tee`, `cat`, `tail`, and other
+  text-processing commands that accept file arguments.
+- **Shell redirections** — both input (`< /dev/null`) and output (`> /dev/null`,
+  `>> /dev/null`) forms.
+
+So the following all behave the same on Linux, macOS, and Windows:
+
+```endo
+echo hello | tee /dev/null          # tees to stdout only
+cat /dev/null                       # prints nothing
+grep pattern file > /dev/null       # discards stdout
+some-command 2> /dev/null           # discards stderr
+```
+
+On Windows, `NUL` itself remains the canonical null device name and may still be
+used directly (e.g. `echo hello > NUL`). The `/dev/null` alias is purely a
+convenience for portability — no other POSIX `/dev/*` names are recognised.
+
+#### Scope of the translation
+
+The rewrite is intentionally narrow: only the exact literal string `/dev/null` is
+mapped. Paths such as `/dev/nullx`, `/dev/null/file`, or `/dev/zero` are treated
+as ordinary filesystem paths, which on Windows will fail to open as expected.
+
+This translation happens inside the shell's file-open helpers — it is not a
+preprocessing step, so user variables and argument strings are unaffected until
+they are passed to a file operation. The implementation lives in
+`endo::platform::resolveDevicePath()` in `src/platform/PathUtils.hpp`.
 
 ---
 

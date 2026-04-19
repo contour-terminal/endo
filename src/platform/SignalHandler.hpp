@@ -87,6 +87,9 @@ class SignalHandler
     /// Clears the pending SIGINT flag.
     static void clearPendingSigint() noexcept;
 
+    /// Simulates a SIGINT by setting the pending flag. For testing only.
+    static void simulateSigint() noexcept;
+
     /// Temporarily restores default SIGTSTP handling and re-raises the signal.
     ///
     /// This is called during shell suspend to actually stop the process.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 
 #if defined(_WIN32)
@@ -267,7 +268,8 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto const handle = CreateFileW(path.wstring().c_str(),
+    auto const resolved = std::filesystem::path(resolveDevicePath(path.generic_string()));
+    auto const handle = CreateFileW(resolved.wstring().c_str(),
                                     access,
                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                                     &sa,

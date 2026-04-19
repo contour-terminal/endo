@@ -4,13 +4,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <thread>
+
+#include <platform/PathUtils.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -806,6 +806,64 @@ TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
     std::filesystem::remove("/tmp/endo_test_binary_raw.dat", ec);
 }
 #endif
+
+TEST_CASE("shell.builtin.cat_pipe_regression")
+{
+    // Issue #98: Ensure cat in a pipeline (non-terminal stdin) still works after interruptible read changes.
+    CHECK(escape(TestShell()("echo hello | cat").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo -n test | cat").output()) == escape("test"));
+}
+
+TEST_CASE("shell.builtin.cat_sigint_returns_130")
+{
+    // Issue #98: Simulate SIGINT before running cat with piped input.
+    // The interruptible read loop should detect the pending SIGINT and return 130.
+    TestShell shell;
+    endo::platform::SignalHandler::simulateSigint();
+    shell("echo hello | cat");
+    CHECK(shell.exitCode == 130);
+    endo::platform::SignalHandler::clearPendingSigint(); // cleanup
+}
+
+TEST_CASE("shell.builtin.head_pipe_regression")
+{
+    // Ensure head in a pipeline still works after interruptible read changes.
+    TestShell shell;
+    auto output = shell(R"(echo -e "a\nb\nc" | head -n 2)").output();
+    CHECK(output.find('a') != std::string::npos);
+    CHECK(output.find('b') != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.grep_sigint_returns_130")
+{
+    // Simulate SIGINT before grep reads stdin.
+    TestShell shell;
+    endo::platform::SignalHandler::simulateSigint();
+    shell("echo hello | grep hello");
+    CHECK(shell.exitCode == 130);
+    endo::platform::SignalHandler::clearPendingSigint();
+}
+
+TEST_CASE("shell.builtin.tr_sigint_returns_130")
+{
+    // Simulate SIGINT before tr reads stdin.
+    TestShell shell;
+    endo::platform::SignalHandler::simulateSigint();
+    shell("echo hello | tr a-z A-Z");
+    CHECK(shell.exitCode == 130);
+    endo::platform::SignalHandler::clearPendingSigint();
+}
+
+TEST_CASE("shell.builtin.tee_sigint_returns_130")
+{
+    // Simulate SIGINT before tee reads stdin.
+    TestShell shell;
+    endo::platform::SignalHandler::simulateSigint();
+    shell("echo hello | tee /dev/null");
+    CHECK(shell.exitCode == 130);
+    endo::platform::SignalHandler::clearPendingSigint();
+}
 
 // ============================================================================
 // Sleep Builtin
