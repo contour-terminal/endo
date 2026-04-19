@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cd cannot be backgrounded with trailing &
+# expect-error: builtin 'cd' cannot be run in the background
+
+cd /tmp &

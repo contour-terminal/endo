@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: which accepts multiple program names via the variadic overload
+# mode: shell
+# mock-which: ls=/usr/bin/ls
+# mock-which: cat=/usr/bin/cat
+# expect-nonempty
+
+which ls cat

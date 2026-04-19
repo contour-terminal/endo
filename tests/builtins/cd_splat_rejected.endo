@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: passing a splat into the cd builtin is rejected at compile time
+# expect-error: builtin 'cd' does not accept a splat
+
+let cdr ...args = & cd /tmp ...args

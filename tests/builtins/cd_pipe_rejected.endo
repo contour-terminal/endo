@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cd is not allowed inside a pipeline
+# expect-error: builtin 'cd' cannot be used in a pipeline
+
+cd /tmp | echo done

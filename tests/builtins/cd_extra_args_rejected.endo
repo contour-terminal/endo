@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cd with too many positional arguments emits a clear arity error
+# expect-error: no overload of builtin 'cd' takes 2 arguments
+
+cd /tmp /foo
