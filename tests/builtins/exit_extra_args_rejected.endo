@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: exit accepts only 0 or 1 argument
+# expect-error: no overload of builtin 'exit' takes 2 arguments
+
+exit 0 1

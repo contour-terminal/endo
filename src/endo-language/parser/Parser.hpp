@@ -112,7 +112,7 @@ class Parser
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     /// Converts a LetBindingStmt into a LetInExpr by attaching a body expression.
     static std::unique_ptr<ast::LetInExpr> convertToLetIn(std::unique_ptr<ast::LetBindingStmt> let,
-                                                           std::unique_ptr<ast::Expr> body);
+                                                          std::unique_ptr<ast::Expr> body);
     /// Parses `let Name with get () = ... and set (v) = ...` property syntax.
     /// @param letColumn The column of the `let` keyword, used as indentation reference for multi-line bodies.
     std::unique_ptr<ast::LetBindingStmt> parsePropertyAccessors(ast::Visibility visibility,
@@ -163,7 +163,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseShellCommandExpr(); // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseExecPipeline();     // exec prog args | exec prog args
     std::unique_ptr<ast::Expr> parseTrailingPipeline(std::unique_ptr<ast::Expr> expr); // optional |> chain
-    std::unique_ptr<ast::Expr> parseTryWith();          // try expr with ... | try expr finally ...
+    std::unique_ptr<ast::Expr> parseTryWith(); // try expr with ... | try expr finally ...
 
     // Module system
 
@@ -235,6 +235,15 @@ class Parser
     std::unique_ptr<ast::Statement> parsePrimaryStmt();
     std::unique_ptr<ast::Statement> parseLogicalExpr();
     std::unique_ptr<ast::Statement> parseCallPipeline();
+
+    /// Converts a ProgramCall whose program name matches a directive builtin
+    /// (cd, exit, export, set, unset, jobs, fg, bg, wait, read, bind, which)
+    /// into the corresponding typed Builtin*Stmt AST node. Performs overload
+    /// resolution against the directive overload table, validates arity, splat,
+    /// and redirects, and reports a diagnostic on mismatch.
+    /// Returns the original ProgramCall unchanged if program is not a directive
+    /// builtin. Returns nullptr if a diagnostic was reported.
+    std::unique_ptr<ast::Statement> tryConvertToDirectiveBuiltin(std::unique_ptr<ast::ProgramCall> call);
 
     /// Skips LineFeed and Semicolon tokens (newlines between continuation lines).
     /// Returns true if any were consumed.

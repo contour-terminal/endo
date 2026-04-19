@@ -14,6 +14,7 @@
 #include <crispy/utils.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -2539,147 +2540,13 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
         return std::make_unique<ast::ExprStmt>(std::make_unique<ast::BoolLiteralExpr>(false));
     }
 
-    // Handle builtin commands that don't participate in pipelines
-    if (_lexer.isDirective("exit"))
-    {
-        auto const exitLoc = _lexer.currentRange();
-        _lexer.nextToken();
-        std::unique_ptr<ast::Expr> code;
-        if (!isEndOfStmt())
-            code = parseParameter();
-        auto const endLoc = code && code->location ? code->location->end : exitLoc.end;
-        assert(_runtime.find("exit(I)V") != nullptr);
-        auto node = std::make_unique<ast::BuiltinExitStmt>(*_runtime.find("exit(I)V"), std::move(code));
-        node->location = SourceLocationRange { .begin = exitLoc.begin, .end = endLoc };
-        return node;
-    }
-    else if (_lexer.isDirective("read"))
-    {
-        _lexer.nextToken();
-        std::vector<std::unique_ptr<ast::Expr>> parameters = parseParameterList();
-        CoreVM::NativeCallback const& callback = *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
-        return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
-    }
-    else if (_lexer.isDirective("export"))
-    {
-        _lexer.nextToken();
-        auto name = consumeLiteral();
-        return std::make_unique<ast::BuiltinExportStmt>(*_runtime.find("export(S)V"), name);
-    }
-    else if (_lexer.isDirective("set"))
-    {
-        _lexer.nextToken();
-        auto name = parseParameter();
-        auto value = parseParameter();
-        return std::make_unique<ast::BuiltinSetStmt>(
-            *_runtime.find("set(SS)B"), std::move(name), std::move(value));
-    }
-    else if (_lexer.isDirective("cd"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-            return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd()B"), nullptr);
-        else
-        {
-            auto param = parseParameter();
-            return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd(S)B"), std::move(param));
-        }
-    }
-    else if (_lexer.isDirective("unset"))
-    {
-        _lexer.nextToken();
-        auto name = consumeLiteral();
-        return std::make_unique<ast::BuiltinUnsetStmt>(*_runtime.find("unset(S)B"), name);
-    }
-    else if (_lexer.isDirective("jobs"))
-    {
-        _lexer.nextToken();
-        return std::make_unique<ast::BuiltinJobsStmt>(*_runtime.find("jobs()I"));
-    }
-    else if (_lexer.isDirective("fg"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-            return std::make_unique<ast::BuiltinFgStmt>(*_runtime.find("fg()I"));
-        else
-        {
-            auto jobId = parseParameter();
-            return std::make_unique<ast::BuiltinFgStmt>(*_runtime.find("fg(I)I"), std::move(jobId));
-        }
-    }
-    else if (_lexer.isDirective("bg"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-            return std::make_unique<ast::BuiltinBgStmt>(*_runtime.find("bg()I"));
-        else
-        {
-            auto jobId = parseParameter();
-            return std::make_unique<ast::BuiltinBgStmt>(*_runtime.find("bg(I)I"), std::move(jobId));
-        }
-    }
-    else if (_lexer.isDirective("wait"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-            return std::make_unique<ast::BuiltinWaitStmt>(*_runtime.find("wait()I"));
-        else
-        {
-            auto jobId = parseParameter();
-            return std::make_unique<ast::BuiltinWaitStmt>(*_runtime.find("wait(I)I"), std::move(jobId));
-        }
-    }
-    else if (_lexer.isDirective("bind"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-        {
-            // bind with no arguments - list all bindings
-            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind()I"));
-        }
-        else
-        {
-            // bind with arguments
-            std::vector<std::unique_ptr<ast::Expr>> args;
-            while (!isEndOfStmt())
-            {
-                auto arg = parseParameter();
-                if (!arg)
-                    break;
-                args.push_back(std::move(arg));
-            }
-            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind(s)I"), std::move(args));
-        }
-    }
-    else if (_lexer.isDirective("which"))
-    {
-        _lexer.nextToken();
-        if (isEndOfStmt())
-        {
-            // which with no arguments - show help
-            assert(_runtime.find("which()I") != nullptr);
-            return std::make_unique<ast::BuiltinWhichStmt>(*_runtime.find("which()I"));
-        }
-        else
-        {
-            // which with arguments (program names and flags)
-            std::vector<std::unique_ptr<ast::Expr>> args;
-            while (!isEndOfStmt())
-            {
-                auto arg = parseParameter();
-                if (!arg)
-                    break;
-                args.push_back(std::move(arg));
-            }
-            assert(_runtime.find("which(s)I") != nullptr);
-            return std::make_unique<ast::BuiltinWhichStmt>(*_runtime.find("which(s)I"), std::move(args));
-        }
-    }
-    else
-    {
-        // External command or pipeline
-        return parseCallPipeline();
-    }
+    // All commands — directive builtins (cd, exit, …) and external programs
+    // alike — are parsed via parseCallPipeline so argument parsing is uniform
+    // (loops, splat support, redirects). parseCallPipeline (via
+    // tryConvertToDirectiveBuiltin) recognises directive builtins, validates
+    // arity/splat/redirects, and substitutes the appropriate typed
+    // Builtin*Stmt AST node.
+    return parseCallPipeline();
 }
 
 std::unique_ptr<ast::Statement> Parser::parseLogicalExpr()
@@ -2715,6 +2582,255 @@ std::unique_ptr<ast::Statement> Parser::parseLogicalExpr()
     return left;
 }
 
+namespace
+{
+
+    /// Function pointer used by directive overloads to wrap resolved arguments
+    /// into the appropriate typed Builtin*Stmt AST node. Takes args by value so
+    /// that build functions which discard arguments (e.g. `jobs`) need not move
+    /// from a dangling rvalue reference.
+    using BuiltinArgsVec = std::vector<std::unique_ptr<ast::Expr>>;
+    using BuiltinBuildFn = std::unique_ptr<ast::Statement> (*)(CoreVM::NativeCallback const&, BuiltinArgsVec);
+
+    /// One row of the directive builtin overload table.
+    /// Each (name, arity, variadic, signature) tuple describes one runtime callback
+    /// signature. Multiple rows with the same `name` represent overloads.
+    struct DirectiveOverload
+    {
+        std::string_view name;
+        std::size_t arity; ///< exact count for non-variadic; minimum count for variadic
+        bool variadic;     ///< true if this overload accepts arity..∞ (and a splat)
+        std::string_view signature;
+        BuiltinBuildFn build;
+    };
+
+    std::unique_ptr<ast::Statement> buildExit(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinExitStmt>(cb, args.empty() ? nullptr : std::move(args[0]));
+    }
+
+    std::unique_ptr<ast::Statement> buildCd(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinChDirStmt>(cb, args.empty() ? nullptr : std::move(args[0]));
+    }
+
+    std::unique_ptr<ast::Statement> buildSet(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinSetStmt>(cb, std::move(args[0]), std::move(args[1]));
+    }
+
+    std::unique_ptr<ast::Statement> buildJobs(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        // jobs takes no arguments. The uniform BuildFn signature requires we accept
+        // the vector; clear it explicitly to acknowledge the intentional discard.
+        args.clear();
+        return std::make_unique<ast::BuiltinJobsStmt>(cb);
+    }
+
+    std::unique_ptr<ast::Statement> buildFg(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinFgStmt>(cb, args.empty() ? nullptr : std::move(args[0]));
+    }
+
+    std::unique_ptr<ast::Statement> buildBg(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinBgStmt>(cb, args.empty() ? nullptr : std::move(args[0]));
+    }
+
+    std::unique_ptr<ast::Statement> buildWait(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinWaitStmt>(cb, args.empty() ? nullptr : std::move(args[0]));
+    }
+
+    std::unique_ptr<ast::Statement> buildRead(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinReadStmt>(cb, std::move(args));
+    }
+
+    std::unique_ptr<ast::Statement> buildBind(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinBindStmt>(cb, std::move(args));
+    }
+
+    std::unique_ptr<ast::Statement> buildWhich(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        return std::make_unique<ast::BuiltinWhichStmt>(cb, std::move(args));
+    }
+
+    std::unique_ptr<ast::Statement> buildExport(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        auto const* lit = dynamic_cast<ast::LiteralExpr const*>(args[0].get());
+        return std::make_unique<ast::BuiltinExportStmt>(cb, lit->value);
+    }
+
+    std::unique_ptr<ast::Statement> buildUnset(CoreVM::NativeCallback const& cb, BuiltinArgsVec args)
+    {
+        auto const* lit = dynamic_cast<ast::LiteralExpr const*>(args[0].get());
+        return std::make_unique<ast::BuiltinUnsetStmt>(cb, lit->value);
+    }
+
+    /// Single source of truth for directive builtin overloads. One row per
+    /// runtime-registered (name, signature) pair. Resolution: see
+    /// Parser::tryConvertToDirectiveBuiltin.
+    inline constexpr std::array<DirectiveOverload, 20> kDirectiveOverloads { {
+        { .name = "cd", .arity = 0, .variadic = false, .signature = "cd()B", .build = &buildCd },
+        { .name = "cd", .arity = 1, .variadic = false, .signature = "cd(S)B", .build = &buildCd },
+        { .name = "exit", .arity = 0, .variadic = false, .signature = "exit(I)V", .build = &buildExit },
+        { .name = "exit", .arity = 1, .variadic = false, .signature = "exit(I)V", .build = &buildExit },
+        { .name = "export", .arity = 1, .variadic = false, .signature = "export(S)V", .build = &buildExport },
+        { .name = "set", .arity = 2, .variadic = false, .signature = "set(SS)B", .build = &buildSet },
+        { .name = "unset", .arity = 1, .variadic = false, .signature = "unset(S)B", .build = &buildUnset },
+        { .name = "jobs", .arity = 0, .variadic = false, .signature = "jobs()I", .build = &buildJobs },
+        { .name = "fg", .arity = 0, .variadic = false, .signature = "fg()I", .build = &buildFg },
+        { .name = "fg", .arity = 1, .variadic = false, .signature = "fg(I)I", .build = &buildFg },
+        { .name = "bg", .arity = 0, .variadic = false, .signature = "bg()I", .build = &buildBg },
+        { .name = "bg", .arity = 1, .variadic = false, .signature = "bg(I)I", .build = &buildBg },
+        { .name = "wait", .arity = 0, .variadic = false, .signature = "wait()I", .build = &buildWait },
+        { .name = "wait", .arity = 1, .variadic = false, .signature = "wait(I)I", .build = &buildWait },
+        { .name = "read", .arity = 0, .variadic = false, .signature = "read()S", .build = &buildRead },
+        { .name = "read", .arity = 1, .variadic = true, .signature = "read(s)S", .build = &buildRead },
+        { .name = "bind", .arity = 0, .variadic = false, .signature = "bind()I", .build = &buildBind },
+        { .name = "bind", .arity = 1, .variadic = true, .signature = "bind(s)I", .build = &buildBind },
+        { .name = "which", .arity = 0, .variadic = false, .signature = "which()I", .build = &buildWhich },
+        { .name = "which", .arity = 1, .variadic = true, .signature = "which(s)I", .build = &buildWhich },
+    } };
+
+    /// Returns the subrange of overloads matching the given builtin name.
+    [[nodiscard]] auto overloadsFor(std::string_view name)
+    {
+        return kDirectiveOverloads
+               | std::views::filter([name](DirectiveOverload const& o) { return o.name == name; });
+    }
+
+    /// Builds a human-readable summary of all overloads for `name`, e.g.
+    /// `"cd (0 args), cd (1 arg)"` or `"bind (0 args), bind (1+ args)"`.
+    [[nodiscard]] std::string formatAvailableOverloads(std::string_view name)
+    {
+        std::string out;
+        for (auto const& o: overloadsFor(name))
+        {
+            if (!out.empty())
+                out += ", ";
+            out += std::format("{} ({}{} arg{})",
+                               o.name,
+                               o.arity,
+                               o.variadic ? "+" : "",
+                               (o.arity == 1 && !o.variadic) ? "" : "s");
+        }
+        return out;
+    }
+
+} // namespace
+
+std::unique_ptr<ast::Statement> Parser::tryConvertToDirectiveBuiltin(std::unique_ptr<ast::ProgramCall> call)
+{
+    auto matchingOverloads = overloadsFor(call->program);
+    if (matchingOverloads.empty())
+        return call; // not a directive builtin — pass through unchanged
+
+    auto const programLoc = call->programLocation.value_or(_lexer.currentRange());
+
+    // Directive builtins (cd, exit, ...) operate on shell state and don't fit
+    // I/O redirection; reject early with a clear diagnostic.
+    if (!call->inputRedirects.empty() || !call->outputRedirects.empty() || !call->hereDocuments.empty()
+        || !call->hereStrings.empty())
+    {
+        _report.syntaxErrorWithSuggestions(toCoreLoc(programLoc),
+                                           { std::format("Remove redirects from '{}'", call->program) },
+                                           currentContextSnippet(),
+                                           "builtin '{}' does not support I/O redirection",
+                                           call->program);
+        return nullptr;
+    }
+
+    std::size_t concreteArgs = 0;
+    bool hasSplat = false;
+    for (auto const& arg: call->parameters)
+    {
+        if (dynamic_cast<ast::SplatExpr const*>(arg.get()) != nullptr)
+            hasSplat = true;
+        else
+            ++concreteArgs;
+    }
+
+    if (hasSplat)
+    {
+        // Splat (...args) into directive builtins is not supported: their
+        // codegen path emits compile-time constant argument arrays, which a
+        // runtime-expanding splat cannot satisfy. Reject uniformly with a
+        // clear diagnostic — fixed-arity builtins (cd, exit, …) wouldn't
+        // accept it anyway, and variadic ones (bind, which, read) need
+        // codegen changes to consume a runtime-built vector.
+        _report.syntaxErrorWithSuggestions(
+            toCoreLoc(programLoc),
+            { std::format("Pass arguments to '{}' explicitly instead of via splat", call->program) },
+            currentContextSnippet(),
+            "builtin '{}' does not accept a splat (...args); available: {}",
+            call->program,
+            formatAvailableOverloads(call->program));
+        return nullptr;
+    }
+
+    // Exact-arity match preferred; otherwise fall back to a variadic overload.
+    DirectiveOverload const* chosen = nullptr;
+    for (auto const& o: matchingOverloads)
+        if (!o.variadic && o.arity == concreteArgs)
+        {
+            chosen = &o;
+            break;
+        }
+    if (chosen == nullptr)
+    {
+        for (auto const& o: matchingOverloads)
+            if (o.variadic && o.arity <= concreteArgs)
+            {
+                chosen = &o;
+                break;
+            }
+    }
+    if (chosen == nullptr)
+    {
+        _report.syntaxErrorWithSuggestions(toCoreLoc(programLoc),
+                                           {},
+                                           currentContextSnippet(),
+                                           "no overload of builtin '{}' takes {} argument{}; available: {}",
+                                           call->program,
+                                           concreteArgs,
+                                           concreteArgs == 1 ? "" : "s",
+                                           formatAvailableOverloads(call->program));
+        return nullptr;
+    }
+
+    // export/unset store the name as a std::string and require a literal.
+    if (chosen->build == &buildExport || chosen->build == &buildUnset)
+    {
+        if (dynamic_cast<ast::LiteralExpr const*>(call->parameters[0].get()) == nullptr)
+        {
+            auto const argLoc = call->parameters[0]->location.value_or(programLoc);
+            _report.syntaxErrorWithSuggestions(
+                toCoreLoc(argLoc),
+                { std::format("Use a literal name, e.g. '{} FOO'", chosen->name) },
+                currentContextSnippet(),
+                "'{}' requires a literal variable name, got an expression",
+                chosen->name);
+            return nullptr;
+        }
+    }
+
+    auto const* callback = _runtime.find(std::string(chosen->signature));
+    assert(callback != nullptr);
+
+    // Compute end location from the last parameter (or the program name itself).
+    auto endLoc = programLoc.end;
+    if (!call->parameters.empty() && call->parameters.back()->location)
+        endLoc = call->parameters.back()->location->end;
+
+    auto stmt = chosen->build(*callback, std::move(call->parameters));
+    if (stmt)
+        stmt->location = SourceLocationRange { .begin = programLoc.begin, .end = endLoc };
+    return stmt;
+}
+
 std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
 {
     TRACE_SCOPE("parseCallPipeline");
@@ -2733,11 +2849,38 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
         // Single command, optionally backgrounded
         if (background)
         {
+            // Directive builtins operate on shell state and don't make sense
+            // backgrounded — surface a clear error before wrapping.
+            if (!overloadsFor(call->program).empty())
+            {
+                auto const loc = call->programLocation.value_or(_lexer.currentRange());
+                _report.syntaxErrorWithSuggestions(
+                    toCoreLoc(loc),
+                    { std::format("Remove the trailing '&' from '{}'", call->program) },
+                    currentContextSnippet(),
+                    "builtin '{}' cannot be run in the background",
+                    call->program);
+                return nullptr;
+            }
             std::vector<std::unique_ptr<ast::ProgramCall>> calls;
             calls.emplace_back(std::move(call));
             return std::make_unique<ast::CallPipeline>(std::move(calls), true);
         }
-        return call;
+        return tryConvertToDirectiveBuiltin(std::move(call));
+    }
+
+    // Pipeline (one or more `|`): directive builtins (cd, exit, …) are
+    // shell-state operations that don't read/write pipes meaningfully — reject
+    // upfront rather than emit an external-exec attempt.
+    if (!overloadsFor(call->program).empty())
+    {
+        auto const loc = call->programLocation.value_or(_lexer.currentRange());
+        _report.syntaxErrorWithSuggestions(toCoreLoc(loc),
+                                           { std::format("Remove '{}' from the pipeline", call->program) },
+                                           currentContextSnippet(),
+                                           "builtin '{}' cannot be used in a pipeline",
+                                           call->program);
+        return nullptr;
     }
 
     std::vector<std::unique_ptr<ast::ProgramCall>> calls;
@@ -2748,6 +2891,17 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
         TRACE_FMT("Parsing call pipeline item (NT: {})", _lexer.currentLiteral());
         if (auto nextCall = parseCall(true); nextCall)
         {
+            if (!overloadsFor(nextCall->program).empty())
+            {
+                auto const loc = nextCall->programLocation.value_or(_lexer.currentRange());
+                _report.syntaxErrorWithSuggestions(
+                    toCoreLoc(loc),
+                    { std::format("Remove '{}' from the pipeline", nextCall->program) },
+                    currentContextSnippet(),
+                    "builtin '{}' cannot be used in a pipeline",
+                    nextCall->program);
+                return nullptr;
+            }
             calls.emplace_back(std::move(nextCall));
             TRACE_FMT("Parsed call pipeline item: {} (NT: {})",
                       ast::ASTPrinter::print(*calls.back()),

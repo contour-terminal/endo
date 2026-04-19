@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: defining a directory alias as a unit function compiles cleanly (issue #96 alternative)
+# mode: ir-only
+
+let cdr () = & cd /tmp
+
+cdr ()

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: I/O redirection on cd is rejected at compile time
+# expect-error: builtin 'cd' does not support I/O redirection
+
+cd /tmp > /tmp/out.txt
