@@ -46,6 +46,14 @@ static constexpr InlineOptionDef kMvOptions[] = {
     { .shortFlag = "-i", .longFlag = "--interactive", .description = "Prompt before overwrite" },
 };
 
+static constexpr InlineOptionDef calOptions[] = {
+    { .shortFlag = "-3", .longFlag = "--three",    .description = "Show previous, current, and next month" },
+    { .shortFlag = "-y", .longFlag = "--year",     .description = "Show the entire year" },
+    { .shortFlag = "-m", .longFlag = "--monday",   .description = "Start the week on Monday (ISO 8601)" },
+    { .shortFlag = "-s", .longFlag = "--sunday",   .description = "Start the week on Sunday" },
+    { .shortFlag = "-n", .longFlag = "--no-color", .description = "Disable colorized output even on a terminal" },
+};
+
 static constexpr InlineOptionDef kDateOptions[] = {
     { .shortFlag = "-u", .longFlag = "--utc",    .description = "Use UTC instead of local time" },
     { .shortFlag = {},   .longFlag = "--epoch",  .description = "Print seconds since Unix epoch" },
@@ -147,6 +155,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "basename PATH [SUFFIX]",
           .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = false,
           .noStdinFn = &Shell::executeInlineBasename },
+        { .name = "cal",       .briefDescription = "Display a colorful calendar for a month or year.",
+          .usageLine = "cal [OPTIONS] [[MONTH] YEAR]",
+          .options = calOptions,
+          .noStdinFn = &Shell::executeInlineCal },
         { .name = "cat",       .briefDescription = "Concatenate and display files.",
           .usageLine = "cat [OPTIONS] [FILE...]",
           .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = true,

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: nproc --ignore returns at least 1
+# mode: shell
 # expect-expr: (int_of_string _) > 0
 
 nproc --ignore=99999

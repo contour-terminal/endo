@@ -64,6 +64,9 @@ Test File Format:
     # mock-which: PROG=/path     Set mock which path
     # expect-env: KEY=VALUE      Verify environment variable after execution
     # expect-nonempty            Assert output is non-empty
+    # expect-expr: <endo-expr>   Endo expression that must evaluate to true against the
+                                 trimmed actual output bound to `_` (repeatable — every
+                                 expression must hold)
     # aux-file: <filename>       Start an auxiliary file section (for multi-file module tests)
     # main-file:                 End aux file section, rest is main test source
     # source-file: <path>        Load external file as session prompt (relative to project root)

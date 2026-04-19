@@ -293,6 +293,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the date builtin. Returns exit code.
     [[nodiscard]] int executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the cal builtin (calendar view with optional color). Returns exit code.
+    [[nodiscard]] int executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the uname builtin. Returns exit code.
     [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the nproc builtin. Returns exit code.

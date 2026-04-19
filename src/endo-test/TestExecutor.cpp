@@ -104,22 +104,98 @@ namespace
         return result;
     }
 
+    /// Rewrites standalone `_` tokens in an expect-expr expression to reference
+    /// an internal binding name. In Endo, `_` is the wildcard pattern (and in
+    /// expression position a partial-application placeholder), so it cannot be
+    /// used as a real variable. To let users keep writing `_` in expect-expr,
+    /// we textually replace each standalone `_` (not embedded in a longer
+    /// identifier, not inside a string literal) with the internal name before
+    /// compiling. Escapes inside string literals (`\"`, `\\`) are respected.
+    [[nodiscard]] std::string rewriteUnderscoreTokens(std::string_view expr, std::string_view replacement)
+    {
+        std::string result;
+        result.reserve(expr.size() + replacement.size());
+
+        auto const isIdentChar = [](char c) {
+            return static_cast<bool>(std::isalnum(static_cast<unsigned char>(c))) || c == '_';
+        };
+
+        bool inString = false;
+        char stringQuote = '\0';
+
+        for (size_t i = 0; i < expr.size(); ++i)
+        {
+            auto const ch = expr[i];
+
+            if (inString)
+            {
+                result += ch;
+                if (ch == '\\' && i + 1 < expr.size())
+                {
+                    result += expr[i + 1];
+                    ++i;
+                    continue;
+                }
+                if (ch == stringQuote)
+                    inString = false;
+                continue;
+            }
+
+            if (ch == '"' || ch == '\'')
+            {
+                inString = true;
+                stringQuote = ch;
+                result += ch;
+                continue;
+            }
+
+            if (ch == '_')
+            {
+                bool const prevOk = i == 0 || !isIdentChar(expr[i - 1]);
+                bool const nextOk = i + 1 == expr.size() || !isIdentChar(expr[i + 1]);
+                if (prevOk && nextOk)
+                {
+                    result += replacement;
+                    continue;
+                }
+            }
+
+            result += ch;
+        }
+        return result;
+    }
+
     /// Evaluates an expect-expr directive against actual output.
-    /// Constructs and runs an endo program that binds _ to the trimmed output
-    /// and prints the boolean result of the expression.
+    /// Constructs and runs an endo program that binds the trimmed output to an
+    /// internal name, rewrites standalone `_` in the expression to reference
+    /// that name, and prints the boolean result of the expression.
     /// @return std::nullopt on success, or a failure message string.
     [[nodiscard]] std::optional<std::string> evaluateExpectExpr(std::string_view expr,
                                                                 std::string_view actualOutput)
     {
+        constexpr std::string_view outputVar = "__endoTestActual";
         auto const trimmedOutput = rtrimNewlines(actualOutput);
         auto const escaped = escapeForEndoString(trimmedOutput);
-        auto const program = std::format("let _ = \"{}\"\nprint ({})", escaped, expr);
+        auto const rewritten = rewriteUnderscoreTokens(expr, outputVar);
+        auto const program = std::format("let {} = \"{}\"\nprint ({})", outputVar, escaped, rewritten);
 
-        auto evalResult = executeSource(program);
-        if (!evalResult.has_value())
-            return std::format("expect-expr evaluation failed: {}", toString(evalResult.error()));
+        TestExecutionSuccess evalExec;
+        try
+        {
+            auto evalResult = executeSource(program);
+            if (!evalResult.has_value())
+                return std::format("expect-expr evaluation failed: {}", toString(evalResult.error()));
+            evalExec = std::move(*evalResult);
+        }
+        catch (std::exception const& ex)
+        {
+            return std::format("expect-expr evaluation threw `{}`: `{}` (output was \"{}\")",
+                               ex.what(),
+                               expr,
+                               escapeForDisplay(trimmedOutput));
+        }
 
-        auto const evalOutput = rtrimNewlines(evalResult->output);
+        auto const evalOutput = rtrimNewlines(evalExec.output);
         if (evalOutput != "true")
             return std::format("expect-expr failed: `{}` evaluated to `{}` (output was \"{}\")",
                                expr,
@@ -333,10 +409,10 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 }
             }
 
-            // Check expect-expr assertion
-            if (testFile.expectExpr.has_value())
+            // Check expect-expr assertions (every expression must evaluate to true)
+            for (auto const& expr: testFile.expectExprs)
             {
-                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                if (auto msg = evaluateExpectExpr(expr, result.actualOutput))
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage = std::move(*msg);
@@ -473,10 +549,10 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 }
             }
 
-            // Check expect-expr assertion
-            if (testFile.expectExpr.has_value())
+            // Check expect-expr assertions (every expression must evaluate to true)
+            for (auto const& expr: testFile.expectExprs)
             {
-                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                if (auto msg = evaluateExpectExpr(expr, result.actualOutput))
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage = std::move(*msg);
@@ -594,10 +670,10 @@ TestResult TestExecutor::run(TestFile const& testFile)
                 }
             }
 
-            // Check expect-expr assertion
-            if (testFile.expectExpr.has_value())
+            // Check expect-expr assertions (every expression must evaluate to true)
+            for (auto const& expr: testFile.expectExprs)
             {
-                if (auto msg = evaluateExpectExpr(*testFile.expectExpr, result.actualOutput))
+                if (auto msg = evaluateExpectExpr(expr, result.actualOutput))
                 {
                     result.outcome = TestOutcome::Fail;
                     result.failureMessage = std::move(*msg);

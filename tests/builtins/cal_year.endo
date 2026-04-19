@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cal YEAR produces output for a full year grid
+# mode: shell
+# expect-expr: _ |> contains "2026"
+# expect-expr: _ |> contains "January 2026"
+# expect-expr: _ |> contains "April 2026"
+# expect-expr: _ |> contains "July 2026"
+# expect-expr: _ |> contains "October 2026"
+# expect-expr: _ |> contains "December 2026"
+# expect-expr: _ |> contains "Mo Tu We Th Fr Sa Su"
+
+cal --no-color 2026

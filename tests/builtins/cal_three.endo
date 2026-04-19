@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cal -3 shows previous, current, and next month side-by-side
+# mode: shell
+# expect-expr: _ |> contains "March 2026"
+# expect-expr: _ |> contains "April 2026"
+# expect-expr: _ |> contains "May 2026"
+# expect-expr: _ |> contains "Mo Tu We Th Fr Sa Su"
+
+cal --no-color -3 4 2026

@@ -211,7 +211,7 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
             }
             if (auto val = parseDirective(line, "expect-expr"))
             {
-                result.expectExpr = std::string(*val);
+                result.expectExprs.emplace_back(*val);
                 continue;
             }
             if (parseDirective(line, "unused-detection"))
