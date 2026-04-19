@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/ProcessProvider.hpp>
 
 namespace endo
 {
@@ -82,6 +83,9 @@ class Completer
     [[nodiscard]] std::vector<std::string> takeLastErrors();
 
   private:
+    /// Owned platform process provider used by the pkill process-name query.
+    /// Kept alive for the lifetime of the CommandSpecCompleter that references it.
+    std::unique_ptr<ProcessProvider> _processProvider;
     std::vector<std::unique_ptr<CompletionProvider>> _providers;
     CompletionConfig _config;
 

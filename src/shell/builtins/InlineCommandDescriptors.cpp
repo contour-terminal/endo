@@ -133,6 +133,18 @@ static constexpr InlineOptionDef kTeeOptions[] = {
     { .shortFlag = "-a", .longFlag = "--append", .description = "Append to files instead of overwriting" },
 };
 
+static constexpr InlineOptionDef kPkillOptions[] = {
+    { .shortFlag = "-s", .longFlag = {}, .description = "Signal to send (name or number)", .takesValue = true },
+    { .shortFlag = "-f", .longFlag = {}, .description = "Match against the full command line" },
+    { .shortFlag = "-x", .longFlag = {}, .description = "Require exact (anchored) match" },
+    { .shortFlag = "-i", .longFlag = {}, .description = "Case-insensitive match" },
+    { .shortFlag = "-c", .longFlag = {}, .description = "Print count of matched processes" },
+    { .shortFlag = "-l", .longFlag = {}, .description = "List matched processes without signalling" },
+    { .shortFlag = "-n", .longFlag = {}, .description = "Match only the newest process" },
+    { .shortFlag = "-o", .longFlag = {}, .description = "Match only the oldest process" },
+    { .shortFlag = "-u", .longFlag = {}, .description = "Restrict to processes owned by USER[,USER]", .takesValue = true },
+};
+
 // clang-format on
 
 // ---------------------------------------------------------------------------
@@ -227,6 +239,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "nproc [OPTIONS]",
           .options = kNprocOptions,
           .noStdinFn = &Shell::executeInlineNproc },
+        { .name = "pkill",     .briefDescription = "Send signals to processes matched by name or command-line pattern.",
+          .usageLine = "pkill [OPTIONS] [-SIGNAL] PATTERN",
+          .options = kPkillOptions,
+          .noStdinFn = &Shell::executeInlinePkill },
         { .name = "pwd",      .briefDescription = "Print the current working directory.",
           .usageLine = "pwd",
           .options = {},
