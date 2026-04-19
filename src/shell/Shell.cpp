@@ -2,6 +2,7 @@
 #include "Shell.hpp"
 #include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
+#include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/Prompt.hpp>
 #include <shell/ui/PromptPresets.hpp>
 #include <shell/ui/RichConsoleReport.hpp>
@@ -959,14 +960,16 @@ void Shell::loadInitScript()
         {
             if (auto content = _fs.readFile(initPath))
             {
-                if (auto const initResult = executeConfigScript(*content, platform::normalizePath(initPath)); initResult != 0)
+                if (auto const initResult = executeConfigScript(*content, platform::normalizePath(initPath));
+                    initResult != 0)
                     _tty.writeToStderr(
                         std::format("endo: warning: init.endo exited with code {}\n", initResult));
             }
             else
             {
-                _tty.writeToStderr(
-                    std::format("endo: warning: error loading {}: {}\n", platform::normalizePath(initPath), content.error()));
+                _tty.writeToStderr(std::format("endo: warning: error loading {}: {}\n",
+                                               platform::normalizePath(initPath),
+                                               content.error()));
             }
         }
     }
@@ -1042,8 +1045,9 @@ void Shell::loadCompleters()
             }
             else
             {
-                _tty.writeToStderr(std::format(
-                    "endo: warning: error loading completer {}: {}\n", platform::normalizePath(path), content.error()));
+                _tty.writeToStderr(std::format("endo: warning: error loading completer {}: {}\n",
+                                               platform::normalizePath(path),
+                                               content.error()));
             }
         }
     };
@@ -1150,9 +1154,11 @@ void Shell::ensureInteractiveReady()
     history.autoImportIfEmpty();
 
     // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history, _fsharpState);
+    completer = std::make_unique<Completer>(_env, history, _fsharpState, &_fs);
     prompt.setCompleter(completer.get());
     prompt.setHistory(&history);
+    prompt.setEnvironmentProvider(&_env);
+    prompt.setFileSystem(&_fs);
 }
 
 int Shell::run()
@@ -1317,7 +1323,14 @@ int Shell::run()
             if (!lineBuffer.empty())
             {
                 prompt.addHistory(lineBuffer);
-                history.add(lineBuffer);
+                auto const homeEnv = normalizedHomeDirectory(_env);
+                auto const cwdAbs = _env.currentDirectory();
+                history.add(
+                    lineBuffer,
+                    HistoryAddContext {
+                        .cwd = canonicalizeForHistory(cwdAbs, homeEnv),
+                        .requiredPaths = collectRequiredPathsFromCommandLine(lineBuffer, cwdAbs, homeEnv),
+                    });
             }
 
             {
@@ -1428,7 +1441,13 @@ int Shell::run()
         if (!lineBuffer.empty())
         {
             prompt.addHistory(lineBuffer);
-            history.add(lineBuffer);
+            auto const homeEnv = normalizedHomeDirectory(_env);
+            auto const cwdAbs = _env.currentDirectory();
+            history.add(lineBuffer,
+                        HistoryAddContext {
+                            .cwd = canonicalizeForHistory(cwdAbs, homeEnv),
+                            .requiredPaths = collectRequiredPathsFromCommandLine(lineBuffer, cwdAbs, homeEnv),
+                        });
         }
 
         {

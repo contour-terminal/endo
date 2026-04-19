@@ -3,6 +3,7 @@
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/history/History.hpp>
+#include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/SourceOffsetUtils.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/util/CommandResolver.hpp>
@@ -1331,7 +1332,15 @@ void PromptComponent::triggerHistorySearch()
     }
 
     auto const inputText = std::string(_inputField.text());
-    auto results = _history->searchFuzzy(inputText, 200);
+    auto options = FuzzySearchOptions {};
+    if (_envProvider)
+    {
+        options.currentCwd = _envProvider->currentDirectory();
+        options.home = normalizedHomeDirectory(*_envProvider);
+    }
+    options.fs = _historyFs;
+    options.validateRequiredPaths = _historyFs != nullptr;
+    auto results = _history->searchFuzzy(inputText, 200, options);
 
     if (results.empty())
     {
@@ -1363,7 +1372,15 @@ void PromptComponent::updateHistorySearchPopup()
     }
 
     auto const inputText = std::string(_inputField.text());
-    auto results = _history->searchFuzzy(inputText, 200);
+    auto options = FuzzySearchOptions {};
+    if (_envProvider)
+    {
+        options.currentCwd = _envProvider->currentDirectory();
+        options.home = normalizedHomeDirectory(*_envProvider);
+    }
+    options.fs = _historyFs;
+    options.validateRequiredPaths = _historyFs != nullptr;
+    auto results = _history->searchFuzzy(inputText, 200, options);
 
     if (results.empty())
     {

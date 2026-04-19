@@ -25,6 +25,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <platform/EnvironmentProvider.hpp>
+#include <platform/FileSystem.hpp>
+
 namespace endo
 {
 
@@ -108,6 +111,14 @@ class PromptComponent: public tui::Component
 
     /// @brief Sets the history source for inline history cycling.
     void setHistory(History const* history) { _history = history; }
+
+    /// @brief Sets the environment provider used to read the current CWD and $HOME
+    /// when querying history with CWD-aware ranking.
+    void setEnvironmentProvider(EnvironmentProvider const* env) { _envProvider = env; }
+
+    /// @brief Sets the filesystem used for required-paths validation in history search.
+    /// Pass nullptr to disable validation.
+    void setFileSystem(FileSystem const* fs) { _historyFs = fs; }
 
     /// @brief Handles input events dispatched by Screen (mouse events).
     ///
@@ -245,6 +256,8 @@ class PromptComponent: public tui::Component
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
+    EnvironmentProvider const* _envProvider = nullptr;
+    FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
 
     // Prompt theming

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Prompt.hpp"
-#include "PromptPresets.hpp"
 
 #include <tui/Screen.hpp>
 
+#include "PromptPresets.hpp"
 #include "modules/GitModule.hpp"
 
 #if defined(__clang__)
@@ -29,8 +29,7 @@
 namespace endo
 {
 
-Prompt::Prompt():
-    _promptConfig { promptPreset("endo-signature") }
+Prompt::Prompt(): _promptConfig { promptPreset("endo-signature") }
 {
     _promptStr = _promptConfig.indicator;
 }
@@ -622,6 +621,20 @@ void Prompt::setHistory(History const* history)
     _history = history;
     if (_promptComponent)
         _promptComponent->setHistory(history);
+}
+
+void Prompt::setEnvironmentProvider(EnvironmentProvider const* env)
+{
+    _envProvider = env;
+    if (_promptComponent)
+        _promptComponent->setEnvironmentProvider(env);
+}
+
+void Prompt::setFileSystem(FileSystem const* fs)
+{
+    _historyFs = fs;
+    if (_promptComponent)
+        _promptComponent->setFileSystem(fs);
 }
 
 void Prompt::setCommandRegistry(tui::CommandRegistry* registry)

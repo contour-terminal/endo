@@ -14,7 +14,7 @@ InMemoryHistory::InMemoryHistory(size_t maxSize): _maxSize(maxSize)
     _entries.reserve(std::min(maxSize, size_t { 256 }));
 }
 
-void InMemoryHistory::add(std::string entry)
+void InMemoryHistory::add(std::string entry, HistoryAddContext /*context*/)
 {
     trimInPlace(entry);
     if (entry.empty())
@@ -79,8 +79,8 @@ std::vector<std::string_view> InMemoryHistory::search(std::string_view prefix, s
     return results;
 }
 
-std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(std::string_view prefix,
-                                                                     size_t maxResults) const
+std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(
+    std::string_view prefix, size_t maxResults, FuzzySearchOptions const& /*options*/) const
 {
     std::vector<FuzzySearchResult> results;
     results.reserve(std::min(maxResults * 2, _entries.size())); // Reserve extra for sorting
