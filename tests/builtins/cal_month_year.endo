@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cal MONTH YEAR produces output for an explicit month
+# mode: shell
+# expect-expr: _ |> contains "April 2026"
+# expect-expr: _ |> contains "Mo Tu We Th Fr Sa Su"
+# expect-expr: _ |> contains " 6  7  8  9 10 11 12"
+# expect-expr: _ |> contains "27 28 29 30"
+
+cal --no-color 4 2026

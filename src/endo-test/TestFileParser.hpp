@@ -39,9 +39,9 @@ struct TestFile
     std::vector<std::pair<std::string, std::string>> mockWhichPaths; ///< Mock which paths
     std::optional<std::string> mockCwd;                              ///< Mock working directory for pwd
     std::vector<std::pair<std::string, std::string>> expectedEnv;    ///< Expected env vars after execution
-    bool expectNonEmptyOutput = false; ///< Assert output is non-empty (no exact match)
-    std::optional<std::string>
-        expectExpr;                       ///< Endo expression to evaluate against output (_ = trimmed output)
+    bool expectNonEmptyOutput = false;    ///< Assert output is non-empty (no exact match)
+    std::vector<std::string> expectExprs; ///< Endo expressions to evaluate against output (_ = trimmed
+                                          ///< output); every expression must evaluate to true
     bool unusedValueDetection = false;    ///< Enable unused value detection during IR generation
     std::vector<std::string> modulePaths; ///< Additional module search paths
 

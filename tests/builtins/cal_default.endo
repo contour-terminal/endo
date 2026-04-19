@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cal with no args prints the current month
+# mode: shell
+# expect-nonempty
+
+cal --no-color

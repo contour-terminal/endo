@@ -3030,6 +3030,416 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
 }
 
 // ---------------------------------------------------------------------------
+// cal
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+    /// SGR strings used to style the calendar. Kept as a data table so the render
+    /// loop is free of hardcoded escape sequences.
+    struct CalSgr
+    {
+        std::string_view reset;
+        std::string_view title;      ///< Month + year header
+        std::string_view weekdayRow; ///< Header row of weekday abbreviations
+        std::string_view weekend;    ///< Foreground color for Sat/Sun cells
+        std::string_view today;      ///< Highlight for the current day
+    };
+
+    constexpr CalSgr calStyled = {
+        .reset = "\x1b[0m",
+        .title = "\x1b[1;38;5;220m", // bold gold
+        .weekdayRow = "\x1b[1;2m",
+        .weekend = "\x1b[38;5;39m",    // cyan
+        .today = "\x1b[1;7;38;5;226m", // bold + reverse + yellow
+    };
+
+    constexpr CalSgr calPlain = {
+        .reset = "",
+        .title = "",
+        .weekdayRow = "",
+        .weekend = "",
+        .today = "",
+    };
+
+    /// English fallback month names. `std::chrono::format` is locale-aware, but
+    /// for wide portability we build the header from a static table.
+    constexpr std::array<std::string_view, 12> calMonthNames = {
+        "January", "February", "March",     "April",   "May",      "June",
+        "July",    "August",   "September", "October", "November", "December",
+    };
+
+    /// Short weekday labels starting with Monday (index 0). Locale-independent.
+    constexpr std::array<std::string_view, 7> calWeekdayShort = {
+        "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su",
+    };
+
+    /// @brief Returns the zero-based column index (0..6) for a given weekday when
+    /// the week starts with @p firstDay.
+    constexpr size_t weekdayColumn(std::chrono::weekday wd, std::chrono::weekday firstDay) noexcept
+    {
+        // std::chrono::weekday::c_encoding(): 0 = Sunday, 1 = Monday, ..., 6 = Saturday.
+        auto const day = static_cast<int>(wd.c_encoding());
+        auto const first = static_cast<int>(firstDay.c_encoding());
+        return static_cast<size_t>((day - first + 7) % 7);
+    }
+
+    /// @brief Number of days in a calendar month.
+    constexpr unsigned daysInMonth(std::chrono::year_month const& ym) noexcept
+    {
+        auto const last =
+            std::chrono::year_month_day_last { ym.year(), std::chrono::month_day_last { ym.month() } };
+        return last.day().operator unsigned int();
+    }
+
+    struct CalStyle
+    {
+        bool useColor = true;
+        bool startMonday = true;
+    };
+
+    constexpr size_t calBlockWidth = 20; ///< 7 columns * 2 chars + 6 gutters = 20.
+
+    /// Centers @p text within @p width, padding with spaces.
+    std::string centerText(std::string_view text, size_t width)
+    {
+        if (text.size() >= width)
+            return std::string(text);
+        auto const pad = width - text.size();
+        auto const left = pad / 2;
+        auto const right = pad - left;
+        return std::string(left, ' ') + std::string(text) + std::string(right, ' ');
+    }
+
+    /// Renders one month as a list of 8 equally-wide lines (title, weekday row,
+    /// and up to 6 week rows). Later callers compose these blocks horizontally.
+    std::vector<std::string> renderCalMonthBlock(std::chrono::year_month ym,
+                                                 std::chrono::year_month_day today,
+                                                 CalStyle const& style)
+    {
+        auto const& sgr = style.useColor ? calStyled : calPlain;
+        auto const firstDay = style.startMonday ? std::chrono::Monday : std::chrono::Sunday;
+
+        std::vector<std::string> lines;
+        lines.reserve(8);
+
+        // Title: "April 2026"
+        auto const monthIdx = static_cast<unsigned>(ym.month()) - 1u;
+        auto const titleText = std::format("{} {}", calMonthNames.at(monthIdx), static_cast<int>(ym.year()));
+        lines.push_back(std::format("{}{}{}", sgr.title, centerText(titleText, calBlockWidth), sgr.reset));
+
+        // Weekday header row (e.g., "Mo Tu We Th Fr Sa Su").
+        std::string header;
+        header.reserve(calBlockWidth + 16);
+        header += sgr.weekdayRow;
+        for (auto const col: std::views::iota(0uz, 7uz))
+        {
+            if (col > 0)
+                header += ' ';
+            auto const wd = firstDay + std::chrono::days { static_cast<int>(col) };
+            auto const labelIdx = (static_cast<int>(wd.c_encoding()) + 6) % 7; // Mon=0..Sun=6
+            auto const isWeekend = wd == std::chrono::Saturday || wd == std::chrono::Sunday;
+            if (isWeekend && style.useColor)
+            {
+                header += sgr.reset;
+                header += sgr.weekend;
+                header += calWeekdayShort.at(static_cast<size_t>(labelIdx));
+                header += sgr.reset;
+                header += sgr.weekdayRow;
+            }
+            else
+            {
+                header += calWeekdayShort.at(static_cast<size_t>(labelIdx));
+            }
+        }
+        header += sgr.reset;
+        lines.push_back(std::move(header));
+
+        // Compute the starting column of day-1 and fill six week rows.
+        auto const first = std::chrono::year_month_day { ym.year(), ym.month(), std::chrono::day { 1 } };
+        auto const firstWd = std::chrono::weekday { std::chrono::sys_days { first } };
+        auto const startCol = weekdayColumn(firstWd, firstDay);
+        auto const totalDays = daysInMonth(ym);
+
+        // Each empty cell contributes exactly 2 chars and each separator contributes
+        // 1 char, so an all-empty row already has the correct calBlockWidth width.
+        unsigned dayNum = 1;
+        for (auto const week: std::views::iota(0, 6))
+        {
+            std::string row;
+            row.reserve(calBlockWidth + 64);
+            for (auto const col: std::views::iota(0uz, 7uz))
+            {
+                if (col > 0)
+                    row += ' ';
+                auto const cellIndex = static_cast<size_t>(week * 7) + col;
+                if (cellIndex < startCol || dayNum > totalDays)
+                {
+                    row += "  ";
+                    continue;
+                }
+
+                auto const wd = firstDay + std::chrono::days { static_cast<int>(col) };
+                auto const isWeekend = wd == std::chrono::Saturday || wd == std::chrono::Sunday;
+                auto const cellDate =
+                    std::chrono::year_month_day { ym.year(), ym.month(), std::chrono::day { dayNum } };
+                auto const isToday = cellDate == today;
+
+                auto const cell = std::format("{:2}", dayNum);
+                if (style.useColor && isToday)
+                {
+                    row += sgr.today;
+                    row += cell;
+                    row += sgr.reset;
+                }
+                else if (style.useColor && isWeekend)
+                {
+                    row += sgr.weekend;
+                    row += cell;
+                    row += sgr.reset;
+                }
+                else
+                {
+                    row += cell;
+                }
+
+                ++dayNum;
+            }
+            lines.push_back(std::move(row));
+            if (dayNum > totalDays)
+                break;
+        }
+        // Ensure we always have 8 lines so horizontal composition aligns cleanly.
+        while (lines.size() < 8)
+            lines.emplace_back(calBlockWidth, ' ');
+        return lines;
+    }
+
+    /// Joins a row of month blocks side-by-side with a two-space gutter.
+    std::string joinCalBlocksHorizontally(std::span<std::vector<std::string> const> blocks)
+    {
+        if (blocks.empty())
+            return {};
+        constexpr std::string_view gutter = "  ";
+        std::string out;
+        size_t const rows = blocks.front().size();
+        for (auto const row: std::views::iota(0uz, rows))
+        {
+            for (auto const bi: std::views::iota(0uz, blocks.size()))
+            {
+                if (bi > 0)
+                    out += gutter;
+                out += blocks[bi].at(row);
+            }
+            out += '\n';
+        }
+        return out;
+    }
+
+    /// Parses a positive decimal integer. Returns std::nullopt on parse failure.
+    std::optional<int> parseCalInt(std::string_view s)
+    {
+        int value = 0;
+        auto const [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+        if (ec != std::errc {} || ptr != s.data() + s.size())
+            return std::nullopt;
+        return value;
+    }
+
+} // namespace
+
+int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    bool threeMonth = false;
+    bool yearMode = false;
+    std::optional<bool> startMondayOverride;
+    bool forceNoColor = false;
+    std::vector<std::string> positional;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view arg = args.at(i);
+        if (arg == "-h" || arg == "--help")
+            return renderMarkdownHelp(
+                outputFd,
+                "# cal\n"
+                "\n"
+                "Display a colorful calendar for a month or year.\n"
+                "\n"
+                "## Usage\n"
+                "\n"
+                "`cal [OPTIONS] [[MONTH] YEAR]`\n"
+                "\n"
+                "With no arguments, shows the current month. Pass `MONTH YEAR` for a\n"
+                "specific month (MONTH is 1-12) or just `YEAR` for the whole year.\n"
+                "\n"
+                "## Options\n"
+                "\n"
+                "| Option | Description |\n"
+                "|--------|-------------|\n"
+                "| `-3`, `--three` | Show previous, current, and next month side-by-side |\n"
+                "| `-y`, `--year` | Show the entire year |\n"
+                "| `-m`, `--monday` | Start the week on Monday (ISO 8601, default) |\n"
+                "| `-s`, `--sunday` | Start the week on Sunday |\n"
+                "| `-n`, `--no-color` | Disable colorized output even on a terminal |\n"
+                "| `-h`, `--help` | Display this help |\n"
+                "\n"
+                "## Colors\n"
+                "\n"
+                "Today's date is highlighted; weekend columns are tinted. Color output\n"
+                "is suppressed automatically when stdout is not a terminal or when the\n"
+                "`NO_COLOR` environment variable is set.\n");
+        if (arg == "-3" || arg == "--three")
+        {
+            threeMonth = true;
+            continue;
+        }
+        if (arg == "-y" || arg == "--year")
+        {
+            yearMode = true;
+            continue;
+        }
+        if (arg == "-m" || arg == "--monday")
+        {
+            startMondayOverride = true;
+            continue;
+        }
+        if (arg == "-s" || arg == "--sunday")
+        {
+            startMondayOverride = false;
+            continue;
+        }
+        if (arg == "-n" || arg == "--no-color")
+        {
+            forceNoColor = true;
+            continue;
+        }
+        if (arg.starts_with('-') && arg != "-")
+        {
+            error("cal: unrecognized option '{}'", arg);
+            return 1;
+        }
+        positional.emplace_back(arg);
+    }
+
+    // Determine today in local time.
+    auto const nowTp = std::chrono::system_clock::now();
+    auto const nowSec = std::chrono::system_clock::to_time_t(nowTp);
+    std::tm tmBuf {};
+#if defined(_WIN32)
+    localtime_s(&tmBuf, &nowSec);
+#else
+    localtime_r(&nowSec, &tmBuf);
+#endif
+    auto const today = std::chrono::year_month_day {
+        std::chrono::year { tmBuf.tm_year + 1900 },
+        std::chrono::month { static_cast<unsigned>(tmBuf.tm_mon + 1) },
+        std::chrono::day { static_cast<unsigned>(tmBuf.tm_mday) },
+    };
+
+    // Resolve target month/year from positional args.
+    auto targetYear = today.year();
+    auto targetMonth = today.month();
+    bool explicitYearOnly = false;
+
+    if (positional.size() == 1)
+    {
+        auto const n = parseCalInt(positional[0]);
+        if (!n || *n < 1 || *n > 9999)
+        {
+            error("cal: invalid year '{}'", positional[0]);
+            return 1;
+        }
+        targetYear = std::chrono::year { *n };
+        explicitYearOnly = true;
+    }
+    else if (positional.size() == 2)
+    {
+        auto const m = parseCalInt(positional[0]);
+        auto const y = parseCalInt(positional[1]);
+        if (!m || *m < 1 || *m > 12)
+        {
+            error("cal: invalid month '{}' (expected 1-12)", positional[0]);
+            return 1;
+        }
+        if (!y || *y < 1 || *y > 9999)
+        {
+            error("cal: invalid year '{}'", positional[1]);
+            return 1;
+        }
+        targetMonth = std::chrono::month { static_cast<unsigned>(*m) };
+        targetYear = std::chrono::year { *y };
+    }
+    else if (positional.size() > 2)
+    {
+        error("cal: too many arguments");
+        return 1;
+    }
+
+    // Resolve color capability.
+    auto const* noColorEnv = std::getenv("NO_COLOR");
+    bool const useColor =
+        !forceNoColor && isTerminal(outputFd) && (noColorEnv == nullptr || noColorEnv[0] == '\0');
+
+    CalStyle const style { .useColor = useColor, .startMonday = startMondayOverride.value_or(true) };
+
+    // Year mode: 12 months in a 3x4 grid. Activated by -y or by a single year arg.
+    bool const showYear = yearMode || explicitYearOnly;
+    std::string output;
+    output.reserve(showYear ? 16 * 1024 : 512);
+
+    if (showYear)
+    {
+        auto const& headerSgr = useColor ? calStyled.title : calPlain.title;
+        auto const& resetSgr = useColor ? calStyled.reset : calPlain.reset;
+        auto const yearTitle = std::format("{:^{}}", static_cast<int>(targetYear), (calBlockWidth * 3) + 4);
+        output += std::format("{}{}{}\n\n", headerSgr, yearTitle, resetSgr);
+
+        for (auto const bandIdx: std::views::iota(0, 4))
+        {
+            std::array<std::vector<std::string>, 3> band {};
+            for (auto const col: std::views::iota(0, 3))
+            {
+                auto const monthNum = (bandIdx * 3) + col + 1;
+                band.at(static_cast<size_t>(col)) = renderCalMonthBlock(
+                    std::chrono::year_month { targetYear,
+                                              std::chrono::month { static_cast<unsigned>(monthNum) } },
+                    today,
+                    style);
+            }
+            output += joinCalBlocksHorizontally(std::span<std::vector<std::string> const> { band });
+            output += '\n';
+        }
+    }
+    else if (threeMonth)
+    {
+        auto const curr = std::chrono::year_month { targetYear, targetMonth };
+        auto const prev = curr - std::chrono::months { 1 };
+        auto const next = curr + std::chrono::months { 1 };
+        std::vector<std::vector<std::string>> blocks {
+            renderCalMonthBlock(prev, today, style),
+            renderCalMonthBlock(curr, today, style),
+            renderCalMonthBlock(next, today, style),
+        };
+        output += joinCalBlocksHorizontally(std::span { blocks });
+    }
+    else
+    {
+        auto const block =
+            renderCalMonthBlock(std::chrono::year_month { targetYear, targetMonth }, today, style);
+        for (auto const& line: block)
+        {
+            output += line;
+            output += '\n';
+        }
+    }
+
+    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // uname
 // ---------------------------------------------------------------------------
 

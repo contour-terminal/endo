@@ -1349,6 +1349,51 @@ date -d @1700000000
 
 ---
 
+## cal
+
+Display a colorful calendar for a month or year.
+
+**Syntax:**
+
+```
+cal [OPTIONS]
+cal [OPTIONS] YEAR
+cal [OPTIONS] MONTH YEAR
+```
+
+**Description:** Renders a monthly or yearly calendar. With no arguments, shows the
+current month with today's date highlighted. `MONTH YEAR` selects a specific month
+(`MONTH` is 1-12); a single positional argument is treated as a year from 1-9999 and
+renders all 12 months in a 3×4 grid.
+
+When stdout is a terminal and `NO_COLOR` is not set, `cal` emits ANSI color: today's
+date is highlighted, the month/year header is bold, and weekend columns are tinted.
+Color is suppressed automatically when output is piped or when `--no-color` is given.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-3`, `--three` | Show previous, current, and next month side-by-side |
+| `-y`, `--year` | Show the entire current year |
+| `-m`, `--monday` | Start the week on Monday (ISO 8601, default) |
+| `-s`, `--sunday` | Start the week on Sunday |
+| `-n`, `--no-color` | Disable colorized output even on a terminal |
+| `-h`, `--help` | Display help |
+
+**Examples:**
+
+```endo
+cal
+cal 4 2026
+cal 2026
+cal -3
+cal -s 4 2026
+cal --no-color 2026 > year.txt
+```
+
+---
+
 ## uname
 
 Print system information.

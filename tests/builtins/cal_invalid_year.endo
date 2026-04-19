@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cal rejects non-numeric year with exit code 1
+# mode: shell
+# expect-exit: 1
+
+cal abc
