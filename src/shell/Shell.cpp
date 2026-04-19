@@ -1323,7 +1323,7 @@ int Shell::run()
             if (!lineBuffer.empty())
             {
                 prompt.addHistory(lineBuffer);
-                auto const homeEnv = _env.get("HOME").value_or(std::string {});
+                auto const homeEnv = normalizedHomeDirectory(_env);
                 auto const cwdAbs = _env.currentDirectory();
                 history.add(
                     lineBuffer,
@@ -1441,7 +1441,7 @@ int Shell::run()
         if (!lineBuffer.empty())
         {
             prompt.addHistory(lineBuffer);
-            auto const homeEnv = _env.get("HOME").value_or(std::string {});
+            auto const homeEnv = normalizedHomeDirectory(_env);
             auto const cwdAbs = _env.currentDirectory();
             history.add(lineBuffer,
                         HistoryAddContext {

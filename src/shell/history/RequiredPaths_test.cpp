@@ -27,6 +27,12 @@ TEST_CASE("canonicalizeForHistory.no_false_prefix_match", "[history][required-pa
     CHECK(canonicalizeForHistory("/home/userx/a", "/home/user") == "/home/userx/a");
 }
 
+TEST_CASE("canonicalizeForHistory.home_with_trailing_slash", "[history][required-paths]")
+{
+    CHECK(canonicalizeForHistory("/home/u/projects", "/home/u/") == "~/projects");
+    CHECK(canonicalizeForHistory("/home/u", "/home/u/") == "~");
+}
+
 TEST_CASE("canonicalizeForHistory.empty_home", "[history][required-paths]")
 {
     CHECK(canonicalizeForHistory("/home/u/x", "") == "/home/u/x");
@@ -129,6 +135,19 @@ TEST_CASE("collectRequiredPaths.caps_at_max", "[history][required-paths]")
 
     auto const paths = collectRequiredPaths(argv, "/home/u", "/home/u");
     CHECK(paths.size() == maxRequiredPaths);
+}
+
+TEST_CASE("collectRequiredPaths.skips_urls", "[history][required-paths]")
+{
+    // Classic fetch/clone URLs must not be recorded as required paths.
+    auto const httpArgv = std::vector<std::string> { "curl", "https://example.com/a/b" };
+    CHECK(collectRequiredPaths(httpArgv, "/home/u", "/home/u").empty());
+
+    auto const gitArgv = std::vector<std::string> { "git", "clone", "git@github.com:org/repo" };
+    CHECK(collectRequiredPaths(gitArgv, "/home/u", "/home/u").empty());
+
+    auto const fileArgv = std::vector<std::string> { "open", "file:///tmp/a" };
+    CHECK(collectRequiredPaths(fileArgv, "/home/u", "/home/u").empty());
 }
 
 TEST_CASE("collectRequiredPaths.deduplicates", "[history][required-paths]")

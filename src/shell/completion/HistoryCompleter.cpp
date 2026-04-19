@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HistoryCompleter.hpp"
+#include <shell/history/RequiredPaths.hpp>
 
 namespace endo
 {
@@ -20,7 +21,7 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
     // Use fuzzy search to find both prefix and fuzzy matches
     auto options = FuzzySearchOptions {
         .currentCwd = _env.currentDirectory(),
-        .home = _env.get("HOME").value_or(std::string {}),
+        .home = normalizedHomeDirectory(_env),
         .validateRequiredPaths = _fs != nullptr,
         .fs = _fs,
     };

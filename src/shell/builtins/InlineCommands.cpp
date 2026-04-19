@@ -3959,7 +3959,7 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
             auto const& pattern = args.at(patternIdx);
             auto options = FuzzySearchOptions {
                 .currentCwd = _env.currentDirectory(),
-                .home = _env.get("HOME").value_or(std::string {}),
+                .home = normalizedHomeDirectory(_env),
                 .validateRequiredPaths = validate,
                 .fs = &_fs,
             };

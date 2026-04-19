@@ -20,21 +20,24 @@ using platform::trimInPlace;
 /// validation during completion. Empty defaults keep older callers working.
 struct HistoryAddContext
 {
-    std::string cwd; ///< Working directory at execution time (absolute).
+    std::string cwd; ///< Working directory at execution time (canonical, home-relative when applicable).
     std::vector<std::string>
         requiredPaths; ///< Path-like arguments (canonical, home-relative when applicable).
 };
 
 /// @brief Options that influence fuzzy history ranking and filtering.
 ///
-/// All fields default to values that disable CWD ranking and required-paths
-/// validation, preserving legacy behavior when not explicitly populated.
+/// Leaving @c currentCwd empty disables the CWD ranking bonus. Required-paths
+/// validation is gated by @c fs — when @c fs is @c nullptr no existence checks
+/// run regardless of @c validateRequiredPaths. These two knobs together keep
+/// legacy call sites (no env/fs supplied) on the old behavior.
 struct FuzzySearchOptions
 {
     std::string currentCwd;            ///< Absolute current working directory; canonicalized internally.
     std::string home;                  ///< $HOME; used to canonicalize CWD and expand stored paths.
-    bool validateRequiredPaths = true; ///< Drop entries whose referenced paths no longer exist.
-    FileSystem const* fs = nullptr;    ///< Used for existence checks when validating.
+    bool validateRequiredPaths = true; ///< Drop entries whose referenced paths no longer exist
+                                       ///< (only applies when @c fs is non-null).
+    FileSystem const* fs = nullptr;    ///< Non-null enables required-paths existence checks.
 };
 
 /// @brief Abstract history interface for completion and recall.

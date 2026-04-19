@@ -3,6 +3,7 @@
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/history/History.hpp>
+#include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/SourceOffsetUtils.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/util/CommandResolver.hpp>
@@ -1335,7 +1336,7 @@ void PromptComponent::triggerHistorySearch()
     if (_envProvider)
     {
         options.currentCwd = _envProvider->currentDirectory();
-        options.home = _envProvider->get("HOME").value_or(std::string {});
+        options.home = normalizedHomeDirectory(*_envProvider);
     }
     options.fs = _historyFs;
     options.validateRequiredPaths = _historyFs != nullptr;
@@ -1375,7 +1376,7 @@ void PromptComponent::updateHistorySearchPopup()
     if (_envProvider)
     {
         options.currentCwd = _envProvider->currentDirectory();
-        options.home = _envProvider->get("HOME").value_or(std::string {});
+        options.home = normalizedHomeDirectory(*_envProvider);
     }
     options.fs = _historyFs;
     options.validateRequiredPaths = _historyFs != nullptr;
