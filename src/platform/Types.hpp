@@ -122,15 +122,27 @@ inline auto platformWrite(NativeHandle h, void const* data, size_t size) -> intp
 
 /// Cross-platform read using Windows ReadFile.
 ///
+/// Semantics match POSIX `read(2)`: returns the number of bytes read, 0 on
+/// end-of-file (including the case where a pipe's write end has been closed
+/// and the buffer is drained), or -1 on a genuine I/O error.
+///
 /// @param h The native handle to read from.
 /// @param data Pointer to buffer to read into.
 /// @param size Maximum number of bytes to read.
-/// @return Number of bytes read, or -1 on error.
+/// @return Bytes read, 0 on EOF / broken pipe, or -1 on error.
 inline auto platformRead(NativeHandle h, void* data, size_t size) -> intptr_t
 {
     DWORD bytesRead = 0;
     if (!ReadFile(h, data, static_cast<DWORD>(size), &bytesRead, nullptr))
+    {
+        // ERROR_BROKEN_PIPE / ERROR_HANDLE_EOF are stream terminators, not
+        // errors — normalize them to POSIX-style EOF so the cross-platform
+        // abstraction is uniform for callers that distinguish EOF from error.
+        auto const err = GetLastError();
+        if (err == ERROR_BROKEN_PIPE || err == ERROR_HANDLE_EOF)
+            return 0;
         return -1;
+    }
     return static_cast<intptr_t>(bytesRead);
 }
 
@@ -169,7 +181,7 @@ inline auto platformWrite(NativeHandle fd, void const* data, size_t size) -> int
 /// @param fd The file descriptor to read from.
 /// @param data Pointer to buffer to read into.
 /// @param size Maximum number of bytes to read.
-/// @return Number of bytes read, or -1 on error.
+/// @return Bytes read, 0 on EOF / broken pipe, or -1 on error.
 inline auto platformRead(NativeHandle fd, void* data, size_t size) -> intptr_t
 {
     return static_cast<intptr_t>(::read(fd, data, size));

@@ -6,7 +6,10 @@
 
 #include <array>
 #include <cstdio>
+#include <memory>
 #include <string>
+#include <thread>
+#include <utility>
 
 #if defined(_WIN32)
     #define popen  _popen
@@ -38,11 +41,11 @@ namespace
         return result;
     }
 
-    /// @brief Queries git status using a single command.
+    /// @brief Default query implementation: invokes `git status` via popen.
     ///
     /// Extracts branch name from `# branch.head` header and dirty/staged counts
-    /// from porcelain v2 change entries. Avoids the separate `git rev-parse` call.
-    [[nodiscard]] auto queryGitInfo(std::string const& cwd) -> GitInfo
+    /// from porcelain v2 change entries.
+    [[nodiscard]] auto defaultQueryGitInfo(std::string const& cwd) -> GitInfo
     {
         auto info = GitInfo {};
 
@@ -92,17 +95,69 @@ namespace
 
 } // namespace
 
+GitModule::GitModule(QueryFn queryFn):
+    _queryFn(queryFn ? std::move(queryFn) : QueryFn { &defaultQueryGitInfo })
+{
+}
+
+void GitModule::consumePendingIfReady(std::string const& cwd) const
+{
+    if (!_pending)
+        return;
+    if (!_pending->ready.load(std::memory_order_acquire))
+        return;
+
+    // Acquire above pairs with the worker's release-store after writing result;
+    // the read below sees the fully-constructed GitInfo.
+    if (_pending->cwd == cwd)
+    {
+        _cache = std::move(_pending->result);
+        _cachedCwd = _pending->cwd;
+        _cacheTime = std::chrono::steady_clock::now();
+        _cachePopulated = true;
+    }
+    _pending.reset();
+}
+
+void GitModule::launchFetch(std::string const& cwd) const
+{
+    auto slot = std::make_shared<PendingFetch>();
+    slot->cwd = cwd;
+    _pending = slot;
+
+    // The worker owns its own shared_ptr to `slot`, so the slot outlives the
+    // GitModule if the main thread clears `_pending` (e.g., cwd changed) or
+    // the module is destroyed while the worker is still running.
+    std::thread([slot, cwd, query = _queryFn]() mutable {
+        slot->result = query(cwd);
+        slot->ready.store(true, std::memory_order_release);
+    }).detach();
+}
+
 void GitModule::refreshIfNeeded(std::string const& cwd) const
 {
-    auto const now = std::chrono::steady_clock::now();
+    consumePendingIfReady(cwd);
 
+    auto const now = std::chrono::steady_clock::now();
     if (_cachePopulated && _cachedCwd == cwd && (now - _cacheTime) < _cacheTtl)
         return;
 
-    _cache = queryGitInfo(cwd);
-    _cachedCwd = cwd;
-    _cacheTime = now;
-    _cachePopulated = true;
+    // An in-flight fetch for a different cwd is stale: drop our handle. The
+    // worker still holds a shared_ptr to the slot and runs to completion, but
+    // its result is never consumed because the shared slot is no longer
+    // referenced by us.
+    if (_pending && _pending->cwd != cwd)
+        _pending.reset();
+
+    if (!_pending)
+        launchFetch(cwd);
+}
+
+std::optional<std::chrono::milliseconds> GitModule::refreshInterval() const
+{
+    if (_pending)
+        return _pendingInterval;
+    return _idleInterval;
 }
 
 bool GitModule::shouldShow(PromptContext const& ctx) const

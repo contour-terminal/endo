@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdlib>
+#include <string_view>
 
 #include <platform/PathUtils.hpp>
+#include <platform/Types.hpp>
 #include <platform/UserPaths.hpp>
 #include <testing/EnvHelper.hpp>
+
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <unistd.h>
+#endif
 
 using namespace endo::platform;
 
@@ -168,4 +177,50 @@ TEST_CASE("configHome.falls_back_to_home_dot_config", "[platform]")
         endo::testing::setTestEnv("HOME", savedHome.c_str());
     else
         endo::testing::unsetTestEnv("HOME");
+}
+
+TEST_CASE("platformRead.returns_zero_on_closed_pipe_eof", "[platform]")
+{
+    // Regression guard: on Windows, ReadFile on a drained pipe whose writer has
+    // closed fails with ERROR_BROKEN_PIPE. platformRead must normalize that to
+    // a POSIX-style EOF (return 0), not an I/O error (return -1).
+
+#if defined(_WIN32)
+    HANDLE readEnd = nullptr;
+    HANDLE writeEnd = nullptr;
+    REQUIRE(CreatePipe(&readEnd, &writeEnd, nullptr, 0) != 0);
+    auto const readH = static_cast<NativeHandle>(readEnd);
+
+    auto const payload = std::string_view { "hi" };
+    DWORD written = 0;
+    REQUIRE(WriteFile(writeEnd, payload.data(), static_cast<DWORD>(payload.size()), &written, nullptr) != 0);
+    CHECK(written == payload.size());
+    CloseHandle(writeEnd);
+#else
+    int fds[2] = { -1, -1 };
+    REQUIRE(::pipe(fds) == 0);
+    auto const readH = fds[0];
+    auto const writeH = fds[1];
+
+    auto const payload = std::string_view { "hi" };
+    auto const expected = static_cast<intptr_t>(payload.size());
+    auto const w = static_cast<intptr_t>(::write(writeH, payload.data(), payload.size()));
+    REQUIRE(w == expected);
+    ::close(writeH);
+#endif
+
+    std::array<char, 16> buf {};
+    auto const first = platformRead(readH, buf.data(), buf.size());
+    CHECK(first == 2);
+    CHECK(std::string_view(buf.data(), static_cast<size_t>(first)) == "hi");
+
+    // Second call: buffer empty, writer closed. Must be EOF, not error.
+    auto const second = platformRead(readH, buf.data(), buf.size());
+    CHECK(second == 0);
+
+#if defined(_WIN32)
+    CloseHandle(readEnd);
+#else
+    ::close(readH);
+#endif
 }
