@@ -258,6 +258,7 @@ add_executable(test-endo-shell
     commands/TimeoutCommand_test.cpp
     CrashHandler_test.cpp
     ui/PromptComponent_test.cpp
+    ui/modules/GitModule_test.cpp
     ui/Gradient_test.cpp
     completion/Completer_test.cpp
     completion/FSharpCompleter_test.cpp
