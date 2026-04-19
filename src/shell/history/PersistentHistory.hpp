@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "History.hpp"
-
 #include <platform/FileSystem.hpp>
 
 namespace endo
@@ -22,6 +21,10 @@ struct HistoryEntry
     std::chrono::system_clock::time_point lastExecuted; ///< When the command was last executed.
     uint32_t executionCount = 1;                        ///< Total execution count.
     bool persisted = false;                             ///< Whether this entry should be saved to disk.
+    std::string cwd;                                    ///< Working directory at execution time
+                     ///< (canonical, home-relative when applicable; may be empty for legacy entries).
+    std::vector<std::string> requiredPaths; ///< Path-like arguments referenced by the command
+                                            ///< (canonical, home-relative when applicable).
 };
 
 /// @brief Persistent command history that saves to a YAML file on disk.
@@ -37,7 +40,7 @@ class PersistentHistory final: public History
     /// @param maxSize Maximum number of entries to store (default: 5000).
     explicit PersistentHistory(FileSystem const& fs, size_t maxSize = 5000);
 
-    void add(std::string entry) override;
+    void add(std::string entry, HistoryAddContext context = {}) override;
     [[nodiscard]] std::vector<std::string> const& entries() const override;
     [[nodiscard]] size_t size() const override;
     [[nodiscard]] size_t maxSize() const override;
@@ -45,8 +48,10 @@ class PersistentHistory final: public History
     void markLastResult(int exitCode) override;
     [[nodiscard]] std::vector<std::string_view> search(std::string_view prefix,
                                                        size_t maxResults = 10) const override;
-    [[nodiscard]] std::vector<FuzzySearchResult> searchFuzzy(std::string_view prefix,
-                                                             size_t maxResults = 10) const override;
+    [[nodiscard]] std::vector<FuzzySearchResult> searchFuzzy(
+        std::string_view prefix,
+        size_t maxResults = 10,
+        FuzzySearchOptions const& options = {}) const override;
 
     /// @brief Loads history entries from the file on disk.
     void load();

@@ -43,9 +43,12 @@ class Completer
     /// @param env The environment for variable and command completion.
     /// @param history The history for history-based suggestions.
     /// @param fsharpState The persistent F# state for let binding completion.
+    /// @param fs Optional filesystem used for required-paths validation in
+    ///           history-based suggestions. Pass nullptr to disable validation.
     Completer(EnvironmentProvider const& env,
               History const& history,
-              FSharpPersistentState const& fsharpState);
+              FSharpPersistentState const& fsharpState,
+              FileSystem const* fs = nullptr);
 
     /// @brief Registers an additional completion provider.
     /// @param provider The provider to add.

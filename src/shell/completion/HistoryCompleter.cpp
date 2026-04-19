@@ -4,7 +4,10 @@
 namespace endo
 {
 
-HistoryCompleter::HistoryCompleter(History const& history): _history(history)
+HistoryCompleter::HistoryCompleter(History const& history,
+                                   EnvironmentProvider const& env,
+                                   FileSystem const* fs):
+    _history(history), _env(env), _fs(fs)
 {
 }
 
@@ -15,7 +18,13 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
     // For history completion, we match against the full input, not just the current word
     // This is because history entries are complete command lines
     // Use fuzzy search to find both prefix and fuzzy matches
-    auto matches = _history.searchFuzzy(context.fullInput, 10);
+    auto options = FuzzySearchOptions {
+        .currentCwd = _env.currentDirectory(),
+        .home = _env.get("HOME").value_or(std::string {}),
+        .validateRequiredPaths = _fs != nullptr,
+        .fs = _fs,
+    };
+    auto matches = _history.searchFuzzy(context.fullInput, 10, options);
 
     for (auto const& match: matches)
     {

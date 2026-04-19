@@ -12,9 +12,35 @@
 #include <ranges>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+
+#include "RequiredPaths.hpp"
 
 namespace endo
 {
+
+namespace
+{
+
+    /// Component-aware ancestry test: returns true when @p descendant is inside
+    /// @p ancestor (or equal to it). Both inputs must already be in the same
+    /// canonical form (either both absolute or both home-relative `~/...`).
+    [[nodiscard]] bool pathIsAncestor(std::string_view ancestor, std::string_view descendant)
+    {
+        if (ancestor.empty() || descendant.empty())
+            return false;
+        if (ancestor == descendant)
+            return true;
+        if (descendant.size() <= ancestor.size())
+            return false;
+        if (!descendant.starts_with(ancestor))
+            return false;
+        // Require a path boundary after the prefix so `/home/foo` does not match `/home/foobar`.
+        // Treat the bare tilde specially: `~` as ancestor of `~/x` has no intermediate `/`.
+        return descendant[ancestor.size()] == '/' || (ancestor == "~" && descendant.starts_with("~/"));
+    }
+
+} // namespace
 
 PersistentHistory::PersistentHistory(FileSystem const& fs, size_t maxSize):
     _fs(fs), _filePath(defaultHistoryPath()), _maxSize(maxSize)
@@ -82,6 +108,16 @@ void PersistentHistory::load()
 
             if (node["count"])
                 entry.executionCount = node["count"].as<uint32_t>();
+
+            if (node["cwd"])
+                entry.cwd = node["cwd"].as<std::string>();
+
+            if (node["paths"] && node["paths"].IsSequence())
+            {
+                entry.requiredPaths.reserve(node["paths"].size());
+                for (auto const& p: node["paths"])
+                    entry.requiredPaths.push_back(p.as<std::string>());
+            }
 
             entry.persisted = true;
             _richEntries.push_back(std::move(entry));
@@ -159,7 +195,7 @@ void PersistentHistory::autoImportIfEmpty()
 #endif
 }
 
-void PersistentHistory::add(std::string entry)
+void PersistentHistory::add(std::string entry, HistoryAddContext context)
 {
     trimInPlace(entry);
     if (entry.empty())
@@ -171,9 +207,14 @@ void PersistentHistory::add(std::string entry)
 
     if (it != _richEntries.end())
     {
-        // Update existing entry
+        // Update existing entry. Fold in newer context if the caller supplied any —
+        // otherwise keep the stored values so "legacy" callers don't clobber them.
         it->executionCount++;
         it->lastExecuted = std::chrono::system_clock::now();
+        if (!context.cwd.empty())
+            it->cwd = std::move(context.cwd);
+        if (!context.requiredPaths.empty())
+            it->requiredPaths = std::move(context.requiredPaths);
 
         // Move to end (most recent)
         auto updated = std::move(*it);
@@ -191,6 +232,8 @@ void PersistentHistory::add(std::string entry)
             .lastExecuted = std::chrono::system_clock::now(),
             .executionCount = 1,
             .persisted = false,
+            .cwd = std::move(context.cwd),
+            .requiredPaths = std::move(context.requiredPaths),
         });
         _lastAddedIndex = _richEntries.size() - 1;
     }
@@ -261,8 +304,8 @@ std::vector<std::string_view> PersistentHistory::search(std::string_view prefix,
     return results;
 }
 
-std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::string_view prefix,
-                                                                       size_t maxResults) const
+std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
+    std::string_view prefix, size_t maxResults, FuzzySearchOptions const& options) const
 {
     auto results = std::vector<FuzzySearchResult> {};
     results.reserve(std::min(maxResults * 2, _richEntries.size()));
@@ -270,8 +313,28 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
     auto fuzzyConfig = tui::FuzzyConfig {};
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
-    // Collect all matches from newest to oldest
+    // CWD ranking bonuses — exact must outrank maxRecencyBonus so same-CWD entries
+    // beat fresh unrelated ones; ancestor is a gentler tiebreaker.
     constexpr auto maxRecencyBonus = 200;
+    constexpr auto exactCwdBonus = 300;
+    constexpr auto ancestorCwdBonus = 150;
+
+    // Canonicalize the current CWD once; comparison against stored cwd stays a cheap string op.
+    auto const currentCwdCanonical = options.currentCwd.empty()
+                                         ? std::string {}
+                                         : canonicalizeForHistory(options.currentCwd, options.home);
+
+    // Existence cache: required-paths validation may revisit the same path across
+    // candidates; a scratch cache keeps cost bounded to one FS probe per unique path.
+    auto existenceCache = std::unordered_map<std::string, bool> {};
+    auto const pathExists = [&](std::string const& stored) {
+        auto const [iter, inserted] = existenceCache.try_emplace(stored, false);
+        if (inserted)
+            iter->second = options.fs->exists(expandForLookup(stored, options.home));
+        return iter->second;
+    };
+
+    // Collect all matches from newest to oldest
     auto const total = static_cast<int>(_richEntries.size());
     auto position = 0;
     for (auto it = _richEntries.rbegin(); it != _richEntries.rend(); ++it, ++position)
@@ -293,6 +356,14 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
         if (!isPrefixMatch && !isFuzzyMatch)
             continue;
 
+        // Required-paths validation: suppress entries whose referenced paths no longer exist.
+        if (options.validateRequiredPaths && options.fs != nullptr && !it->requiredPaths.empty())
+        {
+            auto const allExist = std::ranges::all_of(it->requiredPaths, pathExists);
+            if (!allExist)
+                continue;
+        }
+
         // Recency bonus: scaled to fixed range [0, maxRecencyBonus], newest gets highest
         auto const recencyBonus = total > 0 ? maxRecencyBonus * (total - position) / total : 0;
 
@@ -300,18 +371,28 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
         auto const frequencyBonus =
             static_cast<int>(std::min(static_cast<uint32_t>(it->executionCount * 2), uint32_t { 50 }));
 
+        // CWD bonus: exact match > ancestor match > unrelated/unknown.
+        auto cwdBonus = 0;
+        if (!currentCwdCanonical.empty() && !it->cwd.empty())
+        {
+            if (it->cwd == currentCwdCanonical)
+                cwdBonus = exactCwdBonus;
+            else if (pathIsAncestor(it->cwd, currentCwdCanonical))
+                cwdBonus = ancestorCwdBonus;
+        }
+
         auto score = 0;
         auto matchPositions = std::vector<size_t> {};
 
         if (isPrefixMatch)
         {
             score = tui::SmartCaseMatch::adjustScore(100, it->command, prefix);
-            score += fuzzyConfig.prefixMatchBonus + recencyBonus + frequencyBonus;
+            score += fuzzyConfig.prefixMatchBonus + recencyBonus + frequencyBonus + cwdBonus;
         }
         else
         {
             score = tui::FuzzyMatch::calculateScore(50, it->command, prefix, fuzzyResult, fuzzyConfig);
-            score += recencyBonus + frequencyBonus;
+            score += recencyBonus + frequencyBonus + cwdBonus;
             matchPositions = std::move(fuzzyResult.positions);
         }
 
@@ -345,7 +426,7 @@ void PersistentHistory::flush()
     // Serialize to YAML
     auto emitter = YAML::Emitter {};
     emitter << YAML::BeginMap;
-    emitter << YAML::Key << "version" << YAML::Value << 1;
+    emitter << YAML::Key << "version" << YAML::Value << 2;
     emitter << YAML::Key << "entries" << YAML::Value << YAML::BeginSeq;
 
     for (auto const& entry: _richEntries)
@@ -360,6 +441,15 @@ void PersistentHistory::flush()
         emitter << YAML::Key << "cmd" << YAML::Value << entry.command;
         emitter << YAML::Key << "ts" << YAML::Value << ts;
         emitter << YAML::Key << "count" << YAML::Value << entry.executionCount;
+        if (!entry.cwd.empty())
+            emitter << YAML::Key << "cwd" << YAML::Value << entry.cwd;
+        if (!entry.requiredPaths.empty())
+        {
+            emitter << YAML::Key << "paths" << YAML::Value << YAML::BeginSeq;
+            for (auto const& p: entry.requiredPaths)
+                emitter << p;
+            emitter << YAML::EndSeq;
+        }
         emitter << YAML::EndMap;
     }
 

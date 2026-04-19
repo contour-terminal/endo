@@ -4,6 +4,7 @@
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
+#include <shell/history/RequiredPaths.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
@@ -3910,7 +3911,9 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
                                       "|------------|-------------|\n"
                                       "| *(none)* | List all history entries, numbered |\n"
                                       "| `N` | List the last N entries |\n"
-                                      "| `search PATTERN` | Search entries by prefix |\n"
+                                      "| `search [--cwd] [--no-validate] PATTERN` | Search entries; `--cwd` "
+                                      "restricts to the current directory or its ancestors, `--no-validate` "
+                                      "skips the required-paths existence filter |\n"
                                       "| `clear` | Clear all history |\n"
                                       "| `-h`, `--help` | Display this help |\n");
 
@@ -3922,16 +3925,74 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
 
         if (subcmd == "search")
         {
-            if (args.size() < 3)
+            // Optional flags may appear before the pattern:
+            //   --cwd           restrict to entries whose stored cwd == or is an
+            //                   ancestor of the current working directory
+            //   --no-validate   skip the required-paths existence filter
+            auto cwdOnly = false;
+            auto validate = true;
+            auto patternIdx = size_t { 2 };
+            while (patternIdx < args.size())
+            {
+                auto const& flag = args.at(patternIdx);
+                if (flag == "--cwd")
+                {
+                    cwdOnly = true;
+                    ++patternIdx;
+                    continue;
+                }
+                if (flag == "--no-validate")
+                {
+                    validate = false;
+                    ++patternIdx;
+                    continue;
+                }
+                break;
+            }
+
+            if (patternIdx >= args.size())
             {
                 error("history: search requires a pattern");
                 return 1;
             }
-            auto const results = history.search(args.at(2), 50);
+
+            auto const& pattern = args.at(patternIdx);
+            auto options = FuzzySearchOptions {
+                .currentCwd = _env.currentDirectory(),
+                .home = _env.get("HOME").value_or(std::string {}),
+                .validateRequiredPaths = validate,
+                .fs = &_fs,
+            };
+
+            // When --cwd is set, filter out entries that aren't exact- or ancestor-CWD matches
+            // by computing canonical forms and rejecting others after the fuzzy search.
+            auto const currentCwdCanonical = canonicalizeForHistory(options.currentCwd, options.home);
+            auto const results = history.searchFuzzy(pattern, 50, options);
+
             auto const& theme = tui::currentTheme();
             std::string buf;
-            for (auto const& entry: results)
+            for (auto const& match: results)
             {
+                if (cwdOnly)
+                {
+                    // Re-check CWD against the original entry to distinguish a boosted-but-not-matching
+                    // result from an actual match. `match.entry` is a view into the history entry's
+                    // command string, so we need to locate the full entry to inspect its `cwd`.
+                    auto const& rich = history.richEntries();
+                    auto it =
+                        std::ranges::find_if(rich, [&](auto const& e) { return e.command == match.entry; });
+                    if (it == rich.end())
+                        continue;
+                    auto const exact = !it->cwd.empty() && it->cwd == currentCwdCanonical;
+                    auto const ancestor = !it->cwd.empty() && it->cwd != currentCwdCanonical
+                                          && currentCwdCanonical.starts_with(it->cwd)
+                                          && currentCwdCanonical.size() > it->cwd.size()
+                                          && currentCwdCanonical[it->cwd.size()] == '/';
+                    if (!exact && !ancestor)
+                        continue;
+                }
+
+                auto const entry = std::string { match.entry };
                 buf.clear();
                 if (useColor)
                 {

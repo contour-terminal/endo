@@ -1331,7 +1331,15 @@ void PromptComponent::triggerHistorySearch()
     }
 
     auto const inputText = std::string(_inputField.text());
-    auto results = _history->searchFuzzy(inputText, 200);
+    auto options = FuzzySearchOptions {};
+    if (_envProvider)
+    {
+        options.currentCwd = _envProvider->currentDirectory();
+        options.home = _envProvider->get("HOME").value_or(std::string {});
+    }
+    options.fs = _historyFs;
+    options.validateRequiredPaths = _historyFs != nullptr;
+    auto results = _history->searchFuzzy(inputText, 200, options);
 
     if (results.empty())
     {
@@ -1363,7 +1371,15 @@ void PromptComponent::updateHistorySearchPopup()
     }
 
     auto const inputText = std::string(_inputField.text());
-    auto results = _history->searchFuzzy(inputText, 200);
+    auto options = FuzzySearchOptions {};
+    if (_envProvider)
+    {
+        options.currentCwd = _envProvider->currentDirectory();
+        options.home = _envProvider->get("HOME").value_or(std::string {});
+    }
+    options.fs = _historyFs;
+    options.validateRequiredPaths = _historyFs != nullptr;
+    auto results = _history->searchFuzzy(inputText, 200, options);
 
     if (results.empty())
     {

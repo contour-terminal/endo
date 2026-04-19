@@ -17,7 +17,8 @@ namespace endo
 
 Completer::Completer(EnvironmentProvider const& env,
                      History const& history,
-                     FSharpPersistentState const& fsharpState)
+                     FSharpPersistentState const& fsharpState,
+                     FileSystem const* fs)
 {
     // Register default providers in priority order
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
@@ -37,7 +38,7 @@ Completer::Completer(EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
     _providers.push_back(std::make_unique<FileCompleter>());
-    _providers.push_back(std::make_unique<HistoryCompleter>(history));
+    _providers.push_back(std::make_unique<HistoryCompleter>(history, env, fs));
 
     // Sort by priority (highest first)
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)

@@ -6,12 +6,36 @@
 #include <utility>
 #include <vector>
 
+#include <platform/FileSystem.hpp>
 #include <platform/StringUtils.hpp>
 
 namespace endo
 {
 
 using platform::trimInPlace;
+
+/// @brief Context supplied by callers when appending to history.
+///
+/// Optional metadata that enables CWD-aware ranking and required-paths
+/// validation during completion. Empty defaults keep older callers working.
+struct HistoryAddContext
+{
+    std::string cwd; ///< Working directory at execution time (absolute).
+    std::vector<std::string>
+        requiredPaths; ///< Path-like arguments (canonical, home-relative when applicable).
+};
+
+/// @brief Options that influence fuzzy history ranking and filtering.
+///
+/// All fields default to values that disable CWD ranking and required-paths
+/// validation, preserving legacy behavior when not explicitly populated.
+struct FuzzySearchOptions
+{
+    std::string currentCwd;            ///< Absolute current working directory; canonicalized internally.
+    std::string home;                  ///< $HOME; used to canonicalize CWD and expand stored paths.
+    bool validateRequiredPaths = true; ///< Drop entries whose referenced paths no longer exist.
+    FileSystem const* fs = nullptr;    ///< Used for existence checks when validating.
+};
 
 /// @brief Abstract history interface for completion and recall.
 ///
@@ -23,8 +47,10 @@ class History
     virtual ~History() = default;
 
     /// @brief Adds an entry to the history.
-    /// @param entry The command line to add.
-    virtual void add(std::string entry) = 0;
+    /// @param entry   The command line to add.
+    /// @param context Optional metadata (CWD, required paths) used for CWD-aware
+    ///                ranking and required-paths validation in searchFuzzy().
+    virtual void add(std::string entry, HistoryAddContext context = {}) = 0;
 
     /// @brief Returns all history entries (oldest first).
     [[nodiscard]] virtual std::vector<std::string> const& entries() const = 0;
@@ -65,9 +91,10 @@ class History
     /// @brief Searches for entries using both prefix and fuzzy matching.
     /// @param prefix The pattern to search for.
     /// @param maxResults Maximum number of results to return.
+    /// @param options Optional CWD-aware ranking and required-paths validation.
     /// @return Matching entries ordered by score (highest first), then recency.
-    [[nodiscard]] virtual std::vector<FuzzySearchResult> searchFuzzy(std::string_view prefix,
-                                                                     size_t maxResults = 10) const = 0;
+    [[nodiscard]] virtual std::vector<FuzzySearchResult> searchFuzzy(
+        std::string_view prefix, size_t maxResults = 10, FuzzySearchOptions const& options = {}) const = 0;
 };
 
 /// @brief In-memory history implementation (current session only).
@@ -78,15 +105,17 @@ class InMemoryHistory: public History
     /// @param maxSize Maximum number of entries to store (default: 1000).
     explicit InMemoryHistory(size_t maxSize = 1000);
 
-    void add(std::string entry) override;
+    void add(std::string entry, HistoryAddContext context = {}) override;
     [[nodiscard]] std::vector<std::string> const& entries() const override;
     [[nodiscard]] size_t size() const override;
     [[nodiscard]] size_t maxSize() const override;
     void clear() override;
     [[nodiscard]] std::vector<std::string_view> search(std::string_view prefix,
                                                        size_t maxResults = 10) const override;
-    [[nodiscard]] std::vector<FuzzySearchResult> searchFuzzy(std::string_view prefix,
-                                                             size_t maxResults = 10) const override;
+    [[nodiscard]] std::vector<FuzzySearchResult> searchFuzzy(
+        std::string_view prefix,
+        size_t maxResults = 10,
+        FuzzySearchOptions const& options = {}) const override;
 
   private:
     std::vector<std::string> _entries;

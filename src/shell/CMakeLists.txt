@@ -109,6 +109,8 @@ add_library(endo-shell STATIC
     history/History.cpp
     history/PersistentHistory.hpp
     history/PersistentHistory.cpp
+    history/RequiredPaths.hpp
+    history/RequiredPaths.cpp
 
     # Structured Output
     output/OutputDefinition.hpp
@@ -267,6 +269,7 @@ add_executable(test-endo-shell
     completion/ScriptedCompleter_test.cpp
     history/History_test.cpp
     history/PersistentHistory_test.cpp
+    history/RequiredPaths_test.cpp
     output/OutputDefinitionRegistry_test.cpp
     output/OutputParser_test.cpp
     util/CommandResolver_test.cpp

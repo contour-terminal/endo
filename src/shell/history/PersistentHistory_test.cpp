@@ -5,8 +5,9 @@
 #include <filesystem>
 
 #include "PersistentHistory.hpp"
-
+#include "RequiredPaths.hpp"
 #include <platform/NativeFileSystem.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -450,4 +451,203 @@ TEST_CASE("PersistentHistory.atomic_flush_uses_tmp", "[history]")
     CHECK(!std::filesystem::exists(filePath.string() + ".tmp"));
     // The actual file should exist
     CHECK(std::filesystem::exists(filePath));
+}
+
+// ---------------------------------------------------------------------------
+// CWD-aware ranking and required-paths validation
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PersistentHistory.cwd_and_paths_yaml_roundtrip", "[history][cwd]")
+{
+    auto dir = TempDir {};
+    auto const filePath = dir.path / "history.yml";
+    {
+        auto history = endo::PersistentHistory { testFs() };
+        history.setFilePath(filePath);
+        history.add("vim ~/notes/plan.md",
+                    endo::HistoryAddContext {
+                        .cwd = "~/projects/endo",
+                        .requiredPaths = { "~/notes/plan.md" },
+                    });
+        history.markLastResult(0);
+    }
+
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(filePath);
+    history.load();
+
+    REQUIRE(history.size() == 1);
+    auto const& entry = history.richEntries().front();
+    CHECK(entry.command == "vim ~/notes/plan.md");
+    CHECK(entry.cwd == "~/projects/endo");
+    REQUIRE(entry.requiredPaths.size() == 1);
+    CHECK(entry.requiredPaths.front() == "~/notes/plan.md");
+}
+
+TEST_CASE("PersistentHistory.legacy_v1_yaml_loads_without_cwd", "[history][cwd]")
+{
+    auto dir = TempDir {};
+    auto const filePath = dir.path / "history.yml";
+    // Hand-craft a legacy v1 file (no cwd, no paths).
+    writeFile(filePath,
+              "version: 1\n"
+              "entries:\n"
+              "  - cmd: legacy command\n"
+              "    ts: 1000\n"
+              "    count: 2\n");
+
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(filePath);
+    history.load();
+
+    REQUIRE(history.size() == 1);
+    auto const& entry = history.richEntries().front();
+    CHECK(entry.command == "legacy command");
+    CHECK(entry.cwd.empty());
+    CHECK(entry.requiredPaths.empty());
+
+    // Legacy entries are neither boosted nor penalized by CWD ranking.
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u/projects/endo",
+        .home = "/home/u",
+    };
+    auto const results = history.searchFuzzy("legacy", 10, options);
+    REQUIRE(results.size() == 1);
+    CHECK(results.front().entry == "legacy command");
+}
+
+TEST_CASE("PersistentHistory.exact_cwd_match_boosts_rank", "[history][cwd]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("make build", endo::HistoryAddContext { .cwd = "~/projects/other", .requiredPaths = {} });
+    history.add("make build", endo::HistoryAddContext { .cwd = "~/projects/endo", .requiredPaths = {} });
+    // Duplicate command — add() updates the existing entry. Create a second distinct
+    // command to compare ranking.
+    history.add("make install", endo::HistoryAddContext { .cwd = "~/projects/other", .requiredPaths = {} });
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u/projects/endo",
+        .home = "/home/u",
+    };
+    auto const results = history.searchFuzzy("make", 10, options);
+    REQUIRE(!results.empty());
+    // The first result must be "make build" (our CWD-matching entry), outranking the
+    // more-recent but unrelated "make install".
+    CHECK(results.front().entry == "make build");
+}
+
+TEST_CASE("PersistentHistory.ancestor_cwd_match_weaker_than_exact", "[history][cwd]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    // Entry stored with cwd = ~/projects ; current CWD is ~/projects/endo (descendant).
+    history.add("scan project", endo::HistoryAddContext { .cwd = "~/projects", .requiredPaths = {} });
+    history.add("scan project exact",
+                endo::HistoryAddContext { .cwd = "~/projects/endo", .requiredPaths = {} });
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u/projects/endo",
+        .home = "/home/u",
+    };
+    auto const results = history.searchFuzzy("scan", 10, options);
+    REQUIRE(results.size() == 2);
+    // Exact (300) > ancestor (150); the exact match comes first.
+    CHECK(results.front().entry == "scan project exact");
+    CHECK(results.back().entry == "scan project");
+}
+
+TEST_CASE("PersistentHistory.required_paths_filtered_when_missing", "[history][required-paths]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("cat ~/notes/plan.md",
+                endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/notes/plan.md" } });
+    history.add("ls", endo::HistoryAddContext { .cwd = "~", .requiredPaths = {} });
+
+    auto fs = endo::platform::testing::InMemoryFileSystem {};
+    // Note: ~/notes/plan.md is NOT added — the file no longer exists.
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u",
+        .home = "/home/u",
+        .validateRequiredPaths = true,
+        .fs = &fs,
+    };
+    auto const results = history.searchFuzzy("", 10, options);
+    // Only "ls" (no required paths) should survive validation.
+    REQUIRE(results.size() == 1);
+    CHECK(results.front().entry == "ls");
+}
+
+TEST_CASE("PersistentHistory.required_paths_kept_when_file_exists", "[history][required-paths]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("cat ~/notes/plan.md",
+                endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/notes/plan.md" } });
+
+    auto fs = endo::platform::testing::InMemoryFileSystem {};
+    fs.addFile("/home/u/notes/plan.md", "contents");
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u",
+        .home = "/home/u",
+        .validateRequiredPaths = true,
+        .fs = &fs,
+    };
+    auto const results = history.searchFuzzy("cat", 10, options);
+    REQUIRE(results.size() == 1);
+    CHECK(results.front().entry == "cat ~/notes/plan.md");
+}
+
+TEST_CASE("PersistentHistory.required_paths_validation_disabled", "[history][required-paths]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("cat ~/missing.txt",
+                endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/missing.txt" } });
+
+    auto fs = endo::platform::testing::InMemoryFileSystem {};
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u",
+        .home = "/home/u",
+        .validateRequiredPaths = false,
+        .fs = &fs,
+    };
+    auto const results = history.searchFuzzy("cat", 10, options);
+    REQUIRE(results.size() == 1);
+    CHECK(results.front().entry == "cat ~/missing.txt");
+}
+
+TEST_CASE("PersistentHistory.readd_updates_cwd_and_paths", "[history][cwd]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add(
+        "make build",
+        endo::HistoryAddContext { .cwd = "~/projects/a", .requiredPaths = { "~/projects/a/Makefile" } });
+    history.add(
+        "make build",
+        endo::HistoryAddContext { .cwd = "~/projects/b", .requiredPaths = { "~/projects/b/Makefile" } });
+
+    REQUIRE(history.size() == 1);
+    auto const& entry = history.richEntries().front();
+    CHECK(entry.cwd == "~/projects/b");
+    REQUIRE(entry.requiredPaths.size() == 1);
+    CHECK(entry.requiredPaths.front() == "~/projects/b/Makefile");
+    CHECK(entry.executionCount == 2);
 }

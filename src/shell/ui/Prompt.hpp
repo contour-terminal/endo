@@ -131,6 +131,14 @@ class Prompt
     /// @param history The history object (ownership not transferred).
     void setHistory(History const* history);
 
+    /// @brief Sets the environment provider used for CWD-aware history ranking.
+    /// @param env Pointer (not owned) — may outlive the prompt.
+    void setEnvironmentProvider(EnvironmentProvider const* env);
+
+    /// @brief Sets the filesystem used for required-paths validation in history search.
+    /// @param fs Pointer (not owned); nullptr disables validation.
+    void setFileSystem(FileSystem const* fs);
+
     /// @brief Sets the command registry used by the command palette.
     /// @param registry Pointer to the registry (caller owns, must outlive this prompt).
     void setCommandRegistry(tui::CommandRegistry* registry);
@@ -184,6 +192,8 @@ class Prompt
     std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
     History const* _history = nullptr;
+    EnvironmentProvider const* _envProvider = nullptr;
+    FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
     PromptConfig _promptConfig;
     bool _initialized = false;
