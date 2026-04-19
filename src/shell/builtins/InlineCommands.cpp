@@ -5,8 +5,6 @@
 #include <shell/commands/KillCommand.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
 #include <tui/MarkdownRenderer.hpp>
@@ -30,6 +28,7 @@
 
 #include <fcntl.h>
 
+#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
@@ -201,6 +200,62 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
         return std::unexpected(std::format("start ({}) must be <= end ({})", *rangeStart, *rangeEnd));
 
     return std::pair { rangeStart, rangeEnd };
+}
+
+/// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
+/// Calls onChunk(data, size) for each chunk of data read.
+///
+/// @return 0 on EOF, 1 on I/O error, 130 on SIGINT interruption.
+int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
+{
+    using namespace endo;
+    using namespace endo::platform;
+
+    std::array<char, 4096> buffer {};
+
+    while (true)
+    {
+        SignalHandler::processSignalFd();
+        if (SignalHandler::hasPendingSigint())
+        {
+            SignalHandler::clearPendingSigint();
+            return 130;
+        }
+#if !defined(_WIN32)
+        pollfd pfd { .fd = fd, .events = POLLIN, .revents = 0 };
+        auto const pollResult = poll(&pfd, 1, 100);
+        if (pollResult < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            return 1;
+        }
+        if ((pfd.revents & (POLLERR | POLLNVAL)) != 0)
+            return 1;
+        if (pollResult == 0)
+            continue;
+#else
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#endif
+        auto const bytesRead = platformRead(fd, buffer.data(), buffer.size());
+        if (bytesRead < 0)
+            return 1;
+        if (bytesRead == 0)
+            break;
+        onChunk(buffer.data(), static_cast<size_t>(bytesRead));
+    }
+    return 0;
+}
+
+/// Reads all data from fd interruptibly.
+///
+/// @return {data, exitCode} where exitCode is 0 on EOF or 130 on SIGINT.
+std::pair<std::string, int> interruptibleReadAll(endo::NativeHandle fd)
+{
+    std::string data;
+    auto const exitCode =
+        interruptibleReadLoop(fd, [&](char const* buf, size_t len) { data.append(buf, len); });
+    return { std::move(data), exitCode };
 }
 
 } // namespace
@@ -757,14 +812,8 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         }
     };
 
-    auto readFromFd = [](NativeHandle fd) -> std::string {
-        std::string content;
-        char buffer[4096];
-        intptr_t bytesRead = 0;
-        while ((bytesRead = platformRead(fd, buffer, sizeof(buffer))) > 0)
-            content.append(buffer, static_cast<size_t>(bytesRead));
-        return content;
-    };
+    bool const hasProcessingFlags =
+        numberLines || numberNonBlank || squeezeBlank || showEnds || showTabs || rangeSpecified;
 
     bool success = true;
 
@@ -775,8 +824,22 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     {
         if (file == "-")
         {
-            auto const content = readFromFd(stdinFd);
-            processContent(content, tui::LanguageId::None);
+            if (hasProcessingFlags)
+            {
+                auto [content, exitCode] = interruptibleReadAll(stdinFd);
+                if (exitCode != 0)
+                    return exitCode;
+                processContent(content, tui::LanguageId::None);
+            }
+            else
+            {
+                // Stream directly for plain cat (best UX for interactive stdin)
+                auto const exitCode = interruptibleReadLoop(stdinFd, [outputFd](char const* buf, size_t len) {
+                    [[maybe_unused]] auto written = platformWrite(outputFd, buf, len);
+                });
+                if (exitCode != 0)
+                    return exitCode;
+            }
         }
         else
         {
@@ -872,8 +935,10 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 continue;
             }
             auto const fd = result.value();
-            auto const content = readFromFd(fd);
+            auto [content, exitCode] = interruptibleReadAll(fd);
             _processManager.closeHandle(fd);
+            if (exitCode != 0)
+                return exitCode;
 
             // Detect binary content (non-image files)
             if (!rawMode && outputIsTty)
@@ -1557,7 +1622,9 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
             // Create the top-level target directory
             if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
             {
-                error("cp: cannot create directory '{}': {}", platform::normalizePath(target), mkResult.error());
+                error("cp: cannot create directory '{}': {}",
+                      platform::normalizePath(target),
+                      mkResult.error());
                 success = false;
                 continue;
             }
@@ -1571,7 +1638,9 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                 {
                     if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
                     {
-                        error("cp: cannot create directory '{}': {}", platform::normalizePath(entryTarget), mkResult.error());
+                        error("cp: cannot create directory '{}': {}",
+                              platform::normalizePath(entryTarget),
+                              mkResult.error());
                         success = false;
                     }
                 }
@@ -1594,12 +1663,16 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                     if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, overwrite);
                         !cpResult.has_value())
                     {
-                        error("cp: cannot copy '{}': {}", platform::normalizePath(entry.path), cpResult.error());
+                        error("cp: cannot copy '{}': {}",
+                              platform::normalizePath(entry.path),
+                              cpResult.error());
                         success = false;
                         continue;
                     }
                     if (verbose)
-                        writeOutput(std::format("'{}' -> '{}'\n", platform::normalizePath(entry.path), platform::normalizePath(entryTarget)));
+                        writeOutput(std::format("'{}' -> '{}'\n",
+                                                platform::normalizePath(entry.path),
+                                                platform::normalizePath(entryTarget)));
                 }
             }
         }
@@ -1611,7 +1684,10 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (auto const cpResult = _fs.copyFile(srcPath, target, overwrite); !cpResult.has_value())
             {
-                error("cp: cannot copy '{}' to '{}': {}", src, platform::normalizePath(target), cpResult.error());
+                error("cp: cannot copy '{}' to '{}': {}",
+                      src,
+                      platform::normalizePath(target),
+                      cpResult.error());
                 success = false;
                 continue;
             }
@@ -1810,14 +1886,20 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                 // Recursive directory copy
                 if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
                 {
-                    error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), mkResult.error());
+                    error("mv: cannot move '{}' to '{}': {}",
+                          src,
+                          platform::normalizePath(target),
+                          mkResult.error());
                     success = false;
                     continue;
                 }
                 auto const listResult = _fs.listDirectoryRecursive(srcPath);
                 if (!listResult.has_value())
                 {
-                    error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), listResult.error());
+                    error("mv: cannot move '{}' to '{}': {}",
+                          src,
+                          platform::normalizePath(target),
+                          listResult.error());
                     success = false;
                     continue;
                 }
@@ -2205,15 +2287,9 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     if (readingStdin)
     {
         // Read from stdin
-        std::string stdinData;
-        std::array<char, 4096> buffer {};
-        while (true)
-        {
-            auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-            if (bytesRead <= 0)
-                break;
-            stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
-        }
+        auto [stdinData, exitCode] = interruptibleReadAll(stdinFd);
+        if (exitCode != 0)
+            return exitCode;
 
         // Split into lines
         std::vector<std::string> lines;
@@ -2264,8 +2340,8 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 lines.push_back(std::move(line));
             }
 
-            auto const matches =
-                grep::searchLines(lines, *regex, opts, platform::normalizePath(filePath), showFilename, useColor, writer);
+            auto const matches = grep::searchLines(
+                lines, *regex, opts, platform::normalizePath(filePath), showFilename, useColor, writer);
             totalMatches += matches;
 
             // For -q, bail out early on first match
@@ -3464,68 +3540,77 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
 namespace
 {
 
-    std::vector<std::string> readLinesFromInput(NativeHandle stdinFd,
-                                                std::span<std::string const> files,
-                                                auto const& errorFn)
+    struct ReadLinesResult
     {
         std::vector<std::string> lines;
+        bool hadError = false;
+        int exitCode = 0;
+    };
+
+    ReadLinesResult readLinesFromInput(endo::NativeHandle stdinFd,
+                                       std::span<std::string const> files,
+                                       auto const& errorFn)
+    {
+        using namespace endo::platform;
+
+        ReadLinesResult result;
 
         auto const readFromStream = [&](std::istream& stream) {
             std::string line;
             while (std::getline(stream, line))
             {
+                SignalHandler::processSignalFd();
+                if (SignalHandler::hasPendingSigint())
+                {
+                    SignalHandler::clearPendingSigint();
+                    result.exitCode = 130;
+                    return;
+                }
                 if (!line.empty() && line.back() == '\r')
                     line.pop_back();
-                lines.push_back(std::move(line));
+                result.lines.push_back(std::move(line));
             }
+        };
+
+        auto const readFromStdin = [&]() {
+            auto [stdinData, exitCode] = interruptibleReadAll(stdinFd);
+            if (exitCode != 0)
+            {
+                result.exitCode = exitCode;
+                return;
+            }
+            std::istringstream iss(stdinData);
+            readFromStream(iss);
         };
 
         if (files.empty())
         {
-            // Read from stdin
-            std::string stdinData;
-            std::array<char, 4096> buffer {};
-            while (true)
-            {
-                auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-                if (bytesRead <= 0)
-                    break;
-                stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
-            }
-            std::istringstream iss(stdinData);
-            readFromStream(iss);
+            readFromStdin();
         }
         else
         {
             for (auto const& file: files)
             {
+                if (result.exitCode != 0)
+                    break;
                 if (file == "-")
                 {
-                    std::string stdinData;
-                    std::array<char, 4096> buffer {};
-                    while (true)
-                    {
-                        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-                        if (bytesRead <= 0)
-                            break;
-                        stdinData.append(buffer.data(), static_cast<size_t>(bytesRead));
-                    }
-                    std::istringstream iss(stdinData);
-                    readFromStream(iss);
+                    readFromStdin();
                 }
                 else
                 {
-                    std::ifstream ifs(file);
+                    std::ifstream ifs(platform::resolveDevicePath(file));
                     if (!ifs)
                     {
                         errorFn(std::format("{}: No such file or directory", file));
+                        result.hadError = true;
                         continue;
                     }
                     readFromStream(ifs);
                 }
             }
         }
-        return lines;
+        return result;
     }
 
 } // namespace
@@ -3580,7 +3665,12 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("head: {}", msg);
     };
-    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto const& lines = result.lines;
 
     auto const count = std::min(static_cast<size_t>(numLines), lines.size());
     for (auto const i: std::views::iota(0uz, count))
@@ -3654,7 +3744,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     {
         // Follow mode: open file once, stream last N lines via bounded deque, then follow
         auto const& filePath = files.back();
-        std::ifstream ifs(filePath);
+        std::ifstream ifs(platform::resolveDevicePath(filePath));
         if (!ifs)
         {
             error("tail: cannot open '{}': No such file or directory", filePath);
@@ -3705,7 +3795,10 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         auto const errorFn = [this](std::string const& msg) {
             error("tail: {}", msg);
         };
-        auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+        auto const result = readLinesFromInput(stdinFd, files, errorFn);
+        if (result.exitCode != 0)
+            return result.exitCode;
+        auto const& lines = result.lines;
         auto const start =
             lines.size() > static_cast<size_t>(numLines) ? lines.size() - static_cast<size_t>(numLines) : 0uz;
         for (auto const i: std::views::iota(start, lines.size()))
@@ -3750,7 +3843,12 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("tail: {}", msg);
     };
-    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto const& lines = result.lines;
 
     auto const start =
         lines.size() > static_cast<size_t>(numLines) ? lines.size() - static_cast<size_t>(numLines) : 0uz;
@@ -3975,7 +4073,12 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const errorFn = [this](std::string const& msg) {
         error("wc: {}", msg);
     };
-    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto const& lines = result.lines;
 
     size_t totalLines = lines.size();
     size_t totalWords = 0;
@@ -4089,7 +4192,12 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("sort: {}", msg);
     };
-    auto lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto& lines = result.lines;
 
     // Extract key field helper
     auto const getKey = [keyField](std::string_view line) -> std::string_view {
@@ -4199,7 +4307,12 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("uniq: {}", msg);
     };
-    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto const& lines = result.lines;
 
     auto const compareEqual = [ignoreCase](std::string_view a, std::string_view b) {
         if (!ignoreCase)
@@ -4347,7 +4460,12 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
     auto const errorFn = [this](std::string const& msg) {
         error("cut: {}", msg);
     };
-    auto const lines = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    if (result.exitCode != 0)
+        return result.exitCode;
+    if (result.hadError)
+        return 1;
+    auto const& lines = result.lines;
 
     if (!fieldSpec.empty())
     {
@@ -4509,15 +4627,9 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const expandedSet2 = expandRange(set2);
 
     // Read stdin
-    std::string inputData;
-    std::array<char, 4096> buffer {};
-    while (true)
-    {
-        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-        if (bytesRead <= 0)
-            break;
-        inputData.append(buffer.data(), static_cast<size_t>(bytesRead));
-    }
+    auto [inputData, exitCode] = interruptibleReadAll(stdinFd);
+    if (exitCode != 0)
+        return exitCode;
 
     std::string output;
     output.reserve(inputData.size());
@@ -4597,7 +4709,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle ou
         auto mode = std::ios::out;
         if (appendMode)
             mode |= std::ios::app;
-        outStreams.emplace_back(file, mode);
+        outStreams.emplace_back(platform::resolveDevicePath(file), mode);
         if (!outStreams.back())
         {
             error("tee: {}: Permission denied", file);
@@ -4606,19 +4718,13 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle ou
     }
 
     // Read from stdin, write to stdout + files
-    std::array<char, 4096> buffer {};
-    while (true)
-    {
-        auto const bytesRead = platformRead(stdinFd, buffer.data(), buffer.size());
-        if (bytesRead <= 0)
-            break;
-
-        auto const data = std::string_view(buffer.data(), static_cast<size_t>(bytesRead));
-        [[maybe_unused]] auto written = platformWrite(outputFd, data.data(), data.size());
-
+    auto const exitCode = interruptibleReadLoop(stdinFd, [&](char const* buf, size_t len) {
+        [[maybe_unused]] auto written = platformWrite(outputFd, buf, len);
         for (auto& ofs: outStreams)
-            ofs.write(data.data(), static_cast<std::streamsize>(data.size()));
-    }
+            ofs.write(buf, static_cast<std::streamsize>(len));
+    });
+    if (exitCode != 0)
+        return exitCode;
 
     return 0;
 }

@@ -46,6 +46,35 @@ TEST_CASE("normalizePath.filesystem_path_overload", "[platform]")
     CHECK(normalizePath(p) == "/some/path");
 }
 
+TEST_CASE("resolveDevicePath.null_device", "[platform]")
+{
+    // `/dev/null` is mapped to the platform-native null device on Windows and
+    // returned unchanged on POSIX systems.
+#if defined(_WIN32)
+    CHECK(resolveDevicePath("/dev/null") == "NUL");
+#else
+    CHECK(resolveDevicePath("/dev/null") == "/dev/null");
+#endif
+}
+
+TEST_CASE("resolveDevicePath.regular_paths_unchanged", "[platform]")
+{
+    CHECK(resolveDevicePath("/tmp/foo.txt") == "/tmp/foo.txt");
+    CHECK(resolveDevicePath("relative/path") == "relative/path");
+    CHECK(resolveDevicePath("C:/Users/test/out.log") == "C:/Users/test/out.log");
+    CHECK(resolveDevicePath("").empty());
+}
+
+TEST_CASE("resolveDevicePath.similar_but_not_null_device", "[platform]")
+{
+    // Only the exact POSIX null-device path is translated. Paths that merely start
+    // with `/dev/` or contain `null` are regular filesystem paths.
+    CHECK(resolveDevicePath("/dev/null/file") == "/dev/null/file");
+    CHECK(resolveDevicePath("/dev/nullx") == "/dev/nullx");
+    CHECK(resolveDevicePath("/dev/zero") == "/dev/zero");
+    CHECK(resolveDevicePath("null") == "null");
+}
+
 TEST_CASE("homeDirectory.returns_value_when_HOME_set", "[platform]")
 {
     auto const* prevHome = std::getenv("HOME");

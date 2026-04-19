@@ -267,7 +267,12 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto const handle = CreateFileW(path.wstring().c_str(),
+    // Special-case the POSIX /dev/null alias; pass any other path through unchanged
+    // to preserve the original wide-string form (round-tripping through generic_string()
+    // can lose non-ASCII characters for arbitrary Windows paths).
+    auto const widePath = path.wstring();
+    auto const* pathToOpen = (widePath == L"/dev/null") ? L"NUL" : widePath.c_str();
+    auto const handle = CreateFileW(pathToOpen,
                                     access,
                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                                     &sa,

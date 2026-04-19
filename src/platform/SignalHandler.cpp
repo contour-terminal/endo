@@ -293,4 +293,9 @@ void SignalHandler::clearPendingSigint() noexcept
     _sigintPending.store(false);
 }
 
+void SignalHandler::simulateSigint() noexcept
+{
+    _sigintPending.store(true);
+}
+
 } // namespace endo::platform

@@ -1868,4 +1868,10 @@ more files simultaneously. Useful for capturing pipeline output while still seei
 echo "hello" | tee output.txt
 echo "data" | tee -a log.txt
 echo "test" | tee file1.txt file2.txt
+echo "quiet" | tee /dev/null     # portable: discards output on Linux, macOS, and Windows
 ```
+
+**Portability:** The path `/dev/null` is accepted on all platforms. On Windows it
+is transparently mapped to the native `NUL` device. See
+[Platform Differences → File Paths](platform-differences.md#null-device-portability-devnull-on-windows)
+for details.
