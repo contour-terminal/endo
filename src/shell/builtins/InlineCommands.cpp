@@ -205,7 +205,7 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
 /// Calls onChunk(data, size) for each chunk of data read.
 ///
-/// @return 0 on EOF, 130 on SIGINT interruption.
+/// @return 0 on EOF, 1 on I/O error, 130 on SIGINT interruption.
 int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
 {
     using namespace endo;
@@ -228,15 +228,19 @@ int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
         {
             if (errno == EINTR)
                 continue;
-            break;
+            return 1;
         }
+        if ((pfd.revents & (POLLERR | POLLNVAL)) != 0)
+            return 1;
         if (pollResult == 0)
             continue;
 #else
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #endif
         auto const bytesRead = platformRead(fd, buffer.data(), buffer.size());
-        if (bytesRead <= 0)
+        if (bytesRead < 0)
+            return 1;
+        if (bytesRead == 0)
             break;
         onChunk(buffer.data(), static_cast<size_t>(bytesRead));
     }

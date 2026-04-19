@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 
 #if defined(_WIN32)
@@ -268,8 +267,12 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto const resolved = std::filesystem::path(resolveDevicePath(path.generic_string()));
-    auto const handle = CreateFileW(resolved.wstring().c_str(),
+    // Special-case the POSIX /dev/null alias; pass any other path through unchanged
+    // to preserve the original wide-string form (round-tripping through generic_string()
+    // can lose non-ASCII characters for arbitrary Windows paths).
+    auto const widePath = path.wstring();
+    auto const* pathToOpen = (widePath == L"/dev/null") ? L"NUL" : widePath.c_str();
+    auto const handle = CreateFileW(pathToOpen,
                                     access,
                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
                                     &sa,
