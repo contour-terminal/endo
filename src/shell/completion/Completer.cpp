@@ -4,6 +4,7 @@
 #include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
 #include <shell/completion/HistorySpec.hpp>
+#include <shell/completion/ProcessNameQueryProvider.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
 #include <tui/completer/Completer.hpp>
@@ -20,6 +21,8 @@ Completer::Completer(EnvironmentProvider const& env,
                      FSharpPersistentState const& fsharpState,
                      FileSystem const* fs)
 {
+    _processProvider = createNativeProcessProvider();
+
     // Register default providers in priority order
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
     _providers.push_back(std::make_unique<CommandCompleter>(env, history));
@@ -30,7 +33,22 @@ Completer::Completer(EnvironmentProvider const& env,
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
     for (auto& spec: createBuiltinSpecs())
+    {
+        if (spec.command == "pkill")
+        {
+            spec.positionalArgs.clear();
+            spec.positionalArgs.push_back(
+                ArgDef { .kind = ArgKind::DynamicQuery,
+                         .description = "Process name pattern",
+                         .queryTag = "process-names",
+                         .repeatable = false,
+                         .optionQueryOverrides = { { "-f", "process-command-lines" } } });
+            specCompleter->registerCommand(std::move(spec),
+                                           std::make_unique<ProcessNameQueryProvider>(*_processProvider));
+            continue;
+        }
         specCompleter->registerCommand(std::move(spec), nullptr);
+    }
     // Register after createBuiltinSpecs() to overwrite the auto-generated spec with subcommands
     specCompleter->registerCommand(createHistorySpec(), nullptr);
     _providers.push_back(std::move(specCompleter));

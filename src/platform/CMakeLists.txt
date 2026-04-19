@@ -16,6 +16,7 @@ add_library(endo-platform STATIC
     UserPaths.hpp
     PathUtils.hpp
     ProcessProvider.hpp
+    ProcessProvider.cpp
     FileSystem.hpp
     NativeFileSystem.hpp
     NativeFileSystem.cpp

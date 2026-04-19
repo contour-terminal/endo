@@ -3,6 +3,7 @@
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
+#include <shell/commands/PkillCommand.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 #include <shell/history/RequiredPaths.hpp>
 
@@ -22,6 +23,7 @@
 #include <iostream>
 #include <random>
 #include <ranges>
+#include <regex>
 #include <span>
 #include <sstream>
 #include <thread>
@@ -31,6 +33,7 @@
 
 #include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
+#include <platform/ProcessProvider.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
 
@@ -2670,6 +2673,167 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
         }
     }
 
+    return exitCode;
+}
+
+// ---------------------------------------------------------------------------
+// pkill
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+    /// Returns true if @p entry's owner is listed in @p users. An empty @p users
+    /// list disables the filter (match-all).
+    [[nodiscard]] bool matchesUserFilter(ProcessEntry const& entry, std::vector<std::string> const& users)
+    {
+        if (users.empty())
+            return true;
+        return std::ranges::find(users, entry.user) != users.end();
+    }
+
+} // namespace
+
+int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto pkillArgs = std::vector<std::string> {};
+    for (auto const i: std::views::iota(1uz, args.size()))
+        pkillArgs.push_back(args.at(i));
+
+    auto parsed = pkill_cmd::parsePkillArgs(pkillArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 2;
+    }
+
+    auto const& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(outputFd,
+                                  "# pkill\n"
+                                  "\n"
+                                  "Send signals to processes matched by name or command-line pattern.\n"
+                                  "\n"
+                                  "## Usage\n"
+                                  "\n"
+                                  "`pkill [OPTIONS] [-SIGNAL] PATTERN`\n"
+                                  "\n"
+                                  "## Options\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|---|---|\n"
+                                  "| `-SIGNAL` | Signal to send by name or number (default: `TERM`) |\n"
+                                  "| `-s SIGNAL` | Signal to send (POSIX style) |\n"
+                                  "| `-f` | Match PATTERN against the full command line |\n"
+                                  "| `-x` | Require an exact (anchored) match |\n"
+                                  "| `-i` | Case-insensitive pattern match |\n"
+                                  "| `-c` | Print the count of matched processes |\n"
+                                  "| `-l` | List matches (`pid name`) without signalling |\n"
+                                  "| `-n` | Match only the newest (highest PID) process |\n"
+                                  "| `-o` | Match only the oldest (lowest PID) process |\n"
+                                  "| `-u USER[,USER]` | Only match processes owned by listed users |\n"
+                                  "| `-h`, `--help` | Show this help message |\n"
+                                  "\n"
+                                  "## Notes\n"
+                                  "\n"
+                                  "- PATTERN is an ECMAScript regular expression.\n"
+                                  "- The shell's own process is always excluded from matches.\n"
+                                  "- Matching runs against the platform's most reliable command field "
+                                  "(argv[0] on Linux, the command string on Darwin/Windows); `-f` is "
+                                  "accepted for CLI compatibility but targets the same field.\n"
+                                  "\n"
+                                  "## Examples\n"
+                                  "\n"
+                                  "| Example | Description |\n"
+                                  "|---|---|\n"
+                                  "| `pkill sleep` | Send `SIGTERM` to every process named `sleep` |\n"
+                                  "| `pkill -9 firefox` | Send `SIGKILL` to every firefox process |\n"
+                                  "| `pkill -f \"python myscript\"` | Match against the full command line |\n"
+                                  "| `pkill -l nginx` | List matching processes without signalling |\n"
+                                  "| `pkill -u alice bash` | Only signal alice's bash processes |\n");
+
+    auto flags = std::regex::ECMAScript;
+    if (opts.caseInsensitive)
+        flags |= std::regex::icase;
+
+    auto const patternText = opts.exactMatch ? std::string("^(?:") + opts.pattern + ")$" : opts.pattern;
+
+    auto pattern = std::regex {};
+    try
+    {
+        pattern = std::regex(patternText, flags);
+    }
+    catch (std::regex_error const& ex)
+    {
+        error("pkill: invalid pattern '{}': {}", opts.pattern, ex.what());
+        return 2;
+    }
+
+    auto provider = createNativeProcessProvider();
+    auto entries = provider->listProcesses();
+
+    auto const selfPid = static_cast<int64_t>(_shellPid);
+
+    auto matches = std::vector<ProcessEntry> {};
+    for (auto const& entry: entries)
+    {
+        if (entry.pid == selfPid)
+            continue;
+        if (!matchesUserFilter(entry, opts.userFilter))
+            continue;
+
+        // ProcessEntry::command is whatever the platform exposes most reliably
+        // (argv[0] on Linux, the command string on Darwin/Windows). Full-cmdline
+        // matching (-f) is accepted for CLI compatibility but matches the same
+        // field since richer data is not available across all platforms.
+        auto const& haystack = entry.command;
+        auto const matched =
+            opts.exactMatch ? std::regex_match(haystack, pattern) : std::regex_search(haystack, pattern);
+        if (matched)
+            matches.push_back(entry);
+    }
+
+    if (matches.empty())
+        return 1;
+
+    if (opts.newestOnly || opts.oldestOnly)
+    {
+        auto const cmp = [](ProcessEntry const& a, ProcessEntry const& b) {
+            return a.pid < b.pid;
+        };
+        auto const it =
+            opts.newestOnly ? std::ranges::max_element(matches, cmp) : std::ranges::min_element(matches, cmp);
+        auto picked = *it;
+        matches.clear();
+        matches.push_back(std::move(picked));
+    }
+
+    if (opts.listOnly)
+    {
+        auto output = std::string {};
+        for (auto const& m: matches)
+            output += std::format("{} {}\n", m.pid, m.command);
+        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        return 0;
+    }
+
+    if (opts.countOnly)
+    {
+        auto const output = std::format("{}\n", matches.size());
+        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+    }
+
+    auto exitCode = 0;
+    for (auto const& m: matches)
+    {
+        auto const result = _processManager.sendSignal(static_cast<ProcessId>(m.pid), opts.signal);
+        if (!result.has_value())
+        {
+            error("pkill: ({}) - {}", m.pid, toString(result.error()));
+            exitCode = 1;
+        }
+    }
     return exitCode;
 }
 

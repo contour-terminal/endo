@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,11 +34,16 @@ class ProcessProvider
     [[nodiscard]] virtual std::vector<ProcessEntry> listProcesses() const = 0;
 };
 
+/// Constructs the platform-native ProcessProvider implementation.
+/// Returns a Linux/Darwin/Windows provider depending on the build target.
+[[nodiscard]] std::unique_ptr<ProcessProvider> createNativeProcessProvider();
+
 } // namespace endo::platform
 
 // Backward-compatible aliases in the endo namespace
 namespace endo
 {
+using endo::platform::createNativeProcessProvider;
 using endo::platform::ProcessEntry;
 using endo::platform::ProcessProvider;
 } // namespace endo

@@ -184,6 +184,10 @@ add_library(endo-shell STATIC
     commands/BindCommand.cpp
     commands/KillCommand.hpp
     commands/KillCommand.cpp
+    commands/PkillCommand.hpp
+    commands/PkillCommand.cpp
+    completion/ProcessNameQueryProvider.hpp
+    completion/ProcessNameQueryProvider.cpp
 )
 
 # Platform-specific implementations
@@ -258,6 +262,7 @@ add_executable(test-endo-shell
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp
     commands/TimeoutCommand_test.cpp
+    commands/PkillCommand_test.cpp
     CrashHandler_test.cpp
     ui/PromptComponent_test.cpp
     ui/modules/GitModule_test.cpp

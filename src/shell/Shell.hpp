@@ -287,6 +287,9 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the kill builtin, sending signals to processes or jobs. Returns exit code.
     [[nodiscard]] int executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the pkill builtin, sending signals to processes matched by name or command line. Returns exit
+    /// code.
+    [[nodiscard]] int executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the whoami builtin. Returns exit code.
     [[nodiscard]] int executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the hostname builtin. Returns exit code.
