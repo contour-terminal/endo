@@ -1,12 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <endo-language/builtins/PropertyDescriptors.hpp>
+#include <endo-language/parser/DiagnosticsAdapter.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
 
+#include <algorithm>
 #include <format>
 #include <ranges>
 #include <utility>
 
 namespace endo
 {
+
+namespace
+{
+    /// Maps an HM type to a CoreVM literal type for property-setter matching.
+    /// Returns nullopt when the HM type doesn't map cleanly (type variable, record,
+    /// union, etc.) — callers must treat `nullopt` as "skip the check" rather than
+    /// "rejected", to avoid false positives while the mapping grows.
+    [[nodiscard]] std::optional<CoreVM::LiteralType> typeToLiteralType(TypePtr const& type)
+    {
+        if (!type)
+            return std::nullopt;
+        if (auto const* prim = type->asPrimitive())
+        {
+            switch (prim->kind)
+            {
+                case PrimitiveType::Int: return CoreVM::LiteralType::Number;
+                case PrimitiveType::Float: return CoreVM::LiteralType::Float;
+                case PrimitiveType::Str: return CoreVM::LiteralType::String;
+                case PrimitiveType::Bool: return CoreVM::LiteralType::Boolean;
+                case PrimitiveType::Unit: return CoreVM::LiteralType::Void;
+            }
+            return std::nullopt;
+        }
+        // Any function shape (including captured identifiers for named F# functions)
+        // is compatible with a `Function`-typed setter.
+        if (type->isFunction())
+            return CoreVM::LiteralType::Function;
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::string joinLiteralTypes(std::span<CoreVM::LiteralType const> types)
+    {
+        auto out = std::string {};
+        for (auto const& t: types)
+        {
+            if (!out.empty())
+                out += " | ";
+            out += CoreVM::tos(t);
+        }
+        return out;
+    }
+} // namespace
 
 TypeInferencer::TypeInferencer(TypeEnvPtr env): _env(std::move(env))
 {
@@ -795,6 +840,44 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             return valResult;
         auto [valType, s1] = *valResult;
 
+        // Builtin property setter type check. Runs only when the caller wired up a
+        // runtime + report (shell, LSP, DiagnosticsCollector); non-interactive
+        // unit tests that don't care about property typing pass `nullptr` and
+        // get the pre-existing behavior.
+        if (_runtime && _report && !env->lookup(mutExpr->name))
+        {
+            if (auto const* prop = _runtime->findProperty(mutExpr->name))
+            {
+                auto const loc = mutExpr->value && mutExpr->value->location
+                                     ? toCoreLoc(*mutExpr->value->location)
+                                     : CoreVM::SourceLocation {};
+                if (!prop->hasSetter())
+                {
+                    _report->typeErrorWithSuggestions(
+                        loc,
+                        { "This property is read-only and cannot be assigned." },
+                        std::nullopt,
+                        "Cannot assign to read-only property '{}'",
+                        std::string_view(mutExpr->name));
+                }
+                else
+                {
+                    auto const& accepted = prop->acceptedSetterTypes();
+                    auto const rhsType = typeToLiteralType(s1.apply(valType));
+                    if (rhsType && std::ranges::find(accepted, *rhsType) == accepted.end())
+                    {
+                        auto const acceptedStr = joinLiteralTypes(accepted);
+                        _report->typeErrorWithSuggestions(loc,
+                                                          { std::format("Accepted types: {}", acceptedStr) },
+                                                          std::nullopt,
+                                                          "Property '{}' cannot accept a value of type {}",
+                                                          std::string_view(mutExpr->name),
+                                                          CoreVM::tos(*rhsType));
+                    }
+                }
+            }
+        }
+
         // Unify with existing binding type if available
         if (auto scheme = env->lookup(mutExpr->name))
         {
@@ -1548,6 +1631,43 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
             return subst;
         }
         auto [valType, s1] = *valResult;
+
+        // Builtin property setter type check. Same logic as the MutAssignExpr
+        // branch in `inferExpr` — this handles statement-level `name <- value`,
+        // which parses as MutAssignStmt rather than MutAssignExpr.
+        if (_runtime && _report && !env->lookup(mutAssign->name))
+        {
+            if (auto const* prop = _runtime->findProperty(mutAssign->name))
+            {
+                auto const loc = mutAssign->value && mutAssign->value->location
+                                     ? toCoreLoc(*mutAssign->value->location)
+                                     : CoreVM::SourceLocation {};
+                if (!prop->hasSetter())
+                {
+                    _report->typeErrorWithSuggestions(
+                        loc,
+                        { "This property is read-only and cannot be assigned." },
+                        std::nullopt,
+                        "Cannot assign to read-only property '{}'",
+                        std::string_view(mutAssign->name));
+                }
+                else
+                {
+                    auto const& accepted = prop->acceptedSetterTypes();
+                    auto const rhsType = typeToLiteralType(s1.apply(valType));
+                    if (rhsType && std::ranges::find(accepted, *rhsType) == accepted.end())
+                    {
+                        auto const acceptedStr = joinLiteralTypes(accepted);
+                        _report->typeErrorWithSuggestions(loc,
+                                                          { std::format("Accepted types: {}", acceptedStr) },
+                                                          std::nullopt,
+                                                          "Property '{}' cannot accept a value of type {}",
+                                                          std::string_view(mutAssign->name),
+                                                          CoreVM::tos(*rhsType));
+                    }
+                }
+            }
+        }
 
         // Unify with existing binding type if available
         auto scheme = env->lookup(mutAssign->name);

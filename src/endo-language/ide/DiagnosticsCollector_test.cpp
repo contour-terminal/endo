@@ -323,3 +323,71 @@ TEST_CASE("DiagnosticsCollector.heterogeneous_list_type_error", "[diagnostics][t
     }
     CHECK(found);
 }
+
+// =============================================================================
+// Property type check diagnostics (drives the shell's live prompt feedback)
+// =============================================================================
+
+TEST_CASE("DiagnosticsCollector.property_type_mismatch_int_to_indicator", "[diagnostics][property-type]")
+{
+    // The shell prompt's live diagnostics layer uses collectDiagnostics() with the
+    // stub runtime. It must surface the same type error the shell itself raises —
+    // including the full accepted-type set in the hint, not only the primary type.
+    auto const diagnostics = collectDiagnostics("shell_prompt_indicator <- 42");
+    REQUIRE(!diagnostics.empty());
+
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("shell_prompt_indicator") == std::string::npos)
+            continue;
+        if (d.message.find("int") == std::string::npos)
+            continue;
+        found = true;
+        CHECK(d.severity == DiagnosticSeverity::Error);
+        REQUIRE(!d.suggestions.empty());
+        auto const& hint = d.suggestions[0];
+        CHECK(hint.find("string") != std::string::npos);
+        CHECK(hint.find("FunctionRef") != std::string::npos);
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DiagnosticsCollector.property_type_mismatch_bool_to_color", "[diagnostics][property-type]")
+{
+    auto const diagnostics = collectDiagnostics("shell_prompt_color_indicator <- true");
+    REQUIRE(!diagnostics.empty());
+
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("shell_prompt_color_indicator") == std::string::npos)
+            continue;
+        if (d.message.find("bool") == std::string::npos)
+            continue;
+        found = true;
+        REQUIRE(!d.suggestions.empty());
+        auto const& hint = d.suggestions[0];
+        CHECK(hint.find("string") != std::string::npos);
+        CHECK(hint.find("FunctionRef") != std::string::npos);
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DiagnosticsCollector.property_type_mismatch_read_only", "[diagnostics][property-type]")
+{
+    auto const diagnostics = collectDiagnostics("shell_is_interactive <- true");
+    REQUIRE(!diagnostics.empty());
+
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("read-only property") != std::string::npos
+            && d.message.find("shell_is_interactive") != std::string::npos)
+        {
+            found = true;
+            CHECK(d.severity == DiagnosticSeverity::Error);
+        }
+    }
+    CHECK(found);
+}
