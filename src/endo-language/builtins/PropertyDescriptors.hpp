@@ -28,11 +28,19 @@ struct EnumValueEntry
 struct PropertyDescriptor
 {
     std::string_view name;        ///< Property name (e.g., "shell_prompt_preset")
-    CoreVM::LiteralType type;     ///< Property value type
+    CoreVM::LiteralType type;     ///< Property getter/primary setter value type
     std::string_view description; ///< Short description for registration and completion display
     std::string_view detail;      ///< Detailed markdown documentation for completion detail panel
     bool readOnly = false;        ///< True for read-only properties (no setter)
     std::span<EnumValueEntry const> enumValues; ///< Enumerated values for argument completion
+
+    /// @brief Extra setter-argument types accepted by the property, in addition to `type`.
+    ///
+    /// When non-empty, a Function-typed setter overload (or similar) is registered
+    /// alongside the primary one. The semantic analyzer consults this list to accept
+    /// RHS values whose literal type is either `type` or one of these. Empty means
+    /// the property accepts exactly `type`.
+    std::span<CoreVM::LiteralType const> extraSetterTypes;
 };
 
 /// Returns prompt/shell property descriptors.

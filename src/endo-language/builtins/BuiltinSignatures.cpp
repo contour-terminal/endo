@@ -534,11 +534,17 @@ namespace
 {
     /// Registers a property and binds getter/setter via the CallbackResolver.
     /// The property name is passed once to avoid duplication.
+    /// When `extraSetterTypes` is non-empty, an additional setter callback is
+    /// registered per extra type via `Runtime::registerPropertySetterOverload` so
+    /// sema sees the full accepted-type set. Extra-overload callbacks are no-ops
+    /// in this shared path — runtimes that need concrete behavior (notably the
+    /// shell) bind real callbacks separately via `NativeProperty::onSet(type, cb)`.
     void registerPropertyResolved(CoreVM::Runtime& rt,
                                   CallbackResolver const& resolve,
                                   std::string_view name,
                                   CoreVM::LiteralType type,
-                                  std::string_view desc = {})
+                                  std::string_view desc = {},
+                                  std::span<CoreVM::LiteralType const> extraSetterTypes = {})
     {
         auto& prop = rt.registerProperty(std::string(name), type);
         if (!desc.empty())
@@ -553,6 +559,13 @@ namespace
             prop.onSet(*setterCb);
         else
             prop.onSet([](CoreVM::Params&) {});
+
+        // Additional setter overloads (e.g. Function for shell_prompt_indicator).
+        // Registered purely to make `NativeProperty::acceptedSetterTypes()` and the
+        // underlying `Runtime` callback table complete — sema can then type-check
+        // RHS values against the full accepted set.
+        for (auto const extraType: extraSetterTypes)
+            rt.registerPropertySetterOverload(std::string(name), extraType);
     }
 
     /// Registers a read-only property (getter only, no setter).
@@ -582,7 +595,8 @@ void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const&
         if (desc.readOnly)
             registerReadOnlyPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
         else
-            registerPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+            registerPropertyResolved(
+                rt, resolve, desc.name, desc.type, desc.description, desc.extraSetterTypes);
     }
 }
 
@@ -597,7 +611,8 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
         if (desc.readOnly)
             registerReadOnlyPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
         else
-            registerPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+            registerPropertyResolved(
+                rt, resolve, desc.name, desc.type, desc.description, desc.extraSetterTypes);
     }
 }
 
