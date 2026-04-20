@@ -83,7 +83,7 @@ namespace
         out += "# start a new interactive Endo session; a fresh copy will be written.\n";
         out += "# To skip loading this file on startup, pass `--no-profile` to endo.\n";
         out += "#\n";
-        out += "# Full reference: https://endo-shell.dev/shell/configuration/\n";
+        out += "# Full reference: https://endo-lang.org/shell/configuration/\n";
     }
 
     /// Appends a reference section listing the default key bindings. Purely
@@ -95,7 +95,7 @@ namespace
         out += "# Endo ships with these key bindings out of the box. There is no\n";
         out += "# `.endo` setter API for bindings yet; use the `bind` builtin at the\n";
         out += "# prompt to view, add, or remove bindings interactively. See:\n";
-        out += "#   https://endo-shell.dev/shell/configuration/#key-bindings\n";
+        out += "#   https://endo-lang.org/shell/configuration/#key-bindings\n";
         out += "#\n";
 
         auto const defaults = tui::KeyBindings::defaults();
