@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_prompt_indicator accepts an anonymous lambda literal (no runtime error)
+# expect: ok
+# mode: shell
+
+shell_prompt_indicator <- fun () -> "=> "
+println "ok"

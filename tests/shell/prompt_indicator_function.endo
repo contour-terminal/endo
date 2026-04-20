@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_prompt_indicator accepts a function value (no runtime error)
+# expect: ok
+# mode: shell
+
+let myPrompt () = "=> "
+
+shell_prompt_indicator <- myPrompt
+println "ok"

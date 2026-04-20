@@ -923,13 +923,50 @@ void Shell::registerPromptBuiltins()
 
     _runtime.registerProperty("shell_prompt_indicator", CoreVM::LiteralType::String)
         .onGet([this](CoreVM::Params& args) {
-            args.setResult(std::string(prompt.promptConfig().indicator));
+            // When the user has assigned a zero-argument function, the getter
+            // reflects the currently-effective value by invoking it. This matches
+            // what the prompt actually renders and avoids the surprising case
+            // where a successful `<- fun () -> "…"` leaves the getter reporting
+            // the prior static string.
+            auto const& config = prompt.promptConfig();
+            if (config.indicatorFn.has_value())
+            {
+                if (auto result = invokePromptCallback(*config.indicatorFn))
+                {
+                    args.setResult(std::move(*result));
+                    return;
+                }
+            }
+            args.setResult(std::string(config.indicator));
         })
         .onSet([this](CoreVM::Params& args) {
             auto config = prompt.promptConfig();
             config.indicator = std::string(args.getString(1)) + " ";
+            config.indicatorFn.reset(); // Static string clears any prior dynamic override.
+            prompt.setPromptConfig(std::move(config));
+        })
+        // Function overload: `shell_prompt_indicator <- myFn` where `myFn : () -> string`.
+        // Stores the function's user-facing name (without the `fsharp.` compiler prefix);
+        // the prompt render path looks it up each render via the Shell's invocation helper.
+        .onSet(CoreVM::LiteralType::Function, [this](CoreVM::Params& args) {
+            auto config = prompt.promptConfig();
+            auto const* fn = args.getFunction(1);
+            if (fn)
+            {
+                auto const& fullName = fn->name();
+                auto const prefix = std::string_view { "fsharp." };
+                auto const name = fullName.starts_with(prefix)
+                                      ? fullName.substr(prefix.size())
+                                      : fullName;
+                config.indicatorFn = std::string(name);
+            }
+            else
+            {
+                config.indicatorFn.reset();
+            }
             prompt.setPromptConfig(std::move(config));
         });
+    _runtime.registerPropertySetterOverload("shell_prompt_indicator", CoreVM::LiteralType::Function);
 
     _runtime.registerProperty("shell_prompt_layout", CoreVM::LiteralType::String)
         .onGet([this](CoreVM::Params& args) {
@@ -1067,41 +1104,96 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
-    // Table-driven registration for non-background color properties
+    // Table-driven registration for non-background color properties.
+    // Each property accepts either a static string ("#RRGGBB", gradient, "theme")
+    // or a zero-arg F# function returning such a string. The function form is
+    // invoked at every prompt render, enabling context-sensitive colors (e.g.
+    // exit-code-driven indicator color).
     auto registerColorProp = [this](
         char const* name,
+        std::string_view colorKey,
         std::optional<ColorSpec> PromptColorOverrides::* field)
     {
+        auto const key = std::string { colorKey }; // captured by value in each lambda
         _runtime.registerProperty(name, CoreVM::LiteralType::String)
-            .onGet([this, field](CoreVM::Params& args) {
+            .onGet([this, field, key](CoreVM::Params& args) {
                 auto const& ov = prompt.promptConfig().colorOverrides;
+                // Dynamic form wins: reflect the currently-effective color by invoking
+                // the user-assigned function, so reading the property matches what
+                // the prompt renders.
+                if (auto it = ov.colorFns.find(key); it != ov.colorFns.end())
+                {
+                    if (auto result = invokePromptCallback(it->second))
+                    {
+                        args.setResult(std::move(*result));
+                        return;
+                    }
+                }
                 args.setResult((ov.*field) ? formatColorSpec(*(ov.*field)) : std::string("theme"));
             })
-            .onSet([this, field](CoreVM::Params& args) {
+            .onSet([this, field, key](CoreVM::Params& args) {
                 auto const& value = args.getString(1);
                 auto config = prompt.promptConfig();
+                auto assigned = false;
                 if (value == "theme" || value == "reset")
+                {
                     (config.colorOverrides.*field).reset();
+                    assigned = true;
+                }
                 else if (auto parsed = parseColorSpec(value))
+                {
                     config.colorOverrides.*field = *parsed;
+                    assigned = true;
+                }
+                // Only clear a prior dynamic resolver when the static assignment actually
+                // took effect — an unparseable string (typo) should not silently drop the
+                // user's previously-configured function.
+                if (assigned)
+                    config.colorOverrides.colorFns.erase(key);
+                prompt.setPromptConfig(std::move(config));
+            })
+            // Function overload: `shell_prompt_color_X <- myFn` where `myFn : () -> string`.
+            .onSet(CoreVM::LiteralType::Function, [this, key](CoreVM::Params& args) {
+                auto config = prompt.promptConfig();
+                auto const* fn = args.getFunction(1);
+                if (fn)
+                {
+                    auto const& fullName = fn->name();
+                    auto const prefix = std::string_view { "fsharp." };
+                    auto const fnName = fullName.starts_with(prefix) ? fullName.substr(prefix.size())
+                                                                     : fullName;
+                    config.colorOverrides.colorFns[key] = std::string(fnName);
+                }
+                else
+                {
+                    config.colorOverrides.colorFns.erase(key);
+                }
                 prompt.setPromptConfig(std::move(config));
             });
+        _runtime.registerPropertySetterOverload(name, CoreVM::LiteralType::Function);
     };
 
-    registerColorProp("shell_prompt_color_path",            &PromptColorOverrides::path);
-    registerColorProp("shell_prompt_color_git_clean",       &PromptColorOverrides::gitClean);
-    registerColorProp("shell_prompt_color_git_dirty",       &PromptColorOverrides::gitDirty);
-    registerColorProp("shell_prompt_color_git_staged",      &PromptColorOverrides::gitStaged);
-    registerColorProp("shell_prompt_color_indicator",       &PromptColorOverrides::indicator);
-    registerColorProp("shell_prompt_color_indicator_error", &PromptColorOverrides::indicatorError);
-    registerColorProp("shell_prompt_color_exit_code",       &PromptColorOverrides::exitCode);
-    registerColorProp("shell_prompt_color_duration",        &PromptColorOverrides::duration);
-    registerColorProp("shell_prompt_color_hostname",        &PromptColorOverrides::hostname);
-    registerColorProp("shell_prompt_color_separator",       &PromptColorOverrides::separator);
-    registerColorProp("shell_prompt_color_badge",           &PromptColorOverrides::badge);
-    registerColorProp("shell_prompt_color_badge_text",      &PromptColorOverrides::badgeText);
-    registerColorProp("shell_prompt_color_clock",           &PromptColorOverrides::clock);
+    registerColorProp("shell_prompt_color_path",            "path",            &PromptColorOverrides::path);
+    registerColorProp("shell_prompt_color_git_clean",       "git_clean",       &PromptColorOverrides::gitClean);
+    registerColorProp("shell_prompt_color_git_dirty",       "git_dirty",       &PromptColorOverrides::gitDirty);
+    registerColorProp("shell_prompt_color_git_staged",      "git_staged",      &PromptColorOverrides::gitStaged);
+    registerColorProp("shell_prompt_color_indicator",       "indicator",       &PromptColorOverrides::indicator);
+    registerColorProp("shell_prompt_color_indicator_error", "indicator_error", &PromptColorOverrides::indicatorError);
+    registerColorProp("shell_prompt_color_exit_code",       "exit_code",       &PromptColorOverrides::exitCode);
+    registerColorProp("shell_prompt_color_duration",        "duration",        &PromptColorOverrides::duration);
+    registerColorProp("shell_prompt_color_hostname",        "hostname",        &PromptColorOverrides::hostname);
+    registerColorProp("shell_prompt_color_separator",       "separator",       &PromptColorOverrides::separator);
+    registerColorProp("shell_prompt_color_badge",           "badge",           &PromptColorOverrides::badge);
+    registerColorProp("shell_prompt_color_badge_text",      "badge_text",      &PromptColorOverrides::badgeText);
+    registerColorProp("shell_prompt_color_clock",           "clock",           &PromptColorOverrides::clock);
     // clang-format on
+
+    // Internal helper invoked by `invokePromptCallback` to capture the return value
+    // of a user-defined prompt function. Not intended for direct user use.
+    _runtime.registerFunction("__prompt_capture_string")
+        .param<CoreVM::CoreString>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) { _promptCallbackResult = std::string(args.getString(1)); });
 }
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT

@@ -81,6 +81,8 @@ void Prompt::initialize()
     _promptComponent->setPromptConfig(_promptConfig);
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
+    if (_pendingDynamicFieldResolver)
+        _promptComponent->setDynamicFieldResolver(std::move(_pendingDynamicFieldResolver));
     _promptComponent->setCompleter(_completer);
     _promptComponent->setHistory(_history);
     _promptComponent->setCommandResolver(_commandResolver.get());
@@ -596,6 +598,17 @@ void Prompt::setPromptContext(PromptContext context)
 {
     if (_promptComponent)
         _promptComponent->setPromptContext(std::move(context));
+}
+
+void Prompt::setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resolver)
+{
+    // The Shell installs its resolver from its constructor, which runs before the
+    // terminal-dependent `initialize()` has created `_promptComponent`. Cache the
+    // resolver so it can be forwarded to the component the moment it's built.
+    if (_promptComponent)
+        _promptComponent->setDynamicFieldResolver(std::move(resolver));
+    else
+        _pendingDynamicFieldResolver = std::move(resolver);
 }
 
 GitModule const* Prompt::gitModule() const noexcept

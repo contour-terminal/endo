@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_prompt_color_* accepts a function value (resolved at each render)
+# expect: ok
+# mode: shell
+
+let red () = "#FF0000"
+
+shell_prompt_color_indicator <- red
+shell_prompt_color_path <- fun () -> "#00FF00"
+println "ok"

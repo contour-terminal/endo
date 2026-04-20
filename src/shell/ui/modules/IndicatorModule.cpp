@@ -21,7 +21,10 @@ PromptSegments IndicatorModule::evaluate(PromptContext const& ctx) const
                                            : ctx.theme->promptColors.indicator;
     }
 
-    return { PromptSegment { .text = _indicator, .style = style } };
+    // Prefer the dynamically-resolved override (from a user-assigned function
+    // value via shell_prompt_indicator) when present; otherwise fall back to
+    // the static indicator string configured on this module.
+    return { PromptSegment { .text = ctx.indicatorOverride.value_or(_indicator), .style = style } };
 }
 
 } // namespace endo
