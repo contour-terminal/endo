@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_prompt_indicator string form continues to work unchanged (legacy setter appends a trailing space)
+# expect: $ .
+# mode: shell
+
+shell_prompt_indicator <- "$"
+println $"{shell_prompt_indicator}."

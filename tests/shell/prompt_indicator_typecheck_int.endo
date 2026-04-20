@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Assigning an int to shell_prompt_indicator is rejected at the semantic checking phase.
+# expect-error: cannot accept a value of type int
+
+shell_prompt_indicator <- 42

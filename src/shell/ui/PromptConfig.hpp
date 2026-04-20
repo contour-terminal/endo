@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace endo
@@ -80,6 +81,15 @@ struct PromptColorOverrides
     std::optional<ColorSpec> badgeText; ///< Badge text color.
     std::optional<ColorSpec> clock;     ///< Clock text color.
     bool transparentBackground = false; ///< When true, background = terminal default (no bg color emitted).
+
+    /// @brief Per-color dynamic resolvers (F# function names, without the "fsharp." prefix).
+    ///
+    /// Keys are the public color names (e.g. "path", "indicator", "git_clean"). At each
+    /// prompt render, PromptComponent invokes the named function; the returned string is
+    /// parsed via `parseColorSpec` and overrides the corresponding ColorSpec field for
+    /// that frame only. This map is orthogonal to the static ColorSpec fields: assigning
+    /// a string to a color property clears its entry here, and assigning a function sets it.
+    std::unordered_map<std::string, std::string> colorFns;
 };
 
 /// @brief Configuration for prompt rendering.
@@ -93,6 +103,10 @@ struct PromptConfig
     SeparatorStyle separator = SeparatorStyle::Bar;      ///< Separator style.
     TransientMode transient = TransientMode::Off;        ///< Transient prompt mode.
     std::string indicator = "> ";                        ///< Indicator character(s) on the input line.
+    /// Optional name of a user-defined F# function () -> string that produces the indicator
+    /// dynamically at each prompt render. When set, overrides the static `indicator` string.
+    /// The name is stored without any "fsharp." compiler prefix.
+    std::optional<std::string> indicatorFn;
     std::vector<std::string> infoLineModules = { "path", "git" }; ///< Modules for the info line.
     std::vector<std::string> rightPromptModules;                  ///< Modules for the right-aligned section.
     int promptSpacing = 1;              ///< Number of blank lines above and below the prompt (0 or 1).

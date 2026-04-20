@@ -106,6 +106,12 @@ class Prompt
     /// @param context The new prompt context.
     void setPromptContext(PromptContext context);
 
+    /// @brief Installs a resolver that evaluates user-defined prompt field callbacks.
+    ///
+    /// Forwards to the underlying PromptComponent. See
+    /// PromptComponent::setDynamicFieldResolver for semantics.
+    void setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resolver);
+
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
 
@@ -201,6 +207,12 @@ class Prompt
     bool _multilineEnabled = true; ///< Enable multiline editing by default
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
     bool _displayDrewCurrentState = false; ///< True when display() already drew the current state.
+
+    /// Dynamic-field resolver cached before `_promptComponent` is created (the Shell
+    /// installs it from its constructor, which runs before `initialize()`). It is
+    /// forwarded to the component in `initialize()` so that the first render picks up
+    /// user-assigned function values on properties like `shell_prompt_indicator`.
+    PromptComponent::DynamicFieldResolver _pendingDynamicFieldResolver;
 
     void initialize();
 

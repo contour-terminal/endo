@@ -157,6 +157,18 @@ class Shell final: public SignalCallback
     /// @brief Called when the working directory changes, to load/unload directory configs.
     void onDirectoryChanged();
 
+    /// @brief Invokes a user-defined F# callback `() -> string` by name and returns
+    /// the produced string. Used by the prompt render path for dynamic fields like
+    /// `shell_prompt_indicator` when they hold a function value.
+    ///
+    /// Runs synchronously on the calling (main) thread. Intended to be called from
+    /// prompt-render code between REPL inputs, when the shell's REPL Runner is idle.
+    /// On any error (unknown function, compilation failure, exception), returns
+    /// std::nullopt and leaves the shell state unchanged.
+    ///
+    /// @param functionName The user-facing name (without the `fsharp.` compiler prefix).
+    [[nodiscard]] std::optional<std::string> invokePromptCallback(std::string const& functionName);
+
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     /// @brief Runs the agent in headless/batch mode (no TUI).
     /// @param options Parsed command-line options for the headless run.
@@ -616,6 +628,10 @@ class Shell final: public SignalCallback
     std::optional<ProcessId> _rightPid;
 
     int _exitCode = -1;
+    /// Scratch buffer populated by the `__prompt_capture_string` builtin when
+    /// `invokePromptCallback` runs a user-defined prompt function. Read once and
+    /// cleared by `invokePromptCallback`; not thread-safe.
+    std::string _promptCallbackResult;
     std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
     bool _interactive = true;                             ///< Whether running in interactive mode
     unsigned _configScriptDepth = 0;    ///< Nesting depth of config script / command substitution execution

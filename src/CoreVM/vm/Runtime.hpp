@@ -45,6 +45,13 @@ class Runtime
 
     NativeProperty& registerProperty(std::string const& name, LiteralType type);
 
+    /// Registers an additional setter overload for an already-registered property.
+    /// This lets a single property (e.g. `shell_prompt_indicator`) accept multiple
+    /// RHS types (e.g. String or Function). The callback on the NativeProperty for
+    /// `argType` must be registered separately via `NativeProperty::onSet(argType, ...)`.
+    /// Returns a reference to the existing NativeProperty (for chaining).
+    NativeProperty& registerPropertySetterOverload(std::string const& name, LiteralType argType);
+
     [[nodiscard]] NativeProperty* findProperty(std::string const& name) const noexcept;
 
     [[nodiscard]] auto const& properties() const noexcept { return _properties; }

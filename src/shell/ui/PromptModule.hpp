@@ -82,6 +82,13 @@ struct PromptContext
     int cellPixelHeight = 0;                              ///< Cell height in pixels (0 if unknown).
     int shellLevel = 0;                                   ///< Shell nesting depth (0 = outermost).
     std::string currentInput;                             ///< Current input text being edited.
+
+    /// @brief When set, overrides the static `PromptConfig::indicator` string for this render.
+    ///
+    /// Populated by the render pipeline when the user has assigned a function value to
+    /// `shell_prompt_indicator` (resolved against the shell's F# persistent state).
+    /// IndicatorModule consumes this preferentially over its configured static string.
+    std::optional<std::string> indicatorOverride;
 };
 
 /// @brief Abstract interface for a pluggable prompt module.

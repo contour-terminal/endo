@@ -786,6 +786,12 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
 
+    // Wire the prompt's dynamic-field resolver so that user-assigned function
+    // values on `shell_prompt_indicator` (and future dynamic fields) are invoked
+    // at each prompt render.
+    prompt.setDynamicFieldResolver(
+        [this](std::string const& fnName) { return invokePromptCallback(fnName); });
+
     _dirConfigManager =
         std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
 
@@ -1159,6 +1165,89 @@ void Shell::ensureInteractiveReady()
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);
     prompt.setFileSystem(&_fs);
+}
+
+std::optional<std::string> Shell::invokePromptCallback(std::string const& functionName)
+{
+    // Only named persisted F# functions are invocable as prompt callbacks.
+    if (!_fsharpState.functions.contains(functionName))
+        return std::nullopt;
+
+    // Build a one-line source that calls the user function and captures its
+    // return value via the `__prompt_capture_string` builtin. Reuses the full
+    // parse/sema/irgen/target pipeline via Shell::execute so that user-defined
+    // functions, modules, and builtins are all visible.
+    auto const source = "__prompt_capture_string (" + functionName + " ())";
+
+    _promptCallbackResult.clear();
+
+    // RAII scope guard: runs a callable at scope exit regardless of normal/exception path.
+    class ScopeExit
+    {
+      public:
+        explicit ScopeExit(std::function<void()> fn): _fn { std::move(fn) } {}
+
+        ~ScopeExit()
+        {
+            if (_fn)
+                _fn();
+        }
+
+        ScopeExit(ScopeExit const&) = delete;
+        ScopeExit& operator=(ScopeExit const&) = delete;
+
+      private:
+        std::function<void()> _fn;
+    };
+
+    // Re-entrant safety: save outer VM state that execute() replaces, mirroring
+    // Shell::executeConfigScript(). Without this, a prompt callback fired during
+    // render would clobber _currentProgram/_runner used elsewhere in the shell.
+    auto savedProgram = std::move(_currentProgram);
+    auto* const savedRunner = _runner;
+    auto const savedExitCode = _exitCode;
+    auto const savedDuration = _lastCommandDuration;
+    auto const savedUnusedDetection = _unusedValueDetection;
+    // Snapshot retainedASTs size so we can drop anything this invocation pushes —
+    // prompt callbacks fire on every context change, and retaining their trivial
+    // invocation AST would grow memory unboundedly.
+    auto const savedRetainedASTsSize = _fsharpState.retainedASTs.size();
+
+    ++_configScriptDepth;          // Suppress auto-display and unused-value detection.
+    _unusedValueDetection = false; // Avoid spurious diagnostics from unused bindings in callbacks.
+
+    ScopeExit const restore { [this,
+                               savedRunner,
+                               savedExitCode,
+                               savedDuration,
+                               savedUnusedDetection,
+                               savedRetainedASTsSize,
+                               &savedProgram] {
+        --_configScriptDepth;
+        _unusedValueDetection = savedUnusedDetection;
+        _exitCode = savedExitCode;
+        _lastCommandDuration = savedDuration;
+        _currentProgram = std::move(savedProgram);
+        _runner = savedRunner;
+        if (_fsharpState.retainedASTs.size() > savedRetainedASTsSize)
+            _fsharpState.retainedASTs.resize(savedRetainedASTsSize);
+    } };
+
+    try
+    {
+        CoreVM::diagnostics::BufferedReport report;
+        execute(source, report, "<prompt-callback>");
+    }
+    catch (...)
+    {
+        // Swallow any exception — the prompt must stay alive. Guards restore state.
+        return std::nullopt;
+    }
+
+    if (_promptCallbackResult.empty())
+        return std::nullopt;
+
+    return std::exchange(_promptCallbackResult, std::string {});
 }
 
 int Shell::run()

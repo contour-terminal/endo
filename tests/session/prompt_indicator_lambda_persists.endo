@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A lambda assigned to shell_prompt_indicator survives across REPL prompts (must be persisted under a non-__lambda_ name).
+# expect: ok1
+# expect: ok2
+# mode: shell
+# session-separator: NEXT
+
+shell_prompt_indicator <- fun () -> "L"
+println "ok1"
+# NEXT
+println "ok2"

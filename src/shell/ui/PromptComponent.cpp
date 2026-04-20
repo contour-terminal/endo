@@ -201,6 +201,12 @@ std::vector<PromptSegments> PromptComponent::buildModuleVector(
 
 void PromptComponent::setPromptConfig(PromptConfig config)
 {
+    // Dropping the entire cache is the simplest correct response to a config update:
+    // if the user changed any dynamic-resolver assignment (e.g. `shell_prompt_indicator <- newFn`
+    // or reassigned a color function), cached outputs from the previous function are stale.
+    // The cost is one re-evaluation per field on the next render.
+    _dynamicCallbackCache.clear();
+
     _config = std::move(config);
     _auroraFadeCacheWidth = 0; // Invalidate sixel fade cache
 
@@ -239,9 +245,24 @@ void PromptComponent::setPromptContext(PromptContext context)
     {
         for (auto& [name, mod]: _modules)
             mod->invalidateCache();
+        // Dynamic-callback cache mirrors module caches: invalidate on any context change
+        // so user callbacks see current CWD, exit code, etc.
+        _dynamicCallbackCache.clear();
     }
 
     _context = std::move(context);
+}
+
+std::optional<std::string> PromptComponent::evaluateDynamicCallback(std::string const& fnName)
+{
+    if (!_dynamicFieldResolver)
+        return std::nullopt;
+    if (auto it = _dynamicCallbackCache.find(fnName); it != _dynamicCallbackCache.end())
+        return it->second;
+    auto result = _dynamicFieldResolver(fnName);
+    if (result)
+        _dynamicCallbackCache.emplace(fnName, *result);
+    return result;
 }
 
 void PromptComponent::setTerminalFocused(bool focused) noexcept
@@ -260,6 +281,16 @@ void PromptComponent::setTerminalFocused(bool focused) noexcept
 
 void PromptComponent::render(tui::Canvas& canvas)
 {
+    // Resolve dynamic prompt fields before module evaluation. Each configured
+    // `*Fn` names a user F# function; the installed resolver runs it and returns
+    // the string to use for this render. nullopt falls back to the static field.
+    // Results are cached per fnName and invalidated on context change (see
+    // setPromptContext), so intra-render and per-keystroke renders are cheap.
+    if (_config.indicatorFn.has_value())
+        _context.indicatorOverride = evaluateDynamicCallback(*_config.indicatorFn);
+    else
+        _context.indicatorOverride.reset();
+
     auto const& theme = tui::currentTheme();
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
@@ -269,9 +300,57 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Effective content width (excluding margins)
     auto const contentWidth = canvasWidth - (2 * HorizontalMargin);
 
+    // Apply dynamic color overrides: for each color key in `colorFns`, invoke the
+    // named F# function, parse the returned string as a ColorSpec, and populate the
+    // corresponding member of a frame-local copy of the overrides. The static config
+    // is unchanged; only this frame's `resolved` colors reflect the dynamic values.
+    //
+    // Copying PromptColorOverrides is only necessary when dynamic resolvers are actually
+    // configured; otherwise we resolve directly against the static config to avoid the
+    // per-keystroke copy overhead (PromptColorOverrides contains an unordered_map).
+    PromptColorOverrides const* overridesForResolve = &_config.colorOverrides;
+    auto frameOverridesStorage = std::optional<PromptColorOverrides> {};
+    if (_dynamicFieldResolver && !_config.colorOverrides.colorFns.empty())
+    {
+        frameOverridesStorage.emplace(_config.colorOverrides);
+        overridesForResolve = &*frameOverridesStorage;
+
+        using ColorField = std::optional<ColorSpec> PromptColorOverrides::*;
+        static std::pair<std::string_view, ColorField> const colorFieldMap[] = {
+            { "path", &PromptColorOverrides::path },
+            { "git_clean", &PromptColorOverrides::gitClean },
+            { "git_dirty", &PromptColorOverrides::gitDirty },
+            { "git_staged", &PromptColorOverrides::gitStaged },
+            { "indicator", &PromptColorOverrides::indicator },
+            { "indicator_error", &PromptColorOverrides::indicatorError },
+            { "exit_code", &PromptColorOverrides::exitCode },
+            { "duration", &PromptColorOverrides::duration },
+            { "hostname", &PromptColorOverrides::hostname },
+            { "separator", &PromptColorOverrides::separator },
+            { "badge", &PromptColorOverrides::badge },
+            { "badge_text", &PromptColorOverrides::badgeText },
+            { "clock", &PromptColorOverrides::clock },
+        };
+        for (auto const& [colorKey, fnName]: frameOverridesStorage->colorFns)
+        {
+            auto resolvedStr = evaluateDynamicCallback(fnName);
+            if (!resolvedStr)
+                continue;
+            auto spec = parseColorSpec(*resolvedStr);
+            if (!spec)
+                continue;
+            for (auto const& [mapKey, field]: colorFieldMap)
+                if (mapKey == colorKey)
+                {
+                    (*frameOverridesStorage).*field = *spec;
+                    break;
+                }
+        }
+    }
+
     // Resolve prompt colors: merge overrides with theme defaults.
     // Stored as a local; the pointer in _context is valid only for this render frame.
-    auto const resolved = resolvePromptColors(_config.colorOverrides, theme.promptColors);
+    auto const resolved = resolvePromptColors(*overridesForResolve, theme.promptColors);
     _context.resolvedColors = &resolved;
     // Guard: null out after render scope (see end of this function).
 
@@ -619,8 +698,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         continuationStr += "\xc2\xb7\xc2\xb7"; // ··
     }
 
-    // Set up InputField with prompt, continuation, ghost text style, and decorator
-    _inputField.setPrompt(_promptStr);
+    // Set up InputField with prompt, continuation, ghost text style, and decorator.
+    // When a dynamic indicator function is configured, the override computed above
+    // (via evaluateDynamicCallback) replaces the static `_promptStr` for this frame.
+    _inputField.setPrompt(_context.indicatorOverride.value_or(_promptStr));
     _inputField.setContinuationPrompt(continuationStr);
     _inputField.setStyles(tui::InputFieldStyles {
         .text = promptStyle,

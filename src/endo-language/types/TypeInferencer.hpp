@@ -7,6 +7,8 @@
 #include <endo-language/types/TypeEnv.hpp>
 #include <endo-language/types/Unification.hpp>
 
+#include <CoreVM/CoreVM.hpp>
+
 #include <expected>
 #include <optional>
 #include <string>
@@ -46,6 +48,17 @@ class TypeInferencer
   public:
     /// Construct a type inferencer with the given base environment.
     explicit TypeInferencer(TypeEnvPtr env);
+
+    /// Injects a non-owning runtime + diagnostic report for checks that require
+    /// cross-component knowledge. Currently used to validate RHS types of
+    /// builtin-property assignments (`shell_prompt_indicator <- …`) against the
+    /// property's accepted setter types. Both pointers must outlive the inferencer.
+    /// Optional: without them, property checks are skipped.
+    void setRuntimeContext(CoreVM::Runtime const* runtime, CoreVM::diagnostics::Report* report) noexcept
+    {
+        _runtime = runtime;
+        _report = report;
+    }
 
     /// Infer types for all top-level definitions in a statement.
     [[nodiscard]] InferenceResult inferProgram(ast::Statement const& root);
@@ -105,6 +118,11 @@ class TypeInferencer
     InferenceResult _result; ///< Accumulated inference results
     ast::ShellCaptureMode _captureMode =
         ast::ShellCaptureMode::Capture; ///< Current shell capture mode context
+
+    /// Optional runtime + report for builtin-property type checking. When null,
+    /// property checks are skipped (e.g. unit-test runs without a runtime).
+    CoreVM::Runtime const* _runtime = nullptr;
+    CoreVM::diagnostics::Report* _report = nullptr;
 };
 
 } // namespace endo

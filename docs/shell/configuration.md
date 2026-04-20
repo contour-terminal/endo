@@ -112,11 +112,44 @@ shell_prompt_layout <- "boxed"
 
 ### Prompt Indicator
 
+The indicator is the character(s) shown just before the input cursor. The string
+form is rendered verbatim -- there is no template expansion (for example,
+`"${pwd}"` prints the literal text `${pwd}`).
+
 ```endo
-# Change the input indicator character
+# Static string form: rendered verbatim, no substitution
 shell_prompt_indicator <- "> "
 shell_prompt_indicator <- "$ "
 ```
+
+To produce an indicator that depends on live shell state, assign a
+zero-argument function that returns a string. It is invoked at each prompt
+render:
+
+```endo
+# Dynamic form: named function
+let myPrompt () = $"{(env "PWD")?} => "
+shell_prompt_indicator <- myPrompt
+
+# Anonymous lambda literal also works
+shell_prompt_indicator <- fun () -> $"{(env "PWD")?} => "
+```
+
+Notes and limitations:
+
+- Invocation runs synchronously on the main thread; results are cached and
+  re-evaluated only when the shell context changes (CWD, exit code, or last-
+  command duration). Within a single context, every keystroke reuses the cached
+  value so typing is never slowed by the callback.
+- For genuinely slow callbacks (network or heavy computation), a background-
+  thread execution path analogous to the git status module is still a
+  potential future enhancement. Until then, prefer callbacks that are fast
+  on the happy path.
+- If the function is unknown, throws, or returns an empty string, the static
+  `shell_prompt_indicator` value is used as a fallback and the shell stays alive.
+- The static and dynamic forms write to separate storage: assigning a string
+  clears any dynamic function; assigning a function leaves the static string
+  untouched as the fallback.
 
 ### Separator Style
 
@@ -260,6 +293,25 @@ shell_prompt_color_indicator <- "#50FA7B"
 # Red separator bar
 shell_prompt_color_separator <- "#FF5555"
 ```
+
+#### Dynamic Colors
+
+Any color property (except background) also accepts a zero-argument function
+that returns a color-spec string. The function is invoked at each context
+change (cached between renders within the same context), so the color can
+depend on live shell state such as exit code or working directory:
+
+```endo
+# Indicator color that changes with the last exit code
+let indicatorColor () = "#FF5555"
+shell_prompt_color_indicator <- indicatorColor
+
+# Inline lambda form
+shell_prompt_color_path <- fun () -> "#5078FF:#00DCC8"
+```
+
+If the function returns an unparseable string or fails, the color falls back
+to the theme default (same behavior as `"theme"`).
 
 #### Gradient Colors
 

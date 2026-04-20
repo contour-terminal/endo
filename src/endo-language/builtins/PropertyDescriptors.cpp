@@ -64,6 +64,13 @@ static constexpr std::array colorValues = {
     EnumValueEntry { .value="transparent", .description="Use terminal default background" },
     EnumValueEntry { .value="theme", .description="Use theme default color" },
 };
+
+/// Setter-argument types for properties that additionally accept a zero-argument
+/// function returning a string (`shell_prompt_indicator`, `shell_prompt_color_*`).
+/// Referenced from PropertyDescriptor::extraSetterTypes.
+static constexpr std::array stringOrFunctionExtraTypes = {
+    CoreVM::LiteralType::Function,
+};
 // clang-format on
 
 static constexpr std::array webSearchEngineValues = {
@@ -148,7 +155,10 @@ static constexpr std::array promptProperties = {
         .name = "shell_prompt_indicator",
         .type = CoreVM::LiteralType::String,
         .description = "Prompt indicator character(s)",
-        .detail = "**shell_prompt_indicator** -- property\n\nSets the prompt indicator character(s).",
+        .detail = "**shell_prompt_indicator** -- property\n\nSets the prompt indicator character(s). "
+                  "Accepts either a string or a zero-argument function returning a string "
+                  "(invoked at each prompt render).",
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_layout",
@@ -242,6 +252,7 @@ static constexpr std::array promptProperties = {
             "\"#5078FF:#00DCC8\"\nshell_prompt_color_path theme\n```",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_clean",
@@ -251,6 +262,7 @@ static constexpr std::array promptProperties = {
                   "repository is clean.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_dirty",
@@ -260,6 +272,7 @@ static constexpr std::array promptProperties = {
                   "are unstaged changes.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_staged",
@@ -269,6 +282,7 @@ static constexpr std::array promptProperties = {
                   "changes exist.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_indicator",
@@ -278,6 +292,7 @@ static constexpr std::array promptProperties = {
                   "(e.g., `|> `).",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_indicator_error",
@@ -287,6 +302,7 @@ static constexpr std::array promptProperties = {
                   "last command failed (non-zero exit).",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_exit_code",
@@ -295,6 +311,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_exit_code** -- property\n\nSets the exit code badge color.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_duration",
@@ -303,6 +320,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_duration** -- property\n\nSets the command duration badge color.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_hostname",
@@ -312,6 +330,7 @@ static constexpr std::array promptProperties = {
                   "in SSH sessions).",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_separator",
@@ -320,6 +339,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_separator** -- property\n\nSets the left bar / separator color.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_badge",
@@ -329,6 +349,7 @@ static constexpr std::array promptProperties = {
                   "mode, structured output).",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_badge_text",
@@ -337,6 +358,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_badge_text** -- property\n\nSets the badge text color.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_clock",
@@ -345,6 +367,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_clock** -- property\n\nSets the clock module text color.",
         .readOnly = false,
         .enumValues = colorValues,
+        .extraSetterTypes = stringOrFunctionExtraTypes,
     },
 };
 

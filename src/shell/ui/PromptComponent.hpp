@@ -18,6 +18,7 @@
 #include <tui/TextDecorator.hpp>
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -161,6 +162,21 @@ class PromptComponent: public tui::Component
     /// @param context The new prompt context.
     void setPromptContext(PromptContext context);
 
+    /// @brief Resolver used to evaluate dynamic prompt field callbacks.
+    ///
+    /// When the user assigns a function value to `shell_prompt_indicator` (or future
+    /// dynamic fields), the prompt config stores the function's name. During render,
+    /// PromptComponent calls this resolver to obtain the current string value.
+    /// Returns std::nullopt to fall back to the static field value.
+    using DynamicFieldResolver = std::function<std::optional<std::string>(std::string const& fnName)>;
+
+    /// @brief Installs a resolver that evaluates user-defined prompt callbacks.
+    /// Called by Shell during construction. No-op if never set — falls back to static config.
+    void setDynamicFieldResolver(DynamicFieldResolver resolver)
+    {
+        _dynamicFieldResolver = std::move(resolver);
+    }
+
     /// @brief Returns ms until next module refresh, or -1 if no module needs refresh.
     [[nodiscard]] int moduleRefreshTimeoutMs() const;
 
@@ -261,10 +277,24 @@ class PromptComponent: public tui::Component
     std::string _promptStr = "> ";
 
     // Prompt theming
-    PromptConfig _config;             ///< Layout and module configuration.
-    PromptContext _context;           ///< Current shell context for module evaluation.
-    PromptLayoutEngine _layoutEngine; ///< Layout rendering engine.
+    PromptConfig _config;                       ///< Layout and module configuration.
+    PromptContext _context;                     ///< Current shell context for module evaluation.
+    PromptLayoutEngine _layoutEngine;           ///< Layout rendering engine.
+    DynamicFieldResolver _dynamicFieldResolver; ///< Resolver for user-defined prompt callbacks.
+
+    /// Cached results from user-defined prompt callbacks, keyed by F# function name.
+    /// Render is invoked on every keystroke for features like ghost text; invoking user
+    /// callbacks each time would compile+run the AST N times per second. This cache
+    /// holds the last resolved string per callback and is cleared on every context
+    /// change (CWD / exit code / duration), which matches user expectations for when
+    /// the indicator and colors should update.
+    std::unordered_map<std::string, std::string> _dynamicCallbackCache;
+
     std::unordered_map<std::string, std::unique_ptr<PromptModule>> _modules; ///< Module registry.
+
+    /// @brief Evaluates a user callback, using the per-render cache. Returns std::nullopt
+    /// if the resolver is not installed or the callback failed.
+    [[nodiscard]] std::optional<std::string> evaluateDynamicCallback(std::string const& fnName);
 
     /// @brief Initializes the module registry with all available modules.
     void initializeModules();
