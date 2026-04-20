@@ -59,7 +59,7 @@ namespace
             out += std::format("# (read-only) print {}\n", p.name);
         else
             out += std::format("# {} <- {}\n", p.name, placeholderFor(p));
-        out += '\n';
+        out += "#\n";
     }
 
     /// Emits a section header as an `.endo` comment banner.
@@ -67,7 +67,7 @@ namespace
     {
         out += "# ---------------------------------------------------------------------------\n";
         out += std::format("# {}\n", title);
-        out += "# ---------------------------------------------------------------------------\n\n";
+        out += "# ---------------------------------------------------------------------------\n";
     }
 
     /// Renders the header comment block shown at the top of the file.
@@ -83,7 +83,7 @@ namespace
         out += "# start a new interactive Endo session; a fresh copy will be written.\n";
         out += "# To skip loading this file on startup, pass `--no-profile` to endo.\n";
         out += "#\n";
-        out += "# Full reference: https://endo-shell.dev/shell/configuration/\n\n";
+        out += "# Full reference: https://endo-shell.dev/shell/configuration/\n";
     }
 
     /// Appends a reference section listing the default key bindings. Purely
@@ -101,7 +101,6 @@ namespace
         auto const defaults = tui::KeyBindings::defaults();
         for (auto const& [chord, action]: defaults.bindings())
             out += std::format("#   {:<20} -> {}\n", chord.toString(), tui::editActionToString(action));
-        out += '\n';
     }
 
     /// Appends a short pattern-matching demo tailored to show off the
@@ -119,7 +118,6 @@ namespace
         out += "# | \"Linux\"  -> shell_prompt_indicator <- \"🐧 \"\n";
         out += "# | \"Darwin\" -> shell_prompt_indicator <- \"🍎 \"\n";
         out += "# | _        -> shell_prompt_indicator <- \"|> \"\n";
-        out += '\n';
     }
 
 } // namespace
@@ -137,7 +135,8 @@ std::string generateDefaultInitEndo()
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     appendSection(out, "AI agent configuration");
-    out += "# These settings only take effect when Endo is built with agent support.\n\n";
+    out += "# These settings only take effect when Endo is built with agent support.\n";
+    out += "#\n";
     for (auto const& p: agentPropertyDescriptors())
         appendPropertyBlock(out, p);
 #endif

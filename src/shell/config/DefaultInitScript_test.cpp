@@ -65,6 +65,18 @@ TEST_CASE("DefaultInitScript.enum_values_listed_as_comments")
     CHECK(contains(content, "minimal-arrow"sv));
 }
 
+TEST_CASE("DefaultInitScript.example_matches_runtime_default")
+{
+    // The rendered example for `shell_prompt_preset` must show the actual
+    // startup default ("endo-signature"), not a minimal-looking preset that
+    // would give first-time users the wrong impression of Endo's power.
+    // This works because the first enum entry is the startup default, and
+    // the generator uses the first enum value as the example.
+    auto const content = endo::generateDefaultInitEndo();
+    CHECK(contains(content, "shell_prompt_preset <- \"endo-signature\""sv));
+    CHECK_FALSE(contains(content, "shell_prompt_preset <- \"minimal-arrow\""sv));
+}
+
 TEST_CASE("DefaultInitScript.key_bindings_reference_present")
 {
     // The key-bindings block is reference-only — we just verify that a
