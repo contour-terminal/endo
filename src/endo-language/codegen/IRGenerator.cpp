@@ -432,12 +432,19 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     }
 
     // Run Hindley-Milner type inference pre-pass.
-    // Inference errors are non-fatal: unresolved types simply remain unannotated
-    // and fall back to AST inlining during codegen.
+    //
+    // Most inference errors are non-fatal: unresolved types simply remain
+    // unannotated and fall back to AST inlining during codegen. However,
+    // property-type mismatches (e.g. `shell_prompt_indicator <- 42`) are emitted
+    // as TypeError messages onto the shared `report`. When that happens, we
+    // skip IR generation so the code generator only sees type-checked ASTs.
     {
         auto inferencer = TypeInferencer(createStandardTypeEnv());
+        inferencer.setRuntimeContext(&runtime, &report);
         generator._inferenceResult = inferencer.inferProgram(rootNode);
     }
+    if (report.containsFailures())
+        return nullptr;
 
     generator.codegen(&rootNode);
 
@@ -1091,6 +1098,13 @@ CoreVM::Value* IRGenerator::wrapInResultOrOption(CoreVM::Value* value, ReturnKin
 std::string IRGenerator::generateLambdaName()
 {
     return std::format("__lambda_{}", _lambdaCounter++);
+}
+
+std::string IRGenerator::generatePromptCallbackName()
+{
+    // Does not start with `__lambda_`, so the persistence pass in IRGenerator::generate()
+    // keeps it — required for the function to be resolvable at subsequent prompt renders.
+    return std::format("__promptcb_{}", _lambdaCounter++);
 }
 
 // --- Annotation wrappers (delegated to AnnotationTracker) ---
@@ -4781,18 +4795,39 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
             reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
             return;
         }
-        auto* newValue = codegen(node.value.get());
-        if (!newValue)
+
+        // If the property has a Function-typed setter overload and the RHS is a
+        // function reference (identifier or lambda literal), emit a proper IR
+        // function ref and dispatch to the Function setter directly. The IR-level
+        // type of FunctionRefInstr is Number (it carries the runtime function index);
+        // at the setter-callback ABI level that same uint64_t is interpreted as a
+        // Function via Params::getFunction, so the signature used here is (H)V.
+        CoreVM::Value* newValue = nullptr;
+        CoreVM::NativeCallback* cb = nullptr;
+        auto const functionSetterSig =
+            node.name + "(" + CoreVM::signatureType(CoreVM::LiteralType::Function) + ")V";
+        if (findCallback(functionSetterSig))
+            newValue = tryEmitFunctionRef(*node.value);
+        if (newValue)
         {
-            reportTypeError("Failed to generate code for assignment value");
-            return;
+            cb = findCallback(functionSetterSig);
         }
-        // Emit call to setter callback: name(T)V
-        auto const setterSig = node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
-        if (auto* cb = findCallback(setterSig))
+        else
         {
-            _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
+            newValue = codegen(node.value.get());
+            if (!newValue)
+            {
+                reportTypeError("Failed to generate code for assignment value");
+                return;
+            }
+            // Dispatch strictly on the value's IR type. Sema has already verified
+            // the RHS against the property's accepted setter types, so a missing
+            // callback here is an internal invariant violation, not a user error.
+            auto const valueSig = node.name + "(" + CoreVM::signatureType(newValue->type()) + ")V";
+            cb = findCallback(valueSig);
         }
+        assert(cb && "property setter dispatch: sema should have rejected type-mismatched assignments");
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
         _result = nullptr;
         return;
     }
@@ -4890,18 +4925,30 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
             reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
             return;
         }
-        auto* newValue = codegen(node.value.get());
+
+        // If the property has a Function-typed setter overload and the RHS is a
+        // function reference (identifier or lambda literal), emit a proper IR
+        // function ref so the Function setter is selected over the String setter.
+        CoreVM::Value* newValue = nullptr;
+        auto const functionSetterSig =
+            node.name + "(" + CoreVM::signatureType(CoreVM::LiteralType::Function) + ")V";
+        if (findCallback(functionSetterSig))
+            newValue = tryEmitFunctionRef(*node.value);
+
+        if (!newValue)
+            newValue = codegen(node.value.get());
         if (!newValue)
         {
             reportTypeError("Failed to generate code for assignment value");
             return;
         }
-        // Emit call to setter callback: name(T)V
-        auto const setterSig = node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
-        if (auto* cb = findCallback(setterSig))
-        {
-            _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
-        }
+        // Dispatch strictly on the value's IR type. Sema has already verified the
+        // RHS type against the property's accepted setter types; a missing callback
+        // here is an internal invariant violation.
+        auto const valueSig = node.name + "(" + CoreVM::signatureType(newValue->type()) + ")V";
+        auto* cb = findCallback(valueSig);
+        assert(cb && "property setter dispatch: sema should have rejected type-mismatched assignments");
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
         _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
         return;
     }
@@ -8255,6 +8302,57 @@ void IRGenerator::visit(ast::ParenExpr const& node)
     // Parentheses just evaluate the inner expression
     if (node.inner)
         codegen(node.inner.get());
+}
+
+CoreVM::Value* IRGenerator::tryEmitFunctionRef(ast::Expr const& value)
+{
+    std::string funcName;
+
+    // Case A: lambda literal — register the lambda, then fall through with its synthesized name.
+    // Use a prompt-callback-specific prefix so the lambda is persisted across REPL prompts
+    // (regular lambda names starting with `__lambda_` are stripped by the persistence pass).
+    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(&value))
+    {
+        funcName = generatePromptCallbackName();
+
+        FSharpFunction func;
+        extractTypedParameters(lambda->parameters, func);
+        func.returnType = lambda->returnType;
+        func.body = lambda->body.get();
+        func.returnKind = determineReturnKind(func.body);
+        func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+        collectCapturedMutables(func);
+        for (auto const& [capName, _]: func.capturedBindings)
+            if (auto ref = lookupFSharpFunctionRef(capName))
+                func.capturedFunctionRefs[capName] = *ref;
+
+        registerFSharpFunction(funcName, std::move(func));
+    }
+    // Case B: named F# function referenced by identifier.
+    else if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(&value))
+    {
+        if (lookupFSharpFunction(ident->name))
+            funcName = ident->name;
+        else
+            return nullptr;
+    }
+    else
+    {
+        return nullptr;
+    }
+
+    auto* func = const_cast<FSharpFunction*>(lookupFSharpFunction(funcName));
+    if (!func)
+        return nullptr;
+
+    // Trigger compilation if not already compiled; property callbacks require a
+    // resolvable IRFunction so a runtime function reference can be formed.
+    if (!func->compiledFunction)
+        compileFunctionBody(funcName, *func);
+    if (!func->compiledFunction)
+        return nullptr;
+
+    return _builder.createFunctionRef(func->compiledFunction, funcName + ".funcRef");
 }
 
 void IRGenerator::visit(ast::LambdaExpr const& node)

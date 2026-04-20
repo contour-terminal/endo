@@ -657,6 +657,19 @@ class IRGenerator final: public ast::Visitor
     /// Sets func->compiledFunction to the new function on success.
     void compileFunctionBody(std::string const& name, FSharpFunction& func);
 
+    /// Attempts to produce a LiteralType::Function-typed IR value for an expression
+    /// that references a user-defined F# function. Used at property-assignment sites
+    /// where the property has a setter overload accepting Function (e.g. `shell_prompt_indicator`).
+    ///
+    /// Handles two RHS shapes:
+    ///   - Lambda literal: `fun () -> <body>` (registers the lambda, then emits a function ref).
+    ///   - Identifier:     `myFn` (already-named F# function; emits a function ref).
+    ///
+    /// Returns nullptr if the expression is not a function reference, or if the referenced
+    /// function cannot be compiled (e.g. free parameters without type annotations). Callers
+    /// should fall back to the normal codegen path in that case.
+    CoreVM::Value* tryEmitFunctionRef(ast::Expr const& value);
+
     /// Maps a high-level TypePtr to the corresponding CoreVM::LiteralType for validation.
     [[nodiscard]] static std::optional<CoreVM::LiteralType> mapTypeToLiteralType(TypePtr const& type);
 
@@ -821,6 +834,13 @@ class IRGenerator final: public ast::Visitor
     // Lambda counter for generating unique anonymous function names
     size_t _lambdaCounter = 0;
     [[nodiscard]] std::string generateLambdaName();
+
+    /// Generates a stable name for a lambda literal that must survive across REPL prompts
+    /// (for example, one assigned to a builtin property's Function-typed setter). Unlike
+    /// `generateLambdaName()`, the result does NOT start with the `__lambda_` prefix, so
+    /// it passes the persistence filter in `IRGenerator::generate()` and ends up in
+    /// `FSharpPersistentState::functions`.
+    [[nodiscard]] std::string generatePromptCallbackName();
 
     /// Creates an FSharpFunction from a PlaceholderLambdaExpr (desugars `_` to single-parameter function).
     [[nodiscard]] FSharpFunction createFunctionFromPlaceholder(ast::PlaceholderLambdaExpr const& node);
