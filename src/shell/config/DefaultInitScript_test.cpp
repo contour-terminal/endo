@@ -77,12 +77,17 @@ TEST_CASE("DefaultInitScript.example_matches_runtime_default")
     CHECK_FALSE(contains(content, "shell_prompt_preset <- \"minimal-arrow\""sv));
 }
 
-TEST_CASE("DefaultInitScript.key_bindings_reference_present")
+TEST_CASE("DefaultInitScript.key_bindings_section_has_active_examples")
 {
-    // The key-bindings block is reference-only — we just verify that a
-    // representative default chord/action pair made it into the output.
+    // The key-bindings block must surface real, uncomment-to-activate `bind`
+    // examples (not just a reference table) so users can customize bindings
+    // from init.endo directly. Also retain the live reference table.
     auto const content = endo::generateDefaultInitEndo();
-    CHECK(contains(content, "Default key bindings"sv));
+    CHECK(contains(content, "Key bindings"sv));
+    CHECK(contains(content, "bind ctrl+y yank"sv));
+    CHECK(contains(content, "bind --reset"sv));
+    CHECK(contains(content, "bind -r ctrl+l"sv));
+    CHECK(contains(content, "Current default bindings"sv));
     CHECK(contains(content, "undo"sv));
     CHECK(contains(content, "copy"sv));
 }

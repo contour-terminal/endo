@@ -86,17 +86,30 @@ namespace
         out += "# Full reference: https://endo-lang.org/shell/configuration/\n";
     }
 
-    /// Appends a reference section listing the default key bindings. Purely
-    /// informational — there is currently no script-level API to rebind keys
-    /// from within init.endo (see `bind` builtin for interactive use).
+    /// Appends an executable key-bindings section. The `bind` builtin can be
+    /// called from any script (including init.endo) — `bind <chord> <action>`
+    /// sets, `bind -r <chord>` removes, `bind --reset` restores defaults.
+    /// Uncommenting any line here just works at next shell launch.
     void appendKeyBindingsReference(std::string& out)
     {
-        appendSection(out, "Default key bindings (reference only)");
-        out += "# Endo ships with these key bindings out of the box. There is no\n";
-        out += "# `.endo` setter API for bindings yet; use the `bind` builtin at the\n";
-        out += "# prompt to view, add, or remove bindings interactively. See:\n";
-        out += "#   https://endo-lang.org/shell/configuration/#key-bindings\n";
+        appendSection(out, "Key bindings");
+        out += "# Customize the line editor with the `bind` builtin. All lines below are\n";
+        out += "# valid — uncomment to activate. Run `bind` to list current bindings,\n";
+        out += "# `bind --help` to see every available action, or `bind --reset` to\n";
+        out += "# restore defaults.\n";
         out += "#\n";
+        out += "# Emacs-friendly overrides:\n";
+        out += "# bind ctrl+y yank                 # override Redo with kill-ring paste\n";
+        out += "# bind ctrl+t transpose            # swap chars around cursor (replaces agent-mode)\n";
+        out += "# bind ctrl+v paste                # clipboard paste (unbound by default)\n";
+        out += "#\n";
+        out += "# Remove a default binding:\n";
+        out += "# bind -r ctrl+l\n";
+        out += "#\n";
+        out += "# Reset everything back to Endo defaults:\n";
+        out += "# bind --reset\n";
+        out += "#\n";
+        out += "# Current default bindings (for reference):\n";
 
         auto const defaults = tui::KeyBindings::defaults();
         for (auto const& [chord, action]: defaults.bindings())
