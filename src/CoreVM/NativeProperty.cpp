@@ -22,8 +22,30 @@ NativeProperty& NativeProperty::onGet(Getter cb)
 
 NativeProperty& NativeProperty::onSet(Setter cb)
 {
-    _setter = std::move(cb);
+    return onSet(_type, std::move(cb));
+}
+
+NativeProperty& NativeProperty::onSet(LiteralType argType, Setter cb)
+{
+    for (auto& [t, setter]: _setters)
+    {
+        if (t == argType)
+        {
+            setter = std::move(cb);
+            return *this;
+        }
+    }
+    _setters.emplace_back(argType, std::move(cb));
+    _setterTypes.push_back(argType);
     return *this;
+}
+
+bool NativeProperty::hasSetter(LiteralType argType) const noexcept
+{
+    for (auto const& [t, setter]: _setters)
+        if (t == argType)
+            return setter != nullptr;
+    return false;
 }
 
 void NativeProperty::invokeGet(Params& args) const
@@ -32,10 +54,16 @@ void NativeProperty::invokeGet(Params& args) const
         _getter(args);
 }
 
-void NativeProperty::invokeSet(Params& args) const
+void NativeProperty::invokeSet(LiteralType argType, Params& args) const
 {
-    if (_setter)
-        _setter(args);
+    for (auto const& [t, setter]: _setters)
+    {
+        if (t == argType && setter)
+        {
+            setter(args);
+            return;
+        }
+    }
 }
 
 } // namespace CoreVM

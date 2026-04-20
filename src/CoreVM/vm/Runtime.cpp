@@ -28,6 +28,22 @@ NativeCallback& Runtime::registerFunction(const std::string& name, LiteralType r
     return *_builtins[_builtins.size() - 1];
 }
 
+namespace
+{
+    void setterAddParam(NativeCallback& setter, LiteralType type)
+    {
+        switch (type)
+        {
+            case LiteralType::String: setter.param<CoreString>("value"); break;
+            case LiteralType::Number: setter.param<CoreNumber>("value"); break;
+            case LiteralType::Boolean: setter.param<bool>("value"); break;
+            case LiteralType::Object: setter.param<TypedObject*>("value"); break;
+            case LiteralType::Function: setter.param<const Function*>("value"); break;
+            default: setter.param<CoreNumber>("value"); break;
+        }
+    }
+} // namespace
+
 NativeProperty& Runtime::registerProperty(std::string const& name, LiteralType type)
 {
     _properties.push_back(std::make_unique<NativeProperty>(name, type));
@@ -37,20 +53,38 @@ NativeProperty& Runtime::registerProperty(std::string const& name, LiteralType t
     auto& getter = registerFunction(name, type);
     getter.bind([&prop](Params& args) { prop.invokeGet(args); });
 
-    // Register setter callback: name(T)V — 1 arg (the new value), returns void
+    // Register primary setter callback: name(T)V — 1 arg (the new value), returns void
     auto& setter = registerFunction(name);
-    switch (type)
-    {
-        case LiteralType::String: setter.param<CoreString>("value"); break;
-        case LiteralType::Number: setter.param<CoreNumber>("value"); break;
-        case LiteralType::Boolean: setter.param<bool>("value"); break;
-        case LiteralType::Object: setter.param<TypedObject*>("value"); break;
-        default: setter.param<CoreNumber>("value"); break;
-    }
+    setterAddParam(setter, type);
     setter.returnType(LiteralType::Void);
-    setter.bind([&prop](Params& args) { prop.invokeSet(args); });
+    setter.bind([&prop, type](Params& args) { prop.invokeSet(type, args); });
 
     return prop;
+}
+
+NativeProperty& Runtime::registerPropertySetterOverload(std::string const& name, LiteralType argType)
+{
+    auto* prop = findProperty(name);
+    assert(prop != nullptr
+           && "registerPropertySetterOverload: property not found — call registerProperty first");
+
+    // Register an additional setter callback with a distinct argument type.
+    // Overload resolution at the assignment site (in IRGenerator) selects by arg type.
+    auto& setter = registerFunction(name);
+    setterAddParam(setter, argType);
+    setter.returnType(LiteralType::Void);
+    setter.bind([prop, argType](Params& args) { prop->invokeSet(argType, args); });
+
+    // Ensure `NativeProperty::acceptedSetterTypes()` reflects the overload. Without
+    // this, consumers that discover overload support only by inspecting the property
+    // (semantic analyzer, hover provider, diagnostic hints) would see just the
+    // primary setter type even when a real callback is registered via the Runtime.
+    // If a user-provided callback for this type is later bound via
+    // `NativeProperty::onSet(argType, cb)`, it replaces this no-op in the slot.
+    if (!prop->hasSetter(argType))
+        prop->onSet(argType, [](Params&) {});
+
+    return *prop;
 }
 
 NativeProperty* Runtime::findProperty(std::string const& name) const noexcept

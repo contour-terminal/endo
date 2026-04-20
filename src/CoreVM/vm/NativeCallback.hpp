@@ -306,7 +306,15 @@ class NativeProperty
 
     [[nodiscard]] std::string const& name() const noexcept { return _name; }
 
+    /// Primary (declared) type of this property. Used for the getter and as the
+    /// default type for setter overload registration.
     [[nodiscard]] LiteralType type() const noexcept { return _type; }
+
+    /// All setter types accepted by this property, in registration order.
+    [[nodiscard]] std::vector<LiteralType> const& acceptedSetterTypes() const noexcept
+    {
+        return _setterTypes;
+    }
 
     [[nodiscard]] std::string const& description() const noexcept { return _description; }
 
@@ -314,10 +322,21 @@ class NativeProperty
 
     [[nodiscard]] bool hasGetter() const noexcept { return _getter != nullptr; }
 
-    [[nodiscard]] bool hasSetter() const noexcept { return _setter != nullptr; }
+    /// Returns true if any setter (primary or overload) is registered.
+    [[nodiscard]] bool hasSetter() const noexcept { return !_setters.empty(); }
+
+    /// Returns true if a setter for the given argument type is registered.
+    [[nodiscard]] bool hasSetter(LiteralType argType) const noexcept;
 
     NativeProperty& onGet(Getter cb);
+
+    /// Registers the primary setter (accepts a value of the property's declared type()).
     NativeProperty& onSet(Setter cb);
+
+    /// Registers an additional setter overload for the given argument type. This
+    /// enables a single property to accept multiple RHS types (e.g. String or Function),
+    /// dispatched by the argument's literal type at the assignment site.
+    NativeProperty& onSet(LiteralType argType, Setter cb);
 
     template <typename Class>
     NativeProperty& onGet(void (Class::*method)(Params&), Class* obj)
@@ -332,14 +351,18 @@ class NativeProperty
     }
 
     void invokeGet(Params& args) const;
-    void invokeSet(Params& args) const;
+
+    /// Invokes the setter for the given argument type. No-op if no setter is
+    /// registered for that type.
+    void invokeSet(LiteralType argType, Params& args) const;
 
   private:
     std::string _name;
     LiteralType _type;
     std::string _description;
     Getter _getter;
-    Setter _setter;
+    std::vector<std::pair<LiteralType, Setter>> _setters; ///< Ordered list of setter overloads.
+    std::vector<LiteralType> _setterTypes;                ///< Accepted types (parallel to _setters).
 };
 
 // =============================================================================
@@ -504,6 +527,16 @@ inline NativeCallback& NativeCallback::param<CoreVM::TypedObject*>(const std::st
 {
     assert(_defaults.size() == _names.size());
     _signature.args().push_back(LiteralType::Object);
+    _names.push_back(name);
+    _defaults.emplace_back(std::monostate {});
+    return *this;
+}
+
+template <>
+inline NativeCallback& NativeCallback::param<const CoreVM::Function*>(const std::string& name)
+{
+    assert(_defaults.size() == _names.size());
+    _signature.args().push_back(LiteralType::Function);
     _names.push_back(name);
     _defaults.emplace_back(std::monostate {});
     return *this;
