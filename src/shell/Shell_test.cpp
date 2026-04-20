@@ -5001,3 +5001,75 @@ TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
         std::ranges::find_if(result.completions, [](auto const& c) { return c.text == "--help"; });
     CHECK(it->description == "Show help");
 }
+
+// ============================================================================
+// Auto-generated init.endo on first run (#109)
+// ============================================================================
+
+TEST_CASE("shell.init_endo.auto_creates_when_missing")
+{
+    // Point XDG_CONFIG_HOME at a fresh tempdir so loadInitScript() writes
+    // into an isolated location and does not disturb the user's real config.
+    auto const dir = std::filesystem::temp_directory_path()
+                     / std::format("endo-init-test-{}", ::getpid());
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    auto const* const prevXdg = std::getenv("XDG_CONFIG_HOME");
+    auto const prevXdgSaved = prevXdg != nullptr ? std::string { prevXdg } : std::string {};
+    auto const xdgGuard = [prev = prevXdgSaved, hadPrev = prevXdg != nullptr](auto*) {
+        if (hadPrev)
+            ::setenv("XDG_CONFIG_HOME", prev.c_str(), 1);
+        else
+            ::unsetenv("XDG_CONFIG_HOME");
+    };
+    std::unique_ptr<int, decltype(xdgGuard)> restore(reinterpret_cast<int*>(1), xdgGuard);
+    ::setenv("XDG_CONFIG_HOME", dir.c_str(), 1);
+
+    auto const initPath = dir / "endo" / "init.endo";
+    REQUIRE_FALSE(std::filesystem::exists(initPath));
+
+    {
+        TestShell shell;
+        shell.shell.loadInitScript();
+    }
+
+    REQUIRE(std::filesystem::exists(initPath));
+    auto const size = std::filesystem::file_size(initPath);
+    CHECK(size > 500);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("shell.init_endo.preserves_existing_content")
+{
+    // An existing init.endo must not be clobbered by the auto-generate step.
+    auto const dir = std::filesystem::temp_directory_path()
+                     / std::format("endo-init-preserve-{}", ::getpid());
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "endo");
+    auto const initPath = dir / "endo" / "init.endo";
+    auto const userContent = std::string_view { "# my custom init\nshell_prompt_spacing <- 0\n" };
+    std::ofstream { initPath } << userContent;
+
+    auto const* const prevXdg = std::getenv("XDG_CONFIG_HOME");
+    auto const prevXdgSaved = prevXdg != nullptr ? std::string { prevXdg } : std::string {};
+    auto const xdgGuard = [prev = prevXdgSaved, hadPrev = prevXdg != nullptr](auto*) {
+        if (hadPrev)
+            ::setenv("XDG_CONFIG_HOME", prev.c_str(), 1);
+        else
+            ::unsetenv("XDG_CONFIG_HOME");
+    };
+    std::unique_ptr<int, decltype(xdgGuard)> restore(reinterpret_cast<int*>(1), xdgGuard);
+    ::setenv("XDG_CONFIG_HOME", dir.c_str(), 1);
+
+    {
+        TestShell shell;
+        shell.shell.loadInitScript();
+    }
+
+    auto in = std::ifstream { initPath };
+    auto actual = std::string { std::istreambuf_iterator<char>(in), {} };
+    CHECK(actual == std::string(userContent));
+
+    std::filesystem::remove_all(dir);
+}
