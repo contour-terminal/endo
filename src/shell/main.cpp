@@ -23,7 +23,9 @@
     #include <windows.h>
 #endif
 
+#if defined(ENDO_BUILTIN_CRARHDUMP)
 #include "CrashHandler.hpp"
+#endif
 #include "FormatCommand.hpp"
 #include "HelpPrinter.hpp"
 #include "Shell.hpp"
@@ -270,7 +272,9 @@ int main(int argc, char const* argv[])
     setupWindowsUtf8();
 #endif
 
+#if defined(ENDO_BUILTIN_CRARHDUMP)
     endo::CrashHandler::initialize(std::string(Version).c_str());
+#endif
 
     auto const args = std::span(argv, static_cast<size_t>(argc));
     auto const programName = args.empty() ? "endo"sv : std::string_view(args[0]);

@@ -156,6 +156,8 @@ endif()
 # crispy is vendored from contour — pass through its testing flag
 set(CONTOUR_TESTING ${ENDO_TESTING})
 
+option(ENDO_BUILTIN_CRARHDUMP "Enable built-in crashdump reporter, say NO to use system wide crashdump collection like coredumpctl [default: ON]" ON)
+
 # Apply Emscripten compatibility patches to vendored sources.
 # crispy is symlinked from contour, so we use sed for in-place patching
 # (GNU patch does not follow symlinked directories).
@@ -188,6 +190,7 @@ message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
 message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
 message(STATUS "Testing             ${ENDO_TESTING}")
 message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
+message(STATUS "Built in crashdump  ${ENDO_BUILTIN_CRARHDUMP}")
 if(NOT EMSCRIPTEN)
     message(STATUS "Address Sanitizer   ${ENABLE_ASAN}")
     message(STATUS "UB Sanitizer        ${ENABLE_UBSAN}")
