@@ -353,8 +353,9 @@ class InputField: public Component
     std::string _continuationPrompt;               ///< Continuation prompt for non-first lines.
     bool _masked = false;
     bool _multiline = false;
-    int _maxLines = 0;     ///< 0 = unlimited
-    int _scrollOffset = 0; ///< Scroll offset for multiline mode
+    int _maxLines = 0;      ///< 0 = unlimited
+    int _scrollOffset = 0;  ///< Scroll offset for multiline mode
+    int _hScrollOffset = 0; ///< Horizontal scroll offset (display columns) for single-line mode
 
     // Mouse state
     bool _dragging = false; ///< True during click-and-drag selection

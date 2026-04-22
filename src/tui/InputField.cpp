@@ -189,13 +189,44 @@ void InputField::render(Canvas& canvas)
         if (availableWidth <= 0)
             return;
 
-        // Render text with selection highlighting and optional decorator
+        // Measure pass: compute total text width in display columns and the cursor's
+        // column within the unscrolled text, so we can adjust the horizontal scroll
+        // offset to keep the cursor visible.
         auto segmenter = unicode::utf8_grapheme_segmenter(_buffer);
-        int cursorDisplayCol = textStartCol;
-        bool cursorFound = false;
-        std::size_t graphemeIdx = 0;
+        int totalTextCols = 0;
+        int cursorTextCol = 0;
+        bool cursorMeasured = false;
+        for (auto it = segmenter.begin(); it != segmenter.end(); ++it)
+        {
+            char const* clusterStart = it._clusterStart;
+            auto const clusterByteStart = static_cast<std::size_t>(clusterStart - _buffer.data());
+            if (!cursorMeasured && _cursor <= clusterByteStart)
+            {
+                cursorTextCol = totalTextCols;
+                cursorMeasured = true;
+            }
+            int const clusterWidth = _masked ? 1 : graphemeClusterWidth(*it);
+            totalTextCols += clusterWidth;
+        }
+        if (!cursorMeasured)
+            cursorTextCol = totalTextCols;
 
-        for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it, ++graphemeIdx)
+        // Adjust horizontal scroll offset to keep cursor in view.
+        if (cursorTextCol < _hScrollOffset)
+            _hScrollOffset = cursorTextCol;
+        else if (cursorTextCol >= _hScrollOffset + availableWidth)
+            _hScrollOffset = cursorTextCol - availableWidth + 1;
+
+        // Reduce offset when content (including room for the end-of-line cursor)
+        // would otherwise leave blank space on the right.
+        int const maxOffset = std::max(0, totalTextCols + 1 - availableWidth);
+        _hScrollOffset = std::min(_hScrollOffset, maxOffset);
+        _hScrollOffset = std::max(_hScrollOffset, 0);
+
+        // Render pass with horizontal scroll applied.
+        int textCol = 0;
+        std::size_t graphemeIdx = 0;
+        for (auto it = segmenter.begin(); it != segmenter.end(); ++it, ++graphemeIdx)
         {
             auto const& cluster = *it;
             auto nextIt = it;
@@ -204,16 +235,22 @@ void InputField::render(Canvas& canvas)
             char const* clusterEnd =
                 (nextIt != segmenter.end()) ? nextIt._clusterStart : (_buffer.data() + _buffer.size());
             auto const clusterByteStart = static_cast<std::size_t>(clusterStart - _buffer.data());
+            int const clusterWidth = _masked ? 1 : graphemeClusterWidth(cluster);
 
-            if (!cursorFound && _cursor <= clusterByteStart)
+            int const visibleStart = textCol - _hScrollOffset;
+            int const canvasCol = textStartCol + visibleStart;
+
+            // Fully clipped off the left.
+            if (visibleStart + clusterWidth <= 0)
             {
-                cursorDisplayCol = col;
-                cursorFound = true;
+                textCol += clusterWidth;
+                continue;
             }
+            // Fully clipped off the right.
+            if (canvasCol >= width)
+                break;
 
-            int const clusterWidth = graphemeClusterWidth(cluster);
-
-            // Build style: start with text style, apply decorator, then selection
+            // Build style: start with text style, apply decorator, then selection.
             Style style = textStyle;
             if (_textDecorator)
             {
@@ -235,31 +272,54 @@ void InputField::render(Canvas& canvas)
                     style = selectionStyle;
             }
 
-            // Apply background from decorator
+            // Apply background from decorator at the actual canvas column.
             if (_textDecorator)
             {
-                if (auto bg = _textDecorator->background(col))
+                if (auto bg = _textDecorator->background(std::max(textStartCol, canvasCol)))
                     style.bg = *bg;
             }
 
-            std::string_view clusterView(clusterStart, static_cast<std::size_t>(clusterEnd - clusterStart));
-            if (_masked)
+            if (visibleStart < 0)
             {
-                canvas.putString(0, col, "*", style);
-                col += 1;
+                // Wide cluster straddling the left edge: fill visible cells with spaces
+                // so we don't overflow the prompt area.
+                for (int c = textStartCol; c < canvasCol + clusterWidth && c < width; ++c)
+                    canvas.putString(0, c, " ", style);
+            }
+            else if (_masked)
+            {
+                canvas.putString(0, canvasCol, "*", style);
             }
             else
             {
-                canvas.putString(0, col, clusterView, style);
-                col += clusterWidth;
+                std::string_view clusterView(clusterStart,
+                                             static_cast<std::size_t>(clusterEnd - clusterStart));
+                canvas.putString(0, canvasCol, clusterView, style);
             }
+            textCol += clusterWidth;
         }
 
-        if (!cursorFound || _cursor >= _buffer.size())
-            cursorDisplayCol = col;
+        int const cursorDisplayCol = std::min(width - 1, textStartCol + (cursorTextCol - _hScrollOffset));
 
-        if (!_masked && !_ghostText.empty() && _cursor >= _buffer.size())
-            renderGhostText(canvas, 0, col, ghostStyle);
+        int const textEndCol = textStartCol + (totalTextCols - _hScrollOffset);
+        if (!_masked && !_ghostText.empty() && _cursor >= _buffer.size() && textEndCol < width
+            && textEndCol >= textStartCol)
+        {
+            int ghostCol = textEndCol;
+            renderGhostText(canvas, 0, ghostCol, ghostStyle);
+        }
+
+        // Scroll continuation indicators: render on top of the first/last text cell
+        // when buffer content extends beyond the visible viewport. Style uses the
+        // dim ghost style so the markers don't compete with the input itself.
+        if (_hScrollOffset > 0)
+            canvas.putString(0, textStartCol, "\xE2\x80\xB9", ghostStyle); // U+2039 ‹
+        if (totalTextCols - _hScrollOffset > availableWidth)
+        {
+            int const indicatorCol = width - 1;
+            if (indicatorCol >= textStartCol && indicatorCol != cursorDisplayCol)
+                canvas.putString(0, indicatorCol, "\xE2\x80\xBA", ghostStyle); // U+203A ›
+        }
 
         canvas.setCursor(0, cursorDisplayCol);
         return;
@@ -512,6 +572,7 @@ void InputField::clear()
 {
     _buffer.clear();
     _cursor = 0;
+    _hScrollOffset = 0;
     clearSelection();
 }
 
@@ -519,6 +580,7 @@ void InputField::setText(std::string_view text)
 {
     _buffer = _multiline ? std::string(text) : sanitizeForSingleLine(text);
     _cursor = _buffer.size();
+    _hScrollOffset = 0;
     clearSelection();
 }
 
