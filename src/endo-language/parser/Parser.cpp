@@ -456,7 +456,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto step = parseFSharpComposition();
                     if (!step)
                     {
@@ -511,7 +512,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto step = parseFSharpComposition();
                     if (!step)
                     {
@@ -599,7 +601,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto step = parseFSharpComposition();
                     if (!step)
                     {
@@ -679,7 +682,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto step = parseFSharpComposition();
                     if (!step)
                     {
@@ -750,7 +754,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto step = parseFSharpComposition();
                     if (!step)
                     {
@@ -876,7 +881,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         if (_lexer.currentToken() == Token::ForwardPipe)
                         {
                             _lexer.enterFSharpExpr();
-                            _lexer.nextToken(); // consume first |>
+                            _lexer.nextToken();                    // consume first |>
+                            consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
 
                             auto step = parseFSharpComposition();
                             if (!step)
@@ -930,7 +936,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 {
                     auto source = std::make_unique<ast::StructuredPipelineSourceExpr>(std::move(stmt));
                     _lexer.enterFSharpExpr();
-                    _lexer.nextToken(); // consume first |>
+                    _lexer.nextToken();                    // consume first |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
 
                     // Parse first pipeline step (single composition, not full pipeline)
                     auto step = parseFSharpComposition();
@@ -954,7 +961,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                 _lexer.pushBackToken(Token::LineFeed, "\n");
                             break;
                         }
-                        _lexer.nextToken(); // consume |>
+                        _lexer.nextToken();                    // consume |>
+                        consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                         auto right = parseFSharpComposition();
                         if (!right)
                         {
@@ -992,7 +1000,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             if (_lexer.currentToken() == Token::ForwardPipe)
             {
                 _lexer.enterFSharpExpr();
-                _lexer.nextToken(); // consume first |>
+                _lexer.nextToken();                    // consume first |>
+                consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                 auto step = parseFSharpComposition();
                 if (!step)
                 {
@@ -1042,7 +1051,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             {
                 auto source = std::make_unique<ast::StructuredPipelineSourceExpr>(std::move(stmt));
                 _lexer.enterFSharpExpr();
-                _lexer.nextToken(); // consume first |>
+                _lexer.nextToken();                    // consume first |>
+                consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
 
                 auto step = parseFSharpComposition();
                 if (!step)
@@ -1063,7 +1073,8 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                             _lexer.pushBackToken(Token::LineFeed, "\n");
                         break;
                     }
-                    _lexer.nextToken(); // consume |>
+                    _lexer.nextToken();                    // consume |>
+                    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
                     auto right = parseFSharpComposition();
                     if (!right)
                     {
@@ -1405,160 +1416,186 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
     std::vector<std::unique_ptr<ast::HereDocument>> hereDocuments;
     std::vector<std::unique_ptr<ast::HereString>> hereStrings;
 
+    // Anchor column for indentation-based line continuation: a following line
+    // whose first token sits at a column strictly greater than the program
+    // name's column is parsed as a continuation of this call.
+    // 1-based, to match currentTokenColumn().
+    auto const anchorColumn = static_cast<size_t>(programLocation.begin.column) + 1;
+
     // Parse arguments and redirects interleaved
-    // Continue while we have parameter tokens or redirect tokens, and we're not at end of statement
-    while (!isEndOfStmt() || isParameterToken())
+    // Continue while we have parameter tokens or redirect tokens, and we're not at end of statement.
+    //
+    // Outer loop implements multi-line continuation: when the inner loop stops
+    // on a LineFeed, we check whether the next line continues the command
+    // (indented relative to the program name, or begins with a continuation
+    // operator) and resume the inner loop if so.
+    while (true)
     {
-        // Check for redirect tokens
-        if (isRedirectToken())
+        while (!isEndOfStmt() || isParameterToken())
         {
-            if (!parseRedirect(inputRedirects, outputRedirects, hereDocuments, hereStrings))
-                break;
-            continue;
-        }
-
-        // Check for number that might be fd prefix for redirect
-        if (_lexer.currentToken() == Token::Number)
-        {
-            // Save position to potentially backtrack
-            std::string const numLiteral = _lexer.currentLiteral();
-            _lexer.nextToken();
-
+            // Check for redirect tokens
             if (isRedirectToken())
             {
-                // It's an fd prefix - put back and parse as redirect
-                // We need to handle this differently since we've already consumed the number
-                int const fdValue = std::stoi(numLiteral);
+                if (!parseRedirect(inputRedirects, outputRedirects, hereDocuments, hereStrings))
+                    break;
+                continue;
+            }
 
-                switch (_lexer.currentToken())
+            // Check for number that might be fd prefix for redirect
+            if (_lexer.currentToken() == Token::Number)
+            {
+                // Save position to potentially backtrack
+                std::string const numLiteral = _lexer.currentLiteral();
+                _lexer.nextToken();
+
+                if (isRedirectToken())
                 {
-                    case Token::Greater: {
-                        _lexer.nextToken();
-                        auto target = parseParameter();
-                        if (!target)
-                            break;
-                        outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-                            std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), false));
-                        continue;
-                    }
-                    case Token::GreaterGreater: {
-                        _lexer.nextToken();
-                        auto target = parseParameter();
-                        if (!target)
-                            break;
-                        outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-                            std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), true));
-                        continue;
-                    }
-                    case Token::GreaterAmp: {
-                        _lexer.nextToken();
-                        if (_lexer.currentToken() == Token::Number)
-                        {
-                            int const targetFd = std::stoi(_lexer.currentLiteral());
+                    // It's an fd prefix - put back and parse as redirect
+                    // We need to handle this differently since we've already consumed the number
+                    int const fdValue = std::stoi(numLiteral);
+
+                    switch (_lexer.currentToken())
+                    {
+                        case Token::Greater: {
                             _lexer.nextToken();
-                            outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-                                std::make_unique<ast::FileDescriptor>(fdValue),
-                                std::make_unique<ast::FileDescriptor>(targetFd)));
-                        }
-                        else
-                        {
                             auto target = parseParameter();
                             if (!target)
                                 break;
                             outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
                                 std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), false));
+                            continue;
                         }
-                        continue;
-                    }
-                    case Token::Less: {
-                        _lexer.nextToken();
-                        auto source = parseParameter();
-                        if (!source)
-                            break;
-                        inputRedirects.emplace_back(std::make_unique<ast::InputRedirect>(
-                            std::make_unique<ast::FileDescriptor>(fdValue), std::move(source)));
-                        continue;
-                    }
-                    case Token::LessLess:
-                    case Token::LessLessDash: {
-                        bool const stripTabs = _lexer.currentToken() == Token::LessLessDash;
-                        _lexer.nextToken();
-                        if (_lexer.currentToken() != Token::Identifier
-                            && _lexer.currentToken() != Token::String)
-                        {
-                            _report.syntaxErrorWithSuggestions(
-                                currentLocation(),
-                                { "Provide a delimiter for the here-document" },
-                                currentContextSnippet(),
-                                "Expected here-document delimiter, got '{}'",
-                                _lexer.currentTokenText());
-                            break;
+                        case Token::GreaterGreater: {
+                            _lexer.nextToken();
+                            auto target = parseParameter();
+                            if (!target)
+                                break;
+                            outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), true));
+                            continue;
                         }
-                        std::string delimiter = consumeLiteral();
-                        hereDocuments.emplace_back(std::make_unique<ast::HereDocument>(
-                            std::make_unique<ast::FileDescriptor>(fdValue),
-                            std::move(delimiter),
-                            "",
-                            stripTabs));
-                        continue;
+                        case Token::GreaterAmp: {
+                            _lexer.nextToken();
+                            if (_lexer.currentToken() == Token::Number)
+                            {
+                                int const targetFd = std::stoi(_lexer.currentLiteral());
+                                _lexer.nextToken();
+                                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                    std::make_unique<ast::FileDescriptor>(fdValue),
+                                    std::make_unique<ast::FileDescriptor>(targetFd)));
+                            }
+                            else
+                            {
+                                auto target = parseParameter();
+                                if (!target)
+                                    break;
+                                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                    std::make_unique<ast::FileDescriptor>(fdValue),
+                                    std::move(target),
+                                    false));
+                            }
+                            continue;
+                        }
+                        case Token::Less: {
+                            _lexer.nextToken();
+                            auto source = parseParameter();
+                            if (!source)
+                                break;
+                            inputRedirects.emplace_back(std::make_unique<ast::InputRedirect>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(source)));
+                            continue;
+                        }
+                        case Token::LessLess:
+                        case Token::LessLessDash: {
+                            bool const stripTabs = _lexer.currentToken() == Token::LessLessDash;
+                            _lexer.nextToken();
+                            if (_lexer.currentToken() != Token::Identifier
+                                && _lexer.currentToken() != Token::String)
+                            {
+                                _report.syntaxErrorWithSuggestions(
+                                    currentLocation(),
+                                    { "Provide a delimiter for the here-document" },
+                                    currentContextSnippet(),
+                                    "Expected here-document delimiter, got '{}'",
+                                    _lexer.currentTokenText());
+                                break;
+                            }
+                            std::string delimiter = consumeLiteral();
+                            hereDocuments.emplace_back(std::make_unique<ast::HereDocument>(
+                                std::make_unique<ast::FileDescriptor>(fdValue),
+                                std::move(delimiter),
+                                "",
+                                stripTabs));
+                            continue;
+                        }
+                        case Token::LessLessLess: {
+                            _lexer.nextToken();
+                            auto content = parseParameter();
+                            if (!content)
+                                break;
+                            hereStrings.emplace_back(std::make_unique<ast::HereString>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(content)));
+                            continue;
+                        }
+                        default: break;
                     }
-                    case Token::LessLessLess: {
-                        _lexer.nextToken();
-                        auto content = parseParameter();
-                        if (!content)
-                            break;
-                        hereStrings.emplace_back(std::make_unique<ast::HereString>(
-                            std::make_unique<ast::FileDescriptor>(fdValue), std::move(content)));
-                        continue;
-                    }
-                    default: break;
                 }
+
+                // Not followed by redirect - treat the number as a regular argument
+                // Check if the next token is adjacent (no whitespace) — combine into a compound word
+                if (!_lexer.hasPrecedingSpace() && isParameterToken())
+                {
+                    std::vector<std::unique_ptr<ast::Expr>> parts;
+                    parts.push_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+                    while (!_lexer.hasPrecedingSpace() && isParameterToken())
+                        if (auto part = parseParameter())
+                            parts.push_back(std::move(part));
+                        else
+                            break;
+                    if (parts.size() == 1)
+                        arguments.emplace_back(std::move(parts.front()));
+                    else
+                        arguments.emplace_back(std::make_unique<ast::ConcatExpr>(std::move(parts)));
+                }
+                else
+                {
+                    arguments.emplace_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+                }
+                continue;
             }
 
-            // Not followed by redirect - treat the number as a regular argument
-            // Check if the next token is adjacent (no whitespace) — combine into a compound word
-            if (!_lexer.hasPrecedingSpace() && isParameterToken())
+            // Regular argument — combine adjacent tokens without whitespace into a single word
+            auto arg = parseCompoundParameter();
+            if (arg)
             {
-                std::vector<std::unique_ptr<ast::Expr>> parts;
-                parts.push_back(std::make_unique<ast::LiteralExpr>(numLiteral));
-                while (!_lexer.hasPrecedingSpace() && isParameterToken())
-                    if (auto part = parseParameter())
-                        parts.push_back(std::move(part));
-                    else
-                        break;
-                if (parts.size() == 1)
-                    arguments.emplace_back(std::move(parts.front()));
-                else
-                    arguments.emplace_back(std::make_unique<ast::ConcatExpr>(std::move(parts)));
+                // Check for brace expansion on literal arguments
+                if (auto* literal = dynamic_cast<ast::LiteralExpr*>(arg.get()))
+                {
+                    if (containsBracePattern(literal->value))
+                    {
+                        auto const expanded = expandBraces(literal->value);
+                        for (auto const& e: expanded)
+                            arguments.emplace_back(std::make_unique<ast::LiteralExpr>(e));
+                        continue;
+                    }
+                }
+                arguments.emplace_back(std::move(arg));
             }
             else
             {
-                arguments.emplace_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+                break;
             }
-            continue;
         }
 
-        // Regular argument — combine adjacent tokens without whitespace into a single word
-        auto arg = parseCompoundParameter();
-        if (arg)
-        {
-            // Check for brace expansion on literal arguments
-            if (auto* literal = dynamic_cast<ast::LiteralExpr*>(arg.get()))
-            {
-                if (containsBracePattern(literal->value))
-                {
-                    auto const expanded = expandBraces(literal->value);
-                    for (auto const& e: expanded)
-                        arguments.emplace_back(std::make_unique<ast::LiteralExpr>(e));
-                    continue;
-                }
-            }
-            arguments.emplace_back(std::move(arg));
-        }
-        else
-        {
+        // Inner loop stopped. If we're on a LineFeed, attempt line
+        // continuation; otherwise the command ends here.
+        if (_lexer.currentToken() != Token::LineFeed)
             break;
-        }
+        if (tryConsumeNewlinesBeforeContinuationOperator())
+            break; // Let caller (parseCallPipeline/parseLogicalExpr) handle the operator.
+        if (tryConsumeIndentedContinuation(anchorColumn))
+            continue; // Resume arg parsing on the continuation line.
+        break;
     }
 
     CoreVM::NativeCallback const* builtinCallProcess = _lexer.currentToken() == Token::Pipe || piped
@@ -2577,6 +2614,8 @@ std::unique_ptr<ast::Statement> Parser::parseLogicalExpr()
     {
         auto const op = _lexer.currentToken();
         _lexer.nextToken();
+        // Allow `foo &&\n  bar` / `foo ||\n  bar`.
+        consumeUntilNotOneOf(Token::LineFeed);
 
         auto right = parsePrimaryStmt();
         if (!right)
@@ -2904,6 +2943,8 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
     while (_lexer.currentToken() == Token::Pipe)
     {
         _lexer.nextToken();
+        // Allow `foo |\n  bar` — newlines after `|` are whitespace.
+        consumeUntilNotOneOf(Token::LineFeed);
         TRACE_FMT("Parsing call pipeline item (NT: {})", _lexer.currentLiteral());
         if (auto nextCall = parseCall(true); nextCall)
         {
@@ -2936,6 +2977,37 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
 bool Parser::consumeNewlines()
 {
     return consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+}
+
+bool Parser::tryConsumeNewlinesBeforeContinuationOperator()
+{
+    if (_lexer.currentToken() != Token::LineFeed)
+        return false;
+
+    auto const skipped = consumeUntilNotOneOf(Token::LineFeed);
+    auto const tok = _lexer.currentToken();
+    bool const isOperator =
+        tok == Token::Pipe || tok == Token::ForwardPipe || tok == Token::AmpAmp || tok == Token::PipePipe;
+    if (isOperator)
+        return true;
+
+    if (skipped)
+        _lexer.pushBackToken(Token::LineFeed, "\n");
+    return false;
+}
+
+bool Parser::tryConsumeIndentedContinuation(size_t anchorColumn)
+{
+    if (_lexer.currentToken() != Token::LineFeed)
+        return false;
+
+    auto const skipped = consumeUntilNotOneOf(Token::LineFeed);
+    if (currentTokenColumn() > anchorColumn && (isParameterToken() || isRedirectToken()))
+        return true;
+
+    if (skipped)
+        _lexer.pushBackToken(Token::LineFeed, "\n");
+    return false;
 }
 
 bool Parser::tryConsumeToken(Token token)
@@ -4528,7 +4600,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
                 _lexer.pushBackToken(Token::LineFeed, "\n");
             break;
         }
-        _lexer.nextToken(); // consume '|>'
+        _lexer.nextToken();                    // consume '|>'
+        consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
         auto right = parseFSharpComposition();
         if (!right)
             return nullptr;
@@ -5215,7 +5288,8 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
 std::unique_ptr<ast::Expr> Parser::parseTrailingPipeline(std::unique_ptr<ast::Expr> expr)
 {
     _lexer.enterFSharpExpr();
-    _lexer.nextToken(); // consume first |>
+    _lexer.nextToken();                    // consume first |>
+    consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
     auto step = parseFSharpComposition();
     if (!step)
     {
@@ -5232,7 +5306,8 @@ std::unique_ptr<ast::Expr> Parser::parseTrailingPipeline(std::unique_ptr<ast::Ex
                 _lexer.pushBackToken(Token::LineFeed, "\n");
             break;
         }
-        _lexer.nextToken(); // consume |>
+        _lexer.nextToken();                    // consume |>
+        consumeUntilNotOneOf(Token::LineFeed); // allow `|>\n  expr`
         step = parseFSharpComposition();
         if (!step)
         {
