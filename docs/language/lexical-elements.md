@@ -159,5 +159,14 @@ TimeSpan values support comparison operators:
 1s < 1min   # true
 ```
 
+### 2.9 Line Endings and Statement Termination
+
+A newline normally ends the current statement. Within shell commands and
+pipelines, however, a newline can be absorbed as whitespace when the surrounding
+context implies continuation: a trailing or leading `|`, `|>`, `&&`, `||`, or
+an indented line following the command's program name. See
+[Multi-line Commands](command-execution.md#106-multi-line-commands) for the
+full rules.
+
 ---
 **See also:** [Type System](type-system.md) | [Grammar](grammar.md) | [Philosophy & Goals](index.md)

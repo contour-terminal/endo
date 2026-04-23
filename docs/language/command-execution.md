@@ -248,5 +248,66 @@ match which "fortune", which "lolcat" with
 - Inside `match` arms, parentheses are needed: `(exec f | exec l)` to disambiguate `|` from arm separators
 - Returns the exit code of the last command in the pipeline
 
+### 10.6 Multi-line Commands
+
+Long shell commands can span multiple lines. Endo recognises three forms of
+line continuation. Bash-style `\` at end of line is **not** supported.
+
+**Trailing operator** — if a line ends in `|`, `|>`, `&&`, or `||`, the command
+continues on the next line (indentation is irrelevant):
+
+<!-- endo-no-check -->
+```endo
+# Trailing `|`
+ls -la |
+    grep ".endo" |
+    wc -l
+
+# Trailing `&&` / `||`
+make build &&
+    make test
+
+# Trailing `|>` (F# pipeline)
+readFile "data.json" |>
+    parseJson |>
+    validate
+```
+
+**Leading operator** — if the next line starts with `|`, `|>`, `&&`, or `||`
+(at any column), it continues the previous command. This is idiomatic F#:
+
+<!-- endo-no-check -->
+```endo
+[1; 2; 3]
+    |> List.map (fun x -> x * 2)
+    |> List.filter (fun x -> x > 2)
+    |> List.sum
+
+ls -la
+    | grep ".endo"
+    | wc -l
+
+testsPassed
+    && publishArtifact
+    || notifyFailure
+```
+
+**Indentation** — if the next line's first token sits at a column strictly
+greater than the program name's column, it is parsed as a continuation of the
+command above, regardless of operators:
+
+<!-- endo-no-check -->
+```endo
+git commit -m "blurb"
+           --author "John Doe"
+           --date "2024-01-01"
+```
+
+Here `git` is at column 1; the `--author` and `--date` lines are indented past
+column 1, so they extend the `git commit` invocation.
+
+The three forms can be combined freely. A command at column 1 followed by a
+line at column 1 starts a new, independent command.
+
 ---
 **See also:** [Operators & Pipelines](operators-and-pipelines.md) | [Error Handling](error-handling.md) | [Interoperability](interoperability.md)

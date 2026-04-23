@@ -518,6 +518,11 @@ src/
   - [x] Or-pattern `|` alternation across line breaks in `parseMatch()` — LineFeed-only consumption (not semicolons)
   - [x] Match arm body on next line after `->` — consume linefeeds after arrow token
   - [x] Double-quoted string literal patterns in `parsePrimaryPattern()` — handle `DblQuoteStart` tokenization in F# mode
+- [x] Parser multi-line continuation for shell commands
+  - [x] Trailing `|`, `|>`, `&&`, `||` at end of line: LineFeeds after the operator consumed as whitespace in `parseCallPipeline`, `parseLogicalExpr`, and every `|>` site
+  - [x] Leading `|`, `|>`, `&&`, `||` at start of next line: `tryConsumeNewlinesBeforeContinuationOperator` helper peeks past LineFeeds and drops them when followed by a continuation operator
+  - [x] Indentation continuation: in `parseCall`, a next line whose first token sits at a column strictly greater than the program name's column joins the command (`tryConsumeIndentedContinuation` helper; anchor = `programLocation.begin.column`)
+  - [x] 10 Catch2 parser unit tests under `[multiline]` tag covering trailing/leading `|`/`&&`/`||`, indented arg continuation (`git commit` style), F# `|>` trailing/leading, same-column independence
 - [x] F#-style `<>` not-equal operator (alternative to `!=`, both supported)
   - [x] Lexer produces `Token::NotEqual` when `<` followed by `>` in F# mode (`_fsharpDepth > 0`)
   - [x] No parser/IR changes needed — reuses same `Token::NotEqual` as `!=`
