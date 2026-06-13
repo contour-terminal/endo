@@ -13,6 +13,10 @@ namespace tui
 /// Kitty-specific keys use values in the 0x20000+ range.
 enum class KeyCode : std::uint32_t // NOLINT(readability-enum-initial-value)
 {
+    /// Sentinel for "no key" (also the null Unicode codepoint). Used when a
+    /// KeyEvent/KeyChord carries its value in the codepoint field instead.
+    None = 0,
+
     // Non-printable keys (above Unicode BMP to avoid collision with codepoints)
     Enter = 0x10000,
     Tab,

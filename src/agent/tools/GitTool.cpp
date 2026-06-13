@@ -15,10 +15,15 @@ namespace
     constexpr auto MaxOutputSize = size_t { 30'000 };
     constexpr auto DefaultTimeout = std::chrono::milliseconds { 30'000 };
 
-    /// Subcommands that are read-only and safe to auto-approve.
-    auto const ReadOnlySubcommands = std::set<std::string> {
-        "status", "diff", "log", "branch", "show", "rev-parse", "blame", "tag", "remote", "stash",
-    };
+    /// Returns the set of git subcommands that are read-only and safe to auto-approve
+    /// (lazily initialized to avoid throwing static initialization).
+    auto readOnlySubcommands() -> std::set<std::string> const&
+    {
+        static auto const value = std::set<std::string> {
+            "status", "diff", "log", "branch", "show", "rev-parse", "blame", "tag", "remote", "stash",
+        };
+        return value;
+    }
 
     /// Checks whether a git command string contains blocked dangerous patterns.
     auto isBlockedPattern(std::string_view subcommand, std::vector<std::string> const& args) -> bool
@@ -180,7 +185,7 @@ auto GitTool::classifyRisk(nlohmann::json const& arguments) const -> ToolRisk
         return ToolRisk::Blocked;
 
     // Read-only subcommands.
-    if (ReadOnlySubcommands.contains(subcommand))
+    if (readOnlySubcommands().contains(subcommand))
         return ToolRisk::ReadOnly;
 
     // Push is destructive (affects remote state).

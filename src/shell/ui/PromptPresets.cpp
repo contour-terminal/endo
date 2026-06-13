@@ -8,8 +8,11 @@ using namespace std::string_view_literals;
 namespace endo
 {
 
-static std::vector<PromptConfig> presets = {
-    {
+/// Returns the built-in prompt presets (lazily initialized to avoid throwing static initialization).
+static std::vector<PromptConfig> const& presets()
+{
+    static std::vector<PromptConfig> const value = {
+        {
         .name = "minimal-arrow"sv,
         .layout = PromptLayoutKind::SingleLine,
         .separator = SeparatorStyle::None,
@@ -101,7 +104,9 @@ static std::vector<PromptConfig> presets = {
         .enableSixelFade = false,
         .colorOverrides = { .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } } }, // Blue → Teal gradient
     },
-};
+    };
+    return value;
+}
 
 /// @brief Overrides gradient and aurora colors for light-mode terminals.
 static void applyLightOverrides(PromptConfig& config)
@@ -125,7 +130,7 @@ static void applyLightOverrides(PromptConfig& config)
 
 PromptConfig promptPreset(std::string_view name, tui::ColorScheme scheme)
 {
-    for (const auto& preset: presets)
+    for (const auto& preset: presets())
         if (preset.name == name)
         {
             auto config = preset;
@@ -140,8 +145,8 @@ PromptConfig promptPreset(std::string_view name, tui::ColorScheme scheme)
 std::vector<std::string_view> promptPresetNames()
 {
     std::vector<std::string_view> names;
-    names.reserve(presets.size());
-    for (const auto& preset: presets)
+    names.reserve(presets().size());
+    for (const auto& preset: presets())
         names.push_back(preset.name);
     return names;
 }

@@ -31,17 +31,17 @@ class UnboxedRange
 {
   public:
     using BoxedContainer = T;
-    using BoxedIterator = typename BoxedContainer::iterator;
-    using element_type = typename BoxedContainer::value_type::element_type;
+    using BoxedIterator = BoxedContainer::iterator;
+    using element_type = BoxedContainer::value_type::element_type;
 
     class iterator // NOLINT
     {              // {{{
       public:
-        using difference_type = typename BoxedContainer::iterator::difference_type;
-        using value_type = typename BoxedContainer::iterator::value_type::element_type;
-        using pointer = typename BoxedContainer::iterator::value_type::element_type*;
-        using reference = typename BoxedContainer::iterator::value_type::element_type&;
-        using iterator_category = typename BoxedContainer::iterator::iterator_category;
+        using difference_type = BoxedContainer::iterator::difference_type;
+        using value_type = BoxedContainer::iterator::value_type::element_type;
+        using pointer = BoxedContainer::iterator::value_type::element_type*;
+        using reference = BoxedContainer::iterator::value_type::element_type&;
+        using iterator_category = BoxedContainer::iterator::iterator_category;
 
         explicit iterator(BoxedIterator boxed): _it(boxed) {}
 
@@ -122,7 +122,7 @@ class SuffixTree
 {
   public:
     using Key = K;
-    using Elem = typename Key::value_type;
+    using Elem = Key::value_type;
     using Value = V;
 
     SuffixTree();
@@ -170,7 +170,7 @@ void SuffixTree<K, V>::insert(const Key& key, const Value& value)
 }
 
 template <typename K, typename V>
-typename SuffixTree<K, V>::Node* SuffixTree<K, V>::acquire(Elem elem, Node* n)
+SuffixTree<K, V>::Node* SuffixTree<K, V>::acquire(Elem elem, Node* n)
 {
     auto i = n->children.find(elem);
     if (i != n->children.end())
@@ -212,7 +212,7 @@ class PrefixTree
 {
   public:
     using Key = K;
-    using Elem = typename Key::value_type;
+    using Elem = Key::value_type;
     using Value = V;
 
     PrefixTree();
@@ -260,7 +260,7 @@ void PrefixTree<K, V>::insert(const Key& key, const Value& value)
 }
 
 template <typename K, typename V>
-typename PrefixTree<K, V>::Node* PrefixTree<K, V>::acquire(Elem elem, Node* n)
+PrefixTree<K, V>::Node* PrefixTree<K, V>::acquire(Elem elem, Node* n)
 {
     auto i = n->children.find(elem);
     if (i != n->children.end())
@@ -678,19 +678,5 @@ struct std::formatter<CoreVM::util::IPAddress>: formatter<std::string>
     auto format(IPAddress const& v, format_context& ctx) const -> format_context::iterator
     {
         return formatter<std::string>::format(v.str(), ctx);
-    }
-};
-
-template <>
-struct std::formatter<std::optional<CoreVM::util::IPAddress>>: formatter<std::string>
-{
-    using IPAddress = CoreVM::util::IPAddress;
-
-    auto format(std::optional<IPAddress> const& v, format_context& ctx) const -> format_context::iterator
-    {
-        if (v)
-            return formatter<std::string>::format(v->str(), ctx);
-        else
-            return formatter<std::string>::format("NONE", ctx);
     }
 };
