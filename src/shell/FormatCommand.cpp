@@ -36,17 +36,29 @@ namespace
         {
             auto const arg = std::string_view(args[i]);
             if (arg == "--check")
+            {
                 opts.check = true;
+            }
             else if (arg == "--diff")
+            {
                 opts.diff = true;
+            }
             else if (arg == "--stdout")
+            {
                 opts.toStdout = true;
+            }
             else if (arg == "--recursive" || arg == "-r")
+            {
                 opts.recursive = true;
+            }
             else if (arg == "--config" && i + 1 < args.size())
+            {
                 opts.configPath = args[++i];
+            }
             else if (arg.starts_with("--config="))
+            {
                 opts.configPath = std::string(arg.substr(9));
+            }
             else if (arg == "-h" || arg == "--help")
             {
                 std::print(R"(Usage: endo format [OPTIONS] FILE...
@@ -65,7 +77,9 @@ If no files are specified, reads from stdin.
                 std::exit(EXIT_SUCCESS);
             }
             else if (!arg.starts_with("-"))
+            {
                 opts.files.push_back(arg);
+            }
             else
             {
                 std::print(stderr, "endo format: unknown option: {}\n", arg);

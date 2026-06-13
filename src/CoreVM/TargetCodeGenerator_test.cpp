@@ -79,7 +79,7 @@ TEST_CASE("TargetCodeGenerator.single_block_alloca_store_ret")
     builder.setInsertPoint(entry);
 
     auto* alloca = builder.createAlloca(LiteralType::Number, builder.get(1), "x");
-    builder.createStore(alloca, builder.get(CoreNumber(42)), "store");
+    builder.createStore(alloca, builder.get(static_cast<CoreNumber>(42)), "store");
     auto* loaded = builder.createLoad(alloca, "load");
     builder.createRet(loaded);
 
@@ -98,7 +98,7 @@ TEST_CASE("TargetCodeGenerator.single_block_ret_zero")
 
     auto* entry = builder.createBlock("entry");
     builder.setInsertPoint(entry);
-    builder.createRet(builder.get(CoreNumber(0)));
+    builder.createRet(builder.get(static_cast<CoreNumber>(0)));
 
     auto [completed, success] = testRunner.run("test");
     CHECK(completed);
@@ -127,8 +127,8 @@ TEST_CASE("TargetCodeGenerator.single_block_multiple_allocas")
 
     auto* allocaA = builder.createAlloca(LiteralType::Number, builder.get(1), "a");
     auto* allocaB = builder.createAlloca(LiteralType::Number, builder.get(1), "b");
-    builder.createStore(allocaA, builder.get(CoreNumber(10)), "store.a");
-    builder.createStore(allocaB, builder.get(CoreNumber(20)), "store.b");
+    builder.createStore(allocaA, builder.get(static_cast<CoreNumber>(10)), "store.a");
+    builder.createStore(allocaB, builder.get(static_cast<CoreNumber>(20)), "store.b");
     auto* loadedA = builder.createLoad(allocaA, "load.a");
     auto* loadedB = builder.createLoad(allocaB, "load.b");
     auto* sum = builder.createAdd(loadedA, loadedB, "sum");
@@ -164,7 +164,7 @@ TEST_CASE("TargetCodeGenerator.two_blocks_simple_branch")
 
     builder.setInsertPoint(entry);
     auto* alloca = builder.createAlloca(LiteralType::Number, builder.get(1), "x");
-    builder.createStore(alloca, builder.get(CoreNumber(0)), "store");
+    builder.createStore(alloca, builder.get(static_cast<CoreNumber>(0)), "store");
     builder.createBr(next);
 
     builder.setInsertPoint(next);
@@ -205,16 +205,16 @@ TEST_CASE("TargetCodeGenerator.conditional_branch_true_path")
 
     builder.setInsertPoint(entry);
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(result, builder.get(CoreNumber(1)), "init");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(1)), "init");
     auto* cond = builder.get(true);
     builder.createCondBr(cond, ifTrue, ifFalse);
 
     builder.setInsertPoint(ifTrue);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.true");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.true");
     builder.createBr(merge);
 
     builder.setInsertPoint(ifFalse);
-    builder.createStore(result, builder.get(CoreNumber(2)), "store.false");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(2)), "store.false");
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -241,16 +241,16 @@ TEST_CASE("TargetCodeGenerator.conditional_branch_false_path")
 
     builder.setInsertPoint(entry);
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(result, builder.get(CoreNumber(1)), "init");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(1)), "init");
     auto* cond = builder.get(false); // false this time
     builder.createCondBr(cond, ifTrue, ifFalse);
 
     builder.setInsertPoint(ifTrue);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.true");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.true");
     builder.createBr(merge);
 
     builder.setInsertPoint(ifFalse);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.false"); // also 0 for testing
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.false"); // also 0 for testing
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -300,23 +300,23 @@ TEST_CASE("TargetCodeGenerator.multiple_allocas_with_conditional")
     builder.setInsertPoint(entry);
     auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(scrutinee, builder.get(CoreNumber(5)), "store.scrutinee");
+    builder.createStore(scrutinee, builder.get(static_cast<CoreNumber>(5)), "store.scrutinee");
     builder.createBr(check0);
 
     // First pattern check
     builder.setInsertPoint(check0);
     auto* s = builder.createLoad(scrutinee, "load.scrutinee");
-    auto* match = builder.createNCmpEQ(s, builder.get(CoreNumber(5)), "match");
+    auto* match = builder.createNCmpEQ(s, builder.get(static_cast<CoreNumber>(5)), "match");
     builder.createCondBr(match, arm0, check1);
 
     // First arm body - matched!
     builder.setInsertPoint(arm0);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.result.matched");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.result.matched");
     builder.createBr(merge);
 
     // Second check (default case) - not matched
     builder.setInsertPoint(check1);
-    builder.createStore(result, builder.get(CoreNumber(1)), "store.default");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(1)), "store.default");
     builder.createBr(merge);
 
     // Merge block
@@ -347,20 +347,21 @@ TEST_CASE("TargetCodeGenerator.match_pattern_fallthrough")
     builder.setInsertPoint(entry);
     auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(scrutinee, builder.get(CoreNumber(7)), "store.scrutinee"); // 7 != 5
+    builder.createStore(scrutinee, builder.get(static_cast<CoreNumber>(7)), "store.scrutinee"); // 7 != 5
     builder.createBr(check0);
 
     builder.setInsertPoint(check0);
     auto* s = builder.createLoad(scrutinee, "load.scrutinee");
-    auto* match = builder.createNCmpEQ(s, builder.get(CoreNumber(5)), "match");
+    auto* match = builder.createNCmpEQ(s, builder.get(static_cast<CoreNumber>(5)), "match");
     builder.createCondBr(match, arm0, check1);
 
     builder.setInsertPoint(arm0);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.matched");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.matched");
     builder.createBr(merge);
 
     builder.setInsertPoint(check1);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.default"); // 0 for verification
+    builder.createStore(
+        result, builder.get(static_cast<CoreNumber>(0)), "store.default"); // 0 for verification
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -395,29 +396,29 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_second_match")
     builder.setInsertPoint(entry);
     auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(scrutinee, builder.get(CoreNumber(2)), "store.scrutinee");
+    builder.createStore(scrutinee, builder.get(static_cast<CoreNumber>(2)), "store.scrutinee");
     builder.createBr(check0);
 
     builder.setInsertPoint(check0);
     auto* s0 = builder.createLoad(scrutinee, "load.s0");
-    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(static_cast<CoreNumber>(1)), "match0");
     builder.createCondBr(match0, arm0, check1);
 
     builder.setInsertPoint(arm0);
-    builder.createStore(result, builder.get(CoreNumber(1)), "store.1"); // non-zero
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(1)), "store.1"); // non-zero
     builder.createBr(merge);
 
     builder.setInsertPoint(check1);
     auto* s1 = builder.createLoad(scrutinee, "load.s1");
-    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(static_cast<CoreNumber>(2)), "match1");
     builder.createCondBr(match1, arm1, defaultBlock);
 
     builder.setInsertPoint(arm1);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.0"); // zero = success
     builder.createBr(merge);
 
     builder.setInsertPoint(defaultBlock);
-    builder.createStore(result, builder.get(CoreNumber(3)), "store.3"); // non-zero
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(3)), "store.3"); // non-zero
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -448,29 +449,29 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_first_match")
     builder.setInsertPoint(entry);
     auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(scrutinee, builder.get(CoreNumber(1)), "store.scrutinee");
+    builder.createStore(scrutinee, builder.get(static_cast<CoreNumber>(1)), "store.scrutinee");
     builder.createBr(check0);
 
     builder.setInsertPoint(check0);
     auto* s0 = builder.createLoad(scrutinee, "load.s0");
-    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(static_cast<CoreNumber>(1)), "match0");
     builder.createCondBr(match0, arm0, check1);
 
     builder.setInsertPoint(arm0);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.0"); // zero = success
     builder.createBr(merge);
 
     builder.setInsertPoint(check1);
     auto* s1 = builder.createLoad(scrutinee, "load.s1");
-    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(static_cast<CoreNumber>(2)), "match1");
     builder.createCondBr(match1, arm1, defaultBlock);
 
     builder.setInsertPoint(arm1);
-    builder.createStore(result, builder.get(CoreNumber(2)), "store.2");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(2)), "store.2");
     builder.createBr(merge);
 
     builder.setInsertPoint(defaultBlock);
-    builder.createStore(result, builder.get(CoreNumber(3)), "store.3");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(3)), "store.3");
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -501,29 +502,29 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_default")
     builder.setInsertPoint(entry);
     auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
     auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
-    builder.createStore(scrutinee, builder.get(CoreNumber(99)), "store.scrutinee");
+    builder.createStore(scrutinee, builder.get(static_cast<CoreNumber>(99)), "store.scrutinee");
     builder.createBr(check0);
 
     builder.setInsertPoint(check0);
     auto* s0 = builder.createLoad(scrutinee, "load.s0");
-    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(static_cast<CoreNumber>(1)), "match0");
     builder.createCondBr(match0, arm0, check1);
 
     builder.setInsertPoint(arm0);
-    builder.createStore(result, builder.get(CoreNumber(1)), "store.1");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(1)), "store.1");
     builder.createBr(merge);
 
     builder.setInsertPoint(check1);
     auto* s1 = builder.createLoad(scrutinee, "load.s1");
-    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(static_cast<CoreNumber>(2)), "match1");
     builder.createCondBr(match1, arm1, defaultBlock);
 
     builder.setInsertPoint(arm1);
-    builder.createStore(result, builder.get(CoreNumber(2)), "store.2");
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(2)), "store.2");
     builder.createBr(merge);
 
     builder.setInsertPoint(defaultBlock);
-    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createStore(result, builder.get(static_cast<CoreNumber>(0)), "store.0"); // zero = success
     builder.createBr(merge);
 
     builder.setInsertPoint(merge);
@@ -557,8 +558,8 @@ TEST_CASE("TargetCodeGenerator.source_location_propagation")
 
     // Set location for first instruction
     builder.setSourceLocation(loc1);
-    auto* x = builder.get(CoreNumber(42));
-    auto* y = builder.get(CoreNumber(10));
+    auto* x = builder.get(static_cast<CoreNumber>(42));
+    auto* y = builder.get(static_cast<CoreNumber>(10));
     auto* sum = builder.createAdd(x, y, "sum");
 
     // Set different location for second instruction
@@ -615,7 +616,7 @@ TEST_CASE("TargetCodeGenerator.empty_location_table")
     builder.setInsertPoint(entry);
 
     // No setSourceLocation calls - should use empty location
-    builder.createRet(builder.get(CoreNumber(0)));
+    builder.createRet(builder.get(static_cast<CoreNumber>(0)));
 
     TargetCodeGenerator codegen;
     auto targetProgram = codegen.generate(builder.program());

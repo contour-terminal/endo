@@ -38,7 +38,7 @@ void ObjectPool::addSlab(size_t sizeClassIdx)
     auto memory = std::make_unique<uint8_t[]>(slabSize);
     sc.bumpPtr = memory.get();
     sc.bumpEnd = memory.get() + slabSize;
-    sc.slabs.push_back({ std::move(memory), slabSize });
+    sc.slabs.push_back({ .memory = std::move(memory), .size = slabSize });
 }
 
 TypedObject* ObjectPool::allocate(TypeDescriptor const* type)

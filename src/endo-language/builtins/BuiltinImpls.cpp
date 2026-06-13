@@ -532,7 +532,9 @@ void stringTrim(CoreVM::Params& args)
     auto str = std::string(args.getString(1));
     auto const start = str.find_first_not_of(" \t\n\r");
     if (start == std::string::npos)
+    {
         args.setResult(args.caller()->newString(""));
+    }
     else
     {
         auto const end = str.find_last_not_of(" \t\n\r");
@@ -1030,7 +1032,7 @@ void timespanSleep(CoreVM::Params& args)
     auto const ms = static_cast<int64_t>(obj->getSlot(0));
     if (ms > 0)
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-    args.setResult(CoreVM::CoreNumber(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void formatTimeSpan(CoreVM::Params& args)
@@ -1317,12 +1319,12 @@ namespace
                 auto const start = i;
                 while (i < path.size() && path[i] != '.' && path[i] != '[')
                     ++i;
-                segments.push_back(
-                    { JsonPathSegment::Kind::Key, std::string(path.substr(start, i - start)) });
+                segments.push_back({ .kind = JsonPathSegment::Kind::Key,
+                                     .key = std::string(path.substr(start, i - start)) });
             }
             else if (path[i] == '[' && i + 1 < path.size() && path[i + 1] == ']')
             {
-                segments.push_back({ JsonPathSegment::Kind::Array, {} });
+                segments.push_back({ .kind = JsonPathSegment::Kind::Array, .key = {} });
                 i += 2;
             }
             else
@@ -1475,7 +1477,7 @@ void fileClose(CoreVM::Params& args)
     auto* handleObj = args.getObject(1);
     auto const handle = static_cast<int64_t>(handleObj->getSlot(0));
     globalFileManager().close(handle);
-    args.setResult(CoreVM::CoreNumber(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void fileReadLine(CoreVM::Params& args)
@@ -1580,7 +1582,7 @@ void fileExists(CoreVM::Params& args)
 {
     auto const& path = args.getString(1);
     auto const exists = std::filesystem::exists(path);
-    args.setResult(CoreVM::CoreNumber(exists ? 1 : 0));
+    args.setResult(static_cast<CoreVM::CoreNumber>(exists ? 1 : 0));
 }
 
 void fileDelete(CoreVM::Params& args)
@@ -1676,7 +1678,7 @@ void refWriteBarrier(CoreVM::Params& args)
 {
     auto* obj = args.getObject(1);
     args.caller()->writeBarrier(obj);
-    args.setResult(CoreVM::CoreNumber(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 // ---------------------------------------------------------------------------

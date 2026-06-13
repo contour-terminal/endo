@@ -142,7 +142,9 @@ TEST_CASE("CompletionCandidates.dotAccess.Option_filter_m", "[completion]")
 TEST_CASE("CompletionCandidates.dotAccess.underscore_returns_all_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["ProcessInfo"] = { { "pid", "int" }, { "user", "str" }, { "cpu", "float" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                              { .name = "user", .typeName = "str" },
+                              { .name = "cpu", .typeName = "float" } };
     auto candidates = dotAccessCandidates("_", "", fields);
     CHECK(candidates.size() == 3);
     CHECK(hasCandidate(candidates, "_.pid"));
@@ -153,7 +155,9 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_returns_all_fields", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.underscore_filter", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["ProcessInfo"] = { { "pid", "int" }, { "user", "str" }, { "cpu", "float" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                              { .name = "user", .typeName = "str" },
+                              { .name = "cpu", .typeName = "float" } };
     auto candidates = dotAccessCandidates("_", "p", fields);
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].text == "_.pid");
@@ -162,7 +166,7 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_filter", "[completion]")
 TEST_CASE("CompletionCandidates.dotAccess.generic_var_returns_methods_and_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["ProcessInfo"] = { { "pid", "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     auto candidates = dotAccessCandidates("myVar", "", fields, {}, {}, testModuleFunctions());
     // 3 Option methods + 1 field = 4
     CHECK(candidates.size() == 4);
@@ -175,8 +179,8 @@ TEST_CASE("CompletionCandidates.dotAccess.generic_var_returns_methods_and_fields
 TEST_CASE("CompletionCandidates.dotAccess.no_duplicates_across_types", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["TypeA"] = { { "name", "str" }, { "age", "int" } };
-    fields["TypeB"] = { { "name", "str" }, { "score", "int" } };
+    fields["TypeA"] = { { .name = "name", .typeName = "str" }, { .name = "age", .typeName = "int" } };
+    fields["TypeB"] = { { .name = "name", .typeName = "str" }, { .name = "score", .typeName = "int" } };
     auto candidates = dotAccessCandidates("_", "", fields);
     // "name" should only appear once
     auto nameCount = std::ranges::count_if(candidates, [](auto const& c) { return c.text == "_.name"; });
@@ -186,7 +190,7 @@ TEST_CASE("CompletionCandidates.dotAccess.no_duplicates_across_types", "[complet
 TEST_CASE("CompletionCandidates.dotAccess.typed_fields_show_type", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Person"] = { { "name", "str" }, { "age", "int" } };
+    fields["Person"] = { { .name = "name", .typeName = "str" }, { .name = "age", .typeName = "int" } };
     auto candidates = dotAccessCandidates("_", "", fields);
     auto const* nameCand = findCandidate(candidates, "_.name");
     REQUIRE(nameCand != nullptr);
@@ -199,8 +203,8 @@ TEST_CASE("CompletionCandidates.dotAccess.typed_fields_show_type", "[completion]
 TEST_CASE("CompletionCandidates.dotAccess.variable_with_known_type", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Person"] = { { "name", "str" }, { "age", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    fields["Person"] = { { .name = "name", .typeName = "str" }, { .name = "age", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" }, { .name = "cpu", .typeName = "float" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["alice"] = "Person";
     auto candidates = dotAccessCandidates("alice", "", fields, variableTypes);
@@ -214,7 +218,7 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_with_known_type", "[completio
 TEST_CASE("CompletionCandidates.dotAccess.variable_with_known_type_no_option_methods", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Person"] = { { "name", "str" } };
+    fields["Person"] = { { .name = "name", .typeName = "str" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["alice"] = "Person";
     auto candidates = dotAccessCandidates("alice", "", fields, variableTypes);
@@ -227,7 +231,7 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_with_known_type_no_option_met
 TEST_CASE("CompletionCandidates.dotAccess.variable_unknown_type_fallback", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Person"] = { { "name", "str" } };
+    fields["Person"] = { { .name = "name", .typeName = "str" } };
     std::unordered_map<std::string, std::string> variableTypes;
     // "bob" is NOT in variableTypes -> fallback to generic behavior
     auto candidates = dotAccessCandidates("bob", "", fields, variableTypes, {}, testModuleFunctions());
@@ -239,8 +243,10 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_unknown_type_fallback", "[com
 TEST_CASE("CompletionCandidates.dotAccess.typed_variable_TimeSpan", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["TimeSpan"] = { { "milliseconds", "int" } };
-    fields["DateTime"] = { { "year", "int" }, { "month", "int" }, { "epoch", "int" } };
+    fields["TimeSpan"] = { { .name = "milliseconds", .typeName = "int" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },
+                           { .name = "month", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["x"] = "TimeSpan";
     auto candidates = dotAccessCandidates("x", "", fields, variableTypes, {}, testModuleFunctions());
@@ -257,8 +263,10 @@ TEST_CASE("CompletionCandidates.dotAccess.typed_variable_TimeSpan", "[completion
 TEST_CASE("CompletionCandidates.dotAccess.size_literal_float_shows_only_size_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Size"] = { { "bytes", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                              { .name = "cpu", .typeName = "float" },
+                              { .name = "command", .typeName = "string" } };
     auto candidates = dotAccessCandidates("15.5MB", "", fields, {}, {}, testModuleFunctions());
     REQUIRE(candidates.size() == 1);
     CHECK(hasCandidate(candidates, "15.5MB.bytes"));
@@ -269,8 +277,8 @@ TEST_CASE("CompletionCandidates.dotAccess.size_literal_float_shows_only_size_fie
 TEST_CASE("CompletionCandidates.dotAccess.size_literal_int_shows_only_size_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Size"] = { { "bytes", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     auto candidates = dotAccessCandidates("100KB", "", fields, {}, {}, testModuleFunctions());
     REQUIRE(candidates.size() == 1);
     CHECK(hasCandidate(candidates, "100KB.bytes"));
@@ -279,7 +287,7 @@ TEST_CASE("CompletionCandidates.dotAccess.size_literal_int_shows_only_size_field
 TEST_CASE("CompletionCandidates.dotAccess.size_literal_filter_by_prefix", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Size"] = { { "bytes", "int" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
     auto candidates = dotAccessCandidates("15.5MB", "b", fields);
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].text == "15.5MB.bytes");
@@ -288,7 +296,7 @@ TEST_CASE("CompletionCandidates.dotAccess.size_literal_filter_by_prefix", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.size_literal_all_suffixes", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Size"] = { { "bytes", "int" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
     for (auto const* const suffix: { "B", "KB", "MB", "GB", "TB" })
     {
         auto literal = std::string("100") + suffix;
@@ -301,8 +309,8 @@ TEST_CASE("CompletionCandidates.dotAccess.size_literal_all_suffixes", "[completi
 TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_shows_only_timespan_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["TimeSpan"] = { { "milliseconds", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" } };
+    fields["TimeSpan"] = { { .name = "milliseconds", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     auto candidates = dotAccessCandidates("500ms", "", fields, {}, {}, testModuleFunctions());
     REQUIRE(candidates.size() == 1);
     CHECK(hasCandidate(candidates, "500ms.milliseconds"));
@@ -312,7 +320,7 @@ TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_shows_only_timespan_f
 TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_float_seconds", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    fields["TimeSpan"] = { { .name = "milliseconds", .typeName = "int" } };
     auto candidates = dotAccessCandidates("3.5s", "", fields);
     REQUIRE(candidates.size() == 1);
     CHECK(hasCandidate(candidates, "3.5s.milliseconds"));
@@ -321,7 +329,7 @@ TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_float_seconds", "[com
 TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_all_suffixes", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    fields["TimeSpan"] = { { .name = "milliseconds", .typeName = "int" } };
     for (auto const* const suffix: { "ms", "s", "min", "h" })
     {
         auto literal = std::string("100") + suffix;
@@ -334,7 +342,7 @@ TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_all_suffixes", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.stdlib_function_not_qualifiable", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["ProcessInfo"] = { { "pid", "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     // Stdlib function names like ps, head, trim, rand should produce no dot-access candidates
     for (auto const& name: { "ps", "head", "trim", "rand" })
     {
@@ -346,7 +354,7 @@ TEST_CASE("CompletionCandidates.dotAccess.stdlib_function_not_qualifiable", "[co
 TEST_CASE("CompletionCandidates.dotAccess.underscore_typed_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["Person"] = { { "name", "str" }, { "age", "int" } };
+    fields["Person"] = { { .name = "name", .typeName = "str" }, { .name = "age", .typeName = "int" } };
     auto candidates = dotAccessCandidates("_", "", fields);
     // Both fields should appear with type info
     CHECK(candidates.size() == 2);
@@ -378,9 +386,13 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_filter_f", "[completion]")
 TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_returns_DateTime_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                              { .name = "cpu", .typeName = "float" },
+                              { .name = "command", .typeName = "string" } };
     auto candidates = dotAccessCandidates("DateTime.now", "", fields);
     CHECK(candidates.size() == 7);
     CHECK(hasCandidate(candidates, "DateTime.now.year"));
@@ -395,9 +407,13 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_returns_DateTime_fields",
 TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_filter_by_prefix", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                              { .name = "cpu", .typeName = "float" },
+                              { .name = "command", .typeName = "string" } };
     auto candidates = dotAccessCandidates("DateTime.now", "m", fields);
     REQUIRE(candidates.size() == 2);
     CHECK(hasCandidate(candidates, "DateTime.now.month"));
@@ -407,10 +423,14 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_filter_by_prefix", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.nested_dot_resolves_through_types", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "name", "str" }, { "size", "Size" }, { "mtime", "DateTime" } };
-    fields["Size"] = { { "bytes", "int" } };
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["FileInfo"] = { { .name = "name", .typeName = "str" },
+                           { .name = "size", .typeName = "Size" },
+                           { .name = "mtime", .typeName = "DateTime" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["f"] = "FileInfo";
     auto candidates = dotAccessCandidates("f.mtime", "", fields, variableTypes);
@@ -428,12 +448,15 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_dot_FileInfo_size_bytes", "[com
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
     fields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },   { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "int" },   { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
-    fields["Size"] = { { "bytes", "int" } };
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["f"] = "FileInfo";
     auto candidates = dotAccessCandidates("f.size", "", fields, variableTypes);
@@ -444,9 +467,12 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_dot_FileInfo_size_bytes", "[com
 TEST_CASE("CompletionCandidates.dotAccess.nested_dot_filter_by_prefix", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "name", "str" }, { "mtime", "DateTime" } };
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["FileInfo"] = { { .name = "name", .typeName = "str" },
+                           { .name = "mtime", .typeName = "DateTime" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
     std::unordered_map<std::string, std::string> variableTypes;
     variableTypes["f"] = "FileInfo";
     auto candidates = dotAccessCandidates("f.mtime", "y", fields, variableTypes);
@@ -930,8 +956,8 @@ TEST_CASE("CompletionCandidates.resolvePipelineSourceType.empty_input", "[comple
 TEST_CASE("CompletionCandidates.dotAccess.underscore_with_pipeline_type", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "name", "str" }, { "isDir", "bool" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    fields["FileInfo"] = { { .name = "name", .typeName = "str" }, { .name = "isDir", .typeName = "bool" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" }, { .name = "cpu", .typeName = "float" } };
 
     // With pipeline type: only FileInfo fields
     auto candidates = dotAccessCandidates("_", "", fields, {}, "FileInfo");
@@ -944,8 +970,8 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_with_pipeline_type", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.underscore_without_pipeline_type", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "name", "str" }, { "isDir", "bool" } };
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    fields["FileInfo"] = { { .name = "name", .typeName = "str" }, { .name = "isDir", .typeName = "bool" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" }, { .name = "cpu", .typeName = "float" } };
 
     // Without pipeline type: all fields (existing behavior)
     auto candidates = dotAccessCandidates("_", "", fields, {}, "");
@@ -962,13 +988,16 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mode_shows_FileMode_
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
     fields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },      { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "FileMode" }, { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
-    fields["FileMode"] = { { "bits", "int" } };
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
-    fields["Size"] = { { "bytes", "int" } };
+    fields["FileMode"] = { { .name = "bits", .typeName = "int" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
+    fields["Size"] = { { .name = "bytes", .typeName = "int" } };
 
     auto candidates = dotAccessCandidates("_.mode", "", fields, {}, "FileInfo");
     REQUIRE(candidates.size() == 1);
@@ -979,12 +1008,15 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mtime_shows_DateTime
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
     fields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },      { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "FileMode" }, { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
-    fields["FileMode"] = { { "bits", "int" } };
-    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
-                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["FileMode"] = { { .name = "bits", .typeName = "int" } };
+    fields["DateTime"] = { { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+                           { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+                           { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+                           { .name = "epoch", .typeName = "int" } };
 
     auto candidates = dotAccessCandidates("_.mtime", "", fields, {}, "FileInfo");
     CHECK(candidates.size() == 7);
@@ -996,8 +1028,8 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mtime_shows_DateTime
 TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mode_filter_by_prefix", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "mode", "FileMode" } };
-    fields["FileMode"] = { { "bits", "int" } };
+    fields["FileInfo"] = { { .name = "mode", .typeName = "FileMode" } };
+    fields["FileMode"] = { { .name = "bits", .typeName = "int" } };
 
     auto candidates = dotAccessCandidates("_.mode", "b", fields, {}, "FileInfo");
     REQUIRE(candidates.size() == 1);
@@ -1007,9 +1039,9 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mode_filter_by_prefi
 TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_no_pipeline_type_falls_back", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "mode", "FileMode" } };
-    fields["FileMode"] = { { "bits", "int" } };
-    fields["ProcessInfo"] = { { "pid", "int" } };
+    fields["FileInfo"] = { { .name = "mode", .typeName = "FileMode" } };
+    fields["FileMode"] = { { .name = "bits", .typeName = "int" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
 
     // No pipeline type → falls through to fallback (all fields)
     auto candidates = dotAccessCandidates("_.mode", "", fields, {}, "");
@@ -1060,7 +1092,7 @@ TEST_CASE("CompletionCandidates.keywordCandidates.all_have_detail", "[completion
 TEST_CASE("CompletionCandidates.dotAccess.fields_have_detail", "[completion][detail]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    fields["ProcessInfo"] = { { .name = "pid", .typeName = "int" }, { .name = "cpu", .typeName = "float" } };
     auto candidates = dotAccessCandidates("_", "", fields);
     for (auto const& c: candidates)
         CHECK(!c.detail.empty());

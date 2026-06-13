@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -16,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
@@ -66,7 +65,9 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
     auto const result = _env.changeDirectory(path);
     if (!result.has_value())
     {
-        error("Failed to change directory to '{}': {}", platform::normalizePath(path), toString(result.error()));
+        error("Failed to change directory to '{}': {}",
+              platform::normalizePath(path),
+              toString(result.error()));
         _exitCode = 1;
     }
     else
@@ -349,7 +350,9 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         }
         case ScriptType::Shell: {
             if (auto bashPath = resolveProgram("bash"); bashPath.has_value())
+            {
                 interpreter = *bashPath;
+            }
             else
             {
                 error("source-env: bash not found in PATH");

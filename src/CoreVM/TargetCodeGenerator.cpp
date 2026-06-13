@@ -247,7 +247,7 @@ void TargetCodeGenerator::generate(IRFunction* function)
             // Skip internal/unnamed variables (empty names or compiler-generated with '.')
             if (varName.empty() || varName.find('.') != std::string::npos)
                 continue;
-            debugVars.push_back({ varName, index, alloca->type() });
+            debugVars.push_back({ .name = varName, .allocaIndex = index, .type = alloca->type() });
         }
         // Sort by alloca index for deterministic ordering
         std::ranges::sort(debugVars, {}, &DebugVarInfo::allocaIndex);
@@ -270,14 +270,14 @@ void TargetCodeGenerator::emitCondJump(Opcode opcode, BasicBlock* bb)
     const auto pc = getInstructionPointer();
     emitInstr(opcode);
     changeStack(1, nullptr);
-    _conditionalJumps[bb].push_back({ pc, opcode });
+    _conditionalJumps[bb].push_back({ .pc = pc, .opcode = opcode });
 }
 
 void TargetCodeGenerator::emitJump(BasicBlock* bb)
 {
     const auto pc = getInstructionPointer();
     emitInstr(Opcode::JMP);
-    _unconditionalJumps[bb].push_back({ pc, Opcode::JMP });
+    _unconditionalJumps[bb].push_back({ .pc = pc, .opcode = Opcode::JMP });
 }
 
 void TargetCodeGenerator::emitBinary(Instr& binaryInstr, Opcode opcode)
@@ -321,7 +321,7 @@ StackPointer TargetCodeGenerator::getStackPointer(const Value* value)
             return i;
 
     // ((Value*) value)->dump();
-    return (StackPointer) -1;
+    return static_cast<StackPointer>(-1);
 }
 
 void TargetCodeGenerator::changeStack(size_t pops, const Value* pushValue)

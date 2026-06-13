@@ -71,7 +71,9 @@ namespace
             return;
         }
         if (auto const* e = dynamic_cast<ast::ParenExpr const*>(&expr))
+        {
             collectCalls(*e->inner, calls);
+        }
         else if (auto const* e = dynamic_cast<ast::BinaryExpr const*>(&expr))
         {
             collectCalls(*e->left, calls);

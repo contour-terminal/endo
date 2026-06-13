@@ -34,7 +34,9 @@ TypeDescriptor makeObjProduct(uint16_t slotCount, uint16_t id = 201)
     desc.slotCount = slotCount;
     for (uint16_t i = 0; i < slotCount; ++i)
     {
-        desc.fields.push_back({ "f" + std::to_string(i), static_cast<uint8_t>(i), LiteralType::Object });
+        desc.fields.push_back({ .name = "f" + std::to_string(i),
+                                .offset = static_cast<uint8_t>(i),
+                                .type = LiteralType::Object });
         desc.traceInfo.fixedObjectSlots.push_back(static_cast<uint8_t>(i));
     }
     return desc;
@@ -48,7 +50,7 @@ TypeDescriptor makeOptionLike(uint16_t id = 210)
     desc.id = id;
     desc.name = "OptionLike" + std::to_string(id);
     desc.slotCount = 2; // payload + type tag
-    desc.variants = { { "None", 0 }, { "Some", 1 } };
+    desc.variants = { { .name = "None", .payloadSlots = 0 }, { .name = "Some", .payloadSlots = 1 } };
     desc.traceInfo.variantFixedSlots = { {}, {} };
     desc.traceInfo.variantDynamicSlots = {
         {},
@@ -65,7 +67,7 @@ TypeDescriptor makeListLike(uint16_t id = 220)
     desc.id = id;
     desc.name = "ListLike" + std::to_string(id);
     desc.slotCount = 3; // head + tail + type tag
-    desc.variants = { { "Nil", 0 }, { "Cons", 2 } };
+    desc.variants = { { .name = "Nil", .payloadSlots = 0 }, { .name = "Cons", .payloadSlots = 2 } };
     desc.traceInfo.variantFixedSlots = { {}, { 1 } }; // tail always object
     desc.traceInfo.variantDynamicSlots = {
         {},

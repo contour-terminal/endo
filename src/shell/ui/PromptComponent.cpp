@@ -670,7 +670,9 @@ void PromptComponent::render(tui::Canvas& canvas)
                 canvas.putString(row, HorizontalMargin + 1, "\xe2\x94\x80", sepStyle); // U+2500 ─
             }
             else
+            {
                 canvas.putString(row, HorizontalMargin, "\xe2\x94\x82", sepStyle); // U+2502 │
+            }
         }
         else if (_config.separator == SeparatorStyle::None)
         {
@@ -1092,7 +1094,9 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                     if (_historyCycleIndex.has_value())
                     {
                         if (*_historyCycleIndex > 0)
+                        {
                             --(*_historyCycleIndex);
+                        }
                         else
                         {
                             // Back to original input

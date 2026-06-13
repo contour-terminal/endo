@@ -246,8 +246,8 @@ TypedObject* Runner::allocObject(uint16_t typeId)
     }
 
     // Trigger GC if suspects exist and allocation threshold reached.
-    if (_config.gcEnabled && !_gcSuspects.empty()
-        && _objectPool.totalAllocations() > 0 && _objectPool.totalAllocations() % _config.gcThreshold == 0)
+    if (_config.gcEnabled && !_gcSuspects.empty() && _objectPool.totalAllocations() > 0
+        && _objectPool.totalAllocations() % _config.gcThreshold == 0)
     {
         performGC();
     }
@@ -1026,14 +1026,14 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(SADD)
     {
-        SP(-2) = (Value) catString(getString(-2), getString(-1));
+        SP(-2) = reinterpret_cast<Value>(catString(getString(-2), getString(-1)));
         pop();
         next;
     }
 
     instr(SSUBSTR)
     {
-        SP(-2) = (Value) newString(getString(-3).substr(getNumber(-2), getNumber(-1)));
+        SP(-2) = reinterpret_cast<Value>(newString(getString(-3).substr(getNumber(-2), getNumber(-1))));
         _stack.discard(2);
         next;
     }
@@ -1191,7 +1191,7 @@ Runner::RunResult Runner::loopWithResult()
             util::RegExp::Result& rr = *_regexpContext.regexMatch();
             std::string match = rr[position];
 
-            push((Value) newString(std::move(match)));
+            push(reinterpret_cast<Value>(newString(std::move(match))));
         }
         next;
     }
@@ -1207,13 +1207,13 @@ Runner::RunResult Runner::loopWithResult()
     { // A = itoa(B)
         CoreNumber value = getNumber(-1);
         char buf[64];
-        if (snprintf(buf, sizeof(buf), "%" PRIi64 "", (int64_t) value) > 0)
+        if (snprintf(buf, sizeof(buf), "%" PRIi64 "", value) > 0)
         {
-            SP(-1) = (Value) newString(buf);
+            SP(-1) = reinterpret_cast<Value>(newString(buf));
         }
         else
         {
-            SP(-1) = (Value) emptyString();
+            SP(-1) = reinterpret_cast<Value>(emptyString());
         }
         next;
     }
@@ -1221,21 +1221,21 @@ Runner::RunResult Runner::loopWithResult()
     instr(P2S)
     {
         const util::IPAddress& ipaddr = getIPAddress(-1);
-        SP(-1) = (Value) newString(ipaddr.str());
+        SP(-1) = reinterpret_cast<Value>(newString(ipaddr.str()));
         next;
     }
 
     instr(C2S)
     {
         const util::Cidr& cidr = getCidr(-1);
-        SP(-1) = (Value) newString(cidr.str());
+        SP(-1) = reinterpret_cast<Value>(newString(cidr.str()));
         next;
     }
 
     instr(R2S)
     {
         const util::RegExp& re = getRegExp(-1);
-        SP(-1) = (Value) newString(re.pattern());
+        SP(-1) = reinterpret_cast<Value>(newString(re.pattern()));
         next;
     }
     // }}}

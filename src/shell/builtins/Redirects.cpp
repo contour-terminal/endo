@@ -14,11 +14,13 @@ void Shell::builtinOpenRead(CoreVM::Params& context)
     auto const& path = context.getString(1);
     auto const result = _processManager.openFile(path, O_RDONLY);
     if (result.has_value())
-        context.setResult(CoreVM::CoreNumber(result.value()));
+    {
+        context.setResult(static_cast<CoreVM::CoreNumber>(result.value()));
+    }
     else
     {
         error("Failed to open '{}' for reading: {}", path, toString(result.error()));
-        context.setResult(CoreVM::CoreNumber(-1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(-1));
     }
 }
 
@@ -28,11 +30,13 @@ void Shell::builtinOpenWrite(CoreVM::Params& context)
     int const oflags = static_cast<int>(context.getInt(2));
     auto const result = _processManager.openFile(path, oflags);
     if (result.has_value())
-        context.setResult(CoreVM::CoreNumber(result.value()));
+    {
+        context.setResult(static_cast<CoreVM::CoreNumber>(result.value()));
+    }
     else
     {
         error("Failed to open '{}' for writing: {}", path, toString(result.error()));
-        context.setResult(CoreVM::CoreNumber(-1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(-1));
     }
 }
 

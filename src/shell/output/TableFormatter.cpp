@@ -232,7 +232,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         for (size_t i = 0; i < numElems; ++i)
         {
             auto const elemType = CoreVM::unpackTypeTag(packedTags, static_cast<uint8_t>(i));
-            resolvedFields.push_back({ std::to_string(i + 1), static_cast<uint8_t>(i), elemType });
+            resolvedFields.push_back(
+                { .name = std::to_string(i + 1), .offset = static_cast<uint8_t>(i), .type = elemType });
         }
     }
 

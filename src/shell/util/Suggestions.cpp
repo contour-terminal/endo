@@ -66,7 +66,7 @@ std::vector<std::string> SuggestionGenerator::suggestCommand(std::string_view in
     {
         auto const dist = levenshteinDistance(input, builtin);
         if (dist <= maxDistance && dist > 0) // Exclude exact matches
-            candidates.push_back({ std::string(builtin), dist });
+            candidates.push_back({ .name = std::string(builtin), .distance = dist });
     }
 
     // Sort by distance (closest first)

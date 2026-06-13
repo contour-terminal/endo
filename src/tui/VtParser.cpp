@@ -494,11 +494,17 @@ void VtParser::processGround(std::uint8_t byte, std::vector<InputEvent>& events)
         _utf8Buf.clear();
         _utf8Buf += static_cast<char>(byte);
         if ((byte & 0xE0) == 0xC0)
+        {
             _utf8Remaining = 1;
+        }
         else if ((byte & 0xF0) == 0xE0)
+        {
             _utf8Remaining = 2;
+        }
         else if ((byte & 0xF8) == 0xF0)
+        {
             _utf8Remaining = 3;
+        }
         else
         {
             // Invalid lead byte, ignore

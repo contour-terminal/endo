@@ -69,7 +69,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
     if (!pipeResult.has_value())
     {
         error("Failed to create pipe for process substitution: {}", toString(pipeResult.error()));
-        context.setResult(CoreVM::CoreNumber(-1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(-1));
         return;
     }
 
@@ -81,7 +81,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
     if (pid < 0)
     {
         error("Failed to fork for process substitution: {}", strerror(errno));
-        context.setResult(CoreVM::CoreNumber(-1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(-1));
         return;
     }
 
@@ -100,7 +100,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
             pipe->closeWriter();
         }
 
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -126,7 +126,7 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
     _procSubstFdPath = std::format("/dev/fd/{}", exposedFd);
     #endif
 
-    context.setResult(CoreVM::CoreNumber(1));
+    context.setResult(static_cast<CoreVM::CoreNumber>(1));
 #else
     error(
         "Process substitution is not supported on Windows. Consider using temporary files or pipes instead.");

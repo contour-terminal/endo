@@ -295,19 +295,33 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
             else if (_lexer.isDirective("import") && nextIsPascalCaseIdentifier())
+            {
                 return parseImport();
+            }
             else if (_lexer.isDirective("open") && nextIsPascalCaseIdentifier())
+            {
                 return parseOpen();
+            }
             else if (_lexer.isDirective("module") && nextIsPascalCaseIdentifier())
+            {
                 return parseModuleDecl();
+            }
             else if (_lexer.isDirective("while"))
+            {
                 return parseWhile();
+            }
             else if (_lexer.isDirective("for"))
+            {
                 return parseFor();
+            }
             else if (_lexer.isDirective("break"))
+            {
                 return parseBreak();
+            }
             else if (_lexer.isDirective("continue"))
+            {
                 return parseContinue();
+            }
             else if (auto const strategy = endo::getStmtParseStrategy(_lexer.currentLiteral());
                      strategy != endo::StmtParseStrategy::None)
             {
@@ -1542,7 +1556,9 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
             arguments.emplace_back(std::move(arg));
         }
         else
+        {
             break;
+        }
     }
 
     CoreVM::NativeCallback const* builtinCallProcess = _lexer.currentToken() == Token::Pipe || piped
@@ -3008,7 +3024,9 @@ size_t Parser::findMatchingBrace(std::string_view s, size_t start)
     for (size_t i = start + 1; i < s.size(); ++i)
     {
         if (s[i] == '{')
+        {
             ++depth;
+        }
         else if (s[i] == '}')
         {
             --depth;
@@ -6331,13 +6349,21 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                             isBaseUnit = true;
                         }
                         else if (suffix == "KB")
+                        {
                             multiplier = 1024;
+                        }
                         else if (suffix == "MB")
+                        {
                             multiplier = int64_t { 1024 } * 1024;
+                        }
                         else if (suffix == "GB")
+                        {
                             multiplier = int64_t { 1024 } * 1024 * 1024;
+                        }
                         else if (suffix == "TB")
+                        {
                             multiplier = int64_t { 1024 } * 1024 * 1024 * 1024;
+                        }
                         if (isBaseUnit && value != std::floor(value))
                         {
                             _report.syntaxErrorWithSuggestions(
@@ -6364,11 +6390,17 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                             isBaseUnit = true;
                         }
                         else if (suffix == "s")
+                        {
                             multiplier = 1000;
+                        }
                         else if (suffix == "min")
+                        {
                             multiplier = 60000;
+                        }
                         else if (suffix == "h")
+                        {
                             multiplier = 3600000;
+                        }
                         if (isBaseUnit && value != std::floor(value))
                         {
                             _report.syntaxErrorWithSuggestions(
@@ -7041,7 +7073,9 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
     for (size_t i = 0; i < lit.size(); ++i)
     {
         if (lit[i] == '[')
+        {
             ++depth;
+        }
         else if (lit[i] == ']')
         {
             --depth;
@@ -7071,9 +7105,13 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
         for (size_t i = 0; i + 1 < content.size(); ++i)
         {
             if (content[i] == '[')
+            {
                 ++bracketDepth;
+            }
             else if (content[i] == ']')
+            {
                 --bracketDepth;
+            }
             else if (bracketDepth == 0 && content[i] == '.' && content[i + 1] == '.')
             {
                 rangePos = i;
@@ -7415,9 +7453,13 @@ std::unique_ptr<ast::Expr> Parser::parseListRangeFromContent(std::string_view co
     for (size_t i = 0; i + 1 < content.size(); ++i)
     {
         if (content[i] == '[')
+        {
             ++bracketDepth;
+        }
         else if (content[i] == ']')
+        {
             --bracketDepth;
+        }
         else if (bracketDepth == 0 && content[i] == '.' && content[i + 1] == '.')
         {
             rangePos = i;
@@ -7442,9 +7484,13 @@ std::unique_ptr<ast::Expr> Parser::parseListRangeFromContent(std::string_view co
     for (size_t i = 0; i + 1 < restPart.size(); ++i)
     {
         if (restPart[i] == '[')
+        {
             ++bracketDepth;
+        }
         else if (restPart[i] == ']')
+        {
             --bracketDepth;
+        }
         else if (bracketDepth == 0 && restPart[i] == '.' && restPart[i + 1] == '.')
         {
             secondRangePos = i;

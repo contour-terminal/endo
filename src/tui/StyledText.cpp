@@ -142,8 +142,8 @@ namespace
                 auto const endTick = text.find('`', pos + 1);
                 if (endTick != std::string_view::npos)
                 {
-                    spans.push_back(
-                        { std::string(text.substr(pos + 1, endTick - pos - 1)), theme.codeInline });
+                    spans.push_back({ .text = std::string(text.substr(pos + 1, endTick - pos - 1)),
+                                      .style = theme.codeInline });
                     pos = endTick + 1;
                     continue;
                 }
@@ -155,7 +155,8 @@ namespace
                 auto const endBold = text.find("**", pos + 2);
                 if (endBold != std::string_view::npos)
                 {
-                    spans.push_back({ std::string(text.substr(pos + 2, endBold - pos - 2)), theme.bold });
+                    spans.push_back({ .text = std::string(text.substr(pos + 2, endBold - pos - 2)),
+                                      .style = theme.bold });
                     pos = endBold + 2;
                     continue;
                 }
@@ -167,7 +168,8 @@ namespace
                 auto const endItalic = text.find('*', pos + 1);
                 if (endItalic != std::string_view::npos)
                 {
-                    spans.push_back({ std::string(text.substr(pos + 1, endItalic - pos - 1)), theme.italic });
+                    spans.push_back({ .text = std::string(text.substr(pos + 1, endItalic - pos - 1)),
+                                      .style = theme.italic });
                     pos = endItalic + 1;
                     continue;
                 }
@@ -179,7 +181,8 @@ namespace
                 auto const endBold = text.find("__", pos + 2);
                 if (endBold != std::string_view::npos)
                 {
-                    spans.push_back({ std::string(text.substr(pos + 2, endBold - pos - 2)), theme.bold });
+                    spans.push_back({ .text = std::string(text.substr(pos + 2, endBold - pos - 2)),
+                                      .style = theme.bold });
                     pos = endBold + 2;
                     continue;
                 }
@@ -196,7 +199,7 @@ namespace
                     if (endParen != std::string_view::npos)
                     {
                         auto const linkText = text.substr(pos + 1, endBracket - pos - 1);
-                        spans.push_back({ std::string(linkText), theme.link });
+                        spans.push_back({ .text = std::string(linkText), .style = theme.link });
                         pos = endParen + 1;
                         continue;
                     }
@@ -206,7 +209,7 @@ namespace
             // Regular character - find the next special character
             auto const nextSpecial = text.find_first_of("`*_[", pos + 1);
             auto const end = (nextSpecial != std::string_view::npos) ? nextSpecial : text.size();
-            spans.push_back({ std::string(text.substr(pos, end - pos)), {} });
+            spans.push_back({ .text = std::string(text.substr(pos, end - pos)), .style = {} });
             pos = end;
         }
 
@@ -227,7 +230,7 @@ StyledText StyledText::fromPlainText(std::string_view text, int maxWidth, Style 
             (lineEnd != std::string_view::npos) ? text.substr(pos, lineEnd - pos) : text.substr(pos);
 
         StyledLine styledLine;
-        styledLine.push_back({ std::string(line), baseStyle });
+        styledLine.push_back({ .text = std::string(line), .style = baseStyle });
 
         if (maxWidth > 0)
         {
@@ -341,7 +344,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
             }
             borderStr.append(right);
             StyledLine styledLine;
-            styledLine.push_back({ std::move(borderStr), mdTheme.tableBorder });
+            styledLine.push_back({ .text = std::move(borderStr), .style = mdTheme.tableBorder });
             result.addLine(std::move(styledLine)); // No word-wrap for table lines
         };
 
@@ -349,7 +352,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
         auto buildRow = [&](std::vector<std::string> const& cells, Style const& cellStyle) {
             StyledLine styledLine;
             std::string vertStr(border.vertical);
-            styledLine.push_back({ vertStr, mdTheme.tableBorder });
+            styledLine.push_back({ .text = vertStr, .style = mdTheme.tableBorder });
             for (auto const col: std::views::iota(0uz, table.columnCount))
             {
                 auto const& text = (col < cells.size()) ? cells[col] : std::string {};
@@ -357,7 +360,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
                     (col < table.alignments.size()) ? table.alignments[col] : TableAlignment::Left;
                 auto const aligned = alignCell(text, widths[col], alignment);
 
-                styledLine.push_back({ " ", {} });
+                styledLine.push_back({ .text = " ", .style = {} });
                 // Parse inline markdown in cell content
                 auto inlineSpans = parseInlineMarkdown(aligned, mdTheme);
                 for (auto& span: inlineSpans)
@@ -368,8 +371,8 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
                         span.style = cellStyle;
                     styledLine.push_back(std::move(span));
                 }
-                styledLine.push_back({ " ", {} });
-                styledLine.push_back({ vertStr, mdTheme.tableBorder });
+                styledLine.push_back({ .text = " ", .style = {} });
+                styledLine.push_back({ .text = vertStr, .style = mdTheme.tableBorder });
             }
             result.addLine(std::move(styledLine)); // No word-wrap for table lines
         };
@@ -452,13 +455,14 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
                             ++spanEnd;
                         auto style = mdTheme.codeBlock;
                         style.fg = categoryColor(cat, currentTh);
-                        styledLine.push_back({ std::string(line.substr(hlPos, spanEnd - hlPos)), style });
+                        styledLine.push_back(
+                            { .text = std::string(line.substr(hlPos, spanEnd - hlPos)), .style = style });
                         hlPos = spanEnd;
                     }
                 }
                 else
                 {
-                    styledLine.push_back({ std::string(line), mdTheme.codeBlock });
+                    styledLine.push_back({ .text = std::string(line), .style = mdTheme.codeBlock });
                 }
             }
         }
@@ -490,13 +494,14 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
                         case 2: headingStyle = mdTheme.heading2; break;
                         default: headingStyle = mdTheme.heading3; break;
                     }
-                    styledLine.push_back({ std::string(text), headingStyle });
+                    styledLine.push_back({ .text = std::string(text), .style = headingStyle });
                 }
                 // Blockquote
                 else if (auto const bqLen = detectBlockquote(line); bqLen > 0)
                 {
                     styledLine.push_back(
-                        { "\xe2\x94\x82 ", mdTheme.blockquote }); // U+2502 BOX DRAWINGS LIGHT VERTICAL
+                        { .text = "\xe2\x94\x82 ",
+                          .style = mdTheme.blockquote }); // U+2502 BOX DRAWINGS LIGHT VERTICAL
                     auto inlineSpans = parseInlineMarkdown(line.substr(bqLen), mdTheme);
                     for (auto& span: inlineSpans)
                     {
@@ -512,8 +517,8 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
                     auto const markerEnd = line.find(' ', 0);
                     if (markerEnd != std::string_view::npos && markerEnd < listLen)
                     {
-                        styledLine.push_back(
-                            { std::string(line.substr(0, markerEnd + 1)), mdTheme.listMarker });
+                        styledLine.push_back({ .text = std::string(line.substr(0, markerEnd + 1)),
+                                               .style = mdTheme.listMarker });
                         auto inlineSpans = parseInlineMarkdown(line.substr(listLen), mdTheme);
                         for (auto& span: inlineSpans)
                             styledLine.push_back(std::move(span));
@@ -633,9 +638,10 @@ std::vector<StyledLine> StyledText::wrapLine(StyledLine const& line, int maxWidt
 
             // Add word to current line
             if (hasSpace)
-                currentLine.push_back({ std::string(text.substr(pos, wordEnd - pos)), span.style });
+                currentLine.push_back(
+                    { .text = std::string(text.substr(pos, wordEnd - pos)), .style = span.style });
             else
-                currentLine.push_back({ std::string(word), span.style });
+                currentLine.push_back({ .text = std::string(word), .style = span.style });
             currentWidth += wordWidth;
             pos = wordEnd;
         }

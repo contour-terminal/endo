@@ -15,8 +15,8 @@
 #include <format>
 #include <fstream>
 #include <ranges>
-#include <sstream>
 #include <set>
+#include <sstream>
 #include <utility>
 
 #include "ConditionEvaluator.hpp"
@@ -291,10 +291,14 @@ std::vector<Variable> DebugSession::enumerateChildren(int varRef) const
                     child.type = childObj->type->name;
                 }
                 else
+                {
                     child.type = "object";
+                }
             }
             else
+            {
                 child.type = literalTypeName(elemType);
+            }
             children.push_back(std::move(child));
 
             auto const tailVal = cur->getSlot(1);
@@ -628,12 +632,12 @@ std::vector<StackFrame> DebugSession::getStackTrace(int startFrame, int levels) 
     };
 
     std::vector<FrameInfo> allFrames;
-    allFrames.push_back({ currentFn->name(),
-                          currentLoc.filename,
-                          static_cast<int>(currentLoc.begin.line),
-                          static_cast<int>(currentLoc.begin.column),
-                          currentIp,
-                          static_cast<size_t>(std::max(0, _program->indexOf(currentFn))) });
+    allFrames.push_back({ .name = currentFn->name(),
+                          .file = currentLoc.filename,
+                          .line = static_cast<int>(currentLoc.begin.line),
+                          .column = static_cast<int>(currentLoc.begin.column),
+                          .ip = currentIp,
+                          .funcIndex = static_cast<size_t>(std::max(0, _program->indexOf(currentFn))) });
 
     // Walk the call stack from back (most recent) to front
     auto const callStack = _runner->callStack();
@@ -642,12 +646,13 @@ std::vector<StackFrame> DebugSession::getStackTrace(int startFrame, int levels) 
         if (!frame.function)
             continue;
         auto const& loc = frame.function->locationOf(frame.ip);
-        allFrames.push_back({ frame.function->name(),
-                              loc.filename,
-                              static_cast<int>(loc.begin.line),
-                              static_cast<int>(loc.begin.column),
-                              frame.ip,
-                              static_cast<size_t>(std::max(0, _program->indexOf(frame.function))) });
+        allFrames.push_back(
+            { .name = frame.function->name(),
+              .file = loc.filename,
+              .line = static_cast<int>(loc.begin.line),
+              .column = static_cast<int>(loc.begin.column),
+              .ip = frame.ip,
+              .funcIndex = static_cast<size_t>(std::max(0, _program->indexOf(frame.function))) });
     }
 
     // Apply pagination
@@ -783,9 +788,13 @@ std::vector<Variable> DebugSession::getVariables(int variablesReference) const
                                 var.variablesReference = allocateVarRef(rawValue, obj);
                         }
                         else if (_runner->isKnownString(rawValue))
+                        {
                             var.type = "string";
+                        }
                         else
+                        {
                             var.type = "object";
+                        }
                         break;
                 }
             }
@@ -864,9 +873,13 @@ std::vector<Variable> DebugSession::getVariables(int variablesReference) const
                             var.variablesReference = allocateVarRef(rawValue, obj);
                     }
                     else if (_runner->isKnownString(rawValue))
+                    {
                         var.type = "string";
+                    }
                     else
+                    {
                         var.type = "object";
+                    }
                     break;
             }
         }
@@ -952,10 +965,14 @@ std::optional<EvaluateResult> DebugSession::evaluate(std::string const& expressi
                                     result.variablesReference = allocateVarRef(rawValue, obj);
                             }
                             else
+                            {
                                 result.type = "object";
+                            }
                         }
                         else
+                        {
                             result.type = "object";
+                        }
                         break;
                     }
                 }
@@ -1301,7 +1318,7 @@ std::vector<CompletionItem> DebugSession::getCompletions(std::string const& text
     for (auto const& var: localVars)
     {
         if (text.empty() || var.name.starts_with(text))
-            items.push_back({ var.name, "variable" });
+            items.push_back({ .label = var.name, .type = "variable" });
     }
 
     // Add global variable names
@@ -1310,7 +1327,7 @@ std::vector<CompletionItem> DebugSession::getCompletions(std::string const& text
     for (auto const& var: globalVars)
     {
         if (text.empty() || var.name.starts_with(text))
-            items.push_back({ var.name, "variable" });
+            items.push_back({ .label = var.name, .type = "variable" });
     }
 
     // Add function names from the program
@@ -1321,7 +1338,7 @@ std::vector<CompletionItem> DebugSession::getCompletions(std::string const& text
         if (name.starts_with("@"))
             continue;
         if (text.empty() || name.starts_with(text))
-            items.push_back({ name, "function" });
+            items.push_back({ .label = name, .type = "function" });
     }
 
     return items;

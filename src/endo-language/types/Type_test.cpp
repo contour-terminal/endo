@@ -114,7 +114,9 @@ TEST_CASE("Type.result")
 
 TEST_CASE("Type.record")
 {
-    auto person = types::record("Person", { { "name", types::strType() }, { "age", types::intType() } });
+    auto person = types::record(
+        "Person",
+        { { .name = "name", .type = types::strType() }, { .name = "age", .type = types::intType() } });
 
     CHECK(person->isRecord());
     CHECK(person->asRecord()->name == "Person");
@@ -127,7 +129,9 @@ TEST_CASE("Type.record")
 
 TEST_CASE("Type.record_field_lookup")
 {
-    auto person = types::record("Person", { { "name", types::strType() }, { "age", types::intType() } });
+    auto person = types::record(
+        "Person",
+        { { .name = "name", .type = types::strType() }, { .name = "age", .type = types::intType() } });
 
     auto nameType = person->asRecord()->fieldType("name");
     CHECK(nameType.has_value());
@@ -143,10 +147,11 @@ TEST_CASE("Type.record_field_lookup")
 
 TEST_CASE("Type.union")
 {
-    auto shape = types::unionType("Shape",
-                                  { { "Circle", types::floatType() },
-                                    { "Rectangle", types::tuple({ types::floatType(), types::floatType() }) },
-                                    { "Point", std::nullopt } });
+    auto shape = types::unionType(
+        "Shape",
+        { { .name = "Circle", .payloadType = types::floatType() },
+          { .name = "Rectangle", .payloadType = types::tuple({ types::floatType(), types::floatType() }) },
+          { .name = "Point", .payloadType = std::nullopt } });
 
     CHECK(shape->isUnion());
     CHECK(shape->asUnion()->name == "Shape");
@@ -625,8 +630,10 @@ TEST_CASE("TypeRegistry.register_and_lookup")
 {
     TypeRegistry registry;
 
-    registry.registerRecord(
-        "Point", { .name = "Point", .fields = { { "x", types::floatType() }, { "y", types::floatType() } } });
+    registry.registerRecord("Point",
+                            { .name = "Point",
+                              .fields = { { .name = "x", .type = types::floatType() },
+                                          { .name = "y", .type = types::floatType() } } });
 
     auto result = registry.lookupRecord("Point");
     REQUIRE(result.has_value());

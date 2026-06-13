@@ -114,7 +114,7 @@ Token Lexer::nextToken()
     consumeWhitespace();
     switch (_currentChar)
     {
-        case (char32_t) -1: return confirmToken(Token::EndOfInput);
+        case static_cast<char32_t>(-1): return confirmToken(Token::EndOfInput);
         case '\r':
             nextChar();
             if (_currentChar == '\n')
@@ -168,15 +168,25 @@ Token Lexer::nextToken()
                     return confirmToken(Token::LessLess); // << (here-doc or back-compose)
             }
             else if (_currentChar == '-')
+            {
                 return consumeCharAndConfirmToken(Token::LeftArrow); // <- (mutation)
+            }
             else if (_currentChar == '=')
+            {
                 return consumeCharAndConfirmToken(Token::LessEqual);
+            }
             else if (_currentChar == '>' && _fsharpDepth > 0)
+            {
                 return consumeCharAndConfirmToken(Token::NotEqual); // F# <> operator
+            }
             else if (_currentChar == '(')
+            {
                 return consumeCharAndConfirmToken(Token::LessRndOpen);
+            }
             else
+            {
                 return confirmToken(Token::Less);
+            }
         case '(':
             nextChar();
             // Only merge '((' into DblRndOpen for shell arithmetic contexts, not F# mode.
@@ -275,24 +285,38 @@ Token Lexer::nextToken()
                 return confirmToken(Token::DollarRndOpen);
             }
             else if (_currentChar == '$')
+            {
                 return consumeCharAndConfirmToken(Token::DollarDollar);
+            }
             else if (_currentChar == '!')
+            {
                 return consumeCharAndConfirmToken(Token::DollarNot);
+            }
             else if (_currentChar == '?')
+            {
                 return consumeCharAndConfirmToken(Token::DollarQuestion);
+            }
             else if (_currentChar == '{')
+            {
                 return consumeBracedVariable();
+            }
             else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+            {
                 return consumeIdentifier(Token::DollarName);
+            }
             else if (_currentChar == '_')
+            {
                 return consumeIdentifier(Token::DollarName);
+            }
             else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
             {
                 _nextToken.literal += static_cast<char>(_currentChar);
                 return consumeCharAndConfirmToken(Token::DollarNumber);
             }
             else
+            {
                 return confirmToken(Token::Invalid);
+            }
         case '0':
         case '1':
         case '2':
@@ -781,7 +805,9 @@ Token Lexer::consumeIdentifier(Token token)
                 nextChar();
             }
             else
+            {
                 break;
+            }
         }
         return confirmToken(token);
     }
@@ -845,7 +871,9 @@ Token Lexer::consumeIdentifier(Token token)
                 }
             }
             else
+            {
                 break;
+            }
         }
     }
 
@@ -967,17 +995,29 @@ Token Lexer::consumeDoubleQuotedContent()
                     return confirmToken(Token::DollarRndOpen);
                 }
                 else if (_currentChar == '{')
+                {
                     return consumeBracedVariable();
+                }
                 else if (_currentChar == '$')
+                {
                     return consumeCharAndConfirmToken(Token::DollarDollar);
+                }
                 else if (_currentChar == '!')
+                {
                     return consumeCharAndConfirmToken(Token::DollarNot);
+                }
                 else if (_currentChar == '?')
+                {
                     return consumeCharAndConfirmToken(Token::DollarQuestion);
+                }
                 else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+                {
                     return consumeIdentifier(Token::DollarName);
+                }
                 else if (_currentChar == '_')
+                {
                     return consumeIdentifier(Token::DollarName);
+                }
                 else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
                 {
                     _nextToken.literal += static_cast<char>(_currentChar);

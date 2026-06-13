@@ -377,7 +377,9 @@ std::string readLine(TTY& tty, std::string_view prompt)
         char ch {};
         auto const n = platformRead(tty.inputFd(), &ch, 1);
         if (n == 0)
+        {
             break;
+        }
         else if (n == -1)
         {
             if (errno == EINTR)
@@ -386,9 +388,13 @@ std::string readLine(TTY& tty, std::string_view prompt)
                 break;
         }
         else if (ch == '\n')
+        {
             break;
+        }
         else
+        {
             line += ch;
+        }
     }
     return line;
 }
@@ -757,7 +763,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
                             return "bool";
                         return "string";
                     }();
-                    fieldInfos.push_back({ field.name, typeName });
+                    fieldInfos.push_back({ .name = field.name, .typeName = typeName });
                 }
                 _fsharpState.recordTypeFields[variant.recordTypeName] = std::move(fieldInfos);
 
@@ -3065,9 +3071,13 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     {
         auto tracePath = std::string {};
         if (_agentTracePath.has_value() && !_agentTracePath->empty())
+        {
             tracePath = *_agentTracePath;
+        }
         else if (!agentConfig.trace.defaultPath.empty())
+        {
             tracePath = agentConfig.trace.defaultPath;
+        }
         else
         {
             auto const traceDir = agent::resolveTraceLogDirectory();
@@ -4246,7 +4256,9 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         auto const prePollFocused = terminal.isFocused();
         auto pollTimeout = prePollFocused ? 80 : 2000; // Longer timeout when unfocused.
         if (streaming)
+        {
             pollTimeout = 5; // Fast polling during streaming for responsive cancellation.
+        }
         else if (prePollFocused)
         {
             auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();

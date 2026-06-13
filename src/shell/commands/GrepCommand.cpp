@@ -644,13 +644,13 @@ size_t searchLines(std::vector<std::string> const& lines,
         for (auto const i: std::views::iota(0, lineCount))
         {
             if (shouldPrint[static_cast<size_t>(i)])
-                outputLines.push_back({ i, isMatchLine[static_cast<size_t>(i)] });
+                outputLines.push_back({ .lineIndex = i, .isMatch = isMatchLine[static_cast<size_t>(i)] });
         }
     }
     else
     {
         for (auto const matchIdx: matchIndices)
-            outputLines.push_back({ matchIdx, true });
+            outputLines.push_back({ .lineIndex = matchIdx, .isMatch = true });
     }
 
     // Print output lines

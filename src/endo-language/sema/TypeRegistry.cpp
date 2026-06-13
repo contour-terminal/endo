@@ -12,9 +12,12 @@ void TypeDefinitionRegistry::registerBuiltins()
         processInfoType.typeId = CoreVM::BuiltinTypeId::ProcessInfo;
         processInfoType.name = "ProcessInfo";
         processInfoType.fields = {
-            { "pid", 0, CoreVM::LiteralType::Number },  { "ppid", 1, CoreVM::LiteralType::Number },
-            { "user", 2, CoreVM::LiteralType::String }, { "cpu", 3, CoreVM::LiteralType::Float },
-            { "mem", 4, CoreVM::LiteralType::Object },  { "command", 5, CoreVM::LiteralType::String },
+            { .name = "pid", .offset = 0, .type = CoreVM::LiteralType::Number },
+            { .name = "ppid", .offset = 1, .type = CoreVM::LiteralType::Number },
+            { .name = "user", .offset = 2, .type = CoreVM::LiteralType::String },
+            { .name = "cpu", .offset = 3, .type = CoreVM::LiteralType::Float },
+            { .name = "mem", .offset = 4, .type = CoreVM::LiteralType::Object },
+            { .name = "command", .offset = 5, .type = CoreVM::LiteralType::String },
         };
         for (auto const& f: processInfoType.fields)
             processInfoType.fieldTypes[f.name] = f.type;
@@ -28,10 +31,13 @@ void TypeDefinitionRegistry::registerBuiltins()
         dateTimeType.typeId = CoreVM::BuiltinTypeId::DateTime;
         dateTimeType.name = "DateTime";
         dateTimeType.fields = {
-            { "year", 0, CoreVM::LiteralType::Number },   { "month", 1, CoreVM::LiteralType::Number },
-            { "day", 2, CoreVM::LiteralType::Number },    { "hour", 3, CoreVM::LiteralType::Number },
-            { "minute", 4, CoreVM::LiteralType::Number }, { "second", 5, CoreVM::LiteralType::Number },
-            { "epoch", 6, CoreVM::LiteralType::Number },
+            { .name = "year", .offset = 0, .type = CoreVM::LiteralType::Number },
+            { .name = "month", .offset = 1, .type = CoreVM::LiteralType::Number },
+            { .name = "day", .offset = 2, .type = CoreVM::LiteralType::Number },
+            { .name = "hour", .offset = 3, .type = CoreVM::LiteralType::Number },
+            { .name = "minute", .offset = 4, .type = CoreVM::LiteralType::Number },
+            { .name = "second", .offset = 5, .type = CoreVM::LiteralType::Number },
+            { .name = "epoch", .offset = 6, .type = CoreVM::LiteralType::Number },
         };
         for (auto const& f: dateTimeType.fields)
             dateTimeType.fieldTypes[f.name] = f.type;
@@ -44,7 +50,7 @@ void TypeDefinitionRegistry::registerBuiltins()
         sizeType.typeId = CoreVM::BuiltinTypeId::Size;
         sizeType.name = "Size";
         sizeType.fields = {
-            { "bytes", 0, CoreVM::LiteralType::Number },
+            { .name = "bytes", .offset = 0, .type = CoreVM::LiteralType::Number },
         };
         for (auto const& f: sizeType.fields)
             sizeType.fieldTypes[f.name] = f.type;
@@ -57,7 +63,7 @@ void TypeDefinitionRegistry::registerBuiltins()
         timeSpanType.typeId = CoreVM::BuiltinTypeId::TimeSpan;
         timeSpanType.name = "TimeSpan";
         timeSpanType.fields = {
-            { "milliseconds", 0, CoreVM::LiteralType::Number },
+            { .name = "milliseconds", .offset = 0, .type = CoreVM::LiteralType::Number },
         };
         for (auto const& f: timeSpanType.fields)
             timeSpanType.fieldTypes[f.name] = f.type;
@@ -70,7 +76,7 @@ void TypeDefinitionRegistry::registerBuiltins()
         fileModeType.typeId = CoreVM::BuiltinTypeId::FileMode;
         fileModeType.name = "FileMode";
         fileModeType.fields = {
-            { "bits", 0, CoreVM::LiteralType::Number },
+            { .name = "bits", .offset = 0, .type = CoreVM::LiteralType::Number },
         };
         for (auto const& f: fileModeType.fields)
             fileModeType.fieldTypes[f.name] = f.type;
@@ -83,9 +89,11 @@ void TypeDefinitionRegistry::registerBuiltins()
         fileInfoType.typeId = CoreVM::BuiltinTypeId::FileInfo;
         fileInfoType.name = "FileInfo";
         fileInfoType.fields = {
-            { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Object },
-            { "mode", 2, CoreVM::LiteralType::Object },   { "mtime", 3, CoreVM::LiteralType::Object },
-            { "isDir", 4, CoreVM::LiteralType::Boolean },
+            { .name = "name", .offset = 0, .type = CoreVM::LiteralType::String },
+            { .name = "size", .offset = 1, .type = CoreVM::LiteralType::Object },
+            { .name = "mode", .offset = 2, .type = CoreVM::LiteralType::Object },
+            { .name = "mtime", .offset = 3, .type = CoreVM::LiteralType::Object },
+            { .name = "isDir", .offset = 4, .type = CoreVM::LiteralType::Boolean },
         };
         for (auto const& f: fileInfoType.fields)
             fileInfoType.fieldTypes[f.name] = f.type;
@@ -101,10 +109,10 @@ void TypeDefinitionRegistry::registerBuiltins()
         jobInfoType.typeId = CoreVM::BuiltinTypeId::JobInfo;
         jobInfoType.name = "JobInfo";
         jobInfoType.fields = {
-            { "id", 0, CoreVM::LiteralType::Number },
-            { "state", 1, CoreVM::LiteralType::String },
-            { "command", 2, CoreVM::LiteralType::String },
-            { "pid", 3, CoreVM::LiteralType::Number },
+            { .name = "id", .offset = 0, .type = CoreVM::LiteralType::Number },
+            { .name = "state", .offset = 1, .type = CoreVM::LiteralType::String },
+            { .name = "command", .offset = 2, .type = CoreVM::LiteralType::String },
+            { .name = "pid", .offset = 3, .type = CoreVM::LiteralType::Number },
         };
         for (auto const& f: jobInfoType.fields)
             jobInfoType.fieldTypes[f.name] = f.type;
@@ -117,8 +125,8 @@ void TypeDefinitionRegistry::registerBuiltins()
         keyBindingInfoType.typeId = CoreVM::BuiltinTypeId::KeyBindingInfo;
         keyBindingInfoType.name = "KeyBindingInfo";
         keyBindingInfoType.fields = {
-            { "key", 0, CoreVM::LiteralType::String },
-            { "action", 1, CoreVM::LiteralType::String },
+            { .name = "key", .offset = 0, .type = CoreVM::LiteralType::String },
+            { .name = "action", .offset = 1, .type = CoreVM::LiteralType::String },
         };
         for (auto const& f: keyBindingInfoType.fields)
             keyBindingInfoType.fieldTypes[f.name] = f.type;

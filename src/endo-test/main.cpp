@@ -135,9 +135,13 @@ struct CliOptions
             }
             std::string_view fmt = argv[i];
             if (fmt == "tap")
+            {
                 opts.format = endo::test::OutputFormat::TAP;
+            }
             else if (fmt == "pretty")
+            {
                 opts.format = endo::test::OutputFormat::Pretty;
+            }
             else
             {
                 std::cerr << std::format("Error: unknown format \"{}\"\n", fmt);

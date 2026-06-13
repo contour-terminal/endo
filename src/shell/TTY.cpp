@@ -310,16 +310,22 @@ void TestPTY::outputUpdateLoop()
         char buffer[1024] {};
         ssize_t const writeResult = read(_ptyMaster, buffer, sizeof(buffer));
         if (writeResult == 0)
+        {
             break;
+        }
         else if (writeResult > 0)
         {
             auto _ = std::scoped_lock { _outputMutex };
             _output.append(buffer, writeResult);
         }
         else if (errno == EINTR || errno == EAGAIN)
+        {
             continue;
+        }
         else
+        {
             throw std::runtime_error("read: " + std::string(strerror(errno)));
+        }
     }
 }
 

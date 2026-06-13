@@ -128,6 +128,7 @@ ParsedInlineArgs parseInlineArgs(CoreVM::CoreStringArray const& args,
                 InlineOptionDef const* opt;
                 size_t charIndex;
             };
+
             std::vector<PendingFlag> pending;
             bool allValid = true;
             bool hasValueFlag = false;
@@ -140,7 +141,7 @@ ParsedInlineArgs parseInlineArgs(CoreVM::CoreStringArray const& args,
                     allValid = false;
                     break;
                 }
-                pending.push_back({ opt, j });
+                pending.push_back({ .opt = opt, .charIndex = j });
                 if (opt->takesValue)
                 {
                     hasValueFlag = true;
@@ -284,10 +285,8 @@ std::vector<CommandSpec> generateBuiltinCompletionSpecs(std::span<InlineCommandD
         // Positional args
         if (desc.acceptsFileArgs)
         {
-            spec.positionalArgs.push_back(
-                ArgDef { .kind = ArgKind::Path,
-                         .description = "File(s)",
-                         .repeatable = desc.fileArgsRepeatable });
+            spec.positionalArgs.push_back(ArgDef {
+                .kind = ArgKind::Path, .description = "File(s)", .repeatable = desc.fileArgsRepeatable });
         }
 
         specs.push_back(std::move(spec));

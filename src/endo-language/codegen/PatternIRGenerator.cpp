@@ -25,7 +25,7 @@ CoreVM::AllocaInstr* PatternIRGenerator::createAllocaInEntryBlock(CoreVM::Litera
 {
     auto* entryBlock = _builder.function()->getEntryBlock();
     auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
-        type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
+        type, _builder.get(static_cast<CoreVM::CoreNumber>(1)), _builder.makeName(name));
     auto* inserted = entryBlock->insertAfterAllocas(std::move(allocaInstr));
     return static_cast<CoreVM::AllocaInstr*>(inserted);
 }
@@ -137,7 +137,7 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
 void PatternIRGenerator::visit(pattern::VariablePattern const& pat)
 {
     // Variable patterns always match - bind the scrutinee to the variable name
-    _bindings.push_back({ pat.name, _scrutinee });
+    _bindings.push_back({ .name = pat.name, .value = _scrutinee });
 
     if (_collectOnly)
         return;
@@ -165,7 +165,7 @@ void PatternIRGenerator::visit(pattern::WildcardPattern const&)
 void PatternIRGenerator::visit(pattern::AsPattern const& pat)
 {
     // Bind the entire value to the name
-    _bindings.push_back({ pat.name, _scrutinee });
+    _bindings.push_back({ .name = pat.name, .value = _scrutinee });
 
     // Also check the inner pattern (for more bindings)
     pat.inner->accept(*this);
@@ -271,7 +271,7 @@ void PatternIRGenerator::visit(pattern::TuplePattern const& pat)
 
         // Extract slot[i] from the tuple object
         auto* slotValue = _builder.createObjGetSlot(
-            tupleValue, _builder.get(CoreVM::CoreNumber(i)), "tuple.slot." + std::to_string(i));
+            tupleValue, _builder.get(static_cast<CoreVM::CoreNumber>(i)), "tuple.slot." + std::to_string(i));
 
         // Create a success block for this sub-pattern (chains to next sub-pattern or final success)
         auto* subSuccess = (i + 1 < pat.elements.size())
@@ -326,7 +326,8 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
     if (pat.elements.empty())
     {
         auto* tag = _builder.createObjGetTag(_scrutinee, "list.pat.tag");
-        auto* isNil = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "list.pat.isNil");
+        auto* isNil =
+            _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "list.pat.isNil");
         _builder.createCondBr(isNil, _successBlock, _failureBlock);
         return;
     }
@@ -351,11 +352,12 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
     {
         bool isLast = (i + 1 == pat.elements.size());
 
-        auto* scrutineeVal = (i > 0) ? _builder.createLoad(traversalStorage, "list.pat.reload")
-                                      : currentScrutinee;
+        auto* scrutineeVal =
+            (i > 0) ? _builder.createLoad(traversalStorage, "list.pat.reload") : currentScrutinee;
 
         auto* tag = _builder.createObjGetTag(scrutineeVal, "list.pat.tag." + std::to_string(i));
-        auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "list.pat.isCons");
+        auto* isCons =
+            _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "list.pat.isCons");
 
         auto* consBlock = _builder.createBlock("list.pat.cons." + std::to_string(i));
         _builder.createCondBr(isCons, consBlock, _failureBlock);
@@ -363,8 +365,8 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
 
         bool const elemIsWildcard = isWildcard(pat.elements[i].get());
 
-        auto* elemSuccess = _builder.createBlock(
-            isLast ? "list.pat.tail.check" : "list.pat.next." + std::to_string(i + 1));
+        auto* elemSuccess =
+            _builder.createBlock(isLast ? "list.pat.tail.check" : "list.pat.next." + std::to_string(i + 1));
 
         if (elemIsWildcard)
         {
@@ -375,8 +377,9 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         {
             auto* reloaded =
                 _builder.createLoad(traversalStorage, "list.pat.head.reload." + std::to_string(i));
-            auto* headVal = _builder.createObjGetSlot(
-                reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
+            auto* headVal = _builder.createObjGetSlot(reloaded,
+                                                      _builder.get(static_cast<CoreVM::CoreNumber>(0)),
+                                                      "list.pat.head." + std::to_string(i));
 
             _scrutinee = headVal;
             _scrutineeStorage = nullptr;
@@ -390,19 +393,21 @@ void PatternIRGenerator::visit(pattern::ListPattern const& pat)
         {
             auto* tailReloaded =
                 _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
-            auto* tailVal = _builder.createObjGetSlot(
-                tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
+            auto* tailVal = _builder.createObjGetSlot(tailReloaded,
+                                                      _builder.get(static_cast<CoreVM::CoreNumber>(1)),
+                                                      "list.pat.tail." + std::to_string(i));
             auto* tailTag = _builder.createObjGetTag(tailVal, "list.pat.tail.tag");
-            auto* tailIsNil =
-                _builder.createNCmpEQ(tailTag, _builder.get(CoreVM::CoreNumber(0)), "list.pat.tail.isNil");
+            auto* tailIsNil = _builder.createNCmpEQ(
+                tailTag, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "list.pat.tail.isNil");
             _builder.createCondBr(tailIsNil, finalSuccess, _failureBlock);
         }
         else
         {
             auto* tailReloaded =
                 _builder.createLoad(traversalStorage, "list.pat.tail.reload." + std::to_string(i));
-            auto* tailVal = _builder.createObjGetSlot(
-                tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
+            auto* tailVal = _builder.createObjGetSlot(tailReloaded,
+                                                      _builder.get(static_cast<CoreVM::CoreNumber>(1)),
+                                                      "list.pat.tail." + std::to_string(i));
             // Store in private traversal storage (NOT the shared scrutinee storage)
             _builder.createStore(traversalStorage, tailVal, "list.pat.next.store");
         }
@@ -429,7 +434,8 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
 
     // Check tag == 1 (Cons)
     auto* tag = _builder.createObjGetTag(_scrutinee, "cons.pat.tag");
-    auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.isCons");
+    auto* isCons =
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "cons.pat.isCons");
 
     auto* consBlock = _builder.createBlock("cons.pat.match");
     _builder.createCondBr(isCons, consBlock, _failureBlock);
@@ -455,7 +461,7 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
         // Only extract and process the tail.
         auto* scrutineeReloaded2 = _builder.createLoad(savedStorage, "cons.scrutinee.reload");
         auto* tailVal = _builder.createObjGetSlot(
-            scrutineeReloaded2, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.tail");
+            scrutineeReloaded2, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "cons.pat.tail");
 
         _scrutineeStorage = savedStorage;
         _successBlock = finalSuccess;
@@ -471,8 +477,8 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
 
     // Reload scrutinee and extract head (slot 0)
     auto* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "cons.scrutinee.reload");
-    auto* headVal =
-        _builder.createObjGetSlot(scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "cons.pat.head");
+    auto* headVal = _builder.createObjGetSlot(
+        scrutineeReloaded, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "cons.pat.head");
 
     // Create block for tail matching (after head pattern succeeds)
     auto* tailBlock = _builder.createBlock("cons.pat.tail");
@@ -497,8 +503,8 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
     }
 
     auto* scrutineeReloaded2 = _builder.createLoad(savedStorage, "cons.scrutinee.reload2");
-    auto* tailVal =
-        _builder.createObjGetSlot(scrutineeReloaded2, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.tail");
+    auto* tailVal = _builder.createObjGetSlot(
+        scrutineeReloaded2, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "cons.pat.tail");
 
     _scrutineeStorage = savedStorage;
     _successBlock = finalSuccess;
@@ -531,7 +537,7 @@ void PatternIRGenerator::visit(pattern::RecordPattern const& pat)
             else
             {
                 // Punning: { name } — the field name is the binding name
-                _bindings.push_back({ field.name, _scrutinee });
+                _bindings.push_back({ .name = field.name, .value = _scrutinee });
             }
         }
         return;
@@ -564,8 +570,10 @@ void PatternIRGenerator::visit(pattern::RecordPattern const& pat)
             savedStorage ? _builder.createLoad(savedStorage, "record.reload") : currentScrutinee;
 
         // Extract the field value from the record object
-        auto* fieldValue = _builder.createObjGetSlot(
-            recordValue, _builder.get(CoreVM::CoreNumber(slotOffset)), "record.field." + field.name);
+        auto* fieldValue =
+            _builder.createObjGetSlot(recordValue,
+                                      _builder.get(static_cast<CoreVM::CoreNumber>(slotOffset)),
+                                      "record.field." + field.name);
 
         // Create a success block for this field's sub-pattern (chains to next field or final success)
         auto* subSuccess = (i + 1 < pat.fields.size())
@@ -583,7 +591,7 @@ void PatternIRGenerator::visit(pattern::RecordPattern const& pat)
         else
         {
             // Punning: { name } — bind the field value directly to the field name
-            _bindings.push_back({ field.name, fieldValue });
+            _bindings.push_back({ .name = field.name, .value = fieldValue });
 
             // Store in pre-allocated storage if available
             if (auto storageIt = _bindingStorage.find(field.name); storageIt != _bindingStorage.end())
@@ -617,18 +625,28 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
     // Result: Error=0, Ok=1
     int expectedTag = -1;
     if (pat.name == "None")
+    {
         expectedTag = 0;
+    }
     else if (pat.name == "Some")
+    {
         expectedTag = 1;
+    }
     else if (pat.name == "Error")
+    {
         expectedTag = 0;
+    }
     else if (pat.name == "Ok")
+    {
         expectedTag = 1;
+    }
     else
     {
         // User-defined constructor — look up in constructor registry
         if (auto it = _constructorLookup.find(pat.name); it != _constructorLookup.end())
+        {
             expectedTag = it->second.tag;
+        }
         else
         {
             if (_collectOnly)
@@ -662,7 +680,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
 
     // Check if tag matches expected
     CoreVM::Value* tagMatches =
-        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(expectedTag)), "ctor.tag.eq");
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(expectedTag)), "ctor.tag.eq");
 
     // Check if this is a user-defined constructor with multi-slot payload
     auto ctorIt = _constructorLookup.find(pat.name);
@@ -695,7 +713,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
                     CoreVM::Value* reloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
                     CoreVM::Value* slotVal =
                         _builder.createObjGetSlot(reloaded,
-                                                  _builder.get(CoreVM::CoreNumber(slotIdx)),
+                                                  _builder.get(static_cast<CoreVM::CoreNumber>(slotIdx)),
                                                   "ctor.slot." + std::to_string(slotIdx));
 
                     // Recursively match the element pattern (handles variable bindings)
@@ -736,8 +754,10 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
                 CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
 
                 // Extract payload from slot 0 using OGETSLOT
-                CoreVM::Value* payloadValue = _builder.createObjGetSlot(
-                    scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+                CoreVM::Value* payloadValue =
+                    _builder.createObjGetSlot(scrutineeReloaded,
+                                              _builder.get(static_cast<CoreVM::CoreNumber>(0)),
+                                              "ctor.payload.value");
 
                 // Recursively match the payload pattern
                 CoreVM::Value* savedScrutinee = _scrutinee;

@@ -159,7 +159,8 @@ void IRGenerator::generateOptionMapWithValue(ast::Expr const* funcExpr, CoreVM::
 
     // Extract tag
     auto* tag = _builder.createObjGetTag(optionValue, "optmap.tag");
-    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optmap.is_some");
+    auto* isSome =
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "optmap.is_some");
 
     // Create blocks
     auto* someBlock = _builder.createBlock("optmap.some");
@@ -180,8 +181,8 @@ void IRGenerator::generateOptionMapWithValue(ast::Expr const* funcExpr, CoreVM::
     // Some path: extract inner value, apply function, wrap in Some
     _builder.setInsertPoint(someBlock);
     auto* objReload = _builder.createLoad(objStorage, "optmap.obj.reload");
-    auto* innerValue =
-        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optmap.inner");
+    auto* innerValue = _builder.createObjGetSlot(
+        objReload, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "optmap.inner");
 
     // Use the option's inner type annotation (if available) for correct element typing.
     // ObjGetSlot returns Void; the annotation carries the actual type (e.g., String).
@@ -254,7 +255,8 @@ void IRGenerator::generateOptionBindWithValue(ast::Expr const* funcExpr, CoreVM:
 
     // Extract tag
     auto* tag = _builder.createObjGetTag(optionValue, "optbind.tag");
-    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optbind.is_some");
+    auto* isSome =
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "optbind.is_some");
 
     // Create blocks
     auto* someBlock = _builder.createBlock("optbind.some");
@@ -275,8 +277,8 @@ void IRGenerator::generateOptionBindWithValue(ast::Expr const* funcExpr, CoreVM:
     // Some path: extract inner value, call function (f returns Option directly)
     _builder.setInsertPoint(someBlock);
     auto* objReload = _builder.createLoad(objStorage, "optbind.obj.reload");
-    auto* innerValue =
-        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optbind.inner");
+    auto* innerValue = _builder.createObjGetSlot(
+        objReload, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "optbind.inner");
 
     // Use the option's inner type annotation for correct element typing
     auto elemType = getInnerType(optionValue).value_or(innerValue->type());
@@ -330,7 +332,8 @@ void IRGenerator::generateOptionDefaultValueWithValue(ast::Expr const* defaultEx
 
     // Extract tag
     auto* tag = _builder.createObjGetTag(optionValue, "optdefval.tag");
-    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optdefval.is_some");
+    auto* isSome =
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "optdefval.is_some");
 
     // Create blocks
     auto* someBlock = _builder.createBlock("optdefval.some");
@@ -356,8 +359,8 @@ void IRGenerator::generateOptionDefaultValueWithValue(ast::Expr const* defaultEx
     // Some path: extract inner value
     _builder.setInsertPoint(someBlock);
     auto* objReload = _builder.createLoad(objStorage, "optdefval.obj.reload");
-    auto* innerValue =
-        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optdefval.inner");
+    auto* innerValue = _builder.createObjGetSlot(
+        objReload, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "optdefval.inner");
     _builder.createStore(resultStorage, innerValue, "optdefval.some.store");
     _builder.createBr(continueBlock);
 

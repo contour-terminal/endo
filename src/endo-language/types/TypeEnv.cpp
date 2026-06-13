@@ -206,10 +206,10 @@ bool TypeRegistry::isRegistered(std::string const& name) const
 void TypeRegistry::registerBuiltins()
 {
     // Register the built-in Error type
-    registerRecord(
-        "Error",
-        RecordType { .name = "Error",
-                     .fields = { { "code", types::intType() }, { "message", types::strType() } } });
+    registerRecord("Error",
+                   RecordType { .name = "Error",
+                                .fields = { { .name = "code", .type = types::intType() },
+                                            { .name = "message", .type = types::strType() } } });
 }
 
 // Standard environment creation

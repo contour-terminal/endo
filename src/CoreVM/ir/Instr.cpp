@@ -158,19 +158,33 @@ std::string Instr::formatOne(std::string mnemonic) const
         if (dynamic_cast<Constant*>(arg))
         {
             if (auto* i = dynamic_cast<ConstantInt*>(arg))
+            {
                 sstr << i->get();
+            }
             else if (auto* i = dynamic_cast<ConstantBoolean*>(arg))
+            {
                 sstr << (i->get() ? "true" : "false");
+            }
             else if (auto* s = dynamic_cast<ConstantString*>(arg))
+            {
                 sstr << '"' << s->get() << '"';
+            }
             else if (auto* ip = dynamic_cast<ConstantIP*>(arg))
+            {
                 sstr << ip->get().c_str();
+            }
             else if (auto* cidr = dynamic_cast<ConstantCidr*>(arg))
+            {
                 sstr << cidr->get().str();
+            }
             else if (auto* re = dynamic_cast<ConstantRegExp*>(arg))
+            {
                 sstr << '/' << re->get().pattern() << '/';
+            }
             else if (auto* bf = dynamic_cast<IRBuiltinFunction*>(arg))
+            {
                 sstr << bf->signature().to_s();
+            }
             else if (auto* ar = dynamic_cast<ConstantArray*>(arg))
             {
                 sstr << '[';
@@ -218,15 +232,23 @@ std::string Instr::formatOne(std::string mnemonic) const
                 sstr << ']';
             }
             else
+            {
                 sstr << std::format("?UnknownConstant({})", typeid(*arg).name());
+            }
         }
         else if (auto* bb = dynamic_cast<Instr*>(arg))
+        {
             sstr << '%' << arg->name();
+        }
         else if (auto* bb = dynamic_cast<BasicBlock*>(arg))
+        {
             sstr << '%' << arg->name();
+        }
         else
+        {
             sstr << std::format(
                 "?UnknownValue({}): name={}, parent={}", typeid(*arg).name(), arg->to_string(), name());
+        }
     }
 
     // XXX sometimes u're interested in the name of the instr, even though it

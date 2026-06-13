@@ -360,7 +360,7 @@ class CallInstr: public Instr
     CallInstr(const std::vector<Value*>& args, const std::string& name);
     CallInstr(IRBuiltinFunction* callee, const std::vector<Value*>& args, const std::string& name);
 
-    [[nodiscard]] IRBuiltinFunction* callee() const { return (IRBuiltinFunction*) operand(0); }
+    [[nodiscard]] IRBuiltinFunction* callee() const { return static_cast<IRBuiltinFunction*>(operand(0)); }
 
     [[nodiscard]] std::string to_string() const override;
     [[nodiscard]] std::unique_ptr<Instr> clone() override;
@@ -573,9 +573,9 @@ class CondBrInstr: public TerminateInstr
 
     [[nodiscard]] Value* condition() const { return operands()[0]; }
 
-    [[nodiscard]] BasicBlock* trueBlock() const { return (BasicBlock*) operands()[1]; }
+    [[nodiscard]] BasicBlock* trueBlock() const { return reinterpret_cast<BasicBlock*>(operands()[1]); }
 
-    [[nodiscard]] BasicBlock* falseBlock() const { return (BasicBlock*) operands()[2]; }
+    [[nodiscard]] BasicBlock* falseBlock() const { return reinterpret_cast<BasicBlock*>(operands()[2]); }
 
     [[nodiscard]] std::string to_string() const override;
     [[nodiscard]] std::unique_ptr<Instr> clone() override;
@@ -587,7 +587,7 @@ class BrInstr: public TerminateInstr
   public:
     explicit BrInstr(BasicBlock* targetBlock);
 
-    [[nodiscard]] BasicBlock* targetBlock() const { return (BasicBlock*) operands()[0]; }
+    [[nodiscard]] BasicBlock* targetBlock() const { return reinterpret_cast<BasicBlock*>(operands()[0]); }
 
     [[nodiscard]] std::string to_string() const override;
     [[nodiscard]] std::unique_ptr<Instr> clone() override;

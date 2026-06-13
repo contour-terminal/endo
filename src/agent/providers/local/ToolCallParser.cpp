@@ -288,7 +288,9 @@ namespace
                     continue;
 
                 if (ch == '{')
+                {
                     ++depth;
+                }
                 else if (ch == '}')
                 {
                     --depth;

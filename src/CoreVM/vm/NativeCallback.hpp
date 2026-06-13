@@ -40,7 +40,7 @@ class Params
 
     void setResult(bool value) { _argv[0] = value; }
 
-    void setResult(CoreNumber value) { _argv[0] = (Value) value; }
+    void setResult(CoreNumber value) { _argv[0] = static_cast<Value>(value); }
 
     void setResult(const Function* fn);
 
@@ -48,11 +48,11 @@ class Params
 
     void setResult(std::string str);
 
-    void setResult(const CoreString* str) { _argv[0] = (Value) str; }
+    void setResult(const CoreString* str) { _argv[0] = reinterpret_cast<Value>(str); }
 
-    void setResult(const util::IPAddress* ip) { _argv[0] = (Value) ip; }
+    void setResult(const util::IPAddress* ip) { _argv[0] = reinterpret_cast<Value>(ip); }
 
-    void setResult(const util::Cidr* cidr) { _argv[0] = (Value) cidr; }
+    void setResult(const util::Cidr* cidr) { _argv[0] = reinterpret_cast<Value>(cidr); }
 
     [[deprecated("Use count()")]] [[nodiscard]] int size() const { return _argc; }
 
@@ -68,16 +68,22 @@ class Params
 
     [[nodiscard]] CoreNumber getInt(size_t offset) const { return static_cast<CoreNumber>(at(offset)); }
 
-    [[nodiscard]] const CoreString& getString(size_t offset) const { return *(CoreString*) at(offset); }
+    [[nodiscard]] const CoreString& getString(size_t offset) const
+    {
+        return *reinterpret_cast<CoreString*>(at(offset));
+    }
 
     [[nodiscard]] Function* getFunction(size_t offset) const;
 
     [[nodiscard]] const util::IPAddress& getIPAddress(size_t offset) const
     {
-        return *(util::IPAddress*) at(offset);
+        return *reinterpret_cast<util::IPAddress*>(at(offset));
     }
 
-    [[nodiscard]] const util::Cidr& getCidr(size_t offset) const { return *(util::Cidr*) at(offset); }
+    [[nodiscard]] const util::Cidr& getCidr(size_t offset) const
+    {
+        return *reinterpret_cast<util::Cidr*>(at(offset));
+    }
 
     /// @brief Retrieves a TypedObject pointer from the argument at the given offset.
     [[nodiscard]] TypedObject* getObject(size_t offset) const
@@ -85,21 +91,24 @@ class Params
         return reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(at(offset)));
     }
 
-    [[nodiscard]] const CoreIntArray& getIntArray(size_t offset) const { return *(CoreIntArray*) at(offset); }
+    [[nodiscard]] const CoreIntArray& getIntArray(size_t offset) const
+    {
+        return *reinterpret_cast<CoreIntArray*>(at(offset));
+    }
 
     [[nodiscard]] const CoreStringArray& getStringArray(size_t offset) const
     {
-        return *(CoreStringArray*) at(offset);
+        return *reinterpret_cast<CoreStringArray*>(at(offset));
     }
 
     [[nodiscard]] const CoreIPAddrArray& getIPAddressArray(size_t offset) const
     {
-        return *(CoreIPAddrArray*) at(offset);
+        return *reinterpret_cast<CoreIPAddrArray*>(at(offset));
     }
 
     [[nodiscard]] const CoreCidrArray& getCidrArray(size_t offset) const
     {
-        return *(CoreCidrArray*) at(offset);
+        return *reinterpret_cast<CoreCidrArray*>(at(offset));
     }
 
     class iterator // NOLINT
