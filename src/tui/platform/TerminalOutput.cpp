@@ -426,7 +426,7 @@ void TerminalOutput::writeSixel(std::string_view sixelData)
 
 void TerminalOutput::copyToClipboard(std::string_view text)
 {
-    // OSC 52 format: ESC ] 52 ; c ; <base64-data> ESC \
+    // OSC 52 format: 'ESC ] 52 ; c ; <base64-data> ESC \'
     // 'c' means system clipboard (could also use 'p' for primary selection)
     _buffer += "\033]52;c;";
     _buffer += base64Encode(text);
