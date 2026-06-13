@@ -69,7 +69,7 @@ class CommandPalettePopup: public Component
     void hide();
 
     /// @brief Returns whether the palette is currently visible.
-    [[nodiscard]] bool visible() const noexcept;
+    [[nodiscard]] bool visible() const noexcept override;
 
     // ========================================================================
     // Event Handling

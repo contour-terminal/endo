@@ -135,7 +135,9 @@ class Component
     void setVisible(bool visible);
 
     /// Returns true if this component is visible.
-    [[nodiscard]] bool visible() const noexcept { return _layout.visible; }
+    /// Virtual so derived components (e.g. popups) can refine visibility while
+    /// remaining correct when invoked through a Component base pointer.
+    [[nodiscard]] virtual bool visible() const noexcept { return _layout.visible; }
 
     // --- Layout ---
 

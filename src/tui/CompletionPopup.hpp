@@ -92,7 +92,7 @@ class CompletionPopup: public Component
 
     /// @brief Returns whether the popup is currently visible.
     /// @note Overrides Component::visible() to also check for non-empty items.
-    [[nodiscard]] bool visible() const noexcept;
+    [[nodiscard]] bool visible() const noexcept override;
 
     /// @brief Returns the number of items in the popup.
     [[nodiscard]] size_t itemCount() const noexcept;
