@@ -12,8 +12,6 @@ add_library(endo-shell STATIC
     ProcessGroup.hpp
     TTY.hpp
     TTY.cpp
-    CrashHandler.hpp
-    CrashHandler.cpp
 
     # UI (Prompt, Syntax Highlighting, Grapheme Handling)
     ui/Prompt.hpp
@@ -190,6 +188,13 @@ add_library(endo-shell STATIC
     completion/ProcessNameQueryProvider.cpp
 )
 
+if(NOT ENDO_BUILTIN_CRARHDUMP)
+  target_sources(endo-shell PRIVATE
+    CrashHandler.hpp
+    CrashHandler.cpp
+    )
+endif()
+
 # Platform-specific implementations
 if(WIN32)
     target_sources(endo-shell PRIVATE
@@ -263,7 +268,6 @@ add_executable(test-endo-shell
     commands/GrepCommand_test.cpp
     commands/TimeoutCommand_test.cpp
     commands/PkillCommand_test.cpp
-    CrashHandler_test.cpp
     ui/PromptComponent_test.cpp
     ui/modules/GitModule_test.cpp
     ui/Gradient_test.cpp
@@ -282,6 +286,12 @@ add_executable(test-endo-shell
     ui/RichConsoleReport_test.cpp
     ui/SyntaxHighlighter_test.cpp
 )
+
+if(NOT ENDO_BUILTIN_CRARHDUMP)
+target_sources(test-endo-shell PUBLIC
+  CrashHandler_test.cpp
+)
+endif()
 
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 target_compile_definitions(test-endo-shell PRIVATE
