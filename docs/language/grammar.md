@@ -105,10 +105,10 @@ match_expression = "match" expression "with" { match_arm }
                  | pipeline_expression
                  ;
 
-pipeline_expression = logical_or { "|>" logical_or } ;
+pipeline_expression = logical_or { "|>" [ NEWLINE ] logical_or } ;
 
-logical_or      = logical_and { "||" logical_and } ;
-logical_and     = comparison { "&&" comparison } ;
+logical_or      = logical_and { "||" [ NEWLINE ] logical_and } ;
+logical_and     = comparison { "&&" [ NEWLINE ] comparison } ;
 comparison      = range { comparison_op range } ;
 range           = additive [ ".." additive [ ".." additive ] ] ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
@@ -194,9 +194,18 @@ field_pattern   = identifier [ "=" pattern ] ;
 
 (* ---------- Commands and Pipelines ---------- *)
 
-pipeline        = command { "|" command } [ "&" ] ;
+pipeline        = command { "|" [ NEWLINE ] command } [ "&" ] ;
 command         = simple_command { redirect } ;
 simple_command  = word { word } ;
+
+(* Multi-line continuation (parser-level rule, not a pure CFG):
+   - A NEWLINE appearing after `|`, `|>`, `&&`, `||` is consumed as whitespace
+     (trailing operator form).
+   - A NEWLINE followed by one of the same operators is consumed as whitespace
+     (leading operator form).
+   - Inside `command`, a NEWLINE followed by a word at a column strictly
+     greater than the program name's column is consumed as whitespace
+     (indentation form). *)
 
 redirect        = ">" word
                 | ">>" word

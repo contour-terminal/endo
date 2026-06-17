@@ -80,11 +80,42 @@ bool SourceFormatter::hasBlankLineBetween(int afterLine, int beforeLine) const
     return it != _blankLines.end() && *it < beforeLine;
 }
 
+namespace
+{
+    /// Splits source text into individual lines (without their terminating newlines),
+    /// indexed 0-based to match the lexer's line numbering. A trailing newline does not
+    /// produce a spurious empty final line.
+    std::vector<std::string_view> splitLines(std::string_view source)
+    {
+        std::vector<std::string_view> lines;
+        size_t pos = 0;
+        while (pos <= source.size())
+        {
+            auto const eol = source.find('\n', pos);
+            auto const end = (eol == std::string_view::npos) ? source.size() : eol;
+            auto line = source.substr(pos, end - pos);
+            if (!line.empty() && line.back() == '\r') // tolerate CRLF line endings
+                line.remove_suffix(1);
+            lines.push_back(line);
+            if (eol == std::string_view::npos)
+                break;
+            pos = eol + 1;
+        }
+        return lines;
+    }
+} // namespace
+
 SourceFormatter::SourceFormatter(FormatConfig config,
                                  std::vector<CommentTrivia> const& comments,
-                                 std::set<int> blankLines):
+                                 std::set<int> blankLines,
+                                 std::string_view originalSource):
     _config(config), _comments(comments), _blankLines(std::move(blankLines))
 {
+    if (!originalSource.empty())
+    {
+        _sourceLines = splitLines(originalSource);
+        _verbatimRegions = collectVerbatimRegions(_comments, static_cast<int>(_sourceLines.size()));
+    }
 }
 
 std::string SourceFormatter::format(std::string const& source, FormatConfig const& config)
@@ -105,8 +136,16 @@ std::string SourceFormatter::format(std::string const& source, FormatConfig cons
     if (!program || report.containsFailures())
         return source; // Parse failed — return original source unchanged
 
-    // 3. Format
-    return format(*program, comments, config, computeBlankLines(source));
+    // 3. Format. The original source is passed so `# endo format off`/`on` regions can be
+    //    reproduced verbatim rather than re-emitted from the AST.
+    SourceFormatter formatter(config, comments, computeBlankLines(source), source);
+    program->accept(formatter);
+    formatter.emitRemainingComments();
+
+    if (config.trailingNewline && !formatter._result.empty() && formatter._result.back() != '\n')
+        formatter._result += '\n';
+
+    return formatter._result;
 }
 
 std::string SourceFormatter::format(ast::Node const& root,
@@ -114,6 +153,8 @@ std::string SourceFormatter::format(ast::Node const& root,
                                     FormatConfig const& config,
                                     std::set<int> blankLines)
 {
+    // AST-only entry point: no original source is available, so verbatim regions
+    // (`# endo format off`/`on`) are inert here — everything is re-emitted from the AST.
     SourceFormatter formatter(config, comments, std::move(blankLines));
     root.accept(formatter);
     formatter.emitRemainingComments();
@@ -314,6 +355,87 @@ void SourceFormatter::emitCommentsBeforeLine(int line)
         for ([[maybe_unused]] auto _: std::views::iota(0, std::min(gap, maxBlanks)))
             emitNewline();
     }
+}
+
+namespace
+{
+    /// Directive markers recognized in shell-style (`#`) comments to delimit verbatim regions.
+    /// Data-driven so the spelling lives in one place rather than scattered string literals.
+    constexpr std::string_view formatOffDirective = "endo format off";
+    constexpr std::string_view formatOnDirective = "endo format on";
+
+    /// Returns the comment body with the leading `#` / `//` marker and surrounding ASCII
+    /// whitespace stripped, so it can be matched against a directive string.
+    std::string_view stripCommentMarker(std::string_view text)
+    {
+        // Drop a leading `#` or `//` marker.
+        if (text.starts_with("//"))
+            text.remove_prefix(2);
+        else if (text.starts_with('#'))
+            text.remove_prefix(1);
+        // Trim surrounding ASCII whitespace.
+        auto const first = text.find_first_not_of(" \t\r\n");
+        if (first == std::string_view::npos)
+            return {};
+        auto const last = text.find_last_not_of(" \t\r\n");
+        return text.substr(first, last - first + 1);
+    }
+} // namespace
+
+std::vector<SourceFormatter::VerbatimRegion> SourceFormatter::collectVerbatimRegions(
+    std::vector<CommentTrivia> const& comments, int totalLines)
+{
+    std::vector<VerbatimRegion> regions;
+    std::optional<int> openLine; // line of the active `off` directive, if any
+    for (auto const& comment: comments)
+    {
+        auto const body = stripCommentMarker(comment.text);
+        if (body == formatOffDirective)
+        {
+            // Nested `off` is ignored: the first `off` wins until the next `on`.
+            if (!openLine)
+                openLine = comment.location.begin.line;
+        }
+        else if (body == formatOnDirective)
+        {
+            if (openLine)
+            {
+                regions.push_back({ .beginLine = *openLine, .endLine = comment.location.begin.line });
+                openLine = std::nullopt;
+            }
+            // An `on` without a matching `off` is ignored.
+        }
+    }
+    // An unterminated `off` region extends to the final source line.
+    if (openLine && totalLines > 0)
+        regions.push_back({ .beginLine = *openLine, .endLine = totalLines - 1 });
+    return regions;
+}
+
+std::optional<SourceFormatter::VerbatimRegion> SourceFormatter::verbatimRegionAt(int line) const
+{
+    for (auto const& region: _verbatimRegions)
+        if (line >= region.beginLine && line <= region.endLine)
+            return region;
+    return std::nullopt;
+}
+
+void SourceFormatter::emitVerbatimRegion(VerbatimRegion const& region)
+{
+    auto const lastLine = std::min(region.endLine, static_cast<int>(_sourceLines.size()) - 1);
+    for (auto const line: std::views::iota(region.beginLine, lastLine + 1))
+    {
+        // Append the original line directly (not via emit()) so the source's own leading
+        // whitespace is preserved verbatim and no formatter indentation is injected.
+        _result += _sourceLines[static_cast<size_t>(line)];
+        emitNewline();
+    }
+
+    // Skip every comment that lies within the region so the normal interleaving machinery
+    // does not re-emit the directives or any commentary inside the preserved block.
+    while (_nextCommentIndex < _comments.size()
+           && _comments[_nextCommentIndex].location.begin.line <= region.endLine)
+        ++_nextCommentIndex;
 }
 
 std::optional<int> SourceFormatter::findLastLine(ast::Node const& node)
@@ -823,8 +945,22 @@ static bool isDeclarationOrBlock(ast::Node const& node)
 void SourceFormatter::visit(ast::CompoundStmt const& node)
 {
     emitLeadingComments(node);
+    std::optional<int> lastEmittedRegionBegin; // de-duplicates regions spanning several statements
     for (auto const i: std::views::iota(0uz, node.statements.size()))
     {
+        // Verbatim region handling: a statement whose first line falls inside a
+        // `# endo format off` / `# endo format on` block is reproduced from the original
+        // source rather than re-emitted from the AST. The whole region is emitted once, when
+        // its first in-region statement is reached; later statements in the same region are
+        // skipped (they are already part of the verbatim block).
+        auto const stmtFirstLine = findFirstLine(*node.statements[i]);
+        std::optional<VerbatimRegion> region;
+        if (stmtFirstLine)
+            region = verbatimRegionAt(*stmtFirstLine);
+
+        if (region && lastEmittedRegionBegin == region->beginLine)
+            continue; // already covered by the verbatim block emitted earlier
+
         if (i > 0)
         {
             emitNewline();
@@ -840,7 +976,8 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
             if (!wantBlankLine && !_blankLines.empty())
             {
                 auto const prevStart = findFirstLine(*node.statements[i - 1]);
-                auto const nextStart = findFirstLine(*node.statements[i]);
+                auto const nextStart =
+                    region ? std::optional<int> { region->beginLine } : findFirstLine(*node.statements[i]);
                 if (prevStart && nextStart)
                     wantBlankLine = hasBlankLineBetween(*prevStart, *nextStart);
             }
@@ -850,6 +987,14 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
                      std::views::iota(uint32_t { 0 }, _config.blankLinesBetweenTopLevel))
                     emitNewline();
         }
+
+        if (region)
+        {
+            emitVerbatimRegion(*region);
+            lastEmittedRegionBegin = region->beginLine;
+            continue;
+        }
+
         node.statements[i]->accept(*this);
     }
     emitTrailingComment(node);

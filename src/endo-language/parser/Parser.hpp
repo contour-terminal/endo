@@ -249,6 +249,30 @@ class Parser
     /// Returns true if any were consumed.
     bool consumeNewlines();
 
+    /// Multi-line command continuation helpers.
+    ///
+    /// Shell commands support three continuation forms:
+    ///   1. Trailing operator: `foo |\n bar`, `foo &&\n bar`, `foo |>\n bar`
+    ///      — handled by skipping LineFeeds after consuming the operator.
+    ///   2. Leading operator: `foo\n  | bar`, `foo\n  |> bar`, etc.
+    ///      — if we hit LineFeed and the next real token is a continuation
+    ///        operator, drop the LineFeeds.
+    ///   3. Indentation: `foo arg1\n     arg2` (arg2 strictly more indented
+    ///      than the program name) — drop LineFeeds and resume argument
+    ///      parsing.
+    ///
+    /// @return true if the LineFeed(s) were consumed and the lexer is now
+    ///         positioned on a continuation operator (caller should let the
+    ///         enclosing loop handle it).
+    bool tryConsumeNewlinesBeforeContinuationOperator();
+
+    /// Indented continuation for shell argument parsing.
+    /// @param anchorColumn Column of the program name; continuation line's
+    ///                     first token must be at a strictly greater column.
+    /// @return true if LineFeed(s) were consumed and we're positioned on a
+    ///         parameter/redirect token at col > anchorColumn.
+    bool tryConsumeIndentedContinuation(size_t anchorColumn);
+
     bool tryConsumeToken(Token token);
     bool consumeOneOf(Token token);
 

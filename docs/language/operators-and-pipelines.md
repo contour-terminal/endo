@@ -160,7 +160,15 @@ let summary =
     |> filter (fun c -> contains c.message "fix")
 ```
 
-### 8.8 Operator Precedence
+### 8.8 Line Continuation
+
+`|`, `|>`, `&&`, and `||` allow a command to span multiple lines: the operator
+can appear at the end of a line (with the continuation below) or at the start
+of the next line. Arguments can also continue on indented lines. See
+[Multi-line Commands](command-execution.md#106-multi-line-commands) for the
+full rules and examples.
+
+### 8.9 Operator Precedence
 
 From lowest to highest precedence:
 

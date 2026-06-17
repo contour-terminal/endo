@@ -690,6 +690,31 @@ TEST_CASE("Canvas.putString_clipping")
     CHECK(consumed == 3); // Only "hel" fits (cols 7, 8, 9)
 }
 
+TEST_CASE("Canvas.putString_wide_cluster_right_edge")
+{
+    // A wide (2-cell) grapheme cluster at the canvas' last column must not spill its
+    // continuation cell into cells outside the canvas area (which belong to other components).
+    Buffer buf(24, 80);
+    auto theme = darkTheme();
+    // Canvas occupies buffer columns 10..19 (width 10); buffer column 20 is outside the area.
+    Canvas canvas(buf, Rect { .x = 10, .y = 5, .width = 10, .height = 5 }, theme);
+
+    // "界" is a width-2 CJK glyph. Placed at canvas col 9 it would occupy canvas cols 9 and 10,
+    // i.e. buffer cols 19 and 20 — but col 20 is outside the canvas. It must be dropped entirely.
+    int consumed = canvas.putString(0, 9, "界", Style {});
+    CHECK(consumed == 0); // Did not fit within the area.
+
+    // Canvas col 9 = buffer col 19; the out-of-area cell is buffer col 20.
+    CHECK(buf.at(5, 19).grapheme == " "); // Last canvas cell untouched (cluster dropped).
+    CHECK(buf.at(5, 20).grapheme == " "); // Cell outside the canvas area must be untouched.
+
+    // A width-2 cluster that fully fits (canvas cols 8..9 = buffer cols 18..19) is written.
+    consumed = canvas.putString(0, 8, "界", Style {});
+    CHECK(consumed == 2);
+    CHECK(buf.at(5, 18).grapheme == "界");
+    CHECK(buf.at(5, 20).grapheme == " "); // Still nothing outside the area.
+}
+
 TEST_CASE("Canvas.fill")
 {
     Buffer buf(24, 80);

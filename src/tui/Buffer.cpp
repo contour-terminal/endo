@@ -129,10 +129,16 @@ void Buffer::clearRect(Rect area, Style const& style)
     }
 }
 
-int Buffer::putString(int row, int col, std::string_view text, Style const& style)
+int Buffer::putString(int row, int col, std::string_view text, Style const& style, int maxWidth)
 {
     if (row < 0 || row >= _rows || col < 0)
         return 0;
+
+    // Effective right boundary: the lesser of the buffer width and the caller's column budget.
+    // Clamp the budget to a non-negative span starting at col, guarding against overflow when
+    // maxWidth is the default sentinel (std::numeric_limits<int>::max()).
+    int const budgetLimit = (maxWidth >= _cols - col) ? _cols : col + maxWidth;
+    int const colLimit = std::min(_cols, budgetLimit);
 
     int currentCol = col;
 
@@ -141,7 +147,7 @@ int Buffer::putString(int row, int col, std::string_view text, Style const& styl
 
     for (auto it = segmenter.begin(); it != segmenter.end(); ++it)
     {
-        if (currentCol >= _cols)
+        if (currentCol >= colLimit)
             break;
 
         auto const& cluster = *it;
@@ -153,8 +159,10 @@ int Buffer::putString(int row, int col, std::string_view text, Style const& styl
         // Calculate display width for the grapheme cluster
         int const clusterWidth = graphemeClusterWidth(cluster);
 
-        // Check if it fits
-        if (currentCol + clusterWidth > _cols)
+        // Check if it fits within the effective boundary (buffer width and caller budget).
+        // A wide cluster that would straddle the boundary is dropped, not partially written,
+        // so its continuation cells never spill past colLimit.
+        if (currentCol + clusterWidth > colLimit)
             break;
 
         // Get the cluster as a string_view into the original text

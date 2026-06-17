@@ -518,6 +518,11 @@ src/
   - [x] Or-pattern `|` alternation across line breaks in `parseMatch()` — LineFeed-only consumption (not semicolons)
   - [x] Match arm body on next line after `->` — consume linefeeds after arrow token
   - [x] Double-quoted string literal patterns in `parsePrimaryPattern()` — handle `DblQuoteStart` tokenization in F# mode
+- [x] Parser multi-line continuation for shell commands
+  - [x] Trailing `|`, `|>`, `&&`, `||` at end of line: LineFeeds after the operator consumed as whitespace in `parseCallPipeline`, `parseLogicalExpr`, and every `|>` site
+  - [x] Leading `|`, `|>`, `&&`, `||` at start of next line: `tryConsumeNewlinesBeforeContinuationOperator` helper peeks past LineFeeds and drops them when followed by a continuation operator
+  - [x] Indentation continuation: in `parseCall`, a next line whose first token sits at a column strictly greater than the program name's column joins the command (`tryConsumeIndentedContinuation` helper; 1-based anchor = `programLocation.begin.column + 1`, matching `currentTokenColumn()`)
+  - [x] 10 Catch2 parser unit tests under `[multiline]` tag covering trailing/leading `|`/`&&`/`||`, indented arg continuation (`git commit` style), F# `|>` trailing/leading, same-column independence
 - [x] F#-style `<>` not-equal operator (alternative to `!=`, both supported)
   - [x] Lexer produces `Token::NotEqual` when `<` followed by `>` in F# mode (`_fsharpDepth > 0`)
   - [x] No parser/IR changes needed — reuses same `Token::NotEqual` as `!=`
@@ -534,6 +539,10 @@ src/
   - [x] Single-quoted character literals `'a'` preserved via `LiteralQuoting::SingleQuoted` (was `"a"`)
   - [x] List separator style preserved: `[a, b]` stays comma-separated via `ListExpr::useComma` (was always `;`)
   - [x] Inline block comments `(* ... *)` preserved via `emitInlineComments()` (was dropped)
+- [x] Source formatter `# endo format off` / `# endo format on` directives (clang-format style)
+  - [x] `collectVerbatimRegions()` scans shell-style comments for the directives and builds verbatim line ranges; unmatched `off` extends to EOF, nested `off` ignored, stray `on` inert
+  - [x] Original source threaded into `SourceFormatter`; `visit(CompoundStmt)` reproduces in-region statements verbatim from source instead of re-emitting from the AST (idempotent under `--check`)
+  - [x] 7 formatter tests (verbatim multi-line pipeline, idempotency, odd indentation, surrounding code still formatted, unterminated/nested/stray directives)
 - [x] Shell source name in completer error messages — `execute()` accepts optional `sourceName` parameter, `loadCompleters()` passes file path
 - [x] Completer script test suite — 40+ Catch2 tests covering multi-line parser continuations, cmake/ctest/ssh/scp/flatpak script parsing, and register_completer verification
 

@@ -37,6 +37,34 @@ of        as        global    lazy
 *)
 ```
 
+#### Formatter directives
+
+`endo format` recognizes two directive comments that disable and re-enable
+reformatting for a region of source, analogous to `// clang-format off` / `on`.
+A `# endo format off` comment suppresses formatting until a matching
+`# endo format on` comment; everything in between is reproduced **verbatim**,
+preserving the original spacing and line breaks. This is useful for source whose
+exact layout matters — for example a deliberately multi-line pipeline that the
+formatter would otherwise collapse onto a single line.
+
+<!-- endo-no-check -->
+```endo
+# endo format off
+5 |>
+inc |>
+double |>
+println
+# endo format on
+```
+
+Rules:
+
+- The directives must be standalone shell-style (`#`) comments. The marker text
+  is matched after stripping the leading `#` and surrounding whitespace.
+- An `off` with no matching `on` preserves everything to the end of the file.
+- A nested `off` inside an already-open region is ignored (the first `off`
+  wins until the next `on`); a stray `on` with no preceding `off` has no effect.
+
 ### 2.5 String Literals
 
 <!-- endo-no-check -->
@@ -158,6 +186,15 @@ TimeSpan values support comparison operators:
 ```endo
 1s < 1min   # true
 ```
+
+### 2.9 Line Endings and Statement Termination
+
+A newline normally ends the current statement. Within shell commands and
+pipelines, however, a newline can be absorbed as whitespace when the surrounding
+context implies continuation: a trailing or leading `|`, `|>`, `&&`, `||`, or
+an indented line following the command's program name. See
+[Multi-line Commands](command-execution.md#106-multi-line-commands) for the
+full rules.
 
 ---
 **See also:** [Type System](type-system.md) | [Grammar](grammar.md) | [Philosophy & Goals](index.md)

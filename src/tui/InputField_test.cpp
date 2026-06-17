@@ -1763,3 +1763,183 @@ TEST_CASE("InputField.ghost_text_trim_respects_capitalization")
     CHECK(field.text() == "HE");
     CHECK(field.ghostText().empty());
 }
+
+// ============================================================================
+// Horizontal scroll (single-line overflow)
+// ============================================================================
+
+namespace
+{
+
+// Render the field into a fresh buffer of (1 x cols) and return it.
+Buffer renderSingleLine(InputField& field, int cols)
+{
+    Buffer buffer(1, cols);
+    auto const theme = darkTheme();
+    Canvas canvas(buffer, Rect { .x = 0, .y = 0, .width = cols, .height = 1 }, theme);
+    field.render(canvas);
+    return buffer;
+}
+
+std::string rowText(Buffer const& buffer)
+{
+    std::string out;
+    for (int c = 0; c < buffer.cols(); ++c)
+    {
+        auto const& cell = buffer.at(0, c);
+        out += cell.grapheme.empty() ? std::string(" ") : cell.grapheme;
+    }
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("InputField.hscroll_long_line_follows_cursor_to_right_edge")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF"); // 16 graphemes, cursor at end (16)
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // Tail of the input plus a trailing blank for the end-of-line cursor.
+    // The leftmost cell is overlaid with the left continuation indicator
+    // because content continues off-screen on the left.
+    CHECK(rowText(buffer)
+          == "\xE2\x80\xB9"
+             "89ABCDEF ");
+    CHECK(buffer.cursor().x == 9);
+    CHECK(buffer.cursor().y == 0);
+}
+
+TEST_CASE("InputField.hscroll_cursor_at_start_shows_prefix")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF");
+    field.setCursor(0);
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // Right-most cell shows the right continuation indicator.
+    CHECK(rowText(buffer) == "012345678\xE2\x80\xBA");
+    CHECK(buffer.cursor().x == 0);
+}
+
+TEST_CASE("InputField.hscroll_cursor_in_middle_scrolls_into_view")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF");
+    field.setCursor(12); // between 'B' and 'C'
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // Offset places cursor at the right edge; leftmost cell gets the left indicator.
+    CHECK(rowText(buffer)
+          == "\xE2\x80\xB9"
+             "456789ABC");
+    CHECK(buffer.cursor().x == 9);
+}
+
+TEST_CASE("InputField.hscroll_short_line_does_not_scroll")
+{
+    InputField field;
+    field.setText("hi");
+    field.setCursor(2);
+
+    auto buffer = renderSingleLine(field, 10);
+
+    CHECK(rowText(buffer) == "hi        ");
+    CHECK(buffer.cursor().x == 2);
+}
+
+TEST_CASE("InputField.hscroll_prompt_area_is_preserved")
+{
+    InputField field;
+    field.setPrompt("$ ");
+    field.setText("0123456789ABCDEF");
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // Prompt occupies cols 0-1; text area is 8 cols. Cursor at end ⇒ tail visible
+    // with a trailing blank for the cursor: "$ BCDEF  ".
+    auto const row = rowText(buffer);
+    CHECK(row.substr(0, 2) == "$ ");
+    CHECK(buffer.cursor().x == 9);
+}
+
+TEST_CASE("InputField.hscroll_right_indicator_when_tail_clipped")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF"); // 16 chars
+    field.setCursor(0);                // viewport pinned to the left
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // First 9 chars of the buffer visible; last cell replaced by the right indicator.
+    auto const row = rowText(buffer);
+    CHECK(row.substr(0, 9) == "012345678");
+    CHECK(row.substr(9, 3) == "\xE2\x80\xBA"); // U+203A ›
+    CHECK(buffer.cursor().x == 0);
+}
+
+TEST_CASE("InputField.hscroll_left_indicator_when_head_clipped")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF");
+    field.setCursor(16); // end — viewport scrolled right
+
+    auto buffer = renderSingleLine(field, 10);
+
+    // Leftmost cell shows the left indicator on top of the first visible char.
+    auto const row = rowText(buffer);
+    CHECK(row.substr(0, 3) == "\xE2\x80\xB9"); // U+2039 ‹
+    CHECK(buffer.cursor().x == 9);
+}
+
+TEST_CASE("InputField.hscroll_both_indicators_when_clipped_on_both_sides")
+{
+    InputField field;
+    field.setText("0123456789ABCDEFGHIJ"); // 20 chars
+
+    // First render: cursor mid-buffer, viewport scrolls right (offset > 0).
+    field.setCursor(15);
+    (void) renderSingleLine(field, 6);
+
+    // Second render: cursor moves back into the visible range, so the viewport
+    // stays put — text is clipped on BOTH sides and the cursor is in the middle.
+    field.setCursor(12);
+    auto buffer = renderSingleLine(field, 6);
+
+    auto const row = rowText(buffer);
+    CHECK(row.substr(0, 3) == "\xE2\x80\xB9");
+    CHECK(row.substr(row.size() - 3) == "\xE2\x80\xBA");
+    CHECK(buffer.cursor().x != 0);
+    CHECK(buffer.cursor().x != buffer.cols() - 1);
+}
+
+TEST_CASE("InputField.hscroll_no_indicators_when_content_fits")
+{
+    InputField field;
+    field.setText("hello");
+
+    auto buffer = renderSingleLine(field, 10);
+    auto const row = rowText(buffer);
+    // Plain ASCII "hello" followed by spaces — no angle-quote bytes present.
+    CHECK(row.find("\xE2\x80\xB9") == std::string::npos);
+    CHECK(row.find("\xE2\x80\xBA") == std::string::npos);
+}
+
+TEST_CASE("InputField.hscroll_resets_on_clear_and_setText")
+{
+    InputField field;
+    field.setText("0123456789ABCDEF");
+    (void) renderSingleLine(field, 10); // establishes non-zero scroll offset
+
+    field.clear();
+    auto buffer = renderSingleLine(field, 10);
+    CHECK(buffer.cursor().x == 0);
+
+    field.setText("abc");
+    buffer = renderSingleLine(field, 10);
+    CHECK(rowText(buffer).substr(0, 3) == "abc");
+    CHECK(buffer.cursor().x == 3);
+}

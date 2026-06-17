@@ -2665,3 +2665,113 @@ TEST_CASE("Parser.Shell.variadic_function_with_multi_pipe", "[parser][variadic]"
     CHECK(pipeline->calls[1]->program == "grep");
     CHECK(pipeline->calls[2]->program == "head");
 }
+
+// =============================================================================
+// Multi-line shell command continuation
+// =============================================================================
+// Three continuation forms are supported:
+//   1. Trailing operator (`|`, `&&`, `||`) at end of line
+//   2. Leading operator at start of next line
+//   3. Indentation (next line column > program name column)
+
+TEST_CASE("Parser.Multiline.trailing_pipe", "[parser][multiline]")
+{
+    auto ast = parse("echo hello |\n  cat");
+    REQUIRE(ast != nullptr);
+    auto* pipeline = dynamic_cast<endo::ast::CallPipeline*>(getFirstStatement(ast.get()));
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->calls.size() == 2);
+    CHECK(pipeline->calls[0]->program == "echo");
+    CHECK(pipeline->calls[1]->program == "cat");
+}
+
+TEST_CASE("Parser.Multiline.leading_pipe", "[parser][multiline]")
+{
+    auto ast = parse("echo hello\n  | cat");
+    REQUIRE(ast != nullptr);
+    auto* pipeline = dynamic_cast<endo::ast::CallPipeline*>(getFirstStatement(ast.get()));
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->calls.size() == 2);
+    CHECK(pipeline->calls[0]->program == "echo");
+    CHECK(pipeline->calls[1]->program == "cat");
+}
+
+TEST_CASE("Parser.Multiline.trailing_and", "[parser][multiline]")
+{
+    auto ast = parse("echo first &&\n  echo second");
+    REQUIRE(ast != nullptr);
+    auto* andStmt = dynamic_cast<endo::ast::LogicalAndStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(andStmt != nullptr);
+}
+
+TEST_CASE("Parser.Multiline.trailing_or", "[parser][multiline]")
+{
+    auto ast = parse("echo first ||\n  echo fallback");
+    REQUIRE(ast != nullptr);
+    auto* orStmt = dynamic_cast<endo::ast::LogicalOrStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(orStmt != nullptr);
+}
+
+TEST_CASE("Parser.Multiline.leading_and", "[parser][multiline]")
+{
+    auto ast = parse("echo first\n  && echo second");
+    REQUIRE(ast != nullptr);
+    auto* andStmt = dynamic_cast<endo::ast::LogicalAndStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(andStmt != nullptr);
+}
+
+TEST_CASE("Parser.Multiline.leading_or", "[parser][multiline]")
+{
+    auto ast = parse("echo first\n  || echo fallback");
+    REQUIRE(ast != nullptr);
+    auto* orStmt = dynamic_cast<endo::ast::LogicalOrStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(orStmt != nullptr);
+}
+
+TEST_CASE("Parser.Multiline.indented_args_git_commit_style", "[parser][multiline]")
+{
+    // Arguments aligned under the first arg continue the same command.
+    auto ast = parse("git commit -m blurb\n"
+                     "           --author JohnDoe\n"
+                     "           --date 2024");
+    REQUIRE(ast != nullptr);
+    auto* stmt = getFirstStatement(ast.get());
+    REQUIRE(stmt != nullptr);
+
+    // Single unpiped shell command: parseCallPipeline returns the ProgramCall directly
+    // (wrapped inside nothing — ProgramCall is-a Statement).
+    auto* call = dynamic_cast<endo::ast::ProgramCall*>(stmt);
+    REQUIRE(call != nullptr);
+    CHECK(call->program == "git");
+    // Expected args: commit, -m, blurb, --author, JohnDoe, --date, 2024 == 7
+    CHECK(call->parameters.size() == 7);
+}
+
+TEST_CASE("Parser.Multiline.same_column_is_independent", "[parser][multiline]")
+{
+    // Second line at same column as first: two separate commands.
+    auto ast = parse("echo first\necho second");
+    REQUIRE(ast != nullptr);
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    CHECK(compound->statements.size() == 2);
+}
+
+TEST_CASE("Parser.Multiline.fsharp_pipeline_leading", "[parser][multiline]")
+{
+    auto ast = parse("let double x = x * 2\n5\n  |> double");
+    REQUIRE(ast != nullptr);
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    // Two top-level statements: `let double` and the pipeline expression.
+    CHECK(compound->statements.size() == 2);
+}
+
+TEST_CASE("Parser.Multiline.fsharp_pipeline_trailing", "[parser][multiline]")
+{
+    auto ast = parse("let double x = x * 2\n5 |>\n  double");
+    REQUIRE(ast != nullptr);
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    CHECK(compound->statements.size() == 2);
+}
