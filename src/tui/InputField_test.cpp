@@ -1765,6 +1765,92 @@ TEST_CASE("InputField.ghost_text_trim_respects_capitalization")
 }
 
 // ============================================================================
+// Ghost text deletion tests (re-prepend to avoid flicker on backspace/kill)
+// ============================================================================
+
+TEST_CASE("InputField.ghost_text_reprepended_on_backspace")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git c");
+    CHECK(field.ghostText() == "heckout"); // deleted 'h' re-prepended onto ghost
+}
+
+TEST_CASE("InputField.ghost_text_reprepended_on_word_backward")
+{
+    InputField field;
+    field.setText("git checkout");
+    field.setCursor(12);
+    field.setGhostText(" main");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward
+    CHECK(field.text() == "git ");
+    CHECK(field.ghostText() == "checkout main"); // whole killed word re-prepended
+}
+
+TEST_CASE("InputField.ghost_text_reprepended_on_kill_to_start")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('u', Modifier::Ctrl)); // KillToStart
+    CHECK(field.text().empty());
+    CHECK(field.ghostText() == "hello world"); // kept (not cleared) on empty buffer
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(6);
+    field.setGhostText("baz");
+    (void) field.processEvent(specialKey(KeyCode::Left)); // cursor 5, ghost no longer shown
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'a' before cursor
+    CHECK(field.text() == "foobr");
+    CHECK(field.ghostText().empty()); // mid-buffer delete clears ghost
+}
+
+TEST_CASE("InputField.ghost_text_untouched_on_forward_delete_at_end")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    field.setGhostText("bar");
+    (void) field.processEvent(specialKey(KeyCode::Delete)); // deletes nothing at end
+    CHECK(field.text() == "foo");
+    CHECK(field.ghostText() == "bar"); // visible ghost preserved
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_forward_delete_midbuffer")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(3);
+    field.setGhostText("baz");
+    (void) field.processEvent(specialKey(KeyCode::Delete)); // deletes 'b' mid-buffer
+    CHECK(field.text() == "fooar");
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_delete_selection")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(6);
+    field.setGhostText("baz");
+    // Select 'bar' (three chars back), then delete the selection.
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "foo");
+    CHECK(field.ghostText().empty()); // selection delete clears, does not re-prepend
+}
+
+// ============================================================================
 // Horizontal scroll (single-line overflow)
 // ============================================================================
 

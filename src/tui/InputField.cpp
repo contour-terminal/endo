@@ -718,51 +718,47 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
 
         // Editing
         case EditAction::DeleteCharBackward:
-            clearGhostText();
             if (hasSelection())
             {
+                clearGhostText(); // Selection delete is not a prefix-shortening edit.
                 saveUndoState();
                 deleteSelection();
             }
             else
             {
-                deleteCharBackward();
+                deleteCharBackward(); // Adjusts ghost text internally (re-prepend or clear).
             }
             _lastWasKill = false;
             return InputFieldAction::Changed;
 
         case EditAction::DeleteCharForward:
-            clearGhostText();
             if (hasSelection())
             {
+                clearGhostText(); // Selection delete is not a prefix-shortening edit.
                 saveUndoState();
                 deleteSelection();
             }
             else
             {
-                deleteChar();
+                deleteChar(); // Forward delete: clears ghost only if it actually deletes.
             }
             _lastWasKill = false;
             return InputFieldAction::Changed;
 
         case EditAction::DeleteWord:
-            clearGhostText();
-            killWord();
+            killWord(); // Forward word kill: clears ghost only if it actually deletes.
             return InputFieldAction::Changed;
 
         case EditAction::DeleteWordBackward:
-            clearGhostText();
-            killWordBackward();
+            killWordBackward(); // Adjusts ghost text internally (re-prepend or clear).
             return InputFieldAction::Changed;
 
         case EditAction::KillToEnd:
-            clearGhostText();
-            killToEnd();
+            killToEnd(); // Forward kill: clears ghost only if it actually deletes.
             return InputFieldAction::Changed;
 
         case EditAction::KillToStart:
-            clearGhostText();
-            killToStart();
+            killToStart(); // Adjusts ghost text internally (re-prepend or clear).
             return InputFieldAction::Changed;
 
         case EditAction::Transpose:
@@ -1059,6 +1055,7 @@ void InputField::killToEnd()
         saveUndoState();
         auto killed = _buffer.substr(_cursor);
         _buffer.erase(_cursor);
+        clearGhostText(); // Forward kill removes the tail the ghost would extend; clear it.
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1068,10 +1065,15 @@ void InputField::killToStart()
 {
     if (_cursor > 0)
     {
+        bool const wasAtEnd = _cursor == _buffer.size();
         saveUndoState();
         auto killed = _buffer.substr(0, _cursor);
         _buffer.erase(0, _cursor);
         _cursor = 0;
+        if (wasAtEnd)
+            prependGhostText(killed); // Keep the suggestion stable across the recompute debounce.
+        else
+            clearGhostText();
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1093,6 +1095,7 @@ void InputField::killWord()
         saveUndoState();
         auto killed = _buffer.substr(start, endPos - start);
         _buffer.erase(start, endPos - start);
+        clearGhostText(); // Forward word kill: cursor not at end, ghost was not rendered.
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1101,6 +1104,7 @@ void InputField::killWord()
 void InputField::killWordBackward()
 {
     auto const end = _cursor;
+    bool const wasAtEnd = _cursor == _buffer.size();
     // Find start position without modifying cursor
     auto startPos = _cursor;
     while (startPos > 0 && !isWordChar(_buffer[prevGraphemeCluster(startPos)]))
@@ -1114,6 +1118,10 @@ void InputField::killWordBackward()
         auto killed = _buffer.substr(startPos, end - startPos);
         _buffer.erase(startPos, end - startPos);
         _cursor = startPos;
+        if (wasAtEnd)
+            prependGhostText(killed); // Keep the suggestion stable across the recompute debounce.
+        else
+            clearGhostText();
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1150,20 +1158,27 @@ void InputField::yankPop()
 void InputField::deleteChar()
 {
     if (_cursor >= _buffer.size())
-        return;
+        return; // Nothing deleted at end-of-buffer: a visible ghost (if any) stays valid.
     saveUndoState();
     auto const next = nextGraphemeCluster(_cursor);
     _buffer.erase(_cursor, next - _cursor);
+    clearGhostText(); // Mid-buffer delete: cursor not at end, ghost was not rendered.
 }
 
 void InputField::deleteCharBackward()
 {
     if (_cursor == 0)
         return;
+    bool const wasAtEnd = _cursor == _buffer.size();
     saveUndoState();
     auto const prev = prevGraphemeCluster(_cursor);
+    auto const removed = _buffer.substr(prev, _cursor - prev);
     _buffer.erase(prev, _cursor - prev);
     _cursor = prev;
+    if (wasAtEnd)
+        prependGhostText(removed); // Keep the suggestion stable across the recompute debounce.
+    else
+        clearGhostText();
 }
 
 void InputField::moveToStart()
@@ -1490,6 +1505,14 @@ void InputField::setGhostText(std::string_view ghost)
 void InputField::clearGhostText()
 {
     _ghostText.clear();
+}
+
+void InputField::prependGhostText(std::string_view deleted)
+{
+    // Guard on a non-empty ghost so we never invent a suggestion that wasn't showing.
+    if (_ghostText.empty() || deleted.empty())
+        return;
+    _ghostText.insert(0, deleted);
 }
 
 void InputField::acceptGhostText()

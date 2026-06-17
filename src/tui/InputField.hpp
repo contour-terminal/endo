@@ -471,6 +471,19 @@ class InputField: public Component
 
     /// @brief Renders ghost text character-by-character with per-column decorator background.
     void renderGhostText(Canvas& canvas, int row, int& col, Style const& ghostStyle) const;
+
+    /// @brief Re-prepends a just-deleted run onto the ghost text so a backward deletion
+    ///        at the buffer end keeps the inline suggestion stable (no flicker).
+    ///
+    /// Symmetric inverse of the type-at-end trim: deleting the last character(s) of the
+    /// buffer makes the deleted run the new prefix of the suggestion (e.g. buffer "git c"
+    /// + ghost "heckout" after backspacing the 'h' from "git ch"). For prefix-consistent
+    /// completers this yields the exact correct suggestion; the consumer's debounced
+    /// recompute confirms or corrects it afterwards.
+    ///
+    /// @param deleted The grapheme run removed from the end of the buffer. No-op if the
+    ///        ghost text is currently empty or @p deleted is empty.
+    void prependGhostText(std::string_view deleted);
 };
 
 } // namespace tui
