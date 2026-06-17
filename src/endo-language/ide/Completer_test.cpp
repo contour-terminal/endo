@@ -134,8 +134,16 @@ TEST_CASE("Completer.dollar_returns_additional_candidates", "[completion][comple
 {
     CompletionDataSource dataSource;
     dataSource.additionalCandidates = {
-        { "HOME", "HOME", "/home/user", "", CompletionKind::Other },
-        { "PATH", "PATH", "/usr/bin", "", CompletionKind::Other },
+        { .text = "HOME",
+          .displayText = "HOME",
+          .description = "/home/user",
+          .detail = "",
+          .kind = CompletionKind::Other },
+        { .text = "PATH",
+          .displayText = "PATH",
+          .description = "/usr/bin",
+          .detail = "",
+          .kind = CompletionKind::Other },
     };
     auto results = computeCompletions("$", 1, dataSource);
     CHECK(hasCandidate(results, "HOME"));
@@ -176,7 +184,11 @@ TEST_CASE("Completer.filepath_context_uses_additional", "[completion][completer]
 {
     CompletionDataSource dataSource;
     dataSource.additionalCandidates = {
-        { "./src", "./src", "directory", "", CompletionKind::Other },
+        { .text = "./src",
+          .displayText = "./src",
+          .description = "directory",
+          .detail = "",
+          .kind = CompletionKind::Other },
     };
     auto results = computeCompletions("./s", 3, dataSource);
     CHECK(hasCandidate(results, "./src"));
@@ -194,7 +206,9 @@ TEST_CASE("Completer.prefix_filtering_works", "[completion][completer]")
 TEST_CASE("Completer.dot_access_with_record_fields", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    dataSource.recordFields["ProcessInfo"] = { { "pid", "int" }, { "user", "str" }, { "cpu", "float" } };
+    dataSource.recordFields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                                               { .name = "user", .typeName = "str" },
+                                               { .name = "cpu", .typeName = "float" } };
     auto results = computeCompletions("_.p", 3, dataSource);
     CHECK(hasCandidate(results, "_.pid"));
     CHECK(!hasCandidate(results, "_.user"));
@@ -203,7 +217,8 @@ TEST_CASE("Completer.dot_access_with_record_fields", "[completion][completer]")
 TEST_CASE("Completer.record_field_completion", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    dataSource.recordFields["Person"] = { { "name", "str" }, { "age", "int" } };
+    dataSource.recordFields["Person"] = { { .name = "name", .typeName = "str" },
+                                          { .name = "age", .typeName = "int" } };
     auto results = computeCompletions("_.", 2, dataSource);
     CHECK(hasCandidate(results, "_.name"));
     CHECK(hasCandidate(results, "_.age"));
@@ -212,8 +227,9 @@ TEST_CASE("Completer.record_field_completion", "[completion][completer]")
 TEST_CASE("Completer.variable_specific_completion", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    dataSource.recordFields["Person"] = { { "name", "str" }, { "age", "int" } };
-    dataSource.recordFields["ProcessInfo"] = { { "pid", "int" } };
+    dataSource.recordFields["Person"] = { { .name = "name", .typeName = "str" },
+                                          { .name = "age", .typeName = "int" } };
+    dataSource.recordFields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     dataSource.variableTypes["alice"] = "Person";
     auto results = computeCompletions("alice.", 6, dataSource);
     CHECK(hasCandidate(results, "alice.name"));

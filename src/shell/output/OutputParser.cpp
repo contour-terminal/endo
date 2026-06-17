@@ -67,7 +67,9 @@ namespace
                 if (obj.contains(key))
                 {
                     if (obj[key].is_number())
+                    {
                         value = obj[key].get<int64_t>();
+                    }
                     else if (obj[key].is_string())
                     {
                         try

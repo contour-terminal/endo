@@ -137,8 +137,9 @@ TEST_CASE("FSharpCompleter.underscore.all_fields")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -156,8 +157,9 @@ TEST_CASE("FSharpCompleter.underscore.prefix_pp")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -170,8 +172,9 @@ TEST_CASE("FSharpCompleter.underscore.prefix_us")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -184,8 +187,9 @@ TEST_CASE("FSharpCompleter.underscore.no_match")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -197,10 +201,12 @@ TEST_CASE("FSharpCompleter.underscore.multiple_types")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
-    state.recordTypeFields["Person"] = { { "name", "str" }, { "age", "int" } };
+    state.recordTypeFields["Person"] = { { .name = "name", .typeName = "str" },
+                                         { .name = "age", .typeName = "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_."));
@@ -213,10 +219,12 @@ TEST_CASE("FSharpCompleter.underscore.multiple_types_filter")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
-    state.recordTypeFields["Person"] = { { "name", "str" }, { "age", "int" } };
+    state.recordTypeFields["Person"] = { { .name = "name", .typeName = "str" },
+                                         { .name = "age", .typeName = "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.n"));
@@ -227,7 +235,7 @@ TEST_CASE("FSharpCompleter.underscore.multiple_types_filter")
 TEST_CASE("FSharpCompleter.underscore.description_shows_type")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" } };
+    state.recordTypeFields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.p"));
@@ -244,8 +252,9 @@ TEST_CASE("FSharpCompleter.value.offers_methods_and_fields")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -264,8 +273,9 @@ TEST_CASE("FSharpCompleter.value.filter_m")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -280,8 +290,9 @@ TEST_CASE("FSharpCompleter.value.filter_bi")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -347,7 +358,7 @@ TEST_CASE("FSharpCompleter.edge.just_dot")
 TEST_CASE("FSharpCompleter.edge.nested_dot")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { { "cpu", "float" } };
+    state.recordTypeFields["ProcessInfo"] = { { .name = "cpu", .typeName = "float" } };
     endo::FSharpCompleter completer(state);
 
     // "a.b.c" should split on last dot: objectPart="a.b", memberPrefix="c"
@@ -364,18 +375,20 @@ TEST_CASE("FSharpCompleter.DateTime_now.returns_only_DateTime_fields")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
-        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+        { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+        { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+        { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+        { .name = "epoch", .typeName = "int" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },
-        { "cpu", "float" },
-        { "command", "str" },
+        { .name = "pid", .typeName = "int" },
+        { .name = "cpu", .typeName = "float" },
+        { .name = "command", .typeName = "str" },
     };
     state.recordTypeFields["GitCommit"] = {
-        { "author", "str" },
-        { "email", "str" },
-        { "date", "str" },
+        { .name = "author", .typeName = "str" },
+        { .name = "email", .typeName = "str" },
+        { .name = "date", .typeName = "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -399,10 +412,12 @@ TEST_CASE("FSharpCompleter.DateTime_now.filter_by_prefix")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
-        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+        { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+        { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+        { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+        { .name = "epoch", .typeName = "int" },
     };
-    state.recordTypeFields["ProcessInfo"] = { { "mem", "float" } };
+    state.recordTypeFields["ProcessInfo"] = { { .name = "mem", .typeName = "float" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("DateTime.now.m"));
@@ -416,11 +431,11 @@ TEST_CASE("FSharpCompleter.DateTime_fromEpoch.returns_only_DateTime_fields")
     endo::FSharpPersistentState state;
     state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" },
-        { "month", "int" },
-        { "day", "int" },
+        { .name = "year", .typeName = "int" },
+        { .name = "month", .typeName = "int" },
+        { .name = "day", .typeName = "int" },
     };
-    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" } };
+    state.recordTypeFields["ProcessInfo"] = { { .name = "pid", .typeName = "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("DateTime.fromEpoch."));
@@ -457,12 +472,14 @@ TEST_CASE("FSharpCompleter.underscore.pipeline_type_aware")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },   { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "int" },   { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     state.commandOutputTypes["ps"] = "ProcessInfo";
@@ -484,12 +501,13 @@ TEST_CASE("FSharpCompleter.underscore.pipeline_ps_type_aware")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },
-        { "size", "Size" },
+        { .name = "name", .typeName = "str" },
+        { .name = "size", .typeName = "Size" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+        { .name = "pid", .typeName = "int" },   { .name = "ppid", .typeName = "int" },
+        { .name = "user", .typeName = "str" },  { .name = "cpu", .typeName = "float" },
+        { .name = "mem", .typeName = "float" }, { .name = "command", .typeName = "str" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     state.commandOutputTypes["ps"] = "ProcessInfo";
@@ -507,12 +525,13 @@ TEST_CASE("FSharpCompleter.underscore.chained_pipeline")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },   { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "int" },   { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },
-        { "cpu", "float" },
+        { .name = "pid", .typeName = "int" },
+        { .name = "cpu", .typeName = "float" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     endo::FSharpCompleter completer(state);
@@ -529,12 +548,12 @@ TEST_CASE("FSharpCompleter.underscore.no_pipeline_fallback")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },
-        { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },
+        { .name = "isDir", .typeName = "bool" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },
-        { "cpu", "float" },
+        { .name = "pid", .typeName = "int" },
+        { .name = "cpu", .typeName = "float" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     endo::FSharpCompleter completer(state);
@@ -552,15 +571,19 @@ TEST_CASE("FSharpCompleter.underscore.nested_mode_pipeline_type_aware")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },      { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "FileMode" }, { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
-    state.recordTypeFields["FileMode"] = { { "bits", "int" } };
+    state.recordTypeFields["FileMode"] = { { .name = "bits", .typeName = "int" } };
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
-        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+        { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+        { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+        { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+        { .name = "epoch", .typeName = "int" },
     };
-    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    state.recordTypeFields["ProcessInfo"] = { { .name = "pid", .typeName = "int" },
+                                              { .name = "cpu", .typeName = "float" } };
     state.commandOutputTypes["ls"] = "FileInfo";
     endo::FSharpCompleter completer(state);
 
@@ -575,13 +598,16 @@ TEST_CASE("FSharpCompleter.underscore.nested_mtime_pipeline_type_aware")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },      { .name = "size", .typeName = "Size" },
+        { .name = "mode", .typeName = "FileMode" }, { .name = "mtime", .typeName = "DateTime" },
+        { .name = "isDir", .typeName = "bool" },
     };
-    state.recordTypeFields["FileMode"] = { { "bits", "int" } };
+    state.recordTypeFields["FileMode"] = { { .name = "bits", .typeName = "int" } };
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
-        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+        { .name = "year", .typeName = "int" },   { .name = "month", .typeName = "int" },
+        { .name = "day", .typeName = "int" },    { .name = "hour", .typeName = "int" },
+        { .name = "minute", .typeName = "int" }, { .name = "second", .typeName = "int" },
+        { .name = "epoch", .typeName = "int" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     endo::FSharpCompleter completer(state);
@@ -599,12 +625,12 @@ TEST_CASE("FSharpCompleter.underscore.unknown_command_fallback")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["FileInfo"] = {
-        { "name", "str" },
-        { "isDir", "bool" },
+        { .name = "name", .typeName = "str" },
+        { .name = "isDir", .typeName = "bool" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },
-        { "cpu", "float" },
+        { .name = "pid", .typeName = "int" },
+        { .name = "cpu", .typeName = "float" },
     };
     state.commandOutputTypes["ls"] = "FileInfo";
     endo::FSharpCompleter completer(state);

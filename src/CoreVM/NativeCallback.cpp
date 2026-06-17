@@ -72,12 +72,12 @@ void Params::setResult(const Function* fn)
 
 void Params::setResult(const char* str)
 {
-    _argv[0] = (Value) _caller->newString(str);
+    _argv[0] = reinterpret_cast<Value>(_caller->newString(str));
 }
 
 void Params::setResult(std::string str)
 {
-    _argv[0] = (Value) _caller->newString(std::move(str));
+    _argv[0] = reinterpret_cast<Value>(_caller->newString(std::move(str)));
 }
 
 Function* Params::getFunction(size_t offset) const

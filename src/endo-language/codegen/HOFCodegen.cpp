@@ -217,9 +217,9 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
 
 void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
@@ -365,9 +365,9 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
 
 void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve the predicate function (may be null for Callable parameters)
     auto predName = predParamName;
@@ -522,9 +522,9 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
                                  std::string const& funcParamName,
                                  CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
@@ -602,9 +602,9 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
 
 void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
@@ -721,9 +721,9 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
 
 void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "rev.src");
@@ -784,9 +784,9 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
 
 void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve predicate function
     auto predName = predParamName;
@@ -877,9 +877,9 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
 
 void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve predicate function
     auto predName = predParamName;
@@ -958,9 +958,9 @@ void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Val
 
 void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve predicate function
     auto predName = predParamName;
@@ -1041,9 +1041,9 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
 
 void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Resolve function
     auto funcName = funcParamName;
@@ -1073,9 +1073,9 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     // Use Void alloca for typed object elements (e.g., CompletionEntry) so convertToString
     // dispatches to object_to_string at runtime instead of N2S on the raw pointer.
     auto const hasObjectElements = getListElementTypeId(listValue).has_value();
-    auto const eachElemType = hasObjectElements
-                                  ? CoreVM::LiteralType::Void
-                                  : getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto const eachElemType =
+        hasObjectElements ? CoreVM::LiteralType::Void
+                          : getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
     auto* elemAlloca = createAllocaInEntryBlock(eachElemType, "each.elem");
 
     // Propagate list element type to extracted elements
@@ -1138,16 +1138,16 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
 
     // End: return unit
     _builder.setInsertPoint(endBlock);
-    _result = _builder.get(CoreVM::CoreNumber(0));
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
-    auto* one = _builder.get(CoreVM::CoreNumber(1));
-    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
+    auto* one = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* zero = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.src");
@@ -1259,10 +1259,10 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
 
 void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
-    auto* one = _builder.get(CoreVM::CoreNumber(1));
-    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
+    auto* one = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* zero = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "drop.src");
@@ -1315,9 +1315,9 @@ void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listV
 
 void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head / fst
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail / snd
 
     // Allocas for both source lists
     auto* srcAStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.srcA");
@@ -1456,9 +1456,9 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
 
 void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Allocas
     auto* outerSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.outer.src");
@@ -1605,9 +1605,9 @@ void IRGenerator::generateDistinctIR(CoreVM::Value* listValue)
 
 void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head / fst
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail / snd
 
     // Resolve the key function
     auto funcName = funcParamName;
@@ -1686,7 +1686,7 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     {
         if (*keyTypeId == CoreVM::BuiltinTypeId::Size)
             keyValue = _builder.createObjGetSlot(
-                keyValue, _builder.get(CoreVM::CoreNumber(0)), "sortBy.key.size.bytes");
+                keyValue, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "sortBy.key.size.bytes");
     }
 
     // Store key and elem in temp allocas (must survive Tuple2 ObjAlloc)
@@ -1739,9 +1739,9 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
 
 void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head / fst
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail / snd
 
     // Resolve the key function
     auto funcName = funcParamName;
@@ -1865,9 +1865,9 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
 
 void IRGenerator::generateSeqEachIR(std::string const& funcParamName, CoreVM::Value* seqValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // lazyTail
 
     // Resolve function
     auto funcName = funcParamName;
@@ -1940,16 +1940,16 @@ void IRGenerator::generateSeqEachIR(std::string const& funcParamName, CoreVM::Va
 
     // End: return unit
     _builder.setInsertPoint(endBlock);
-    _result = _builder.get(CoreVM::CoreNumber(0));
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void IRGenerator::generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* seqValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
-    auto* one = _builder.get(CoreVM::CoreNumber(1));
-    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // lazyTail
+    auto* one = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* zero = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.src");
@@ -2066,9 +2066,9 @@ void IRGenerator::generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* se
 
 void IRGenerator::generateToListIR(CoreVM::Value* seqValue)
 {
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // lazyTail
 
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.src");

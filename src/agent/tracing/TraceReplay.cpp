@@ -170,7 +170,9 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
     auto const totalEvents =
         toolCallCount + userMessageCount + llmRequestCount + llmResponseCount + compactionCount + errorCount;
     if (totalEvents == 0)
+    {
         std::println("No events found in trace file.");
+    }
     else
     {
         std::println("\nSummary:");

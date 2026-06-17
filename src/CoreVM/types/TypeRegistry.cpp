@@ -21,13 +21,13 @@ void TypeRegistry::registerBuiltins()
     optionType->name = "Option";
     optionType->slotCount = 2; // 1 payload slot + 1 type tag slot
     optionType->variants = {
-        { "None", 0 }, // tag 0: no payload
-        { "Some", 1 }, // tag 1: 1 slot payload
+        { .name = "None", .payloadSlots = 0 }, // tag 0: no payload
+        { .name = "Some", .payloadSlots = 1 }, // tag 1: 1 slot payload
     };
     optionType->moduleFunctions = {
-        { "map", "Option.map f opt -> option" },
-        { "bind", "Option.bind f opt -> option" },
-        { "defaultValue", "Option.defaultValue d opt -> value" },
+        { .name = "map", .signature = "Option.map f opt -> option" },
+        { .name = "bind", .signature = "Option.bind f opt -> option" },
+        { .name = "defaultValue", .signature = "Option.defaultValue d opt -> value" },
     };
     // SlotTraceInfo: None has no slots; Some's slot 0 is dynamic (check type tag in slot 1)
     optionType->traceInfo.variantFixedSlots = { {}, {} };
@@ -44,8 +44,8 @@ void TypeRegistry::registerBuiltins()
     resultType->name = "Result";
     resultType->slotCount = 2; // 1 payload slot + 1 type tag slot
     resultType->variants = {
-        { "Error", 1 }, // tag 0: error payload
-        { "Ok", 1 },    // tag 1: success payload
+        { .name = "Error", .payloadSlots = 1 }, // tag 0: error payload
+        { .name = "Ok", .payloadSlots = 1 },    // tag 1: success payload
     };
     // SlotTraceInfo: Error/Ok slot 0 is dynamic (check type tag in slot 1)
     resultType->traceInfo.variantFixedSlots = { {}, {} };
@@ -61,8 +61,8 @@ void TypeRegistry::registerBuiltins()
     tuple2Type->id = BuiltinTypeId::Tuple2;
     tuple2Type->name = "Tuple2";
     tuple2Type->fields = {
-        { "", 0 }, // slot 0 (unnamed positional)
-        { "", 1 }, // slot 1
+        { .name = "", .offset = 0 }, // slot 0 (unnamed positional)
+        { .name = "", .offset = 1 }, // slot 1
     };
     tuple2Type->slotCount = 3; // 2 element slots + 1 packed type tag slot
     // SlotTraceInfo: slots 0,1 are dynamic (check packed type tag in slot 2)
@@ -78,9 +78,9 @@ void TypeRegistry::registerBuiltins()
     tuple3Type->id = BuiltinTypeId::Tuple3;
     tuple3Type->name = "Tuple3";
     tuple3Type->fields = {
-        { "", 0 }, // slot 0
-        { "", 1 }, // slot 1
-        { "", 2 }, // slot 2
+        { .name = "", .offset = 0 }, // slot 0
+        { .name = "", .offset = 1 }, // slot 1
+        { .name = "", .offset = 2 }, // slot 2
     };
     tuple3Type->slotCount = 4; // 3 element slots + 1 packed type tag slot
     // SlotTraceInfo: slots 0,1,2 are dynamic (check packed type tag in slot 3)
@@ -98,8 +98,8 @@ void TypeRegistry::registerBuiltins()
     listType->name = "List";
     listType->slotCount = 3; // 2 payload slots (head + tail) + 1 type tag slot
     listType->variants = {
-        { "Nil", 0 },  // tag 0: empty list
-        { "Cons", 2 }, // tag 1: head (slot 0) + tail (slot 1)
+        { .name = "Nil", .payloadSlots = 0 },  // tag 0: empty list
+        { .name = "Cons", .payloadSlots = 2 }, // tag 1: head (slot 0) + tail (slot 1)
     };
     // SlotTraceInfo: Cons slot 1 (tail) is always an object; slot 0 (head) is dynamic
     listType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Nil={}, Cons={slot 1}
@@ -116,9 +116,12 @@ void TypeRegistry::registerBuiltins()
     processInfoType->name = "ProcessInfo";
     processInfoType->slotCount = 6;
     processInfoType->fields = {
-        { "pid", 0, LiteralType::Number },  { "ppid", 1, LiteralType::Number },
-        { "user", 2, LiteralType::String }, { "cpu", 3, LiteralType::Float },
-        { "mem", 4, LiteralType::Object },  { "command", 5, LiteralType::String },
+        { .name = "pid", .offset = 0, .type = LiteralType::Number },
+        { .name = "ppid", .offset = 1, .type = LiteralType::Number },
+        { .name = "user", .offset = 2, .type = LiteralType::String },
+        { .name = "cpu", .offset = 3, .type = LiteralType::Float },
+        { .name = "mem", .offset = 4, .type = LiteralType::Object },
+        { .name = "command", .offset = 5, .type = LiteralType::String },
     };
     processInfoType->producingCommand = "ps";
     // SlotTraceInfo: slot 4 (mem) is Object (Size)
@@ -132,14 +135,17 @@ void TypeRegistry::registerBuiltins()
     dateTimeType->name = "DateTime";
     dateTimeType->slotCount = 7;
     dateTimeType->fields = {
-        { "year", 0, LiteralType::Number },   { "month", 1, LiteralType::Number },
-        { "day", 2, LiteralType::Number },    { "hour", 3, LiteralType::Number },
-        { "minute", 4, LiteralType::Number }, { "second", 5, LiteralType::Number },
-        { "epoch", 6, LiteralType::Number },
+        { .name = "year", .offset = 0, .type = LiteralType::Number },
+        { .name = "month", .offset = 1, .type = LiteralType::Number },
+        { .name = "day", .offset = 2, .type = LiteralType::Number },
+        { .name = "hour", .offset = 3, .type = LiteralType::Number },
+        { .name = "minute", .offset = 4, .type = LiteralType::Number },
+        { .name = "second", .offset = 5, .type = LiteralType::Number },
+        { .name = "epoch", .offset = 6, .type = LiteralType::Number },
     };
     dateTimeType->moduleFunctions = {
-        { "now", "DateTime.now -> DateTime (current UTC time)" },
-        { "fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
+        { .name = "now", .signature = "DateTime.now -> DateTime (current UTC time)" },
+        { .name = "fromEpoch", .signature = "DateTime.fromEpoch epoch -> DateTime" },
     };
     addType(std::move(dateTimeType));
 
@@ -150,11 +156,11 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->name = "FileInfo";
     fileInfoType->slotCount = 5;
     fileInfoType->fields = {
-        { "name", 0, LiteralType::String },
-        { "size", 1, LiteralType::Object, "Size" },
-        { "mode", 2, LiteralType::Object, "FileMode" },
-        { "mtime", 3, LiteralType::Object, "DateTime" },
-        { "isDir", 4, LiteralType::Boolean },
+        { .name = "name", .offset = 0, .type = LiteralType::String },
+        { .name = "size", .offset = 1, .type = LiteralType::Object, .nestedTypeName = "Size" },
+        { .name = "mode", .offset = 2, .type = LiteralType::Object, .nestedTypeName = "FileMode" },
+        { .name = "mtime", .offset = 3, .type = LiteralType::Object, .nestedTypeName = "DateTime" },
+        { .name = "isDir", .offset = 4, .type = LiteralType::Boolean },
     };
     fileInfoType->producingCommand = "ls";
     // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects
@@ -168,10 +174,10 @@ void TypeRegistry::registerBuiltins()
     jobInfoType->name = "JobInfo";
     jobInfoType->slotCount = 4;
     jobInfoType->fields = {
-        { "id", 0, LiteralType::Number },
-        { "state", 1, LiteralType::String },
-        { "command", 2, LiteralType::String },
-        { "pid", 3, LiteralType::Number },
+        { .name = "id", .offset = 0, .type = LiteralType::Number },
+        { .name = "state", .offset = 1, .type = LiteralType::String },
+        { .name = "command", .offset = 2, .type = LiteralType::String },
+        { .name = "pid", .offset = 3, .type = LiteralType::Number },
     };
     jobInfoType->producingCommand = "jobs";
     addType(std::move(jobInfoType));
@@ -183,8 +189,8 @@ void TypeRegistry::registerBuiltins()
     keyBindingInfoType->name = "KeyBindingInfo";
     keyBindingInfoType->slotCount = 2;
     keyBindingInfoType->fields = {
-        { "key", 0, LiteralType::String },
-        { "action", 1, LiteralType::String },
+        { .name = "key", .offset = 0, .type = LiteralType::String },
+        { .name = "action", .offset = 1, .type = LiteralType::String },
     };
     keyBindingInfoType->producingCommand = "bind";
     addType(std::move(keyBindingInfoType));
@@ -196,14 +202,14 @@ void TypeRegistry::registerBuiltins()
     sizeType->name = "Size";
     sizeType->slotCount = 1;
     sizeType->fields = {
-        { "bytes", 0, LiteralType::Number },
+        { .name = "bytes", .offset = 0, .type = LiteralType::Number },
     };
     sizeType->moduleFunctions = {
-        { "fromBytes", "Size.fromBytes n -> Size" },
-        { "fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
-        { "fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
-        { "fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
-        { "fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
+        { .name = "fromBytes", .signature = "Size.fromBytes n -> Size" },
+        { .name = "fromKB", .signature = "Size.fromKB n -> Size (n * 1024 bytes)" },
+        { .name = "fromMB", .signature = "Size.fromMB n -> Size (n * 1024² bytes)" },
+        { .name = "fromGB", .signature = "Size.fromGB n -> Size (n * 1024³ bytes)" },
+        { .name = "fromTB", .signature = "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
     };
     addType(std::move(sizeType));
 
@@ -214,10 +220,10 @@ void TypeRegistry::registerBuiltins()
     fileModeType->name = "FileMode";
     fileModeType->slotCount = 1;
     fileModeType->fields = {
-        { "bits", 0, LiteralType::Number },
+        { .name = "bits", .offset = 0, .type = LiteralType::Number },
     };
     fileModeType->moduleFunctions = {
-        { "fromBits", "FileMode.fromBits n -> FileMode" },
+        { .name = "fromBits", .signature = "FileMode.fromBits n -> FileMode" },
     };
     addType(std::move(fileModeType));
 
@@ -228,12 +234,12 @@ void TypeRegistry::registerBuiltins()
     markdownType->name = "Markdown";
     markdownType->slotCount = 1;
     markdownType->fields = {
-        { "content", 0, LiteralType::String },
+        { .name = "content", .offset = 0, .type = LiteralType::String },
     };
     markdownType->moduleFunctions = {
-        { "render", "Markdown.render md -> unit (renders to terminal)" },
-        { "toHtml", "Markdown.toHtml md -> string (converts to HTML)" },
-        { "toText", "Markdown.toText md -> string (strips formatting)" },
+        { .name = "render", .signature = "Markdown.render md -> unit (renders to terminal)" },
+        { .name = "toHtml", .signature = "Markdown.toHtml md -> string (converts to HTML)" },
+        { .name = "toText", .signature = "Markdown.toText md -> string (strips formatting)" },
     };
     addType(std::move(markdownType));
 
@@ -244,14 +250,14 @@ void TypeRegistry::registerBuiltins()
     timeSpanType->name = "TimeSpan";
     timeSpanType->slotCount = 1;
     timeSpanType->fields = {
-        { "milliseconds", 0, LiteralType::Number },
+        { .name = "milliseconds", .offset = 0, .type = LiteralType::Number },
     };
     timeSpanType->moduleFunctions = {
-        { "fromMilliseconds", "TimeSpan.fromMilliseconds n -> TimeSpan" },
-        { "fromSeconds", "TimeSpan.fromSeconds n -> TimeSpan (n * 1000 ms)" },
-        { "fromMinutes", "TimeSpan.fromMinutes n -> TimeSpan (n * 60000 ms)" },
-        { "fromHours", "TimeSpan.fromHours n -> TimeSpan (n * 3600000 ms)" },
-        { "fromDays", "TimeSpan.fromDays n -> TimeSpan (n * 86400000 ms)" },
+        { .name = "fromMilliseconds", .signature = "TimeSpan.fromMilliseconds n -> TimeSpan" },
+        { .name = "fromSeconds", .signature = "TimeSpan.fromSeconds n -> TimeSpan (n * 1000 ms)" },
+        { .name = "fromMinutes", .signature = "TimeSpan.fromMinutes n -> TimeSpan (n * 60000 ms)" },
+        { .name = "fromHours", .signature = "TimeSpan.fromHours n -> TimeSpan (n * 3600000 ms)" },
+        { .name = "fromDays", .signature = "TimeSpan.fromDays n -> TimeSpan (n * 86400000 ms)" },
     };
     addType(std::move(timeSpanType));
 
@@ -262,7 +268,7 @@ void TypeRegistry::registerBuiltins()
     jsonType->name = "Json";
     jsonType->slotCount = 0;
     jsonType->moduleFunctions = {
-        { "query", "Json.query path json -> list<string>" },
+        { .name = "query", .signature = "Json.query path json -> list<string>" },
     };
     addType(std::move(jsonType));
 
@@ -273,8 +279,8 @@ void TypeRegistry::registerBuiltins()
     processType->name = "Process";
     processType->slotCount = 0;
     processType->moduleFunctions = {
-        { "kill", "Process.kill pid -> result<unit, str>" },
-        { "signal", "Process.signal signum pid -> result<unit, str>" },
+        { .name = "kill", .signature = "Process.kill pid -> result<unit, str>" },
+        { .name = "signal", .signature = "Process.signal signum pid -> result<unit, str>" },
     };
     addType(std::move(processType));
 
@@ -287,8 +293,8 @@ void TypeRegistry::registerBuiltins()
     lazyType->name = "Lazy";
     lazyType->slotCount = 2; // base: slot 0 = funcId, slot 1 = cached result
     lazyType->variants = {
-        { "Unevaluated", 2 }, // tag 0: thunk (funcId + cached placeholder)
-        { "Evaluated", 1 },   // tag 1: cached result in slot 1
+        { .name = "Unevaluated", .payloadSlots = 2 }, // tag 0: thunk (funcId + cached placeholder)
+        { .name = "Evaluated", .payloadSlots = 1 },   // tag 1: cached result in slot 1
     };
     addType(std::move(lazyType));
 
@@ -299,8 +305,8 @@ void TypeRegistry::registerBuiltins()
     seqType->name = "Seq";
     seqType->slotCount = 2; // head (slot 0) + lazy tail (slot 1)
     seqType->variants = {
-        { "Empty", 0 }, // tag 0: empty sequence
-        { "Cons", 2 },  // tag 1: head (slot 0) + lazy tail (slot 1)
+        { .name = "Empty", .payloadSlots = 0 }, // tag 0: empty sequence
+        { .name = "Cons", .payloadSlots = 2 },  // tag 1: head (slot 0) + lazy tail (slot 1)
     };
     // SlotTraceInfo: Cons slot 1 (lazy tail) is always an object
     seqType->traceInfo.variantFixedSlots = { {}, { 1 } }; // Empty={}, Cons={slot 1}
@@ -314,20 +320,20 @@ void TypeRegistry::registerBuiltins()
     fileHandleType->name = "FileHandle";
     fileHandleType->slotCount = 1;
     fileHandleType->fields = {
-        { "handle", 0, LiteralType::Number },
+        { .name = "handle", .offset = 0, .type = LiteralType::Number },
     };
     fileHandleType->disposeCallbackName = "file_close";
     fileHandleType->moduleFunctions = {
-        { "open", "File.open path mode -> result<FileHandle, str>" },
-        { "close", "File.close fd -> unit" },
-        { "readLine", "File.readLine fd -> option<str>" },
-        { "readAll", "File.readAll path -> result<str, str>" },
-        { "writeAll", "File.writeAll path content -> result<unit, str>" },
-        { "appendAll", "File.appendAll path content -> result<unit, str>" },
-        { "size", "File.size path -> result<int, str>" },
-        { "exists", "File.exists path -> bool" },
-        { "delete", "File.delete path -> result<unit, str>" },
-        { "lines", "File.lines fd -> seq<str>" },
+        { .name = "open", .signature = "File.open path mode -> result<FileHandle, str>" },
+        { .name = "close", .signature = "File.close fd -> unit" },
+        { .name = "readLine", .signature = "File.readLine fd -> option<str>" },
+        { .name = "readAll", .signature = "File.readAll path -> result<str, str>" },
+        { .name = "writeAll", .signature = "File.writeAll path content -> result<unit, str>" },
+        { .name = "appendAll", .signature = "File.appendAll path content -> result<unit, str>" },
+        { .name = "size", .signature = "File.size path -> result<int, str>" },
+        { .name = "exists", .signature = "File.exists path -> bool" },
+        { .name = "delete", .signature = "File.delete path -> result<unit, str>" },
+        { .name = "lines", .signature = "File.lines fd -> seq<str>" },
     };
     addType(std::move(fileHandleType));
 
@@ -340,7 +346,7 @@ void TypeRegistry::registerBuiltins()
     callableType->name = "Callable";
     callableType->slotCount = 1; // slot 0 = function ID (zero-capture base)
     callableType->fields = {
-        { "funcId", 0, LiteralType::Number },
+        { .name = "funcId", .offset = 0, .type = LiteralType::Number },
     };
     addType(std::move(callableType));
 
@@ -351,7 +357,7 @@ void TypeRegistry::registerBuiltins()
     pathType->name = "Path";
     pathType->slotCount = 0;
     pathType->moduleFunctions = {
-        { "temporary_directory", "Path.temporary_directory -> str" },
+        { .name = "temporary_directory", .signature = "Path.temporary_directory -> str" },
     };
     addType(std::move(pathType));
 
@@ -363,8 +369,10 @@ void TypeRegistry::registerBuiltins()
     refType->name = "Ref";
     refType->slotCount = 2; // slot 0 = inner value, slot 1 = type tag (LiteralType)
     refType->fields = {
-        { "value", 0, LiteralType::Void }, // user-facing dot property: r.value
-        { "", 1, LiteralType::Number },    // type tag for GC and formatting (internal, hidden from completion)
+        { .name = "value", .offset = 0, .type = LiteralType::Void }, // user-facing dot property: r.value
+        { .name = "",
+          .offset = 1,
+          .type = LiteralType::Number }, // type tag for GC and formatting (internal, hidden from completion)
     };
     refType->hasMutableSlots = true;
     refType->traceInfo.dynamicSlots = {
@@ -381,16 +389,18 @@ void TypeRegistry::registerBuiltins()
     completionEntryType->name = "Completion";
     completionEntryType->slotCount = 3; // 3 payload slots (no type tag needed — all String)
     completionEntryType->variants = {
-        { "Entry", 1 },    // tag 0: text only
-        { "Described", 2 }, // tag 1: text + description
-        { "Detailed", 3 },  // tag 2: text + description + detail
+        { .name = "Entry", .payloadSlots = 1 },     // tag 0: text only
+        { .name = "Described", .payloadSlots = 2 }, // tag 1: text + description
+        { .name = "Detailed", .payloadSlots = 3 },  // tag 2: text + description + detail
     };
     completionEntryType->moduleFunctions = {
-        { "register", "str -> str -> unit — register a completion function for a command" },
-        { "entry", "str -> Completion — plain text completion" },
-        { "described", "str -> str -> Completion — text with short description" },
-        { "detailed", "str -> str -> str -> Completion — text, description, and markdown detail" },
-        { "text", "Completion -> str — extract text from a completion entry" },
+        { .name = "register",
+          .signature = "str -> str -> unit — register a completion function for a command" },
+        { .name = "entry", .signature = "str -> Completion — plain text completion" },
+        { .name = "described", .signature = "str -> str -> Completion — text with short description" },
+        { .name = "detailed",
+          .signature = "str -> str -> str -> Completion — text, description, and markdown detail" },
+        { .name = "text", .signature = "Completion -> str — extract text from a completion entry" },
     };
     // SlotTraceInfo: all payload slots are string pointers (traced as fixed object slots).
     // Entry uses only slot 0, Described uses 0-1, Detailed uses 0-2.

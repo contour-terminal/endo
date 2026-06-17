@@ -178,7 +178,7 @@ TypePtr transformType(TypePtr const& type, std::function<TypePtr(TypePtr const&)
         std::vector<RecordField> newFields;
         newFields.reserve(rec->fields.size());
         for (auto const& field: rec->fields)
-            newFields.push_back({ field.name, transformType(field.type, visitor) });
+            newFields.push_back({ .name = field.name, .type = transformType(field.type, visitor) });
         return types::record(rec->name, std::move(newFields));
     }
     if (auto const* un = type->asUnion())
@@ -188,9 +188,9 @@ TypePtr transformType(TypePtr const& type, std::function<TypePtr(TypePtr const&)
         for (auto const& c: un->cases)
         {
             if (c.payloadType)
-                newCases.push_back({ c.name, transformType(*c.payloadType, visitor) });
+                newCases.push_back({ .name = c.name, .payloadType = transformType(*c.payloadType, visitor) });
             else
-                newCases.push_back({ c.name, std::nullopt });
+                newCases.push_back({ .name = c.name, .payloadType = std::nullopt });
         }
         return types::unionType(un->name, std::move(newCases));
     }
@@ -487,7 +487,9 @@ std::string toString(Type const& type, TypeVarNameMap const& nameMap)
             return std::format("'{}{}", letter, suffix);
     }
     else if (const auto* prim = type.asPrimitive())
+    {
         return toString(prim->kind);
+    }
     else if (const auto* fn = type.asFunction())
     {
         auto paramStr = toString(*fn->paramType, nameMap);

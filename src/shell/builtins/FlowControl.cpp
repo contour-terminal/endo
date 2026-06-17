@@ -92,7 +92,7 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
                         : std::format(" {}", SuggestionGenerator::formatDidYouMean(suggestions.front()));
         error("{}: command not found{}", name, hint);
         _exitCode = 127;
-        context.setResult(CoreVM::CoreNumber(127));
+        context.setResult(static_cast<CoreVM::CoreNumber>(127));
         return;
     }
 
@@ -101,7 +101,7 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
     {
         error("{}: function not found (was it defined in a previous command?)", name);
         _exitCode = 127;
-        context.setResult(CoreVM::CoreNumber(127));
+        context.setResult(static_cast<CoreVM::CoreNumber>(127));
         return;
     }
 
@@ -111,7 +111,7 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
                                  CoreVM::RuntimeConfig::defaultConfig(),
                                  std::bind(&Shell::trace, this, _1, _2, _3));
     runner.run();
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 } // namespace endo

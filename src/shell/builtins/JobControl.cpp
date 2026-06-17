@@ -53,7 +53,7 @@ void Shell::builtinJobs(CoreVM::Params& context)
     }
 
     _exitCode = 0;
-    context.setResult(CoreVM::CoreNumber(0));
+    context.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void Shell::builtinFg(CoreVM::Params& context)
@@ -69,7 +69,7 @@ void Shell::builtinFg(CoreVM::Params& context)
         {
             error("fg: %{}: no such job", jobId);
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
     }
@@ -80,7 +80,7 @@ void Shell::builtinFg(CoreVM::Params& context)
         {
             error("fg: no current job");
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
     }
@@ -141,7 +141,7 @@ void Shell::builtinFg(CoreVM::Params& context)
         error("fg: failed to restore shell foreground: {}", toString(restoreResult.error()));
     }
 
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 #else
     // Windows: basic foreground job support
     Job* job = nullptr;
@@ -212,7 +212,7 @@ void Shell::builtinBg(CoreVM::Params& context)
         {
             error("bg: %{}: no such job", jobId);
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
     }
@@ -223,7 +223,7 @@ void Shell::builtinBg(CoreVM::Params& context)
         {
             error("bg: no current job");
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
     }
@@ -232,7 +232,7 @@ void Shell::builtinBg(CoreVM::Params& context)
     {
         error("bg: job {} not stopped", job->id);
         _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
         return;
     }
 
@@ -245,13 +245,13 @@ void Shell::builtinBg(CoreVM::Params& context)
     {
         error("bg: failed to send SIGCONT: {}", toString(sigResult.error()));
         _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
         return;
     }
 
     job->state = JobState::Running;
     _exitCode = 0;
-    context.setResult(CoreVM::CoreNumber(0));
+    context.setResult(static_cast<CoreVM::CoreNumber>(0));
 #else
     // Windows: basic background resume support
     Job* job = nullptr;
@@ -321,7 +321,7 @@ void Shell::builtinWait(CoreVM::Params& context)
         {
             error("wait: %{}: no such job", jobId);
             _exitCode = 127;
-            context.setResult(CoreVM::CoreNumber(127));
+            context.setResult(static_cast<CoreVM::CoreNumber>(127));
             return;
         }
 
@@ -368,7 +368,7 @@ void Shell::builtinWait(CoreVM::Params& context)
         }
     }
 
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 #else
     // Windows: wait for background jobs using ProcessManager
     if (context.count() >= 1)
@@ -438,7 +438,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     {
         error("No command to execute");
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -449,7 +449,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     {
         error("{}: {}", program, toString(programPath.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -472,7 +472,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -492,7 +492,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
 
     // Background jobs return 0 immediately
     _exitCode = 0;
-    context.setResult(CoreVM::CoreNumber(0));
+    context.setResult(static_cast<CoreVM::CoreNumber>(0));
 #else
     // Windows: background execution using CreateProcess without job control
     std::string const command = context.getString(1);

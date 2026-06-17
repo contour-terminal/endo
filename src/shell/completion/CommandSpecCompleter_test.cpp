@@ -65,31 +65,40 @@ class MockQueryProvider: public endo::CommandQueryProvider
     std::vector<endo::QueryResult> query(std::string_view queryTag) override
     {
         if (queryTag == "branches")
-            return { { "main", "local branch" },
-                     { "develop", "local branch" },
-                     { "origin/develop", "remote branch" },
-                     { "feature/test", "remote branch" } };
+            return { { .text = "main", .description = "local branch" },
+                     { .text = "develop", .description = "local branch" },
+                     { .text = "origin/develop", .description = "remote branch" },
+                     { .text = "feature/test", .description = "remote branch" } };
         if (queryTag == "local-branches")
-            return { { "main", "local branch" }, { "develop", "local branch" } };
+            return { { .text = "main", .description = "local branch" },
+                     { .text = "develop", .description = "local branch" } };
         if (queryTag == "remotes")
-            return { { "origin", "remote" }, { "upstream", "remote" } };
+            return { { .text = "origin", .description = "remote" },
+                     { .text = "upstream", .description = "remote" } };
         if (queryTag == "tags")
-            return { { "v1.0", "tag" }, { "v2.0", "tag" } };
+            return { { .text = "v1.0", .description = "tag" }, { .text = "v2.0", .description = "tag" } };
         if (queryTag == "stashes")
-            return { { "stash@{0}", "WIP on main" }, { "stash@{1}", "Fix bugs" } };
+            return { { .text = "stash@{0}", .description = "WIP on main" },
+                     { .text = "stash@{1}", .description = "Fix bugs" } };
         if (queryTag == "status-files")
-            return { { "src/main.cpp", "modified" }, { "README.md", "untracked" } };
+            return { { .text = "src/main.cpp", .description = "modified" },
+                     { .text = "README.md", .description = "untracked" } };
         if (queryTag == "config-keys")
-            return { { "user.name", "config key" }, { "user.email", "config key" } };
+            return { { .text = "user.name", .description = "config key" },
+                     { .text = "user.email", .description = "config key" } };
         if (queryTag == "aliases")
-            return { { "co", "alias: checkout" }, { "br", "alias: branch" }, { "st", "alias: status" } };
+            return { { .text = "co", .description = "alias: checkout" },
+                     { .text = "br", .description = "alias: branch" },
+                     { .text = "st", .description = "alias: status" } };
         if (queryTag == "recent-commits")
-            return { { "abc1234", "Fix the bug" }, { "def5678", "Add feature" } };
+            return { { .text = "abc1234", .description = "Fix the bug" },
+                     { .text = "def5678", .description = "Add feature" } };
         if (queryTag == "tracked-files")
-            return { { "src/main.cpp", "tracked file" }, { "CMakeLists.txt", "tracked file" } };
+            return { { .text = "src/main.cpp", .description = "tracked file" },
+                     { .text = "CMakeLists.txt", .description = "tracked file" } };
         if (queryTag == "worktrees")
-            return { { "wt-feature", "worktree [feature]" },
-                     { "wt-bugfix", "worktree [bugfix]" } };
+            return { { .text = "wt-feature", .description = "worktree [feature]" },
+                     { .text = "wt-bugfix", .description = "worktree [bugfix]" } };
         return {};
     }
 };

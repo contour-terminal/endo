@@ -32,7 +32,7 @@ TypeDescriptor makeSumType(uint8_t slotCount)
     desc.id = 101;
     desc.name = "TestSum";
     desc.slotCount = slotCount;
-    desc.variants = { { "A", 0 }, { "B", slotCount } };
+    desc.variants = { { .name = "A", .payloadSlots = 0 }, { .name = "B", .payloadSlots = slotCount } };
     return desc;
 }
 

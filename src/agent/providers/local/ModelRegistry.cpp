@@ -16,7 +16,10 @@ namespace
 {
 
     // clang-format off
-    auto const CuratedModelCatalog = std::array<CuratedModel, 6> {{
+    /// Returns the curated model catalog (lazily initialized to avoid throwing static initialization).
+    auto curatedModelCatalog() -> std::array<CuratedModel, 6> const&
+    {
+        static auto const catalog = std::array<CuratedModel, 6> {{
         {
             .name = "qwen2.5-coder-7b",
             .displayName = "Qwen 2.5 Coder 7B",
@@ -165,6 +168,9 @@ namespace
             .supportsVision = false,
         },
     }};
+        return catalog;
+    }
+
     // clang-format on
 
     /// Case-insensitive substring search.
@@ -199,16 +205,17 @@ auto allFilenames(ModelVariant const& variant) -> std::vector<std::string>
 
 auto curatedModels() -> std::span<CuratedModel const>
 {
-    return CuratedModelCatalog;
+    return curatedModelCatalog();
 }
 
 auto findCuratedModel(std::string_view name) -> CuratedModel const*
 {
+    auto const& catalog = curatedModelCatalog();
     auto const it = std::ranges::find_if( // NOLINT(readability-qualified-auto)
-        CuratedModelCatalog,
+        catalog,
         [name](CuratedModel const& model) { return containsCaseInsensitive(model.name, name); });
 
-    if (it != CuratedModelCatalog.end())
+    if (it != catalog.end())
         return &(*it);
 
     return nullptr;

@@ -276,8 +276,14 @@ nlohmann::json DapServer::handleInitialize(nlohmann::json const& args)
     caps.supportsCompletionsRequest = true;
     caps.supportsInstructionBreakpoints = true;
     caps.exceptionBreakpointFilters = {
-        { "runtime-error", "Runtime Errors", "Break on runtime errors", false },
-        { "all", "All Errors", "Break on all errors", false },
+        { .filterId = "runtime-error",
+          .label = "Runtime Errors",
+          .description = "Break on runtime errors",
+          .defaultValue = false },
+        { .filterId = "all",
+          .label = "All Errors",
+          .description = "Break on all errors",
+          .defaultValue = false },
     };
 
     nlohmann::json body;
@@ -1109,7 +1115,9 @@ std::optional<EvaluateResult> DapServer::evaluateReplExpression(std::string cons
 
     // Try to infer type
     if (capturedOutput == "true" || capturedOutput == "false")
+    {
         evalResult.type = "boolean";
+    }
     else
     {
         // Try to parse as number

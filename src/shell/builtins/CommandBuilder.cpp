@@ -52,7 +52,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     {
         error("No command to execute");
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -70,7 +70,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
             _exitCode = *exitCode;
             if (!_cmdBuilderStack.empty())
                 _cmdBuilderStack.pop_back();
-            context.setResult(CoreVM::CoreNumber(_exitCode));
+            context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
             return;
         }
     }
@@ -81,7 +81,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     {
         error("{}: {}", program, toString(programPath.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -109,7 +109,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     {
         error("Failed to run {}: {}", program, toString(fgResult.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -121,7 +121,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
 
     if (!_cmdBuilderStack.empty())
         _cmdBuilderStack.pop_back();
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 void Shell::builtinCmdExecPiped(CoreVM::Params& context)
@@ -132,7 +132,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     {
         error("No command to execute");
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -155,7 +155,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     {
         error("{}: {}", program, toString(programPath.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
@@ -178,7 +178,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
@@ -236,9 +236,13 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
                 debugLog()()("child process {} stopped\n", processPid);
             }
             else if (waitResult->signaled)
+            {
                 debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+            }
             else
+            {
                 debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+            }
         }
 
         // Restore shell's terminal control
@@ -282,7 +286,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
 
     if (!_cmdBuilderStack.empty())
         _cmdBuilderStack.pop_back();
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 std::vector<std::string>& Shell::cmdBuilderArgs()

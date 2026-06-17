@@ -75,7 +75,9 @@ namespace
                 current = setTag->object();
             }
             else
+            {
                 break;
+            }
         }
         return std::nullopt;
     }
@@ -298,7 +300,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                     switch (binding.storageType)
                     {
                         case CoreVM::LiteralType::Number:
-                            val = generator._builder.get(CoreVM::CoreNumber(static_cast<int64_t>(rawValue)));
+                            val = generator._builder.get(
+                                static_cast<CoreVM::CoreNumber>(static_cast<int64_t>(rawValue)));
                             break;
                         case CoreVM::LiteralType::Boolean:
                             val = generator._builder.getBoolean(rawValue != 0);
@@ -510,7 +513,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     if (generator._hasErrors)
         return nullptr;
 
-    generator._builder.createRet(generator._builder.get(CoreVM::CoreNumber(0)));
+    generator._builder.createRet(generator._builder.get(static_cast<CoreVM::CoreNumber>(0)));
 
     return generator._builder.takeProgram();
 }
@@ -1238,16 +1241,17 @@ CoreVM::Value* IRGenerator::createCallableObject(FSharpFunction const& func, std
     customType.name = std::format("Callable_{}", funcName);
     customType.assignedId = callableTypeId;
     customType.fields.reserve(captureCount + 1);
-    customType.fields.push_back({ "funcId", 0, CoreVM::LiteralType::Number });
+    customType.fields.push_back({ .name = "funcId", .offset = 0, .type = CoreVM::LiteralType::Number });
     for (uint16_t i = 0; i < captureCount; ++i)
-        customType.fields.push_back(
-            { captureOrder[i], static_cast<uint8_t>(i + 1), CoreVM::LiteralType::Void });
+        customType.fields.push_back({ .name = captureOrder[i],
+                                      .offset = static_cast<uint8_t>(i + 1),
+                                      .type = CoreVM::LiteralType::Void });
     customType.slotCount = slotCount;
     _builder.program()->addCustomProductType(std::move(customType));
 
     // Build the Callable object: OALLOC + OSETSLOT for funcId + captures
-    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(callableTypeId));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* typeIdVal = _builder.get(static_cast<CoreVM::CoreNumber>(callableTypeId));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, funcName + ".callable");
     obj = _builder.createObjSetSlot(obj, slot0, funcRef, funcName + ".callable.funcId");
@@ -1262,7 +1266,7 @@ CoreVM::Value* IRGenerator::createCallableObject(FSharpFunction const& func, std
         if (!capStorage)
             capStorage = func.capturedBindings.at(capName);
         auto* capValue = _builder.createLoad(capStorage, "cap." + capName + ".load");
-        auto* slotIdx = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(1 + i)));
+        auto* slotIdx = _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int64_t>(1 + i)));
         auto slotName = funcName;
         slotName += ".callable.cap.";
         slotName += capName;
@@ -1328,7 +1332,7 @@ CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType t
 
     // Create the alloca instruction
     auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
-        type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
+        type, _builder.get(static_cast<CoreVM::CoreNumber>(1)), _builder.makeName(name));
 
     // Insert after existing allocas to maintain the alloca-prefix invariant.
     // Using insertBeforeTerminator would interleave allocas with non-alloca instructions,
@@ -1344,15 +1348,15 @@ CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType t
 
 CoreVM::Value* IRGenerator::emitNilList(CoreVM::LiteralType elemType, std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot2 = _builder.get(static_cast<CoreVM::CoreNumber>(2));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
     obj = _builder.createObjSetSlot(obj,
                                     slot2,
-                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(elemType))),
+                                    _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(elemType))),
                                     std::string(label) + ".etype");
     return obj;
 }
@@ -1362,11 +1366,11 @@ CoreVM::Value* IRGenerator::emitListCons(CoreVM::Value* head,
                                          CoreVM::LiteralType elemType,
                                          std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::List));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot2 = _builder.get(static_cast<CoreVM::CoreNumber>(2));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
@@ -1374,7 +1378,7 @@ CoreVM::Value* IRGenerator::emitListCons(CoreVM::Value* head,
     obj = _builder.createObjSetSlot(obj, slot1, tail, std::string(label) + ".tail");
     obj = _builder.createObjSetSlot(obj,
                                     slot2,
-                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(elemType))),
+                                    _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(elemType))),
                                     std::string(label) + ".etype");
     return obj;
 }
@@ -1383,25 +1387,26 @@ CoreVM::Value* IRGenerator::emitSomeOption(CoreVM::Value* value,
                                            CoreVM::LiteralType innerType,
                                            std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Option));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
     obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
-    obj = _builder.createObjSetSlot(obj,
-                                    slot1,
-                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
-                                    std::string(label) + ".itype");
+    obj =
+        _builder.createObjSetSlot(obj,
+                                  slot1,
+                                  _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(innerType))),
+                                  std::string(label) + ".itype");
     return obj;
 }
 
 CoreVM::Value* IRGenerator::emitNoneOption(std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Option));
+    auto* tag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
@@ -1413,10 +1418,10 @@ CoreVM::Value* IRGenerator::emitRefCell(CoreVM::Value* value,
                                         CoreVM::LiteralType innerType,
                                         std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Ref));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType)));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Ref));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* typeTag = _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(innerType)));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
@@ -1430,12 +1435,12 @@ void IRGenerator::emitRefCellMutate(BindingInfo const* binding, CoreVM::Value* n
     auto* refObj = _builder.createLoad(binding->value, "ref.load");
 
     // Update slot 0 (inner value)
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
     refObj = _builder.createObjSetSlot(refObj, slot0, newValue, "ref.set");
 
     // Update slot 1 (type tag)
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* typeTag = _builder.get(CoreVM::CoreNumber(static_cast<int>(newValue->type())));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* typeTag = _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(newValue->type())));
     refObj = _builder.createObjSetSlot(refObj, slot1, typeTag, "ref.settag");
 
     // Write barrier for GC cycle detection
@@ -1448,18 +1453,19 @@ CoreVM::Value* IRGenerator::emitOkResult(CoreVM::Value* value,
                                          CoreVM::LiteralType innerType,
                                          std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Result));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
     obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
-    obj = _builder.createObjSetSlot(obj,
-                                    slot1,
-                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
-                                    std::string(label) + ".itype");
+    obj =
+        _builder.createObjSetSlot(obj,
+                                  slot1,
+                                  _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(innerType))),
+                                  std::string(label) + ".itype");
     return obj;
 }
 
@@ -1467,18 +1473,19 @@ CoreVM::Value* IRGenerator::emitErrorResult(CoreVM::Value* value,
                                             CoreVM::LiteralType innerType,
                                             std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Result));
+    auto* tag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
     obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
-    obj = _builder.createObjSetSlot(obj,
-                                    slot1,
-                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
-                                    std::string(label) + ".itype");
+    obj =
+        _builder.createObjSetSlot(obj,
+                                  slot1,
+                                  _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(innerType))),
+                                  std::string(label) + ".itype");
     return obj;
 }
 
@@ -1490,19 +1497,19 @@ CoreVM::Value* IRGenerator::emitTuple2(CoreVM::Value* fst,
                                        uint16_t customTypeId)
 {
     auto const allocTypeId = customTypeId > 0 ? customTypeId : CoreVM::BuiltinTypeId::Tuple2;
-    auto* typeId = _builder.get(CoreVM::CoreNumber(allocTypeId));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(allocTypeId));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot2 = _builder.get(static_cast<CoreVM::CoreNumber>(2));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetSlot(obj, slot0, fst, std::string(label) + ".fst");
     obj = _builder.createObjSetSlot(obj, slot1, snd, std::string(label) + ".snd");
-    obj = _builder.createObjSetSlot(
-        obj,
-        slot2,
-        _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(CoreVM::packTypeTag(fstType, sndType)))),
-        std::string(label) + ".ttag");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot2,
+                                    _builder.get(static_cast<CoreVM::CoreNumber>(
+                                        static_cast<int64_t>(CoreVM::packTypeTag(fstType, sndType)))),
+                                    std::string(label) + ".ttag");
     return obj;
 }
 
@@ -1516,11 +1523,11 @@ CoreVM::Value* IRGenerator::emitTuple3(CoreVM::Value* e0,
                                        uint16_t customTypeId)
 {
     auto const allocTypeId = customTypeId > 0 ? customTypeId : CoreVM::BuiltinTypeId::Tuple3;
-    auto* typeId = _builder.get(CoreVM::CoreNumber(allocTypeId));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
-    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
-    auto* slot3 = _builder.get(CoreVM::CoreNumber(3));
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(allocTypeId));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
+    auto* slot2 = _builder.get(static_cast<CoreVM::CoreNumber>(2));
+    auto* slot3 = _builder.get(static_cast<CoreVM::CoreNumber>(3));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetSlot(obj, slot0, e0, std::string(label) + ".e0");
@@ -1529,7 +1536,7 @@ CoreVM::Value* IRGenerator::emitTuple3(CoreVM::Value* e0,
     obj = _builder.createObjSetSlot(
         obj,
         slot3,
-        _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(CoreVM::packTypeTag(t0, t1, t2)))),
+        _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int64_t>(CoreVM::packTypeTag(t0, t1, t2)))),
         std::string(label) + ".ttag");
     return obj;
 }
@@ -1595,7 +1602,9 @@ std::string IRGenerator::wrappedTypeName(CoreVM::Value* value, uint16_t typeId)
             tn = std::format("{}<{}>", baseName, innerName);
         }
         else
+        {
             tn = baseName;
+        }
     }
     return tn;
 }
@@ -1604,7 +1613,9 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
 {
     CoreVM::Value* exitCode = nullptr;
     if (!node.code)
-        exitCode = _builder.get(CoreVM::CoreNumber(0));
+    {
+        exitCode = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    }
     else
     {
         // Special handling: if the exit code is a LiteralExpr that looks like an identifier,
@@ -1627,7 +1638,9 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
         }
 
         if (exitCode->type() == CoreVM::LiteralType::String)
+        {
             exitCode = _builder.createS2N(exitCode);
+        }
         else if (exitCode->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("exit code must be a number, got {}", CoreVM::tos(exitCode->type()));
@@ -1803,7 +1816,7 @@ void IRGenerator::visit(ast::CommandFileSubst const& node)
         _builder.getBuiltinFunction(*forkCb), { _builder.get(isWrite) }, "procsubst_fork");
 
     // Check if we're the child (result == 0)
-    auto* isChild = _builder.createNCmpEQ(forkResult, _builder.get(CoreVM::CoreNumber(0)));
+    auto* isChild = _builder.createNCmpEQ(forkResult, _builder.get(static_cast<CoreVM::CoreNumber>(0)));
 
     CoreVM::BasicBlock* childBlock = _builder.createBlock("procsubst.child");
     CoreVM::BasicBlock* contBlock = _builder.createBlock("procsubst.cont");
@@ -1914,7 +1927,7 @@ void IRGenerator::visit(ast::InputRedirect const& node)
         reportTypeError("Internal error: internal.redirect_input builtin not found");
         return;
     }
-    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* targetFd = _builder.get(static_cast<CoreVM::CoreNumber>(node.targetFd->value));
     auto* source = codegen(node.source.get());
     if (!source)
         return;
@@ -1930,7 +1943,7 @@ void IRGenerator::visit(ast::HereDocument const& node)
         reportTypeError("Internal error: internal.redirect_heredoc builtin not found");
         return;
     }
-    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* targetFd = _builder.get(static_cast<CoreVM::CoreNumber>(node.targetFd->value));
     auto* content = _builder.get(node.content);
     _result = _builder.createCallFunction(
         _builder.getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
@@ -1944,7 +1957,7 @@ void IRGenerator::visit(ast::HereString const& node)
         reportTypeError("Internal error: internal.redirect_herestring builtin not found");
         return;
     }
-    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* targetFd = _builder.get(static_cast<CoreVM::CoreNumber>(node.targetFd->value));
     auto* content = codegen(node.content.get());
     if (!content)
         return;
@@ -2115,7 +2128,7 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
 {
     if (auto const* lit = dynamic_cast<ast::ArithLiteralExpr const*>(expr))
     {
-        return _builder.get(CoreVM::CoreNumber(lit->value));
+        return _builder.get(static_cast<CoreVM::CoreNumber>(lit->value));
     }
     else if (auto const* var = dynamic_cast<ast::ArithVarExpr const*>(expr))
     {
@@ -2180,7 +2193,7 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
         {
             case ast::ArithOp::Neg:
                 // Implement negation as 0 - operand for proper signed behavior
-                return _builder.createSub(_builder.get(CoreVM::CoreNumber(0)), operand);
+                return _builder.createSub(_builder.get(static_cast<CoreVM::CoreNumber>(0)), operand);
             case ast::ArithOp::Not: return _builder.createNot(operand);
             case ast::ArithOp::BitNot: return _builder.createNot(operand); // Bitwise NOT
             default: reportTypeError("Unsupported unary arithmetic operator"); return nullptr;
@@ -2333,7 +2346,7 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 return;
             }
             _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback),
-                                                  { _builder.get(CoreVM::CoreNumber(index)) },
+                                                  { _builder.get(static_cast<CoreVM::CoreNumber>(index)) },
                                                   "getvar.positional");
             break;
         }
@@ -2365,7 +2378,9 @@ void IRGenerator::visit(ast::BuiltinFgStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
+        {
             jobIdValue = _builder.createS2N(jobIdValue);
+        }
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
@@ -2388,7 +2403,9 @@ void IRGenerator::visit(ast::BuiltinBgStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
+        {
             jobIdValue = _builder.createS2N(jobIdValue);
+        }
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
@@ -2411,7 +2428,9 @@ void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
+        {
             jobIdValue = _builder.createS2N(jobIdValue);
+        }
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
@@ -2463,9 +2482,9 @@ void IRGenerator::visit(ast::OutputRedirect const& node)
             reportTypeError("Internal error: internal.redirect_fd_dup builtin not found");
             return;
         }
-        auto* sourceFd = _builder.get(CoreVM::CoreNumber(node.source->value));
-        auto* targetFd = _builder.get(
-            CoreVM::CoreNumber(std::get<std::unique_ptr<ast::FileDescriptor>>(node.target)->value));
+        auto* sourceFd = _builder.get(static_cast<CoreVM::CoreNumber>(node.source->value));
+        auto* targetFd = _builder.get(static_cast<CoreVM::CoreNumber>(
+            std::get<std::unique_ptr<ast::FileDescriptor>>(node.target)->value));
         _result = _builder.createCallFunction(
             _builder.getBuiltinFunction(*callback), { sourceFd, targetFd }, "redirect_fd_dup");
     }
@@ -2478,7 +2497,7 @@ void IRGenerator::visit(ast::OutputRedirect const& node)
             reportTypeError("Internal error: internal.redirect_output builtin not found");
             return;
         }
-        auto* sourceFd = _builder.get(CoreVM::CoreNumber(node.source->value));
+        auto* sourceFd = _builder.get(static_cast<CoreVM::CoreNumber>(node.source->value));
         auto* target = codegen(std::get<std::unique_ptr<ast::Expr>>(node.target).get());
         if (!target)
             return;
@@ -2774,7 +2793,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
                     case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
                 }
             }
-            fields.push_back({ field.name, static_cast<uint8_t>(i), vmType });
+            fields.push_back({ .name = field.name, .offset = static_cast<uint8_t>(i), .type = vmType });
             fieldTypes[field.name] = vmType;
 
             // Build schema descriptor
@@ -2880,7 +2899,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
     }
 
     auto* schemaArg = _builder.get(schemaDesc);
-    auto* typeIdArg = _builder.get(CoreVM::CoreNumber(typeId));
+    auto* typeIdArg = _builder.get(static_cast<CoreVM::CoreNumber>(typeId));
 
     // 4. Emit callback call
     _result = _builder.createCallFunction(
@@ -2953,9 +2972,9 @@ void IRGenerator::visit(ast::ForInStmt const& node)
     //              goto forin.cond
     //   forin.end:  (continue after loop)
 
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     // Evaluate source expression
     auto* sourceVal = codegen(node.source.get());
@@ -3044,7 +3063,7 @@ void IRGenerator::visit(ast::ForInStmt const& node)
 
     // Fail block: runtime pattern match failure
     _builder.setInsertPoint(destructureFail);
-    _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+    _builder.createRet(_builder.get(static_cast<CoreVM::CoreNumber>(1)));
 
     // Success block: bind variables, execute body
     _builder.setInsertPoint(destructureOk);
@@ -3121,7 +3140,7 @@ CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
         return _builder.createFCmpEQ(value, _builder.getFloat(0.0));
     if (value->type() == CoreVM::LiteralType::String)
         return _builder.createSCmpEQ(value, _builder.get(std::string("")));
-    return _builder.createNCmpEQ(value, _builder.get(CoreVM::CoreNumber(0)));
+    return _builder.createNCmpEQ(value, _builder.get(static_cast<CoreVM::CoreNumber>(0)));
 }
 
 bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
@@ -3164,7 +3183,9 @@ std::vector<CoreVM::Constant*> IRGenerator::createConstantArray(
             continue;
         }
         if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
+        {
             irArray.push_back(constant);
+        }
         else
         {
             reportTypeError("Non-constant expression in array context");
@@ -3563,7 +3584,7 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     // Generate native call
     std::string funcName = appendNewline ? "println" : "print";
     _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argValue }, funcName);
-    _result = _builder.get(CoreVM::CoreNumber(0)); // print/println returns unit
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // print/println returns unit
 }
 
 bool IRGenerator::dispatchBuiltinCall(BuiltinCallEntry const& entry,
@@ -4174,13 +4195,15 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
         if (fieldName == "isSome")
         {
             auto* tag = _builder.createObjGetTag(obj, "option.tag");
-            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "option.isSome");
+            _result =
+                _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "option.isSome");
             return true;
         }
         if (fieldName == "isNone")
         {
             auto* tag = _builder.createObjGetTag(obj, "option.tag");
-            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "option.isNone");
+            _result =
+                _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "option.isNone");
             return true;
         }
         return false;
@@ -4191,7 +4214,8 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
     {
         if (fieldName == "value")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "ref.value");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "ref.value");
             // Propagate inner type annotations from the ref cell
             if (auto innerType = getInnerType(obj))
                 annotateInnerType(_result, *innerType);
@@ -4209,13 +4233,15 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
         if (fieldName == "isOk")
         {
             auto* tag = _builder.createObjGetTag(obj, "result.tag");
-            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "result.isOk");
+            _result =
+                _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "result.isOk");
             return true;
         }
         if (fieldName == "isError")
         {
             auto* tag = _builder.createObjGetTag(obj, "result.tag");
-            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "result.isError");
+            _result = _builder.createNCmpEQ(
+                tag, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "result.isError");
             return true;
         }
         return false;
@@ -4226,12 +4252,14 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
     {
         if (fieldName == "fst" || fieldName == "0")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "tuple.fst");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "tuple.fst");
             return true;
         }
         if (fieldName == "snd" || fieldName == "1")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), "tuple.snd");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "tuple.snd");
             return true;
         }
         return false;
@@ -4242,17 +4270,20 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
     {
         if (fieldName == "fst" || fieldName == "0")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "tuple.fst");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "tuple.fst");
             return true;
         }
         if (fieldName == "snd" || fieldName == "1")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), "tuple.snd");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "tuple.snd");
             return true;
         }
         if (fieldName == "trd" || fieldName == "2")
         {
-            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(2)), "tuple.trd");
+            _result =
+                _builder.createObjGetSlot(obj, _builder.get(static_cast<CoreVM::CoreNumber>(2)), "tuple.trd");
             return true;
         }
         return false;
@@ -4363,11 +4394,15 @@ bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<Cor
             {
                 // Try basic type conversions
                 if (expectedType == CoreVM::LiteralType::String && arg->type() == CoreVM::LiteralType::Number)
+                {
                     arg = _builder.createN2S(arg, "n2s");
+                }
                 else if (expectedType == CoreVM::LiteralType::Number
                          && arg->type() == CoreVM::LiteralType::String)
+                {
                     arg = _builder.createS2N(arg, "s2n");
-                // Check if argument is a wrapped type (Option/Result) that needs unwrapping
+                    // Check if argument is a wrapped type (Option/Result) that needs unwrapping
+                }
                 else if (auto const typeId = getObjectTypeId(arg);
                          typeId
                          && (*typeId == CoreVM::BuiltinTypeId::Option
@@ -4408,7 +4443,7 @@ std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
 
 void IRGenerator::pushLoopContext(CoreVM::BasicBlock* continueTarget, CoreVM::BasicBlock* breakTarget)
 {
-    _loopStack.push_back({ continueTarget, breakTarget });
+    _loopStack.push_back({ .continueTarget = continueTarget, .breakTarget = breakTarget });
 }
 
 void IRGenerator::popLoopContext()
@@ -4478,14 +4513,18 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
     std::string outerName;
 
     if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(innerFn))
+    {
         innerName = ident->name;
+    }
     else
     {
         innerFn->accept(*this); // NOLINT(clang-analyzer-core.CallAndMessage)
         if (!_result)
             return;
         if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
+        {
             innerName = cs->get();
+        }
         else
         {
             reportTypeError("Composition operand did not produce a function name");
@@ -4494,14 +4533,18 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
     }
 
     if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(outerFn))
+    {
         outerName = ident->name;
+    }
     else
     {
         outerFn->accept(*this); // NOLINT(clang-analyzer-core.CallAndMessage)
         if (!_result)
             return;
         if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
+        {
             outerName = cs->get();
+        }
         else
         {
             reportTypeError("Composition operand did not produce a function name");
@@ -4601,7 +4644,8 @@ void IRGenerator::visit(ast::IfExpr const& node)
 
     // Else branch (unit value when no else clause)
     _builder.setInsertPoint(elseBlock);
-    auto* elseResult = node.elseExpr ? codegen(node.elseExpr.get()) : _builder.get(CoreVM::CoreNumber(0));
+    auto* elseResult =
+        node.elseExpr ? codegen(node.elseExpr.get()) : _builder.get(static_cast<CoreVM::CoreNumber>(0));
     if (elseResult)
     {
         if (resultStorage && thenResult && !typesCompatible(thenResult, elseResult))
@@ -4685,7 +4729,9 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         for (auto const& elem: node.elements)
         {
             if (auto const* fa = dynamic_cast<ast::FieldAccessExpr const*>(elem.get()))
+            {
                 fieldNames.push_back(fa->fieldName);
+            }
             else
             {
                 allFieldAccess = false;
@@ -4703,7 +4749,9 @@ void IRGenerator::visit(ast::TupleExpr const& node)
                 if (i > 0)
                     typeName += ", ";
                 typeName += fieldNames[i];
-                fields.push_back({ fieldNames[i], static_cast<uint8_t>(i), resolveType(elemAllocas[i]) });
+                fields.push_back({ .name = fieldNames[i],
+                                   .offset = static_cast<uint8_t>(i),
+                                   .type = resolveType(elemAllocas[i]) });
             }
             typeName += ')';
 
@@ -4913,7 +4961,7 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
         bindFSharpVariable(it->second.setter->paramName, paramStorage, false);
         codegen(it->second.setter->body.get());
         popFSharpScope();
-        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+        _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // returns unit
         return;
     }
 
@@ -4949,7 +4997,7 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
         auto* cb = findCallback(valueSig);
         assert(cb && "property setter dispatch: sema should have rejected type-mismatched assignments");
         _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
-        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+        _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // returns unit
         return;
     }
 
@@ -4979,7 +5027,7 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
             return;
         }
         emitRefCellMutate(binding, newValue);
-        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+        _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // returns unit
         return;
     }
 
@@ -5008,7 +5056,7 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
         emitExportVariable(binding->value, node.name);
 
     // As an expression, mutation returns unit
-    _result = _builder.get(CoreVM::CoreNumber(0));
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 }
 
 // ============================================================================
@@ -5071,7 +5119,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
         // Fail block: runtime error (tuple destructure failed)
         _builder.setInsertPoint(failBlock);
-        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+        _builder.createRet(_builder.get(static_cast<CoreVM::CoreNumber>(1)));
 
         // Success block: register all bindings in F# scope
         _builder.setInsertPoint(successBlock);
@@ -5427,14 +5475,14 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Only persist top-level bindings (not bindings inside function bodies)
     if (_functionBodyDepth == 0)
     {
-        _newValueBindings.push_back({ node.name,
-                                      node.value.get(),
-                                      node.mutability == ast::Mutability::Mutable,
-                                      isObjectExpr,
-                                      storageType,
-                                      node.visibility == ast::Visibility::Exported,
-                                      objectTypeName,
-                                      isRefCellBinding });
+        _newValueBindings.push_back({ .name = node.name,
+                                      .value = node.value.get(),
+                                      .isMutable = node.mutability == ast::Mutability::Mutable,
+                                      .isObjectExpr = isObjectExpr,
+                                      .storageType = storageType,
+                                      .isExported = node.visibility == ast::Visibility::Exported,
+                                      .objectTypeName = objectTypeName,
+                                      .isRefCell = isRefCellBinding });
     }
 
     // Let bindings as statements don't produce a result value
@@ -5500,7 +5548,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         patternGen.compile(*node.destructurePattern, value, scrutineeStorage, successBlock, failBlock);
 
         _builder.setInsertPoint(failBlock);
-        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+        _builder.createRet(_builder.get(static_cast<CoreVM::CoreNumber>(1)));
 
         _builder.setInsertPoint(successBlock);
         for (auto const& name: bindingNames)
@@ -5653,7 +5701,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         {
             auto const exitCode = boolLit->value ? 0 : 1;
             _builder.createCallFunction(_builder.getBuiltinFunction(*callback),
-                                        { _builder.get(CoreVM::CoreNumber(exitCode)) },
+                                        { _builder.get(static_cast<CoreVM::CoreNumber>(exitCode)) },
                                         "setExitStatus");
         }
     }
@@ -5770,11 +5818,11 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         if (auto const typeId = getObjectTypeId(operand))
         {
             if (*typeId == CoreVM::BuiltinTypeId::Size)
-                operand =
-                    _builder.createObjGetSlot(operand, _builder.get(CoreVM::CoreNumber(0)), "size.bytes");
+                operand = _builder.createObjGetSlot(
+                    operand, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "size.bytes");
             else if (*typeId == CoreVM::BuiltinTypeId::TimeSpan)
                 operand = _builder.createObjGetSlot(
-                    operand, _builder.get(CoreVM::CoreNumber(0)), "timespan.milliseconds");
+                    operand, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "timespan.milliseconds");
         }
     };
     unwrapSizedType(left);
@@ -5961,7 +6009,9 @@ void IRGenerator::visit(ast::UnaryExpr const& node)
     {
         case ast::UnaryOp::Neg:
             if (operand->type() == CoreVM::LiteralType::Float)
+            {
                 _result = _builder.createFNeg(operand, "fneg");
+            }
             else
             {
                 // Ensure operand is a number for negation
@@ -6545,7 +6595,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                     if (tryGenerateNativeCall(std::string(it->second), { value }))
                     {
                         if (fieldAccess->fieldName == "render")
-                            _result = _builder.get(CoreVM::CoreNumber(0)); // render returns unit
+                            _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // render returns unit
                         return;
                     }
                 }
@@ -6781,7 +6831,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 return;
             }
             codegen(argExprs[0]);
-            _result = _builder.get(CoreVM::CoreNumber(0)); // unit
+            _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // unit
             return;
         }
 
@@ -6926,7 +6976,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (tryGenerateNativeCall(std::string(it->second), { arg }))
                     {
                         if (method == "render")
-                            _result = _builder.get(CoreVM::CoreNumber(0)); // render returns unit
+                            _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // render returns unit
                         return;
                     }
                 }
@@ -6974,7 +7024,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     {
                         if (tryGenerateNativeCall("file_close", { fdArg }))
                         {
-                            _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+                            _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // returns unit
                             return;
                         }
                     }
@@ -7497,7 +7547,7 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
 
             // Set dispatch tag to route to the target function
             _builder.createStore(_activeMutualRecursion->dispatchTag,
-                                 _builder.get(CoreVM::CoreNumber(slot->dispatchIndex)),
+                                 _builder.get(static_cast<CoreVM::CoreNumber>(slot->dispatchIndex)),
                                  "mutual.dispatch.update");
 
             // Jump back to dispatch loop entry
@@ -7550,7 +7600,8 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
     }
 
     // Store initial dispatch tag and arguments for the called function
-    _builder.createStore(dispatchTag, _builder.get(CoreVM::CoreNumber(calledIndex)), "mutual.tag.init");
+    _builder.createStore(
+        dispatchTag, _builder.get(static_cast<CoreVM::CoreNumber>(calledIndex)), "mutual.tag.init");
     for (size_t i = 0; i < args.size(); ++i)
         _builder.createStore(ctx.functions[calledIndex].paramAllocas[i], args[i], "mutual.arg.init");
 
@@ -7571,7 +7622,8 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
     for (size_t i = 0; i + 1 < func->mutualGroup.size(); ++i)
     {
         auto* nextCheck = _builder.createBlock("mutual.check." + std::to_string(i + 1));
-        auto* cmp = _builder.createNCmpEQ(tagValue, _builder.get(CoreVM::CoreNumber(static_cast<int>(i))));
+        auto* cmp = _builder.createNCmpEQ(tagValue,
+                                          _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int>(i))));
         _builder.createCondBr(cmp, bodyBlocks[i], nextCheck);
         _builder.setInsertPoint(nextCheck);
     }
@@ -8102,7 +8154,7 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
             if (auto* callInstr = dynamic_cast<CoreVM::CallInstr*>(bodyResult);
                 callInstr && callInstr->callee()->signature().returnType() == CoreVM::LiteralType::Void)
             {
-                bodyResult = _builder.get(CoreVM::CoreNumber(0));
+                bodyResult = _builder.get(static_cast<CoreVM::CoreNumber>(0));
             }
             _builder.createFunctionRet(bodyResult, "ret");
         }
@@ -8272,7 +8324,7 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
 {
     // Integer literals can be directly converted to CoreVM numbers
-    _result = _builder.get(CoreVM::CoreNumber(node.value));
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(node.value));
 }
 
 void IRGenerator::visit(ast::FloatLiteralExpr const& node)
@@ -8287,13 +8339,15 @@ void IRGenerator::visit(ast::BoolLiteralExpr const& node)
 
 void IRGenerator::visit(ast::SizeLiteralExpr const& node)
 {
-    if (tryGenerateNativeCall("size_from_bytes", { _builder.get(CoreVM::CoreNumber(node.bytes)) }))
+    if (tryGenerateNativeCall("size_from_bytes",
+                              { _builder.get(static_cast<CoreVM::CoreNumber>(node.bytes)) }))
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
 }
 
 void IRGenerator::visit(ast::TimeSpanLiteralExpr const& node)
 {
-    if (tryGenerateNativeCall("timespan_from_ms", { _builder.get(CoreVM::CoreNumber(node.milliseconds)) }))
+    if (tryGenerateNativeCall("timespan_from_ms",
+                              { _builder.get(static_cast<CoreVM::CoreNumber>(node.milliseconds)) }))
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::TimeSpan);
 }
 
@@ -8626,7 +8680,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
                 if (ctorPat->payload.has_value())
                 {
                     bindingSource = _builder.createObjGetSlot(
-                        bindingSource, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload");
+                        bindingSource, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "ctor.payload");
                     // Recover the inner object's type ID (e.g., List inside Some/Ok)
                     if (auto innerObjTypeId = getInnerObjectTypeId(scrutineeStorage))
                         annotateObjectTypeId(bindingSource, *innerObjTypeId);
@@ -8709,9 +8763,13 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         propagateAllAnnotations(resultStorage, _result);
     }
     else if (resultStorage)
-        _result = _builder.get(CoreVM::CoreNumber(0)); // Statement context — skip dead load
+    {
+        _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // Statement context — skip dead load
+    }
     else
+    {
         _result = nullptr; // All arms are tail calls — merge is unreachable
+    }
 }
 
 void IRGenerator::visit(ast::ListExpr const& node)
@@ -8899,9 +8957,10 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
         {
             if (startLit->value.size() == 1 && endLit->value.size() == 1 && !node.step)
             {
-                auto* startOrd =
-                    _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(startLit->value[0])));
-                auto* endOrd = _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(endLit->value[0])));
+                auto* startOrd = _builder.get(
+                    static_cast<CoreVM::CoreNumber>(static_cast<unsigned char>(startLit->value[0])));
+                auto* endOrd = _builder.get(
+                    static_cast<CoreVM::CoreNumber>(static_cast<unsigned char>(endLit->value[0])));
                 auto* callback = findCallback("list_char_range(II)I");
                 if (!callback)
                 {
@@ -8944,7 +9003,7 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
     }
     else
     {
-        stepVal = _builder.get(CoreVM::CoreNumber(1));
+        stepVal = _builder.get(static_cast<CoreVM::CoreNumber>(1));
     }
 
     // Store start, step, end in allocas so they survive across loop blocks
@@ -8988,7 +9047,7 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
     auto* stepLoad = _builder.createLoad(stepStorage, "range.step.cond");
     auto* diff = _builder.createSub(iLoad, startLoad, "range.diff");
     auto* product = _builder.createMul(diff, stepLoad, "range.product");
-    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+    auto* zero = _builder.get(static_cast<CoreVM::CoreNumber>(0));
     auto* cond = _builder.createNCmpGE(product, zero, "range.cond.check");
     _builder.createCondBr(cond, bodyBlock, endBlock);
 
@@ -9030,7 +9089,7 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
 {
     TRACE_SCOPE("visit(ListComprehensionExpr)");
 
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1)); // Cons
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // Cons
 
     // Shared accumulator for all nesting levels (produces flat list)
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc");
@@ -9080,8 +9139,8 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
 
     // Phase 2: Body — extract head, advance cursor, cons onto output
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // tail
 
     _builder.setInsertPoint(revBodyBlock);
     auto* revSrcForHead = _builder.createLoad(revSrcStorage, "comp.rev.src.for_head");
@@ -9116,9 +9175,9 @@ void IRGenerator::emitComprehensionLevel(ast::ListComprehensionExpr const& node,
                                          int level)
 {
     auto const prefix = std::format("comp{}", level);
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1)); // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // Cons
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
 
     // Evaluate source collection FIRST — source codegen may create blocks (e.g., ListRangeExpr)
     // that must appear before this level's blocks in the block list.
@@ -9242,7 +9301,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         if (exitCb)
             _result = _builder.createCallFunction(_builder.getBuiltinFunction(*exitCb), {}, "exit_status");
         else
-            _result = _builder.get(CoreVM::CoreNumber(0));
+            _result = _builder.get(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -9313,7 +9372,7 @@ void IRGenerator::visit(ast::SplatExpr const& node)
     _builder.setInsertPoint(condBlock);
     auto* cursorLoad = _builder.createLoad(cursorStorage, "splat.cursor.load");
     auto* tag = _builder.createObjGetTag(cursorLoad, "splat.tag");
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));
     auto* isCons = _builder.createNCmpEQ(tag, tag1, "splat.is_cons");
     _builder.createCondBr(isCons, bodyBlock, endBlock);
 
@@ -9321,17 +9380,19 @@ void IRGenerator::visit(ast::SplatExpr const& node)
     // tail
     _builder.setInsertPoint(bodyBlock);
     auto* cursorForHead = _builder.createLoad(cursorStorage, "splat.for_head");
-    auto* head = _builder.createObjGetSlot(cursorForHead, _builder.get(CoreVM::CoreNumber(0)), "splat.head");
+    auto* head = _builder.createObjGetSlot(
+        cursorForHead, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "splat.head");
     _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCb), { head }, "splat.cmd_arg");
 
     auto* cursorForTail = _builder.createLoad(cursorStorage, "splat.for_tail");
-    auto* tail = _builder.createObjGetSlot(cursorForTail, _builder.get(CoreVM::CoreNumber(1)), "splat.tail");
+    auto* tail = _builder.createObjGetSlot(
+        cursorForTail, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "splat.tail");
     _builder.createStore(cursorStorage, tail);
     _builder.createBr(condBlock);
 
     // End block
     _builder.setInsertPoint(endBlock);
-    _result = _builder.get(CoreVM::CoreNumber(0)); // unit value
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // unit value
 }
 
 // ============================================================================
@@ -9342,7 +9403,8 @@ void IRGenerator::pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
                                             CoreVM::AllocaInstr* returnStorage,
                                             ReturnKind returnKind)
 {
-    _fsharpFunctionContextStack.push_back({ returnBlock, returnStorage, returnKind });
+    _fsharpFunctionContextStack.push_back(
+        { .returnBlock = returnBlock, .returnStorage = returnStorage, .returnKind = returnKind });
 }
 
 void IRGenerator::popFSharpFunctionContext()
@@ -9428,8 +9490,8 @@ void IRGenerator::visit(ast::ResultExpr const& node)
 
 CoreVM::Value* IRGenerator::emitSeqEmpty(std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Seq));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0)); // Empty tag
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Seq));
+    auto* tag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // Empty tag
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
@@ -9438,10 +9500,10 @@ CoreVM::Value* IRGenerator::emitSeqEmpty(std::string_view label)
 
 CoreVM::Value* IRGenerator::emitSeqCons(CoreVM::Value* head, CoreVM::Value* lazyTail, std::string_view label)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Seq));
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons tag
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head slot
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail slot
+    auto* typeId = _builder.get(static_cast<CoreVM::CoreNumber>(CoreVM::BuiltinTypeId::Seq));
+    auto* tag1 = _builder.get(static_cast<CoreVM::CoreNumber>(1));  // Cons tag
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0)); // head slot
+    auto* slot1 = _builder.get(static_cast<CoreVM::CoreNumber>(1)); // lazyTail slot
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
     obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
@@ -9519,14 +9581,14 @@ void IRGenerator::visit(ast::SeqExpr const& node)
         customType.name = std::format("SeqTailLazy_{}", _seqCounter - 1);
         customType.assignedId = lazyTypeId;
         customType.variants = {
-            { "Unevaluated", 2 },
-            { "Evaluated", 1 },
+            { .name = "Unevaluated", .payloadSlots = 2 },
+            { .name = "Evaluated", .payloadSlots = 1 },
         };
         _builder.program()->addCustomSumType(std::move(customType));
 
-        auto* lazyTypeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
-        auto* lazyTag0 = _builder.get(CoreVM::CoreNumber(0));
-        auto* lazySlot0 = _builder.get(CoreVM::CoreNumber(0));
+        auto* lazyTypeIdVal = _builder.get(static_cast<CoreVM::CoreNumber>(lazyTypeId));
+        auto* lazyTag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+        auto* lazySlot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
         CoreVM::Value* lazyObj = _builder.createObjAlloc(lazyTypeIdVal, "seq.tail.lazy");
         lazyObj = _builder.createObjSetTag(lazyObj, lazyTag0, "seq.tail.lazy.tag");
@@ -9625,15 +9687,15 @@ void IRGenerator::visit(ast::SeqExpr const& node)
             customType.name = std::format("SeqThunkLazy_{}", _seqCounter - 1);
             customType.assignedId = lazyTypeId;
             customType.variants = {
-                { "Unevaluated", 3 }, // funcId + cached + 1 capture
-                { "Evaluated", 1 },
+                { .name = "Unevaluated", .payloadSlots = 3 }, // funcId + cached + 1 capture
+                { .name = "Evaluated", .payloadSlots = 1 },
             };
             _builder.program()->addCustomSumType(std::move(customType));
 
-            auto* lazyTypeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
-            auto* lazyTag0 = _builder.get(CoreVM::CoreNumber(0));
-            auto* lazySlot0 = _builder.get(CoreVM::CoreNumber(0));
-            auto* lazySlot2 = _builder.get(CoreVM::CoreNumber(2));
+            auto* lazyTypeIdVal = _builder.get(static_cast<CoreVM::CoreNumber>(lazyTypeId));
+            auto* lazyTag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+            auto* lazySlot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+            auto* lazySlot2 = _builder.get(static_cast<CoreVM::CoreNumber>(2));
 
             auto* tailValue = _builder.createLoad(tailStorage, "tail.reload");
 
@@ -9717,15 +9779,15 @@ void IRGenerator::visit(ast::LazyExpr const& node)
     customType.name = std::format("Lazy_{}", _lazyCounter - 1);
     customType.assignedId = lazyTypeId;
     customType.variants = {
-        { "Unevaluated", static_cast<uint8_t>(slotCount) },
-        { "Evaluated", 1 },
+        { .name = "Unevaluated", .payloadSlots = static_cast<uint8_t>(slotCount) },
+        { .name = "Evaluated", .payloadSlots = 1 },
     };
     _builder.program()->addCustomSumType(std::move(customType));
 
     // 4. Emit object creation: OALLOC, OSETTAG 0, OSETSLOT 0 (funcRef), OSETSLOT 2..N+1 (captures)
-    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* typeIdVal = _builder.get(static_cast<CoreVM::CoreNumber>(lazyTypeId));
+    auto* tag0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
+    auto* slot0 = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 
     CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, "lazy");
     obj = _builder.createObjSetTag(obj, tag0, "lazy.tag");
@@ -9737,7 +9799,7 @@ void IRGenerator::visit(ast::LazyExpr const& node)
         auto const& capName = captureOrder[i];
         auto* capStorage = freeVars.at(capName);
         auto* capValue = _builder.createLoad(capStorage, "cap." + capName + ".load");
-        auto* slotIdx = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(2 + i)));
+        auto* slotIdx = _builder.get(static_cast<CoreVM::CoreNumber>(static_cast<int64_t>(2 + i)));
         obj = _builder.createObjSetSlot(obj, slotIdx, capValue, "lazy.cap." + capName);
     }
 
@@ -9793,7 +9855,7 @@ void IRGenerator::visit(ast::TryExpr const& node)
 
     // Check if success (tag == 1 means Some/Ok)
     CoreVM::Value* isSuccess =
-        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "try.is_success");
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "try.is_success");
 
     // Pre-allocate result storage in entry block for consistent stack tracking.
     // Use inner type annotation if available (e.g., String for env "USER"),
@@ -9813,7 +9875,7 @@ void IRGenerator::visit(ast::TryExpr const& node)
     _builder.setInsertPoint(successBlock);
     CoreVM::Value* objReload1 = _builder.createLoad(objStorage, "try.obj.reload");
     CoreVM::Value* innerValue =
-        _builder.createObjGetSlot(objReload1, _builder.get(CoreVM::CoreNumber(0)), "try.inner");
+        _builder.createObjGetSlot(objReload1, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "try.inner");
 
     // Store result and branch to continue
     _builder.createStore(resultStorage, innerValue, "try.result.store");
@@ -9831,7 +9893,7 @@ void IRGenerator::visit(ast::TryExpr const& node)
     else
     {
         // Top-level: exit program with non-zero exit code
-        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+        _builder.createRet(_builder.get(static_cast<CoreVM::CoreNumber>(1)));
     }
 
     // Continue with extracted value
@@ -9890,15 +9952,15 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
     // Extract tag using OGETTAG
     CoreVM::Value* tag = _builder.createObjGetTag(bodyObj, "trywith.tag");
     CoreVM::Value* isSuccess =
-        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "trywith.is_success");
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "trywith.is_success");
 
     _builder.createCondBr(isSuccess, successBlock, errorBlock);
 
     // Success path: reload object and extract inner value using OGETSLOT
     _builder.setInsertPoint(successBlock);
     CoreVM::Value* bodyReload1 = _builder.createLoad(bodyStorage, "trywith.body.reload");
-    CoreVM::Value* successValue =
-        _builder.createObjGetSlot(bodyReload1, _builder.get(CoreVM::CoreNumber(0)), "trywith.success_value");
+    CoreVM::Value* successValue = _builder.createObjGetSlot(
+        bodyReload1, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "trywith.success_value");
     _builder.createStore(resultStorage, successValue, "trywith.success.store");
     _builder.createBr(mergeBlock);
 
@@ -9919,7 +9981,7 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
 
         // Extract error value from slot 0 (the payload of Error/None)
         CoreVM::Value* errorValue = _builder.createObjGetSlot(
-            bodyReload2, _builder.get(CoreVM::CoreNumber(0)), "trywith.error_value");
+            bodyReload2, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "trywith.error_value");
 
         // Store error value for pattern matching
         CoreVM::AllocaInstr* errorStorage =
@@ -9981,7 +10043,7 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                         // Compare error value with literal
                         if (const auto* intVal = std::get_if<int64_t>(&litPat->value))
                         {
-                            CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
+                            CoreVM::Value* litValue = _builder.get(static_cast<CoreVM::CoreNumber>(*intVal));
                             // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
                             CoreVM::Value* matches =
                                 _builder.createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
@@ -10015,7 +10077,7 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                 // Direct literal pattern - compare error value
                 if (const auto* intVal = std::get_if<int64_t>(&litPat->value))
                 {
-                    CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
+                    CoreVM::Value* litValue = _builder.get(static_cast<CoreVM::CoreNumber>(*intVal));
                     // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
                     CoreVM::Value* matches = _builder.createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
                     _builder.createCondBr(matches, handlerBodyBlocks[i], onFailure);
@@ -10197,13 +10259,15 @@ void IRGenerator::visit(ast::TryFinallyExpr const& node)
 
     // Normal path: store body result, set error flag to 0, branch to finally
     _builder.createStore(bodyResultStorage, bodyVal, "tryfinally.body.store");
-    _builder.createStore(errorFlag, _builder.get(CoreVM::CoreNumber(0)), "tryfinally.flag.normal");
+    _builder.createStore(
+        errorFlag, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "tryfinally.flag.normal");
     _builder.createBr(finallyBlock);
 
     // Error path: ? operator jumped here. Error is already in funcCtx->returnStorage.
     // Set error flag to 1, branch to finally
     _builder.setInsertPoint(finallyFromError);
-    _builder.createStore(errorFlag, _builder.get(CoreVM::CoreNumber(1)), "tryfinally.flag.error");
+    _builder.createStore(
+        errorFlag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "tryfinally.flag.error");
     _builder.createBr(finallyBlock);
 
     // Finally block: run cleanup, then check error flag
@@ -10211,7 +10275,8 @@ void IRGenerator::visit(ast::TryFinallyExpr const& node)
     codegen(node.finallyExpr.get()); // result discarded
 
     auto* flag = _builder.createLoad(errorFlag, "tryfinally.flag.load");
-    auto* isErr = _builder.createNCmpEQ(flag, _builder.get(CoreVM::CoreNumber(1)), "tryfinally.is_err");
+    auto* isErr =
+        _builder.createNCmpEQ(flag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "tryfinally.is_err");
     _builder.createCondBr(isErr, finallyErrorExit, finallyNormal);
 
     // Error exit: propagate to original return block (error already in returnStorage)
@@ -10226,7 +10291,7 @@ void IRGenerator::visit(ast::TryFinallyExpr const& node)
 void IRGenerator::visit(ast::UnitExpr const& /*node*/)
 {
     // Unit produces integer 0 (void/unit semantics)
-    _result = _builder.get(CoreVM::CoreNumber(0));
+    _result = _builder.get(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void IRGenerator::visit(ast::BlockExpr const& node)
@@ -10291,7 +10356,7 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
                 case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
             }
         }
-        fields.push_back({ node.fields[i].name, static_cast<uint8_t>(i), vmType });
+        fields.push_back({ .name = node.fields[i].name, .offset = static_cast<uint8_t>(i), .type = vmType });
         fieldTypes[node.fields[i].name] = vmType;
     }
 
@@ -10372,7 +10437,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
 
     // Allocate the record object
     CoreVM::Value* obj =
-        _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeInfo->typeId)), "record");
+        _builder.createObjAlloc(_builder.get(static_cast<CoreVM::CoreNumber>(typeInfo->typeId)), "record");
 
     // Set each field slot (fields are in definition order matching the type)
     for (size_t i = 0; i < node.fields.size(); ++i)
@@ -10388,7 +10453,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
             }
         }
         obj = _builder.createObjSetSlot(
-            obj, _builder.get(CoreVM::CoreNumber(slotOffset)), fieldValues[i], "record.field");
+            obj, _builder.get(static_cast<CoreVM::CoreNumber>(slotOffset)), fieldValues[i], "record.field");
     }
 
     _result = obj;
@@ -10428,16 +10493,20 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
     }
 
     // Allocate a new record object of the same type
-    CoreVM::Value* newObj =
-        _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeInfo->typeId)), "record.upd");
+    CoreVM::Value* newObj = _builder.createObjAlloc(
+        _builder.get(static_cast<CoreVM::CoreNumber>(typeInfo->typeId)), "record.upd");
 
     // Copy all slots from the original record
     for (auto const& fieldDef: typeInfo->fields)
     {
-        auto* slotVal = _builder.createObjGetSlot(
-            baseObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "record.copy." + fieldDef.name);
-        newObj = _builder.createObjSetSlot(
-            newObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), slotVal, "record.copy.set");
+        auto* slotVal =
+            _builder.createObjGetSlot(baseObj,
+                                      _builder.get(static_cast<CoreVM::CoreNumber>(fieldDef.offset)),
+                                      "record.copy." + fieldDef.name);
+        newObj = _builder.createObjSetSlot(newObj,
+                                           _builder.get(static_cast<CoreVM::CoreNumber>(fieldDef.offset)),
+                                           slotVal,
+                                           "record.copy.set");
     }
 
     // Store newObj in an alloca so it survives across basic blocks that codegen() may create
@@ -10465,7 +10534,7 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
             {
                 auto* updatedObj =
                     _builder.createObjSetSlot(currentNewObj,
-                                              _builder.get(CoreVM::CoreNumber(fieldDef.offset)),
+                                              _builder.get(static_cast<CoreVM::CoreNumber>(fieldDef.offset)),
                                               val,
                                               "record.upd.field");
                 _builder.createStore(newObjStorage, updatedObj, "record.upd.store");
@@ -10831,8 +10900,9 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             if (auto it = unionInfo->fieldLookup.find(node.fieldName); it != unionInfo->fieldLookup.end())
             {
                 auto const& [variantTag, slotOffset] = it->second;
-                _result = _builder.createObjGetSlot(
-                    obj, _builder.get(CoreVM::CoreNumber(slotOffset)), "union." + node.fieldName);
+                _result = _builder.createObjGetSlot(obj,
+                                                    _builder.get(static_cast<CoreVM::CoreNumber>(slotOffset)),
+                                                    "union." + node.fieldName);
                 return;
             }
             // Try function-as-method on union type: obj.funcName → funcName(obj)
@@ -10872,8 +10942,10 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     {
         if (fieldDef.name == node.fieldName)
         {
-            _result = _builder.createObjGetSlot(
-                obj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "record." + node.fieldName);
+            _result =
+                _builder.createObjGetSlot(obj,
+                                          _builder.get(static_cast<CoreVM::CoreNumber>(fieldDef.offset)),
+                                          "record." + node.fieldName);
 
             // Annotate the result with the field's literal type for correct convertToString dispatch
             if (auto it = typeInfo->fieldTypes.find(node.fieldName); it != typeInfo->fieldTypes.end())
@@ -10941,7 +11013,8 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     auto* tag = _builder.createObjGetTag(obj, "optchain.tag");
 
     // Check if Some (tag == 1)
-    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optchain.is_some");
+    auto* isSome =
+        _builder.createNCmpEQ(tag, _builder.get(static_cast<CoreVM::CoreNumber>(1)), "optchain.is_some");
 
     // Pre-allocate result storage (always Object type since result is an Option)
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "optchain.result");
@@ -10962,8 +11035,8 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     // Some path: extract inner value, access field, wrap in Some
     _builder.setInsertPoint(someBlock);
     auto* objReload = _builder.createLoad(objStorage, "optchain.obj.reload");
-    auto* innerVal =
-        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optchain.inner");
+    auto* innerVal = _builder.createObjGetSlot(
+        objReload, _builder.get(static_cast<CoreVM::CoreNumber>(0)), "optchain.inner");
 
     // Resolve the record type from the inner value to find the field offset.
     // Try multiple strategies: inner object type ID annotation, direct type ID, IR chain,
@@ -11047,8 +11120,10 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     {
         if (fieldDef.name == node.fieldName)
         {
-            auto* fieldValue = _builder.createObjGetSlot(
-                innerVal, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "optchain." + node.fieldName);
+            auto* fieldValue =
+                _builder.createObjGetSlot(innerVal,
+                                          _builder.get(static_cast<CoreVM::CoreNumber>(fieldDef.offset)),
+                                          "optchain." + node.fieldName);
 
             // Wrap the field value in Some
             auto* someObj = emitSomeOption(fieldValue, fieldValue->type(), "optchain.some.obj");
@@ -11131,13 +11206,15 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
                         }
                     }
                 }
-                fields.push_back({ variant.fieldNames[j], static_cast<uint8_t>(j), vmType });
+                fields.push_back(
+                    { .name = variant.fieldNames[j], .offset = static_cast<uint8_t>(j), .type = vmType });
                 fieldLookup[variant.fieldNames[j]] = { static_cast<int>(i), static_cast<uint8_t>(j) };
             }
         }
 
-        variants.push_back(
-            { variant.name, static_cast<uint8_t>(variant.payloadTypes.size()), std::move(fields) });
+        variants.push_back({ .name = variant.name,
+                             .payloadSlots = static_cast<uint8_t>(variant.payloadTypes.size()),
+                             .fields = std::move(fields) });
 
         // Register each constructor in the constructor registry
         ConstructorInfo ctorInfo;
@@ -11179,12 +11256,12 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
     }
 
     // Allocate the object with the union's type ID
-    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(ctorInfo->typeId));
+    auto* typeIdVal = _builder.get(static_cast<CoreVM::CoreNumber>(ctorInfo->typeId));
     CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, node.constructorName);
 
     // Set the tag for this constructor variant
     obj = _builder.createObjSetTag(
-        obj, _builder.get(CoreVM::CoreNumber(ctorInfo->tag)), node.constructorName + ".tag");
+        obj, _builder.get(static_cast<CoreVM::CoreNumber>(ctorInfo->tag)), node.constructorName + ".tag");
 
     // Set each payload slot (chained to avoid multi-use ObjAlloc)
     for (size_t i = 0; i < node.arguments.size(); ++i)
@@ -11196,7 +11273,7 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
             return;
         }
         obj = _builder.createObjSetSlot(obj,
-                                        _builder.get(CoreVM::CoreNumber(i)),
+                                        _builder.get(static_cast<CoreVM::CoreNumber>(i)),
                                         argVal,
                                         node.constructorName + ".slot" + std::to_string(i));
     }

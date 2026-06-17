@@ -81,7 +81,8 @@ struct TestParserRuntime
 
     /// Constructs a minimal program with custom product types registered.
     /// @param typeRegistrations Map of typeId → (name, slotCount) for types used by tests.
-    explicit TestParserRuntime(std::vector<std::tuple<uint16_t, std::string, uint8_t>> const& typeRegistrations = {})
+    explicit TestParserRuntime(
+        std::vector<std::tuple<uint16_t, std::string, uint8_t>> const& typeRegistrations = {})
     {
         // Create a minimal program with a handler so we can create a Runner
         runtime.registerFunction("noop").returnType(CoreVM::LiteralType::Void).bind([](CoreVM::Params&) {});
@@ -96,14 +97,16 @@ struct TestParserRuntime
             customType.name = name;
             customType.assignedId = typeId;
             for (uint8_t i = 0; i < slotCount; ++i)
-                customType.fields.push_back({ "field" + std::to_string(i), i, CoreVM::LiteralType::String });
+                customType.fields.push_back({ .name = "field" + std::to_string(i),
+                                              .offset = i,
+                                              .type = CoreVM::LiteralType::String });
             builder.program()->addCustomProductType(std::move(customType));
         }
 
         auto* fn = builder.program()->createFunction("@test");
         builder.setFunction(fn);
         builder.setInsertPoint(fn->createBlock("entry"));
-        builder.createRet(builder.get(CoreVM::CoreNumber(0)));
+        builder.createRet(builder.get(static_cast<CoreVM::CoreNumber>(0)));
 
         irProgram = builder.takeProgram();
 
@@ -127,8 +130,8 @@ TEST_CASE("OutputParser.json_lines")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "name", "Name", CoreVM::LiteralType::String },
-        { "value", "Value", CoreVM::LiteralType::String },
+        { .name = "name", .sourceKey = "Name", .type = CoreVM::LiteralType::String },
+        { .name = "value", .sourceKey = "Value", .type = CoreVM::LiteralType::String },
     });
 
     const auto* const input = R"({"Name":"foo","Value":"bar"}
@@ -155,7 +158,7 @@ TEST_CASE("OutputParser.json_array")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "id", "ID", CoreVM::LiteralType::String },
+        { .name = "id", .sourceKey = "ID", .type = CoreVM::LiteralType::String },
     });
     variant.parser.format = ParserConfig::Format::Array;
 
@@ -172,7 +175,7 @@ TEST_CASE("OutputParser.json_empty_input")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "name", "Name", CoreVM::LiteralType::String },
+        { .name = "name", .sourceKey = "Name", .type = CoreVM::LiteralType::String },
     });
 
     auto* result = OutputParser::parseJson(runner, "", variant);
@@ -187,7 +190,7 @@ TEST_CASE("OutputParser.json_malformed_lines_skipped")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "name", "Name", CoreVM::LiteralType::String },
+        { .name = "name", .sourceKey = "Name", .type = CoreVM::LiteralType::String },
     });
 
     const auto* const input = R"(not json
@@ -206,8 +209,8 @@ TEST_CASE("OutputParser.json_missing_fields_default")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "name", "Name", CoreVM::LiteralType::String },
-        { "value", "Value", CoreVM::LiteralType::String },
+        { .name = "name", .sourceKey = "Name", .type = CoreVM::LiteralType::String },
+        { .name = "value", .sourceKey = "Value", .type = CoreVM::LiteralType::String },
     });
 
     const auto* const input = R"({"Name":"only_name"})";
@@ -228,8 +231,8 @@ TEST_CASE("OutputParser.json_int_field_parsing")
     auto runner = rt.createRunner();
 
     auto variant = makeJsonVariant({
-        { "count", "Count", CoreVM::LiteralType::Number },
-        { "name", "Name", CoreVM::LiteralType::String },
+        { .name = "count", .sourceKey = "Count", .type = CoreVM::LiteralType::Number },
+        { .name = "name", .sourceKey = "Name", .type = CoreVM::LiteralType::String },
     });
 
     const auto* const input = R"({"Count":42,"Name":"test"})";
@@ -249,8 +252,8 @@ TEST_CASE("OutputParser.fields_space_separated_max2")
 
     auto variant = makeFieldsVariant(
         {
-            { "status", "", CoreVM::LiteralType::String },
-            { "path", "", CoreVM::LiteralType::String },
+            { .name = "status", .sourceKey = "", .type = CoreVM::LiteralType::String },
+            { .name = "path", .sourceKey = "", .type = CoreVM::LiteralType::String },
         },
         " ",
         2);
@@ -279,7 +282,7 @@ TEST_CASE("OutputParser.fields_empty_input")
 
     auto variant = makeFieldsVariant(
         {
-            { "a", "", CoreVM::LiteralType::String },
+            { .name = "a", .sourceKey = "", .type = CoreVM::LiteralType::String },
         },
         "\t");
 
@@ -327,8 +330,8 @@ TEST_CASE("OutputParser.buildVariantFromDesc.single_field")
 TEST_CASE("OutputParser.detectCsvHeader.matches")
 {
     std::vector<OutputFieldSchema> schema = {
-        { "name", "", CoreVM::LiteralType::String },
-        { "age", "", CoreVM::LiteralType::Number },
+        { .name = "name", .sourceKey = "", .type = CoreVM::LiteralType::String },
+        { .name = "age", .sourceKey = "", .type = CoreVM::LiteralType::Number },
     };
     CHECK(OutputParser::detectCsvHeader("name,age", ",", schema));
 }
@@ -336,8 +339,8 @@ TEST_CASE("OutputParser.detectCsvHeader.matches")
 TEST_CASE("OutputParser.detectCsvHeader.case_insensitive")
 {
     std::vector<OutputFieldSchema> schema = {
-        { "name", "", CoreVM::LiteralType::String },
-        { "age", "", CoreVM::LiteralType::Number },
+        { .name = "name", .sourceKey = "", .type = CoreVM::LiteralType::String },
+        { .name = "age", .sourceKey = "", .type = CoreVM::LiteralType::Number },
     };
     CHECK(OutputParser::detectCsvHeader("Name,Age", ",", schema));
 }
@@ -345,8 +348,8 @@ TEST_CASE("OutputParser.detectCsvHeader.case_insensitive")
 TEST_CASE("OutputParser.detectCsvHeader.no_match_data")
 {
     std::vector<OutputFieldSchema> schema = {
-        { "name", "", CoreVM::LiteralType::String },
-        { "age", "", CoreVM::LiteralType::Number },
+        { .name = "name", .sourceKey = "", .type = CoreVM::LiteralType::String },
+        { .name = "age", .sourceKey = "", .type = CoreVM::LiteralType::Number },
     };
     CHECK_FALSE(OutputParser::detectCsvHeader("Alice,30", ",", schema));
 }
@@ -354,8 +357,8 @@ TEST_CASE("OutputParser.detectCsvHeader.no_match_data")
 TEST_CASE("OutputParser.detectCsvHeader.wrong_count")
 {
     std::vector<OutputFieldSchema> schema = {
-        { "name", "", CoreVM::LiteralType::String },
-        { "age", "", CoreVM::LiteralType::Number },
+        { .name = "name", .sourceKey = "", .type = CoreVM::LiteralType::String },
+        { .name = "age", .sourceKey = "", .type = CoreVM::LiteralType::Number },
     };
     CHECK_FALSE(OutputParser::detectCsvHeader("name,age,extra", ",", schema));
 }

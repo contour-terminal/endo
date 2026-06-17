@@ -15,7 +15,7 @@ TEST_CASE("TypeDescriptor.getVariant")
 {
     TypeDescriptor desc;
     desc.kind = TypeKind::Sum;
-    desc.variants = { { "None", 0 }, { "Some", 1 } };
+    desc.variants = { { .name = "None", .payloadSlots = 0 }, { .name = "Some", .payloadSlots = 1 } };
 
     CHECK(desc.getVariant(0) != nullptr);
     CHECK(desc.getVariant(0)->name == "None");
@@ -32,7 +32,7 @@ TEST_CASE("TypeDescriptor.getVariantTag")
 {
     TypeDescriptor desc;
     desc.kind = TypeKind::Sum;
-    desc.variants = { { "Error", 1 }, { "Ok", 1 } };
+    desc.variants = { { .name = "Error", .payloadSlots = 1 }, { .name = "Ok", .payloadSlots = 1 } };
 
     CHECK(desc.getVariantTag("Error") == 0);
     CHECK(desc.getVariantTag("Ok") == 1);
@@ -43,7 +43,9 @@ TEST_CASE("TypeDescriptor.getField")
 {
     TypeDescriptor desc;
     desc.kind = TypeKind::Product;
-    desc.fields = { { "x", 0 }, { "y", 1 }, { "z", 2 } };
+    desc.fields = { { .name = "x", .offset = 0 },
+                    { .name = "y", .offset = 1 },
+                    { .name = "z", .offset = 2 } };
 
     CHECK(desc.getField(0) != nullptr);
     CHECK(desc.getField(0)->name == "x");
@@ -59,7 +61,7 @@ TEST_CASE("TypeDescriptor.getFieldByName")
 {
     TypeDescriptor desc;
     desc.kind = TypeKind::Product;
-    desc.fields = { { "name", 0 }, { "age", 1 } };
+    desc.fields = { { .name = "name", .offset = 0 }, { .name = "age", .offset = 1 } };
 
     CHECK(desc.getFieldByName("name") != nullptr);
     CHECK(desc.getFieldByName("name")->offset == 0);
@@ -128,13 +130,14 @@ TEST_CASE("TypeRegistry.registerSumType")
 {
     TypeRegistry registry;
 
-    auto* colorType = registry.registerSumType("Color",
-                                               {
-                                                   { "Red", 0 },
-                                                   { "Green", 0 },
-                                                   { "Blue", 0 },
-                                                   { "RGB", 3 }, // 3 slots for r, g, b
-                                               });
+    auto* colorType =
+        registry.registerSumType("Color",
+                                 {
+                                     { .name = "Red", .payloadSlots = 0 },
+                                     { .name = "Green", .payloadSlots = 0 },
+                                     { .name = "Blue", .payloadSlots = 0 },
+                                     { .name = "RGB", .payloadSlots = 3 }, // 3 slots for r, g, b
+                                 });
 
     REQUIRE(colorType != nullptr);
     CHECK(colorType->name == "Color");
@@ -156,8 +159,8 @@ TEST_CASE("TypeRegistry.registerProductType")
 
     auto* pointType = registry.registerProductType("Point",
                                                    {
-                                                       { "x", 0 },
-                                                       { "y", 0 },
+                                                       { .name = "x", .offset = 0 },
+                                                       { .name = "y", .offset = 0 },
                                                    });
 
     REQUIRE(pointType != nullptr);
@@ -193,10 +196,10 @@ TEST_CASE("TypeRegistry.size")
     TypeRegistry registry;
     size_t initialSize = registry.size(); // Includes builtins
 
-    registry.registerSumType("Custom1", { { "A", 0 } });
+    registry.registerSumType("Custom1", { { .name = "A", .payloadSlots = 0 } });
     CHECK(registry.size() == initialSize + 1);
 
-    registry.registerProductType("Custom2", { { "f", 0 } });
+    registry.registerProductType("Custom2", { { .name = "f", .offset = 0 } });
     CHECK(registry.size() == initialSize + 2);
 }
 
@@ -327,7 +330,7 @@ TEST_CASE("TypedObject.isVariant")
     TypeDescriptor desc;
     desc.kind = TypeKind::Sum;
     desc.slotCount = 1;
-    desc.variants = { { "None", 0 }, { "Some", 1 } };
+    desc.variants = { { .name = "None", .payloadSlots = 0 }, { .name = "Some", .payloadSlots = 1 } };
 
     std::vector<uint8_t> storage(TypedObject::allocationSize(&desc));
     auto* obj = reinterpret_cast<TypedObject*>(storage.data());

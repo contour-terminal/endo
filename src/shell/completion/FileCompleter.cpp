@@ -138,18 +138,25 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path)
     if (path.size() == 1 || path[1] == '/')
     {
         // ~ or ~/... - current user's home
-        if (char const* home = std::getenv("HOME"))
-            result = home;
 #if defined(_WIN32)
-        else if (char const* userProfile = std::getenv("USERPROFILE"))
-            result = userProfile;
-#else
-        else if (struct passwd* pw = getpwuid(getuid()))
-            result = pw->pw_dir;
-#endif
-        else
+        if (char const* home = std::getenv("HOME"))
         {
+            result = home;
         }
+        else if (char const* userProfile = std::getenv("USERPROFILE"))
+        {
+            result = userProfile;
+        }
+#else
+        if (char const* home = std::getenv("HOME"))
+        {
+            result = home;
+        }
+        else if (struct passwd* pw = getpwuid(getuid()))
+        {
+            result = pw->pw_dir;
+        }
+#endif
 
         if (path.size() > 1)
             result += std::string(path.substr(1));

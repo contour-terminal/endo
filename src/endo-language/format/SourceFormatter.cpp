@@ -459,9 +459,13 @@ void SourceFormatter::emitParameters(std::vector<ast::TypedParameter> const& par
     {
         emit(" ");
         if (param.isUnit)
+        {
             emit("()");
+        }
         else if (param.typeAnnotation)
+        {
             emit("(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")");
+        }
         else
         {
             if (param.isVariadic)
@@ -575,7 +579,9 @@ std::vector<ast::Expr const*> SourceFormatter::collectPipelineChain(ast::Pipelin
     {
         chain.push_back(current->function.get());
         if (auto const* inner = dynamic_cast<ast::PipelineExpr const*>(current->value.get()))
+        {
             current = inner;
+        }
         else
         {
             chain.push_back(current->value.get());
@@ -1511,7 +1517,9 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
                 dedent();
             }
             else
+            {
                 node.getter->body->accept(*this);
+            }
         }
         if (node.getter && node.setter)
         {
@@ -1532,7 +1540,9 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
                 dedent();
             }
             else
+            {
                 node.setter->body->accept(*this);
+            }
         }
     }
     else
@@ -1781,7 +1791,9 @@ void SourceFormatter::visit(ast::IdentifierExpr const& node)
         }
     }
     else
+    {
         emit(node.name);
+    }
 }
 
 void SourceFormatter::visit(ast::IntLiteralExpr const& node)

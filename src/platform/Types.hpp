@@ -96,6 +96,24 @@ constexpr auto standardError() -> NativeHandle
 }
 #endif
 
+/// @brief Converts a native handle to an integer suitable for the VM number type.
+///
+/// @c NativeHandle is an @c int on POSIX but a @c void* (@c HANDLE) on Windows.
+/// A single @c static_cast cannot express both conversions (it rejects the
+/// pointer-to-integer case), so this helper selects the correct cast at compile
+/// time, keeping call sites portable and free of C-style casts.
+///
+/// @param handle The native handle to convert.
+/// @return The handle reinterpreted as a signed 64-bit integer.
+[[nodiscard]] inline auto nativeHandleToNumber(NativeHandle handle) noexcept -> std::int64_t
+{
+#ifdef _WIN32
+    return static_cast<std::int64_t>(reinterpret_cast<std::intptr_t>(handle));
+#else
+    return static_cast<std::int64_t>(handle);
+#endif
+}
+
 #ifdef _WIN32
 /// Cross-platform close using Windows CloseHandle.
 ///

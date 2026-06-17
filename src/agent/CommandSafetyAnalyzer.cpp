@@ -76,9 +76,13 @@ namespace
         {
             auto const c = command[i];
             if (c == '\'' && !inDoubleQuote)
+            {
                 inSingleQuote = !inSingleQuote;
+            }
             else if (c == '"' && !inSingleQuote)
+            {
                 inDoubleQuote = !inDoubleQuote;
+            }
             else if (!inSingleQuote && !inDoubleQuote)
             {
                 if (c == '|' || c == ';')
@@ -237,7 +241,9 @@ namespace
                         if (rest.empty())
                             break;
                         if (rest.front() != '-')
+                        {
                             ++argCount;
+                        }
                         else
                         {
                             // Skip flag and its value.

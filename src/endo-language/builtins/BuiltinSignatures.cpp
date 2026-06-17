@@ -791,8 +791,10 @@ std::vector<BuiltinInfo> userFacingBuiltins()
 
     // Shell builtins (non-inline)
     for (auto const& desc: shellBuiltinDescriptors)
-        result.push_back(
-            { std::string(desc.name), std::string(desc.description), false, std::string(desc.detail) });
+        result.push_back({ .name = std::string(desc.name),
+                           .description = std::string(desc.description),
+                           .isProperty = false,
+                           .detail = std::string(desc.detail) });
 
     // Inline builtins (registered at startup from InlineCommandDescriptors)
     for (auto const& info: inlineBuiltins)
@@ -801,20 +803,24 @@ std::vector<BuiltinInfo> userFacingBuiltins()
     // Stdlib functions (length, map, filter, fold, ...)
     for (auto const& desc: stdlibDescs)
         if (!desc.userFacingName.empty())
-            result.push_back({ std::string(desc.userFacingName),
-                               std::string(desc.description),
-                               false,
-                               std::string(desc.detail) });
+            result.push_back({ .name = std::string(desc.userFacingName),
+                               .description = std::string(desc.description),
+                               .isProperty = false,
+                               .detail = std::string(desc.detail) });
 
     // Keywords
     for (auto const& desc: keywordDescriptors)
-        result.push_back(
-            { std::string(desc.name), std::string(desc.description), false, std::string(desc.detail) });
+        result.push_back({ .name = std::string(desc.name),
+                           .description = std::string(desc.description),
+                           .isProperty = false,
+                           .detail = std::string(desc.detail) });
 
     // Properties (from PropertyDescriptors)
     for (auto const& desc: allPropertyDescriptors())
-        result.push_back(
-            { std::string(desc.name), std::string(desc.description), true, std::string(desc.detail) });
+        result.push_back({ .name = std::string(desc.name),
+                           .description = std::string(desc.description),
+                           .isProperty = true,
+                           .detail = std::string(desc.detail) });
 
     return result;
 }

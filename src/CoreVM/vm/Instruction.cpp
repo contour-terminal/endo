@@ -31,7 +31,7 @@ struct InstructionInfo
     InstructionInfo& operator=(InstructionInfo&&) noexcept = default;
     ~InstructionInfo() = default;
 
-    InstructionInfo(
+    constexpr InstructionInfo(
         Opcode opc, const char* const m, OperandSig opsig, int stackChange, LiteralType stackOutput):
         mnemonic(m), opcode(opc), operandSig(opsig), stackOutput(stackOutput), stackChange(stackChange)
     {
@@ -44,7 +44,7 @@ struct InstructionInfo
 // LiteralType:: stackOutput }
 
 // OPCODE, operandSignature, stackChange
-static InstructionInfo instructionInfos[] = {
+static constexpr InstructionInfo instructionInfos[] = {
     // misc
     IIDEF(NOP, V, 0, Void),
     IIDEF(ALLOCA, I, 0, Void),
@@ -249,17 +249,17 @@ size_t computeStackSize(const Instruction* program, size_t programSize)
 
 OperandSig operandSignature(Opcode opc)
 {
-    return instructionInfos[(size_t) opc].operandSig;
+    return instructionInfos[static_cast<size_t>(opc)].operandSig;
 }
 
 const char* mnemonic(Opcode opc)
 {
-    return instructionInfos[(size_t) opc].mnemonic;
+    return instructionInfos[static_cast<size_t>(opc)].mnemonic;
 }
 
 LiteralType resultType(Opcode opc)
 {
-    return instructionInfos[(size_t) opc].stackOutput;
+    return instructionInfos[static_cast<size_t>(opc)].stackOutput;
 }
 
 // ---------------------------------------------------------------------------

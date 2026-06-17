@@ -312,7 +312,9 @@ std::expected<std::uintmax_t, std::string> InMemoryFileSystem::removeAll(
             ++count;
         }
         else
+        {
             ++it;
+        }
     }
 
     // Remove all directories under this path
@@ -324,7 +326,9 @@ std::expected<std::uintmax_t, std::string> InMemoryFileSystem::removeAll(
             ++count;
         }
         else
+        {
             ++it;
+        }
     }
 
     // Remove all symlinks under this path
@@ -336,7 +340,9 @@ std::expected<std::uintmax_t, std::string> InMemoryFileSystem::removeAll(
             ++count;
         }
         else
+        {
             ++it;
+        }
     }
 
     return count;

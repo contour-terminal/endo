@@ -457,7 +457,7 @@ void Screen::showOverlay(Component& overlay, Point position)
     else
     {
         // Add new overlay
-        _overlays.push_back({ &overlay, position });
+        _overlays.push_back({ .component = &overlay, .position = position });
         overlay.setScreen(this);
     }
     invalidate();

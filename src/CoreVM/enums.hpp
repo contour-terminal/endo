@@ -378,7 +378,7 @@ using Operand = uint16_t;
 /** Creates an instruction with no operands. */
 constexpr Instruction makeInstruction(Opcode opc)
 {
-    return (Instruction) opc;
+    return static_cast<Instruction>(opc);
 }
 
 /** Creates an instruction with one operand. */

@@ -50,9 +50,21 @@ namespace
         return result;
     }
 
-    auto const GoogleClientId = deobfuscate(
-        "bGJraG9vYmpjaWNvdzU1YjwuaDUqKD4oNCpjP2k7KzxsOyxpMjc+MzhraW8wdDsqKil0PTU1PTY/Lyk/KDk1NC4/NC50OTU3");
-    auto const GoogleClientSecret = deobfuscate("HRUZCQoCd24vEj0XCjd3azVtCTF3PT8MbBkvbzk2AhwpIjY=");
+    /// Returns the deobfuscated Google OAuth client ID (lazily initialized).
+    auto googleClientId() -> std::string const&
+    {
+        static std::string const value = deobfuscate("bGJraG9vYmpjaWNvdzU1YjwuaDUqKD4oNCpjP2k7KzxsOyxpMjc+"
+                                                     "MzhraW8wdDsqKil0PTU1PTY/Lyk/KDk1NC4/NC50OTU3");
+        return value;
+    }
+
+    /// Returns the deobfuscated Google OAuth client secret (lazily initialized).
+    auto googleClientSecret() -> std::string const&
+    {
+        static std::string const value = deobfuscate("HRUZCQoCd24vEj0XCjd3azVtCTF3PT8MbBkvbzk2AhwpIjY=");
+        return value;
+    }
+
     constexpr auto GoogleAuthorizeUrl = "https://accounts.google.com/o/oauth2/v2/auth";
     constexpr auto GoogleTokenUrl = "https://oauth2.googleapis.com/token";
     constexpr auto GoogleScopes = "https://www.googleapis.com/auth/cloud-platform"
@@ -207,7 +219,7 @@ namespace
     auto base64urlEncode(uint8_t const* data, size_t length) -> std::string
     {
         auto result = std::string {};
-        result.reserve((length * 4 + 2) / 3);
+        result.reserve(((length * 4) + 2) / 3);
 
         // macOS libc++ does not yet provide std::views::stride (C++23).
 #if defined(__cpp_lib_ranges_stride) && __cpp_lib_ranges_stride >= 202207L
@@ -217,8 +229,8 @@ namespace
 #endif
         {
             auto const b0 = data[i];
-            auto const b1 = (i + 1 < length) ? data[i + 1] : uint8_t(0);
-            auto const b2 = (i + 2 < length) ? data[i + 2] : uint8_t(0);
+            auto const b1 = (i + 1 < length) ? data[i + 1] : static_cast<uint8_t>(0);
+            auto const b2 = (i + 2 < length) ? data[i + 2] : static_cast<uint8_t>(0);
 
             result += Base64UrlChars[(b0 >> 2) & 0x3F];
             result += Base64UrlChars[((b0 & 0x03) << 4) | ((b1 >> 4) & 0x0F)];
@@ -248,7 +260,9 @@ namespace
         {
             if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '-' || ch == '_' || ch == '.'
                 || ch == '~')
+            {
                 result += ch;
+            }
             else
             {
                 result += '%';
@@ -293,7 +307,7 @@ namespace
         return OAuthCredentials {
             .accessToken = node["access_token"].as<std::string>(),
             .refreshToken = node["refresh_token"].as<std::string>(),
-            .expiresAt = node["expires_at"] ? node["expires_at"].as<int64_t>() : int64_t(0),
+            .expiresAt = node["expires_at"] ? node["expires_at"].as<int64_t>() : static_cast<int64_t>(0),
             .authMode = node["auth_mode"] ? node["auth_mode"].as<std::string>() : std::string {},
         };
     }
@@ -462,7 +476,7 @@ auto refreshOAuthToken(http::HttpClient const& httpClient, std::string_view refr
 
 auto buildGoogleAuthorizeUrl(PkceParams const& pkce, std::string_view redirectUri) -> std::string
 {
-    return std::string(GoogleAuthorizeUrl) + "?client_id=" + GoogleClientId + "&response_type=code"
+    return std::string(GoogleAuthorizeUrl) + "?client_id=" + googleClientId() + "&response_type=code"
            + "&code_challenge=" + pkce.challenge + "&code_challenge_method=S256"
            + "&redirect_uri=" + urlEncode(redirectUri) + "&scope=" + urlEncode(GoogleScopes)
            + "&state=" + pkce.state + "&access_type=offline&prompt=consent";
@@ -475,7 +489,7 @@ auto exchangeGoogleCode(http::HttpClient const& httpClient,
 {
     auto const body = nlohmann::json {
         { "grant_type", "authorization_code" }, { "code", code },
-        { "client_id", GoogleClientId },        { "client_secret", GoogleClientSecret },
+        { "client_id", googleClientId() },      { "client_secret", googleClientSecret() },
         { "redirect_uri", redirectUri },        { "code_verifier", verifier },
     };
 
@@ -525,8 +539,8 @@ auto refreshGoogleOAuthToken(http::HttpClient const& httpClient, std::string_vie
     auto const body = nlohmann::json {
         { "grant_type", "refresh_token" },
         { "refresh_token", refreshToken },
-        { "client_id", GoogleClientId },
-        { "client_secret", GoogleClientSecret },
+        { "client_id", googleClientId() },
+        { "client_secret", googleClientSecret() },
     };
 
     auto request = http::HttpRequest {};

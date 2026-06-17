@@ -37,8 +37,8 @@ bool Cidr::contains(const IPAddress& ipaddr) const
     // IPv4
     if (ipaddr.family() == IPAddress::Family::V4)
     {
-        uint32_t ip = *(uint32_t*) ipaddr.data();
-        uint32_t subnet = *(uint32_t*) address().data();
+        uint32_t ip = *reinterpret_cast<const uint32_t*>(ipaddr.data());
+        uint32_t subnet = *reinterpret_cast<const uint32_t*>(address().data());
         uint32_t match = ip & (0xFFFFFFFF >> (32 - prefix()));
 
         return match == subnet;
@@ -46,8 +46,8 @@ bool Cidr::contains(const IPAddress& ipaddr) const
 
     // IPv6
     auto bits = static_cast<int>(prefix());
-    const auto* words = (const uint32_t*) address().data();
-    const auto* input = (const uint32_t*) ipaddr.data();
+    const auto* words = reinterpret_cast<const uint32_t*>(address().data());
+    const auto* input = reinterpret_cast<const uint32_t*>(ipaddr.data());
     while (bits >= 32)
     {
         uint32_t match = *words & 0xFFFFFFFF;

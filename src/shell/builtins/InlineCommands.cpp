@@ -349,9 +349,13 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
             for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 if (arg[j] == 'n')
+                {
                     suppressNewline = true;
+                }
                 else if (arg[j] == 'e')
+                {
                     interpretEscapes = true;
+                }
                 else
                 {
                     validFlag = false;
@@ -2010,7 +2014,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
         }
     }
 
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
@@ -2262,7 +2266,9 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     // Determine color mode
     bool useColor = false;
     if (opts.colorMode == grep::ColorMode::Always)
+    {
         useColor = true;
+    }
     else if (opts.colorMode == grep::ColorMode::Auto)
     {
         useColor = isTerminal(outputFd);
@@ -4726,7 +4732,9 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
         for (auto const ch: line)
         {
             if (std::isspace(static_cast<unsigned char>(ch)))
+            {
                 inWord = false;
+            }
             else if (!inWord)
             {
                 ++totalWords;

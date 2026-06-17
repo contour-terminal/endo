@@ -87,7 +87,7 @@ auto OAuthCallbackServer::waitForCallback(std::chrono::seconds timeout)
     auto url = std::string_view {};
     if (requestLine.starts_with("GET "))
     {
-        auto const urlStart = size_t(4);
+        auto const urlStart = static_cast<size_t>(4);
         auto const urlEnd = requestLine.find(' ', urlStart);
         url = requestLine.substr(urlStart, urlEnd - urlStart);
     }

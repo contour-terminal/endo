@@ -11,23 +11,30 @@ namespace endo::timeout
 namespace
 {
     // clang-format off
-    const std::unordered_map<std::string_view, int> signalNames = {
-        { "HUP",     1 }, { "SIGHUP",     1 },
-        { "INT",     2 }, { "SIGINT",     2 },
-        { "QUIT",    3 }, { "SIGQUIT",    3 },
-        { "ILL",     4 }, { "SIGILL",     4 },
-        { "TRAP",    5 }, { "SIGTRAP",    5 },
-        { "ABRT",    6 }, { "SIGABRT",    6 },
-        { "BUS",     7 }, { "SIGBUS",     7 },
-        { "FPE",     8 }, { "SIGFPE",     8 },
-        { "KILL",    9 }, { "SIGKILL",    9 },
-        { "USR1",   10 }, { "SIGUSR1",   10 },
-        { "SEGV",   11 }, { "SIGSEGV",   11 },
-        { "USR2",   12 }, { "SIGUSR2",   12 },
-        { "PIPE",   13 }, { "SIGPIPE",   13 },
-        { "ALRM",   14 }, { "SIGALRM",   14 },
-        { "TERM",   15 }, { "SIGTERM",   15 },
-    };
+    /// Returns the signal name-to-number lookup table (lazily initialized to avoid
+    /// throwing static initialization).
+    auto signalNames() -> std::unordered_map<std::string_view, int> const&
+    {
+        static const std::unordered_map<std::string_view, int> value = {
+            { "HUP",     1 }, { "SIGHUP",     1 },
+            { "INT",     2 }, { "SIGINT",     2 },
+            { "QUIT",    3 }, { "SIGQUIT",    3 },
+            { "ILL",     4 }, { "SIGILL",     4 },
+            { "TRAP",    5 }, { "SIGTRAP",    5 },
+            { "ABRT",    6 }, { "SIGABRT",    6 },
+            { "BUS",     7 }, { "SIGBUS",     7 },
+            { "FPE",     8 }, { "SIGFPE",     8 },
+            { "KILL",    9 }, { "SIGKILL",    9 },
+            { "USR1",   10 }, { "SIGUSR1",   10 },
+            { "SEGV",   11 }, { "SIGSEGV",   11 },
+            { "USR2",   12 }, { "SIGUSR2",   12 },
+            { "PIPE",   13 }, { "SIGPIPE",   13 },
+            { "ALRM",   14 }, { "SIGALRM",   14 },
+            { "TERM",   15 }, { "SIGTERM",   15 },
+        };
+        return value;
+    }
+
     // clang-format on
 
     /// Tries to consume an option value from an --option=value or next arg.
@@ -99,8 +106,9 @@ std::expected<int, std::string> parseSignalSpec(std::string_view str)
     }
 
     // Try name lookup
-    auto const it = signalNames.find(str);
-    if (it != signalNames.end())
+    auto const& names = signalNames();
+    auto const it = names.find(str);
+    if (it != names.end())
         return it->second;
 
     return std::unexpected(std::format("unknown signal: '{}'", str));

@@ -449,7 +449,7 @@ TestRuntime::TestRuntime()
                     else
                         capturedOutput += output;
                 }
-                args.setResult(CoreVM::CoreNumber(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(0));
             });
         if (name == "internal.cmd_exec_piped" && arity == 1)
             return Functor([this](CoreVM::Params& args) {
@@ -468,7 +468,7 @@ TestRuntime::TestRuntime()
                     else
                         capturedOutput += output;
                 }
-                args.setResult(CoreVM::CoreNumber(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(0));
             });
 
         // --- Environment (stateful) ---
@@ -513,7 +513,7 @@ TestRuntime::TestRuntime()
                     args.setResult(args.caller()->newString(""));
             });
         if (name == "getvar.exitstatus" && arity == 0)
-            return Functor([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); });
+            return Functor([](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(0)); });
 
         // --- Tilde expansion (stateless) ---
         if (name == "expand.tilde" && arity == 1)
@@ -611,7 +611,7 @@ void TestRuntime::dummyCallProc(CoreVM::Params& params)
         else
             capturedOutput += output;
     }
-    params.setResult(CoreVM::CoreNumber(0));
+    params.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void TestRuntime::dummyCallProcPiped(CoreVM::Params& params)
@@ -642,7 +642,7 @@ void TestRuntime::dummyCallProcPiped(CoreVM::Params& params)
             capturedOutput += output;
     }
     (void) lastInChain;
-    params.setResult(CoreVM::CoreNumber(0));
+    params.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void TestRuntime::builtinPrint(CoreVM::Params& params)
@@ -1211,13 +1211,13 @@ FSharpPersistentState createMockStructuredState()
         state.outputDefinitionTypes["DockerPsRecord"] = {
             .typeId = typeId,
             .fields = {
-                { "id", 0, LiteralType::String },
-                { "image", 1, LiteralType::String },
-                { "command", 2, LiteralType::String },
-                { "created", 3, LiteralType::String },
-                { "status", 4, LiteralType::String },
-                { "ports", 5, LiteralType::String },
-                { "names", 6, LiteralType::String },
+                { .name="id", .offset=0, .type=LiteralType::String },
+                { .name="image", .offset=1, .type=LiteralType::String },
+                { .name="command", .offset=2, .type=LiteralType::String },
+                { .name="created", .offset=3, .type=LiteralType::String },
+                { .name="status", .offset=4, .type=LiteralType::String },
+                { .name="ports", .offset=5, .type=LiteralType::String },
+                { .name="names", .offset=6, .type=LiteralType::String },
             },
         };
         state.structuredCommands[std::string("docker\0ps", 9)] = {
@@ -1226,8 +1226,10 @@ FSharpPersistentState createMockStructuredState()
             .recordTypeName = "DockerPsRecord",
         };
         state.recordTypeFields["DockerPsRecord"] = {
-            { "id", "string" },     { "image", "string" }, { "command", "string" }, { "created", "string" },
-            { "status", "string" }, { "ports", "string" }, { "names", "string" },
+            { .name = "id", .typeName = "string" },      { .name = "image", .typeName = "string" },
+            { .name = "command", .typeName = "string" }, { .name = "created", .typeName = "string" },
+            { .name = "status", .typeName = "string" },  { .name = "ports", .typeName = "string" },
+            { .name = "names", .typeName = "string" },
         };
     }
 
@@ -1237,11 +1239,11 @@ FSharpPersistentState createMockStructuredState()
         state.outputDefinitionTypes["DockerImagesRecord"] = {
             .typeId = typeId,
             .fields = {
-                { "id", 0, LiteralType::String },
-                { "repository", 1, LiteralType::String },
-                { "tag", 2, LiteralType::String },
-                { "created", 3, LiteralType::String },
-                { "size", 4, LiteralType::String },
+                { .name="id", .offset=0, .type=LiteralType::String },
+                { .name="repository", .offset=1, .type=LiteralType::String },
+                { .name="tag", .offset=2, .type=LiteralType::String },
+                { .name="created", .offset=3, .type=LiteralType::String },
+                { .name="size", .offset=4, .type=LiteralType::String },
             },
         };
         state.structuredCommands[std::string("docker\0images", 13)] = {
@@ -1250,8 +1252,9 @@ FSharpPersistentState createMockStructuredState()
             .recordTypeName = "DockerImagesRecord",
         };
         state.recordTypeFields["DockerImagesRecord"] = {
-            { "id", "string" },      { "repository", "string" }, { "tag", "string" },
-            { "created", "string" }, { "size", "string" },
+            { .name = "id", .typeName = "string" },   { .name = "repository", .typeName = "string" },
+            { .name = "tag", .typeName = "string" },  { .name = "created", .typeName = "string" },
+            { .name = "size", .typeName = "string" },
         };
     }
 
@@ -1261,11 +1264,11 @@ FSharpPersistentState createMockStructuredState()
         state.outputDefinitionTypes["GitLogRecord"] = {
             .typeId = typeId,
             .fields = {
-                { "sha", 0, LiteralType::String },
-                { "author", 1, LiteralType::String },
-                { "email", 2, LiteralType::String },
-                { "date", 3, LiteralType::String },
-                { "message", 4, LiteralType::String },
+                { .name="sha", .offset=0, .type=LiteralType::String },
+                { .name="author", .offset=1, .type=LiteralType::String },
+                { .name="email", .offset=2, .type=LiteralType::String },
+                { .name="date", .offset=3, .type=LiteralType::String },
+                { .name="message", .offset=4, .type=LiteralType::String },
             },
         };
         state.structuredCommands[std::string("git\0log", 7)] = {
@@ -1274,8 +1277,9 @@ FSharpPersistentState createMockStructuredState()
             .recordTypeName = "GitLogRecord",
         };
         state.recordTypeFields["GitLogRecord"] = {
-            { "sha", "string" },  { "author", "string" },  { "email", "string" },
-            { "date", "string" }, { "message", "string" },
+            { .name = "sha", .typeName = "string" },     { .name = "author", .typeName = "string" },
+            { .name = "email", .typeName = "string" },   { .name = "date", .typeName = "string" },
+            { .name = "message", .typeName = "string" },
         };
     }
 
@@ -1285,8 +1289,8 @@ FSharpPersistentState createMockStructuredState()
         state.outputDefinitionTypes["GitStatusRecord"] = {
             .typeId = typeId,
             .fields = {
-                { "status", 0, LiteralType::String },
-                { "path", 1, LiteralType::String },
+                { .name="status", .offset=0, .type=LiteralType::String },
+                { .name="path", .offset=1, .type=LiteralType::String },
             },
         };
         state.structuredCommands[std::string("git\0status", 10)] = {
@@ -1295,8 +1299,8 @@ FSharpPersistentState createMockStructuredState()
             .recordTypeName = "GitStatusRecord",
         };
         state.recordTypeFields["GitStatusRecord"] = {
-            { "status", "string" },
-            { "path", "string" },
+            { .name = "status", .typeName = "string" },
+            { .name = "path", .typeName = "string" },
         };
     }
 

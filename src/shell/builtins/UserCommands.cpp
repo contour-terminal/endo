@@ -42,7 +42,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         _tty.writeToStdout(formatRecordTable(list, _runner, config));
 
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -54,7 +54,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         {
             error("bind: -r requires a key argument");
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
 
@@ -63,13 +63,13 @@ void Shell::builtinBind(CoreVM::Params& context)
         {
             error("bind: invalid key chord: {}", args[1]);
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
 
         prompt.unbindKey(*chord);
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -78,7 +78,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         // Reset to defaults: bind --reset
         prompt.resetKeyBindings();
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -95,7 +95,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         _tty.writeToStdout(formatRecordTable(list, _runner, config));
 
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -160,7 +160,7 @@ void Shell::builtinBind(CoreVM::Params& context)
             "| History | `history-prev`, `history-next` |\n"
             "| Command Palette | `command-palette` |\n");
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -171,7 +171,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         error("Usage: bind <key> <action>");
         error("Run 'bind --help' for more information.");
         _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
         return;
     }
 
@@ -180,7 +180,7 @@ void Shell::builtinBind(CoreVM::Params& context)
     {
         error("bind: invalid key chord: {}", args[0]);
         _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
         return;
     }
 
@@ -190,13 +190,13 @@ void Shell::builtinBind(CoreVM::Params& context)
         error("bind: unknown action: {}", args[1]);
         error("Run 'bind --help' to see available actions.");
         _exitCode = 1;
-        context.setResult(CoreVM::CoreNumber(1));
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
         return;
     }
 
     prompt.bindKey(*chord, *action);
     _exitCode = 0;
-    context.setResult(CoreVM::CoreNumber(0));
+    context.setResult(static_cast<CoreVM::CoreNumber>(0));
 }
 
 void Shell::builtinWhich(CoreVM::Params& context)
@@ -219,20 +219,28 @@ void Shell::builtinWhich(CoreVM::Params& context)
     for (auto const& arg: args)
     {
         if (arg == "-h" || arg == "--help")
+        {
             showHelp = true;
+        }
         else if (arg == "-a" || arg == "--all")
+        {
             showAll = true;
+        }
         else if (arg == "-i" || arg == "--read-alias")
+        {
             readAlias = true;
+        }
         else if (arg.starts_with("-"))
         {
             error("which: invalid option: {}", arg);
             _exitCode = 1;
-            context.setResult(CoreVM::CoreNumber(1));
+            context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
         else
+        {
             programs.push_back(arg);
+        }
     }
 
     // Helper to write output to the effective stdout (respects redirects and test environments)
@@ -272,7 +280,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
             "| `0` | All programs were found |\n"
             "| `1` | One or more programs were not found |\n");
         _exitCode = 0;
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
 
@@ -321,7 +329,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
     }
 
     _exitCode = allFound ? 0 : 1;
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 } // namespace endo

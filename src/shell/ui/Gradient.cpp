@@ -70,7 +70,7 @@ namespace
             std::size_t clusterBytes = 0;
             for (auto const cp: cluster)
                 clusterBytes += utf8ByteLength(cp);
-            spans.push_back({ bytePos, clusterBytes });
+            spans.push_back({ .offset = bytePos, .length = clusterBytes });
             bytePos += clusterBytes;
         }
         return spans;

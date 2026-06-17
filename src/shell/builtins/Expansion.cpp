@@ -82,13 +82,13 @@ void Shell::builtinArithGetVar(CoreVM::Params& context)
     auto const value = _env.get(name);
     if (!value.has_value() || value->empty())
     {
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
     int64_t result = 0;
     // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
     auto [ptr, ec] = std::from_chars(value->data(), value->data() + value->size(), result);
-    context.setResult(CoreVM::CoreNumber(result));
+    context.setResult(static_cast<CoreVM::CoreNumber>(result));
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -98,13 +98,13 @@ void Shell::builtinArithPow(CoreVM::Params& context)
     auto const exp = context.getInt(2);
     if (exp < 0)
     {
-        context.setResult(CoreVM::CoreNumber(0));
+        context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;
     }
     int64_t result = 1;
     for (int64_t i = 0; i < exp; ++i)
         result *= base;
-    context.setResult(CoreVM::CoreNumber(result));
+    context.setResult(static_cast<CoreVM::CoreNumber>(result));
 }
 
 void Shell::builtinExpandParamLength(CoreVM::Params& context)
@@ -142,7 +142,9 @@ void Shell::builtinExpandParamAssign(CoreVM::Params& context)
     auto const& defaultValue = context.getString(2);
     auto const value = _env.get(varName);
     if (value.has_value() && !value->empty())
+    {
         context.setResult(std::string(*value));
+    }
     else
     {
         _env.set(varName, defaultValue);
@@ -156,7 +158,9 @@ void Shell::builtinExpandParamError(CoreVM::Params& context)
     auto const& errorMsg = context.getString(2);
     auto const value = _env.get(varName);
     if (value.has_value() && !value->empty())
+    {
         context.setResult(std::string(*value));
+    }
     else
     {
         std::string const msg = errorMsg.empty() ? std::format("{}: parameter null or not set", varName)

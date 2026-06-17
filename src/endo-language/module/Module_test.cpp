@@ -401,7 +401,8 @@ TEST_CASE("module.signature.validation", "[module][signature]")
 
         ModuleSignature sig;
         sig.moduleName = "Math";
-        sig.entries.push_back({ SignatureEntry::Kind::Val, "square", "int -> int" });
+        sig.entries.push_back(
+            { .kind = SignatureEntry::Kind::Val, .name = "square", .signature = "int -> int" });
 
         auto errors = validateSignature(desc, sig);
         CHECK(errors.empty());
@@ -414,7 +415,8 @@ TEST_CASE("module.signature.validation", "[module][signature]")
 
         ModuleSignature sig;
         sig.moduleName = "Math";
-        sig.entries.push_back({ SignatureEntry::Kind::Val, "square", "int -> int" });
+        sig.entries.push_back(
+            { .kind = SignatureEntry::Kind::Val, .name = "square", .signature = "int -> int" });
 
         auto errors = validateSignature(desc, sig);
         REQUIRE(errors.size() == 1);
@@ -452,7 +454,8 @@ TEST_CASE("module.signature.validation_mismatch", "[module][signature]")
 
         ModuleSignature sig;
         sig.moduleName = "Geom";
-        sig.entries.push_back({ SignatureEntry::Kind::Type, "Point", "{ x: int; y: int }" });
+        sig.entries.push_back(
+            { .kind = SignatureEntry::Kind::Type, .name = "Point", .signature = "{ x: int; y: int }" });
 
         auto errors = validateSignature(desc, sig);
         REQUIRE(errors.size() == 1);
@@ -467,8 +470,10 @@ TEST_CASE("module.signature.validation_mismatch", "[module][signature]")
 
         ModuleSignature sig;
         sig.moduleName = "Math";
-        sig.entries.push_back({ SignatureEntry::Kind::Val, "square", "int -> int" });
-        sig.entries.push_back({ SignatureEntry::Kind::Val, "cube", "int -> int" });
+        sig.entries.push_back(
+            { .kind = SignatureEntry::Kind::Val, .name = "square", .signature = "int -> int" });
+        sig.entries.push_back(
+            { .kind = SignatureEntry::Kind::Val, .name = "cube", .signature = "int -> int" });
 
         auto errors = validateSignature(desc, sig);
         CHECK(errors.size() == 2);

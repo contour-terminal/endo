@@ -7,13 +7,12 @@
 
 #include <endo-language/LogCategories.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <CoreVM/CoreVM.hpp>
 
 #include <format>
 #include <ranges>
 
+#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
 
@@ -84,7 +83,7 @@ void Shell::builtinRunScript(CoreVM::Params& context)
 {
     auto const& path = context.getString(1);
     auto const exitCode = executeEndoScript(std::filesystem::path(path));
-    context.setResult(CoreVM::CoreNumber(exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(exitCode));
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +116,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     if (auto const exitCode = tryExecuteInlineBuiltin(program, args, outputFd, inputFd))
     {
         _exitCode = *exitCode;
-        context.setResult(CoreVM::CoreNumber(_exitCode));
+        context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
         return;
     }
 
@@ -129,7 +128,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         {
             error("{}: function not found (was it defined in a previous command?)", program);
             _exitCode = 127;
-            context.setResult(CoreVM::CoreNumber(127));
+            context.setResult(static_cast<CoreVM::CoreNumber>(127));
             return;
         }
 
@@ -148,7 +147,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 
         _positionalParameters = std::move(savedPositionalParams);
 
-        context.setResult(CoreVM::CoreNumber(_exitCode));
+        context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
         return;
     }
 
@@ -171,7 +170,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
             error("{}: {}", program, toString(programPath.error()));
         }
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -180,7 +179,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     {
         auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
         _exitCode = executeEndoScript(*programPath, scriptArgs);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
+        context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
         return;
     }
 
@@ -208,7 +207,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     {
         error("Failed to run {}: {}", program, toString(fgResult.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         return;
     }
 
@@ -218,7 +217,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     else
         debugLog()()("child process exited with code {}\n", _exitCode);
 
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +259,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             error("{}: {}", program, toString(programPath.error()));
         }
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
@@ -270,7 +269,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     {
         auto scriptArgs = std::vector<std::string>(args.begin() + 1, args.end());
         _exitCode = executeEndoScript(*programPath, scriptArgs);
-        context.setResult(CoreVM::CoreNumber(_exitCode));
+        context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
@@ -295,7 +294,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
         _exitCode = EXIT_FAILURE;
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        context.setResult(static_cast<CoreVM::CoreNumber>(EXIT_FAILURE));
         _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
@@ -353,9 +352,13 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
                 debugLog()()("child process {} stopped\n", processPid);
             }
             else if (waitResult->signaled)
+            {
                 debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+            }
             else
+            {
                 debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+            }
         }
 
         // Restore shell's terminal control
@@ -397,7 +400,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         _rightPid = std::nullopt;
     }
 
-    context.setResult(CoreVM::CoreNumber(_exitCode));
+    context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
 } // namespace endo

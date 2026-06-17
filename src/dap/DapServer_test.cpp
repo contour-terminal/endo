@@ -2007,7 +2007,9 @@ TEST_CASE("DAP.e2e.full_debug_session", "[dap][phase6][e2e]")
         {
             auto const event = msg.value("event", "");
             if (event == "initialized")
+            {
                 hasInitializedEvent = true;
+            }
             else if (event == "stopped")
             {
                 auto const reason = msg.at("body").value("reason", "");
@@ -2017,9 +2019,13 @@ TEST_CASE("DAP.e2e.full_debug_session", "[dap][phase6][e2e]")
                     hasStoppedBreakpoint = true;
             }
             else if (event == "terminated")
+            {
                 hasTerminatedEvent = true;
+            }
             else if (event == "exited")
+            {
                 hasExitedEvent = true;
+            }
         }
     }
 

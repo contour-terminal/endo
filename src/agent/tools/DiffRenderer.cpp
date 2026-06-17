@@ -126,15 +126,15 @@ auto generateUnifiedDiff(std::string_view oldText, std::string_view newText, int
             case EditOp::Keep:
                 ++oldIdx;
                 ++newIdx;
-                annotated.push_back({ op, oldIdx, newIdx });
+                annotated.push_back({ .op = op, .oldLine = oldIdx, .newLine = newIdx });
                 break;
             case EditOp::Delete:
                 ++oldIdx;
-                annotated.push_back({ op, oldIdx, 0 });
+                annotated.push_back({ .op = op, .oldLine = oldIdx, .newLine = 0 });
                 break;
             case EditOp::Insert:
                 ++newIdx;
-                annotated.push_back({ op, 0, newIdx });
+                annotated.push_back({ .op = op, .oldLine = 0, .newLine = newIdx });
                 break;
         }
     }
@@ -190,7 +190,7 @@ auto generateUnifiedDiff(std::string_view oldText, std::string_view newText, int
         if (!hunks.empty() && start <= hunks.back().end)
             hunks.back().end = end;
         else
-            hunks.push_back({ start, end });
+            hunks.push_back({ .start = start, .end = end });
     }
 
     // Build diff lines from hunks.

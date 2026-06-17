@@ -228,17 +228,20 @@ class Runner
 
     CoreNumber getNumber(int si) const { return static_cast<CoreNumber>(_stack[si]); }
 
-    const CoreString& getString(int si) const { return *(CoreString*) _stack[si]; }
+    const CoreString& getString(int si) const { return *reinterpret_cast<CoreString*>(_stack[si]); }
 
-    const util::IPAddress& getIPAddress(int si) const { return *(util::IPAddress*) _stack[si]; }
+    const util::IPAddress& getIPAddress(int si) const
+    {
+        return *reinterpret_cast<util::IPAddress*>(_stack[si]);
+    }
 
-    const util::Cidr& getCidr(int si) const { return *(util::Cidr*) _stack[si]; }
+    const util::Cidr& getCidr(int si) const { return *reinterpret_cast<util::Cidr*>(_stack[si]); }
 
-    const util::RegExp& getRegExp(int si) const { return *(util::RegExp*) _stack[si]; }
+    const util::RegExp& getRegExp(int si) const { return *reinterpret_cast<util::RegExp*>(_stack[si]); }
 
-    const CoreString* getStringPtr(int si) const { return (CoreString*) _stack[si]; }
+    const CoreString* getStringPtr(int si) const { return reinterpret_cast<CoreString*>(_stack[si]); }
 
-    const util::Cidr* getCidrPtr(int si) const { return (util::Cidr*) _stack[si]; }
+    const util::Cidr* getCidrPtr(int si) const { return reinterpret_cast<util::Cidr*>(_stack[si]); }
 
     TypedObject* getObject(int si) const { return reinterpret_cast<TypedObject*>(_stack[si]); }
 
@@ -253,7 +256,7 @@ class Runner
 
     void discard(size_t n) { _stack.discard(n); }
 
-    void pushString(const CoreString* value) { push((Value) value); }
+    void pushString(const CoreString* value) { push(reinterpret_cast<Value>(value)); }
 
     void pushObject(TypedObject* obj) { push(reinterpret_cast<Value>(obj)); }
 
@@ -287,8 +290,8 @@ class Runner
     std::list<std::string> _stringGarbage;
     std::unordered_set<CoreString const*> _knownStrings; ///< O(1) string pointer validation.
 
-    ObjectPool _objectPool;                              ///< Slab-allocated object pool.
-    std::unordered_set<TypedObject*> _gcSuspects;        ///< Objects with mutated slots (write barrier).
+    ObjectPool _objectPool;                       ///< Slab-allocated object pool.
+    std::unordered_set<TypedObject*> _gcSuspects; ///< Objects with mutated slots (write barrier).
 
     size_t _fp = 0;
 

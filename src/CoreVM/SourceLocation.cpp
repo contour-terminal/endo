@@ -30,7 +30,7 @@ std::string SourceLocation::str() const
 
 std::string SourceLocation::text() const
 {
-    int size = 1 + int(end.offset) - int(begin.offset);
+    int size = 1 + static_cast<int>(end.offset) - static_cast<int>(begin.offset);
     if (size <= 0)
         return {};
 
