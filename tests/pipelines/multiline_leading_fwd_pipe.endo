@@ -8,4 +8,9 @@ let double x = x * 2
 
 let inc x = x + 1
 
-5 |> inc |> double |> println
+# endo format off
+5
+|> inc
+|> double
+|> println
+# endo format on

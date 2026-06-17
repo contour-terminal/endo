@@ -1560,3 +1560,107 @@ TEST_CASE("SourceFormatter.explicit_unit_call_preserved", "[format]")
     INFO("Result: [" << result << "]");
     CHECK(result.find("f ()") != std::string::npos);
 }
+
+// ============================================================================
+// SourceFormatter — `# endo format off` / `# endo format on` directives
+// ============================================================================
+
+TEST_CASE("SourceFormatter.format_off_preserves_multiline_pipeline", "[format]")
+{
+    // Without the directive, a multi-line `|>` pipeline would be collapsed onto one line.
+    // Inside an off/on region, the source must be reproduced verbatim.
+    const auto* const source = "let inc x = x + 1\n"
+                               "# endo format off\n"
+                               "5 |>\n"
+                               "inc |>\n"
+                               "println\n"
+                               "# endo format on\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("5 |>\ninc |>\nprintln") != std::string::npos);
+    CHECK(result.find("# endo format off") != std::string::npos);
+    CHECK(result.find("# endo format on") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.format_off_is_idempotent", "[format]")
+{
+    // Formatting an already-formatted file containing a verbatim block must be a no-op
+    // (this is what CI's `endo format --check` relies on).
+    const auto* const source = "let inc x = x + 1\n"
+                               "\n"
+                               "# endo format off\n"
+                               "5 |>\n"
+                               "inc |>\n"
+                               "println\n"
+                               "# endo format on\n";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First:  [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.format_off_preserves_odd_indentation", "[format]")
+{
+    // Arbitrary indentation inside the region must survive verbatim.
+    const auto* const source = "# endo format off\n"
+                               "let     x   =    42\n"
+                               "# endo format on\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let     x   =    42") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.format_off_code_outside_region_still_formatted", "[format]")
+{
+    // Code before and after the region is formatted normally.
+    const auto* const source = "let  a  =  1\n"
+                               "# endo format off\n"
+                               "let     b   =   2\n"
+                               "# endo format on\n"
+                               "let  c  =  3\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let a = 1") != std::string::npos);         // normalized
+    CHECK(result.find("let     b   =   2") != std::string::npos); // verbatim
+    CHECK(result.find("let c = 3") != std::string::npos);         // normalized
+}
+
+TEST_CASE("SourceFormatter.format_off_without_on_extends_to_eof", "[format]")
+{
+    // An `off` with no matching `on` preserves everything to the end of the file.
+    const auto* const source = "let a = 1\n"
+                               "# endo format off\n"
+                               "let     b   =   2\n"
+                               "let     d   =   4\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let     b   =   2") != std::string::npos);
+    CHECK(result.find("let     d   =   4") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.format_off_nested_off_ignored", "[format]")
+{
+    // A second `off` inside an open region is ignored; the first `on` closes the region.
+    const auto* const source = "# endo format off\n"
+                               "let     x   =   1\n"
+                               "# endo format off\n"
+                               "let     y   =   2\n"
+                               "# endo format on\n"
+                               "let  z  =  3\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let     x   =   1") != std::string::npos);
+    CHECK(result.find("let     y   =   2") != std::string::npos);
+    CHECK(result.find("let z = 3") != std::string::npos); // formatted after the region closes
+}
+
+TEST_CASE("SourceFormatter.format_on_without_off_is_inert", "[format]")
+{
+    // A stray `on` with no preceding `off` has no effect; code is formatted normally.
+    const auto* const source = "# endo format on\n"
+                               "let  a  =  1\n";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let a = 1") != std::string::npos);
+}

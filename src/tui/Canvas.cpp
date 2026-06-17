@@ -51,11 +51,12 @@ int Canvas::putString(int row, int col, std::string_view text, Style const& styl
     int bufRow = toBufferRow(row);
     int bufCol = toBufferCol(col);
 
-    // Use buffer's putString but limit to available width
-    // We need to handle clipping ourselves since buffer doesn't know our bounds
-    int written = _buffer.putString(bufRow, bufCol, text, style);
+    // Constrain the write to this canvas' available width. Buffer::putString stops before any
+    // grapheme cluster (including its continuation cells) would exceed the budget, so a wide
+    // cluster at the right edge cannot spill into cells outside this canvas' area.
+    int written = _buffer.putString(bufRow, bufCol, text, style, availableWidth);
 
-    // Clamp to available width
+    // Clamp to available width (defensive; Buffer already honours the budget).
     return std::min(written, availableWidth);
 }
 

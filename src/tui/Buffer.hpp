@@ -4,6 +4,7 @@
 #include <tui/Cell.hpp>
 #include <tui/Rect.hpp>
 
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -98,8 +99,17 @@ class Buffer
     /// @param col Starting column (0-based).
     /// @param text UTF-8 text to write.
     /// @param style Style to apply.
+    /// @param maxWidth Maximum number of display columns the caller is permitted to write,
+    ///                 measured from @p col. A grapheme cluster is skipped entirely if it (or
+    ///                 its continuation cells) would exceed this budget — this prevents a wide
+    ///                 cluster at the edge of a sub-region from spilling into adjacent cells.
+    ///                 Defaults to the full buffer width (no extra limit).
     /// @return Number of columns consumed.
-    int putString(int row, int col, std::string_view text, Style const& style);
+    int putString(int row,
+                  int col,
+                  std::string_view text,
+                  Style const& style,
+                  int maxWidth = std::numeric_limits<int>::max());
 
     /// Fills a rectangular region with a character.
     /// @param area The region to fill.

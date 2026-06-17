@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: F# pipeline with trailing `|>` at end of each line
+# description: F# pipeline with trailing `|>` at end of each continuation line
 # expect: 12
 # expect:
 
@@ -8,4 +8,9 @@ let double x = x * 2
 
 let inc x = x + 1
 
-5 |> inc |> double |> println
+# endo format off
+5 |>
+inc |>
+double |>
+println
+# endo format on

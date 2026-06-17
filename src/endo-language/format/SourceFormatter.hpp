@@ -8,8 +8,10 @@
 #include <endo-language/lexer/CommentTrivia.hpp>
 
 #include <functional>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace endo::format
@@ -166,7 +168,8 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
 
     explicit SourceFormatter(FormatConfig config,
                              std::vector<CommentTrivia> const& comments,
-                             std::set<int> blankLines = {});
+                             std::set<int> blankLines = {},
+                             std::string_view originalSource = {});
 
     /// Checks whether any blank line exists in the original source between two line numbers.
     ///
@@ -202,6 +205,33 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
 
     /// Finds the first source line in a node's subtree (for nodes without locations).
     [[nodiscard]] static std::optional<int> findFirstLine(ast::Node const& node);
+
+    /// A contiguous range of original source lines to reproduce verbatim during formatting.
+    /// Delimited by `# endo format off` / `# endo format on` directive comments. Both line
+    /// numbers are 0-based and inclusive; @ref beginLine is the `off` directive line and
+    /// @ref endLine is the `on` directive line (or the last source line if `on` is absent).
+    struct VerbatimRegion
+    {
+        int beginLine; ///< 0-based line of the `# endo format off` directive (inclusive).
+        int endLine;   ///< 0-based line of the `# endo format on` directive (inclusive).
+    };
+
+    /// Scans collected comments for `# endo format off` / `# endo format on` directives and
+    /// builds the list of verbatim regions. Nested `off` directives are ignored (the first
+    /// `off` wins until the next `on`); an `off` without a matching `on` extends to EOF.
+    /// @param comments The collected comment trivia.
+    /// @param totalLines Total number of lines in the original source (for unterminated regions).
+    /// @return Sorted, non-overlapping list of verbatim regions.
+    [[nodiscard]] static std::vector<VerbatimRegion> collectVerbatimRegions(
+        std::vector<CommentTrivia> const& comments, int totalLines);
+
+    /// Returns the verbatim region containing the given 0-based line, if any.
+    [[nodiscard]] std::optional<VerbatimRegion> verbatimRegionAt(int line) const;
+
+    /// Emits the original source lines in [beginLine, endLine] (0-based, inclusive) verbatim,
+    /// and advances the comment cursor past every comment that falls within the range so the
+    /// normal comment-interleaving machinery does not re-emit them.
+    void emitVerbatimRegion(VerbatimRegion const& region);
 
     /// Finds the last source line in a node's subtree (for trailing comment detection).
     [[nodiscard]] static std::optional<int> findLastLine(ast::Node const& node);
@@ -298,6 +328,12 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     std::vector<CommentTrivia> const& _comments;
     size_t _nextCommentIndex = 0; ///< Index of next un-emitted comment
     std::set<int> _blankLines;    ///< 0-based line numbers of blank lines in original source
+
+    /// Original source split into lines (0-based), used to reproduce verbatim regions exactly.
+    /// Empty when the formatter is invoked without source (AST-only overload) — in that case
+    /// the `format off`/`on` feature is inert.
+    std::vector<std::string_view> _sourceLines;
+    std::vector<VerbatimRegion> _verbatimRegions; ///< Regions to emit verbatim, sorted by line.
 };
 
 } // namespace endo::format
