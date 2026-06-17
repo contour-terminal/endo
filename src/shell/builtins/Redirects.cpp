@@ -15,7 +15,7 @@ void Shell::builtinOpenRead(CoreVM::Params& context)
     auto const result = _processManager.openFile(path, O_RDONLY);
     if (result.has_value())
     {
-        context.setResult(static_cast<CoreVM::CoreNumber>(result.value()));
+        context.setResult(static_cast<CoreVM::CoreNumber>(platform::nativeHandleToNumber(result.value())));
     }
     else
     {
@@ -31,7 +31,7 @@ void Shell::builtinOpenWrite(CoreVM::Params& context)
     auto const result = _processManager.openFile(path, oflags);
     if (result.has_value())
     {
-        context.setResult(static_cast<CoreVM::CoreNumber>(result.value()));
+        context.setResult(static_cast<CoreVM::CoreNumber>(platform::nativeHandleToNumber(result.value())));
     }
     else
     {
