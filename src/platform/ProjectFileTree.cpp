@@ -234,16 +234,12 @@ auto ProjectFileTree::buildTreeFromPaths(std::vector<std::string> const& paths) 
 auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> std::string
 {
     auto paths = std::vector<std::string> {};
-    auto entryCount = size_t { 0 };
 
     try
     {
         auto const options = std::filesystem::directory_options::skip_permission_denied;
         for (auto const& entry: std::filesystem::recursive_directory_iterator(path, options))
         {
-            if (entryCount >= _config.maxEntries)
-                break;
-
             // Only include regular files — directories are implied by file paths
             if (!entry.is_regular_file())
                 continue;
@@ -262,7 +258,6 @@ auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> 
                 continue;
 
             paths.push_back(relPath.generic_string());
-            ++entryCount;
         }
     }
     catch (std::filesystem::filesystem_error const&) // NOLINT(bugprone-empty-catch)
@@ -270,7 +265,13 @@ auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> 
         // Permission denied or other FS errors — return what we have
     }
 
+    // Sort before truncating so the surviving entries are deterministic and not
+    // dependent on the (unspecified) filesystem iteration order — matching the
+    // sort-then-resize behavior of getGitTrackedFiles().
     std::ranges::sort(paths);
+    if (paths.size() > _config.maxEntries)
+        paths.resize(_config.maxEntries);
+
     return buildTreeFromPaths(paths);
 }
 

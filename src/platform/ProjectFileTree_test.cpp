@@ -82,6 +82,19 @@ TEST_CASE("ProjectFileTree.respects_entry_limit", "[platform]")
             ++lineCount;
     }
     CHECK(lineCount <= 5); // Allow for directories that contain the entries
+
+    // Truncation is deterministic: entries are sorted before the limit is
+    // applied, so the lexicographically-first paths survive regardless of the
+    // filesystem iteration order. The first three sorted candidates are
+    // CMakeLists.txt, README.md and docs/guide.md.
+    CHECK(result.find("CMakeLists.txt") != std::string::npos);
+    CHECK(result.find("README.md") != std::string::npos);
+    CHECK(result.find("docs/") != std::string::npos);
+    CHECK(result.find("guide.md") != std::string::npos);
+    // Entries that sort after the cutoff must be excluded.
+    CHECK(result.find("main.cpp") == std::string::npos);
+    CHECK(result.find("Shell.cpp") == std::string::npos);
+    CHECK(result.find("Agent.") == std::string::npos);
 }
 
 TEST_CASE("ProjectFileTree.empty_directory", "[platform]")
