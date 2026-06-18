@@ -776,6 +776,10 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             killWordBackward(); // Adjusts ghost text internally (re-prepend or clear).
             return InputFieldAction::Changed;
 
+        case EditAction::DeleteBigWordBackward:
+            killBigWordBackward(); // Adjusts ghost text internally (re-prepend or clear).
+            return InputFieldAction::Changed;
+
         case EditAction::KillToEnd:
             killToEnd(); // Forward kill: clears ghost only if it actually deletes.
             return InputFieldAction::Changed;
@@ -1150,13 +1154,23 @@ void InputField::killWord()
 
 void InputField::killWordBackward()
 {
+    killWordBackwardWith(&InputField::isWordChar);
+}
+
+void InputField::killBigWordBackward()
+{
+    killWordBackwardWith(&InputField::isBigWordChar);
+}
+
+void InputField::killWordBackwardWith(bool (*isWordCharFn)(char))
+{
     auto const end = _cursor;
     bool const wasAtEnd = _cursor == _buffer.size();
     // Find start position without modifying cursor
     auto startPos = _cursor;
-    while (startPos > 0 && !isWordChar(_buffer[prevGraphemeCluster(startPos)]))
+    while (startPos > 0 && !isWordCharFn(_buffer[prevGraphemeCluster(startPos)]))
         startPos = prevGraphemeCluster(startPos);
-    while (startPos > 0 && isWordChar(_buffer[prevGraphemeCluster(startPos)]))
+    while (startPos > 0 && isWordCharFn(_buffer[prevGraphemeCluster(startPos)]))
         startPos = prevGraphemeCluster(startPos);
 
     if (startPos < end)
@@ -1433,6 +1447,14 @@ auto InputField::isWordChar(char c) -> bool
         return true;
     // Everything else (including '/', '.', '-', whitespace, etc.) is a boundary
     return false;
+}
+
+auto InputField::isBigWordChar(char c) -> bool
+{
+    // Fish-style "bigword" boundaries: only whitespace separates words. Every non-whitespace
+    // character (including '/', '.', '-', and punctuation) is part of the word, so a backward
+    // kill removes a whole space-delimited token (e.g. all of "git checkout -b" at once).
+    return std::isspace(static_cast<unsigned char>(c)) == 0;
 }
 
 // ============================================================================

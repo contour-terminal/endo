@@ -2040,6 +2040,75 @@ TEST_CASE("InputField.ghost_text_accept_seed_is_single_line")
     CHECK(field.ghostText().find('\n') == std::string_view::npos);
 }
 
+TEST_CASE("InputField.bigword_backward_deletes_whole_space_delimited_token")
+{
+    // Alt+Backspace (DeleteBigWordBackward) uses whitespace-only boundaries, so it removes a whole
+    // space-delimited token at once — including any '-' or '/' inside it.
+    InputField field;
+    field.setText("git checkout -b");
+    field.setCursor(15);
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt)); // Alt+Backspace
+    CHECK(field.text() == "git checkout ");
+}
+
+TEST_CASE("InputField.bigword_backward_diverges_from_ctrl_w_small_word")
+{
+    // The two granularities differ on a token containing '-': bigword (Alt+Backspace) takes the
+    // whole "-b", while small-word (Ctrl+W) stops at the '-' boundary.
+    InputField big;
+    big.setText("git checkout -b");
+    big.setCursor(15);
+    (void) big.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(big.text() == "git checkout ");
+
+    InputField small;
+    small.setText("git checkout -b");
+    small.setCursor(15);
+    (void) small.processEvent(charKey('w', Modifier::Ctrl));
+    CHECK(small.text() == "git checkout -"); // small word stops at the '-' boundary
+}
+
+TEST_CASE("InputField.bigword_backward_deletes_whole_path")
+{
+    // A path like "foo/bar/baz" is a single bigword: Alt+Backspace clears it entirely, whereas
+    // Ctrl+W would only remove the trailing "baz" path component.
+    InputField big;
+    big.setText("foo/bar/baz");
+    big.setCursor(11);
+    (void) big.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(big.text().empty());
+
+    InputField small;
+    small.setText("foo/bar/baz");
+    small.setCursor(11);
+    (void) small.processEvent(charKey('w', Modifier::Ctrl));
+    CHECK(small.text() == "foo/bar/");
+}
+
+TEST_CASE("InputField.bigword_backward_at_start_is_noop")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(0);
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(field.text() == "foo");
+}
+
+TEST_CASE("InputField.bigword_backward_restores_ghost_text_after_accept")
+{
+    // Bigword backward delete must adjust ghost text just like the small-word path: deleting the
+    // accepted tail restores it as the ghost (no flash). Mirrors the Ctrl+W ghost test.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" install");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake install");
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt)); // delete "install"
+    CHECK(field.text() == "cmake ");
+    CHECK(field.ghostText() == "install"); // restored synchronously — no flash
+}
+
 TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
 {
     InputField field;

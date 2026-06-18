@@ -95,7 +95,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 40> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 41> actionNameMappings = { {
         // Movement
         { .name = "move-forward-char",
           .description = "Move cursor forward one character",
@@ -146,6 +146,9 @@ namespace
         { .name = "delete-word-backward",
           .description = "Delete word before cursor",
           .action = EditAction::DeleteWordBackward },
+        { .name = "delete-big-word-backward",
+          .description = "Delete whitespace-delimited word before cursor",
+          .action = EditAction::DeleteBigWordBackward },
         { .name = "kill-to-end",
           .description = "Kill from cursor to end of line",
           .action = EditAction::KillToEnd },
@@ -454,7 +457,7 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromKey(KeyCode::Backspace), A::DeleteCharBackward);
     bindings.bind(K::fromKey(KeyCode::Delete), A::DeleteCharForward);
     bindings.bind(K::fromKey(KeyCode::Backspace, M::Ctrl), A::DeleteWordBackward);
-    bindings.bind(K::fromKey(KeyCode::Backspace, M::Alt), A::DeleteWordBackward);
+    bindings.bind(K::fromKey(KeyCode::Backspace, M::Alt), A::DeleteBigWordBackward);
     bindings.bind(K::fromChar('w', M::Ctrl), A::DeleteWordBackward);
     bindings.bind(K::fromKey(KeyCode::Delete, M::Ctrl), A::DeleteWord);
     bindings.bind(K::fromChar('d', M::Alt), A::DeleteWord);

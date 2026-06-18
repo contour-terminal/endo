@@ -35,14 +35,15 @@ enum class EditAction : std::uint8_t
     SmartMoveToLineEnd,   ///< Move to line end; if already there, move to next line's end
 
     // === Editing ===
-    DeleteCharBackward, ///< Delete character before cursor (Backspace)
-    DeleteCharForward,  ///< Delete character at cursor (Delete)
-    DeleteWord,         ///< Delete word after cursor
-    DeleteWordBackward, ///< Delete word before cursor
-    KillToEnd,          ///< Kill (cut to kill ring) from cursor to end of line
-    KillToStart,        ///< Kill from cursor to start of line
-    Transpose,          ///< Transpose characters around cursor
-    ClearBuffer,        ///< Clear the entire input buffer
+    DeleteCharBackward,    ///< Delete character before cursor (Backspace)
+    DeleteCharForward,     ///< Delete character at cursor (Delete)
+    DeleteWord,            ///< Delete word after cursor
+    DeleteWordBackward,    ///< Delete word before cursor
+    DeleteBigWordBackward, ///< Delete whitespace-delimited word before cursor (Fish Alt+Backspace bigword)
+    KillToEnd,             ///< Kill (cut to kill ring) from cursor to end of line
+    KillToStart,           ///< Kill from cursor to start of line
+    Transpose,             ///< Transpose characters around cursor
+    ClearBuffer,           ///< Clear the entire input buffer
 
     // === Undo/Redo ===
     Undo, ///< Undo last edit
