@@ -422,7 +422,14 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             // un-recomputed re-prepended guess); recompute is cache-backed.
             updateGhostText();
             if (_inputField.hasGhostText())
+            {
                 _inputField.acceptGhostText();
+                // Preserve the consumed-prefix seed acceptGhostText just set (so a following
+                // backward delete restores the ghost synchronously): suppress the pending
+                // recompute that would otherwise clear it. See PromptComponent for rationale.
+                _ghostTextDirty = false;
+                _ghostTextPendingSince.reset();
+            }
             return Action::Changed;
         }
 
@@ -434,7 +441,11 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             {
                 updateGhostText();
                 if (_inputField.hasGhostText())
+                {
                     _inputField.acceptGhostText();
+                    _ghostTextDirty = false;
+                    _ghostTextPendingSince.reset();
+                }
                 return Action::Changed;
             }
         }

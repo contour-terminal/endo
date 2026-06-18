@@ -1945,6 +1945,101 @@ TEST_CASE("InputField.ghost_text_consumed_memory_reset_by_new_suggestion")
     CHECK(field.ghostText() == "t main"); // deleted 't' re-prepended onto the fresh suggestion
 }
 
+TEST_CASE("InputField.ghost_text_restored_on_word_backspace_after_accept")
+{
+    // Accept the whole suggestion (Ctrl+E etc.), then word-backward delete the last word: the
+    // word must reappear as ghost synchronously, no debounce gap. acceptGhostText seeds the
+    // consumed-prefix memory with the accepted suffix so adjustGhostAfterBackwardDelete restores it.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" --build --target install");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake --build --target install");
+    REQUIRE(field.ghostText().empty());
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward
+    CHECK(field.text() == "cmake --build --target ");
+    CHECK(field.ghostText() == "install"); // restored synchronously — no flash
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_char_backspace_after_accept")
+{
+    // After accept, a single Backspace restores the last char onto the ghost. Verifies that
+    // deleteCharBackward's materialization guard sees the non-empty consumed memory.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "cmake buil");
+    CHECK(field.ghostText() == "d"); // last accepted char restored
+}
+
+TEST_CASE("InputField.ghost_text_chains_repeated_word_backspace_after_accept")
+{
+    // Two consecutive word-backward deletes each restore their suffix: the consumed memory pops
+    // the matched tail so the next delete still matches.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" --build install");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake --build install");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "install"
+    CHECK(field.text() == "cmake --build ");
+    CHECK(field.ghostText() == "install");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "build" (then "--")
+    CHECK(field.text() == "cmake --");
+    CHECK(field.ghostText() == "build install");
+}
+
+TEST_CASE("InputField.ghost_text_not_resurrected_on_nontail_edit_after_accept")
+{
+    // After accept, deleting somewhere that is NOT a tail of the accepted suffix must not invent a
+    // wrong ghost. Here the cursor is moved into the middle, so wasAtEnd is false → ghost cleared.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(specialKey(KeyCode::Left));      // cursor mid-buffer (not at end)
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'l' of "build"
+    CHECK(field.text() == "cmake buid");
+    CHECK(field.ghostText().empty()); // no wrong ghost invented
+}
+
+TEST_CASE("InputField.ghost_text_accept_empty_ghost_is_noop_no_consumed_seed")
+{
+    // Accept with no ghost is a no-op and must not seed a stale consumed run that a later backspace
+    // could resurrect.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.acceptGhostText(); // no ghost — no-op
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "cmak");
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_accept_seed_is_single_line")
+{
+    // The accepted suffix is single-line by construction (setGhostText strips at the newline), so
+    // the seeded consumed memory and any restored ghost stay single-line.
+    InputField field;
+    field.setMultiline(true);
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build\nmore"); // truncated to " build" by setGhostText
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "build"
+    CHECK(field.ghostText() == "build");
+    CHECK(field.ghostText().find('\n') == std::string_view::npos);
+}
+
 TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
 {
     InputField field;

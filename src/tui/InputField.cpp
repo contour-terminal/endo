@@ -1595,8 +1595,17 @@ void InputField::acceptGhostText()
         return;
 
     saveUndoState();
-    insertText(_ghostText);
-    clearGhostText();
+    // Remember the accepted suffix as the consumed-prefix memory (same role as the run eaten by
+    // matching keystrokes): the whole suggestion is now in the buffer, so a backward delete of a
+    // tail of it can restore the ghost synchronously via adjustGhostAfterBackwardDelete, with no
+    // debounce gap. This is what kills the flicker when the user accepts (e.g. Ctrl+E) and then
+    // word-deletes. Setting the members directly — NOT clearGhostText() — preserves the seed.
+    // The ghost is always single-line (setGhostText/prependGhostText strip newlines), so the seed
+    // can never carry a newline.
+    auto accepted = std::move(_ghostText);
+    insertText(accepted);
+    _ghostText.clear();
+    _ghostConsumed = std::move(accepted);
 }
 
 auto InputField::ghostText() const noexcept -> std::string_view

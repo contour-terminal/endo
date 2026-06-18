@@ -36,6 +36,22 @@ tui::InputEvent backspaceEvent()
     return tui::KeyEvent { .key = tui::KeyCode::Backspace, .modifiers = tui::Modifier::None };
 }
 
+/// @brief Creates a Ctrl+E key event (accepts ghost text at end of line).
+tui::InputEvent ctrlE()
+{
+    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('e'),
+                           .modifiers = tui::Modifier::Ctrl,
+                           .codepoint = 'e' };
+}
+
+/// @brief Creates a Ctrl+W key event (word-backward delete / DeleteWordBackward).
+tui::InputEvent ctrlW()
+{
+    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('w'),
+                           .modifiers = tui::Modifier::Ctrl,
+                           .codepoint = 'w' };
+}
+
 /// @brief Builds a prefix-consistent suggest function: completes any prefix of @p word to @p word.
 ///
 /// Mirrors a real prefix completer just enough to exercise the ghost-text lifecycle, and lets a
@@ -158,6 +174,111 @@ TEST_CASE("PromptComponent.ghost_text_first_backspace_survives_debounce_recomput
     std::this_thread::sleep_for(std::chrono::milliseconds(110));
     comp.flushDeferredUpdates();
     CHECK(comp.inputField().ghostText() == "t");
+}
+
+TEST_CASE("PromptComponent.ghost_restored_after_accept_then_word_backspace", "[prompt]")
+{
+    // The user-reported flicker: accept the whole ghost (Ctrl+E), then word-backward delete
+    // (Ctrl+W) the last word. The word must reappear as ghost synchronously (no flush between),
+    // and the later debounce flush must not change it.
+    int calls = 0;
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("cmake --build install", &calls));
+
+    for (char const ch: std::string_view("cmake"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    REQUIRE(comp.inputField().ghostText() == " --build install");
+
+    // Accept the whole suggestion.
+    (void) comp.processInput(ctrlE());
+    REQUIRE(comp.inputField().text() == "cmake --build install");
+    REQUIRE(comp.inputField().ghostText().empty());
+
+    // Word-backward delete with NO flush in between: the ghost must already be correct.
+    auto const callsBeforeDelete = calls;
+    (void) comp.processInput(ctrlW());
+    CHECK(comp.inputField().text() == "cmake --build ");
+    CHECK(comp.inputField().ghostText() == "install"); // restored synchronously — no flash
+    CHECK(calls == callsBeforeDelete);                 // no blocking completer call on the delete
+
+    // Debounce fires later: recompute yields the same "install" — ghost unchanged.
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    CHECK(comp.inputField().ghostText() == "install");
+}
+
+TEST_CASE("PromptComponent.ghost_restored_after_accept_then_char_backspace", "[prompt]")
+{
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("cmake build"));
+
+    for (char const ch: std::string_view("cmake"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    REQUIRE(comp.inputField().ghostText() == " build");
+
+    (void) comp.processInput(ctrlE());
+    REQUIRE(comp.inputField().text() == "cmake build");
+
+    (void) comp.processInput(backspaceEvent());
+    CHECK(comp.inputField().text() == "cmake buil");
+    CHECK(comp.inputField().ghostText() == "d"); // last accepted char restored synchronously
+}
+
+TEST_CASE("PromptComponent.accept_suppresses_pending_recompute", "[prompt]")
+{
+    // A prior keystroke leaves the ghost-text debounce armed with an aged timestamp. Accepting must
+    // suppress that pending recompute — otherwise the recompute for the now-complete text yields
+    // nothing and clears the consumed-prefix seed, so the following word-delete would flicker.
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("cmake --build install"));
+
+    // Settle a visible ghost first (so Ctrl+E's accept guard sees it).
+    for (char const ch: std::string_view("cmake"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    REQUIRE(comp.inputField().ghostText() == " --build install");
+
+    // Type a matching char: ghost stays visible (trim) but the debounce is re-armed. Age it past
+    // the window WITHOUT flushing — the dirty flag is now stale-armed while the ghost still shows.
+    (void) comp.processInput(charEvent(' '));
+    REQUIRE(comp.inputField().ghostText() == "--build install");
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+
+    // Accept; my fix clears the pending recompute so the seed survives the next flush.
+    (void) comp.processInput(ctrlE());
+    REQUIRE(comp.inputField().text() == "cmake --build install");
+    comp.flushDeferredUpdates(); // must be a no-op for the ghost state (seed preserved)
+
+    (void) comp.processInput(ctrlW());
+    CHECK(comp.inputField().text() == "cmake --build ");
+    CHECK(comp.inputField().ghostText() == "install"); // seed survived → synchronous restore
+}
+
+TEST_CASE("PromptComponent.non_tail_edit_after_accept_does_not_resurrect_wrong_ghost", "[prompt]")
+{
+    // After accept, deleting a char that is NOT a tail of the accepted suffix must not invent a
+    // wrong ghost (the InputField guards on wasAtEnd / ends_with).
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("cmake build"));
+
+    for (char const ch: std::string_view("cmake"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    (void) comp.processInput(ctrlE());
+    REQUIRE(comp.inputField().text() == "cmake build");
+
+    // Move cursor one left (now between 'l' and 'd'), then backspace deletes the 'l' — a mid-buffer
+    // edit, not at end → no synchronous restore.
+    (void) comp.processInput(tui::InputEvent { tui::KeyEvent { .key = tui::KeyCode::Left } });
+    (void) comp.processInput(backspaceEvent());
+    CHECK(comp.inputField().text() == "cmake buid");
+    CHECK(comp.inputField().ghostText().empty()); // no wrong ghost invented
 }
 
 TEST_CASE("PromptComponent.ctrl_d_immediate_exit_when_disabled", "[prompt]")

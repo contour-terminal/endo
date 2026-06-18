@@ -1163,7 +1163,16 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 // guess, and clears it if the completer no longer offers one.
                 updateGhostText();
                 if (_inputField.hasGhostText())
+                {
                     _inputField.acceptGhostText();
+                    // acceptGhostText seeds the consumed-prefix memory so a following backward
+                    // delete restores the ghost synchronously. Suppress any pending debounced
+                    // recompute (possibly armed by the prior keystroke): for the now-complete
+                    // accepted text the completer returns nothing, and the resulting
+                    // clearGhostText() would wipe that seed before the user can delete.
+                    _ghostTextDirty = false;
+                    _ghostTextPendingSince.reset();
+                }
                 return Action::Changed;
             }
         }
