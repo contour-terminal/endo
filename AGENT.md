@@ -35,6 +35,8 @@ Source → Lexer → Parser → AST → Semantic Analysis → Code Generation �
 
 ## Design Patterns & Principles
 
+**Dependency injection and data-driven design are always prioritized.** Treat both as the default for new code, not as optional refinements. Deviate only when there is a strong, explicitly-stated reason (e.g. a measured hot path where indirection is unacceptable), and call out that justification in the code and the PR summary.
+
 ### Dependency Injection via Constructor Injection
 
 All OS, file system, network, and I/O access is abstracted behind interfaces and injected via constructors. Never hard-code side effects.
@@ -47,6 +49,21 @@ Canonical examples:
 - `src/http/HttpClient.hpp` — HTTP abstraction injected into `ProviderFactory`, `McpClient`
 
 When adding new functionality that touches the OS or network, define an abstract interface in `src/platform/` (or the relevant component), implement per-platform, and inject it.
+
+### Data-Driven Design
+
+Drive behavior from data — tables, descriptors, configuration — rather than from hand-written per-case logic. The goal is to avoid naive, repetitive implementations: when you find yourself writing N near-identical branches, copy-pasted blocks that differ only in a few constants, or several `switch`/`if` ladders that must be kept in lockstep, replace them with a single set of data and one piece of code that interprets it. Adding a new case should mean adding a data row, not writing new logic.
+
+Reach for this pattern when you see:
+- Repeated `switch`/`if` ladders over a closed set of cases
+- Copy-pasted code blocks differing only in literal values (names, flags, descriptions, types)
+- Several features (dispatch, parsing, help text, completion, LSP) that must all be updated together whenever a case is added — a sign they should share one descriptor
+
+Canonical example: builtin metadata is declared once in `static constexpr` descriptor tables and consumed by many features. The `InlineOptionDef[]` tables in `src/shell/builtins/InlineCommandDescriptors.cpp` (e.g. `kRmOptions`, `kCpOptions`) declare each builtin's flags a single time, and that one declaration drives dispatch, argument parsing, help generation, completion, and LSP. To teach a builtin a new flag you add a row to its table — no new branching code. See "Adding a New Builtin Function" below for the practical workflow.
+
+- Avoid hardcoding values; use configuration, tables, or descriptors
+- Prefer a descriptor table feeding many consumers over parallel hand-maintained code paths
+- As stated above, prioritize this approach by default; deviate only with a strong, documented reason
 
 ### Error Handling: `std::expected<T, E>`
 
@@ -71,11 +88,6 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
 - Smart pointers (`std::unique_ptr`, `std::shared_ptr`) for ownership
 - RAII for resource management
 - Mark-and-sweep garbage collection exists **only inside CoreVM** for cyclic references among `TypedObject` instances — do not use or extend it elsewhere
-
-### Data-Driven Design
-
-- Avoid hardcoding values; use configuration, tables, or descriptors
-- Builtin metadata is declared in descriptor tables that drive dispatch, arg parsing, help generation, completion, and LSP (see `src/shell/builtins/InlineCommandDescriptors.cpp`)
 
 ---
 
