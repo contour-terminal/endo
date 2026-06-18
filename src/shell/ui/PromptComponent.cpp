@@ -1157,8 +1157,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
                 || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
-                _inputField.acceptGhostText();
+                // Confirm the suggestion for the current text before committing it. A delete may
+                // have left a re-prepended guess whose debounced recompute has not run yet;
+                // recomputing here (cache-backed) ensures we accept the real suggestion, not the
+                // guess, and clears it if the completer no longer offers one.
                 updateGhostText();
+                if (_inputField.hasGhostText())
+                    _inputField.acceptGhostText();
                 return Action::Changed;
             }
         }

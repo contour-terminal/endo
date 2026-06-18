@@ -1787,18 +1787,99 @@ TEST_CASE("InputField.ghost_text_reprepended_on_word_backward")
     field.setGhostText(" main");
     (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward
     CHECK(field.text() == "git ");
-    CHECK(field.ghostText() == "checkout main"); // whole killed word re-prepended
+    CHECK(field.ghostText() == "checkout main"); // whole killed word re-prepended (text remains)
 }
 
-TEST_CASE("InputField.ghost_text_reprepended_on_kill_to_start")
+TEST_CASE("InputField.ghost_text_cleared_on_word_backward_empties_buffer")
 {
     InputField field;
     field.setText("hello");
     field.setCursor(5);
     field.setGhostText(" world");
-    (void) field.processEvent(charKey('u', Modifier::Ctrl)); // KillToStart
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward removes the only word
     CHECK(field.text().empty());
-    CHECK(field.ghostText() == "hello world"); // kept (not cleared) on empty buffer
+    CHECK(field.ghostText().empty()); // emptied buffer: ghost cleared, not resurrected
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_kill_to_start_empties_buffer")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('u', Modifier::Ctrl)); // KillToStart empties the buffer
+    CHECK(field.text().empty());
+    CHECK(field.ghostText().empty()); // Ctrl-U clears the line — do not resurrect it as a ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_kill_to_end_at_end")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('k', Modifier::Ctrl)); // KillToEnd at end: nothing deleted
+    CHECK(field.text() == "hello");
+    CHECK(field.ghostText().empty()); // forward kill clears the now-stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_delete_word_forward_at_end")
+{
+    InputField field;
+    field.setText("git");
+    field.setCursor(3);
+    field.setGhostText(" status");
+    (void) field.processEvent(charKey('d', Modifier::Alt)); // DeleteWord (forward): no word ahead
+    CHECK(field.text() == "git");
+    CHECK(field.ghostText().empty()); // forward word kill clears the now-stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_undo_after_backspace")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // -> "git c", ghost "heckout"
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));   // Undo
+    CHECK(field.text() == "git ch");
+    CHECK(field.ghostText().empty()); // undo drops the stale ghost (no "git chheckout")
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_redo")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // -> "git c"
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));   // Undo -> "git ch"
+    (void) field.processEvent(charKey('y', Modifier::Ctrl));   // Redo -> "git c"
+    CHECK(field.text() == "git c");
+    CHECK(field.ghostText().empty()); // redo also drops any stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_no_newline_after_backspace_multiline")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("a\n");
+    field.setCursor(2); // at end, on the (empty) second line
+    field.setGhostText("b");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes the trailing '\n'
+    CHECK(field.text() == "a");
+    CHECK(field.ghostText() == "b");                               // newline not prepended
+    CHECK(field.ghostText().find('\n') == std::string_view::npos); // ghost stays single-line
+}
+
+TEST_CASE("InputField.ghost_text_prepend_noop_on_empty_ghost")
+{
+    InputField field;
+    field.setText("abc");
+    field.setCursor(3); // at end, but no ghost set
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "ab");
+    CHECK(field.ghostText().empty()); // never invent a suggestion that wasn't showing
 }
 
 TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
@@ -1807,7 +1888,7 @@ TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
     field.setText("foobar");
     field.setCursor(6);
     field.setGhostText("baz");
-    (void) field.processEvent(specialKey(KeyCode::Left)); // cursor 5, ghost no longer shown
+    (void) field.processEvent(specialKey(KeyCode::Left));      // cursor 5, ghost no longer shown
     (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'a' before cursor
     CHECK(field.text() == "foobr");
     CHECK(field.ghostText().empty()); // mid-buffer delete clears ghost

@@ -418,8 +418,11 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
             && _inputField.hasGhostText())
         {
-            _inputField.acceptGhostText();
+            // Confirm the suggestion before committing it (a delete may have left an
+            // un-recomputed re-prepended guess); recompute is cache-backed.
             updateGhostText();
+            if (_inputField.hasGhostText())
+                _inputField.acceptGhostText();
             return Action::Changed;
         }
 
@@ -429,8 +432,9 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
                 || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
-                _inputField.acceptGhostText();
                 updateGhostText();
+                if (_inputField.hasGhostText())
+                    _inputField.acceptGhostText();
                 return Action::Changed;
             }
         }

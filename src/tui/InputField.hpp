@@ -482,8 +482,20 @@ class InputField: public Component
     /// recompute confirms or corrects it afterwards.
     ///
     /// @param deleted The grapheme run removed from the end of the buffer. No-op if the
-    ///        ghost text is currently empty or @p deleted is empty.
+    ///        ghost text is currently empty or @p deleted is empty. The run is truncated at
+    ///        the first newline (the ghost is single-line, matching setGhostText).
     void prependGhostText(std::string_view deleted);
+
+    /// @brief Adjusts ghost text after a backward deletion (Backspace / Ctrl-W / Ctrl-U).
+    ///
+    /// Re-prepends the just-deleted run onto the suggestion when the deletion happened at the
+    /// buffer end @e and text remains, keeping the inline suggestion stable across the
+    /// consumer's debounced recompute. Otherwise clears the ghost: a mid-buffer deletion is
+    /// not rendered, and a deletion that empties the buffer must not resurrect the killed line.
+    ///
+    /// @param deletedRun The grapheme run removed from the buffer.
+    /// @param wasAtEnd   Whether the cursor was at the buffer end before the deletion.
+    void adjustGhostAfterBackwardDelete(std::string_view deletedRun, bool wasAtEnd);
 };
 
 } // namespace tui

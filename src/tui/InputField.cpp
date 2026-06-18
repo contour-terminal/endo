@@ -776,13 +776,21 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
         case EditAction::Undo:
             _lastWasKill = false;
             if (undo())
+            {
+                // The snapshot restores buffer+cursor only; a leftover ghost would duplicate
+                // restored text and could be committed on accept. Drop it; the consumer recomputes.
+                clearGhostText();
                 return InputFieldAction::Changed;
+            }
             return InputFieldAction::None;
 
         case EditAction::Redo:
             _lastWasKill = false;
             if (redo())
+            {
+                clearGhostText();
                 return InputFieldAction::Changed;
+            }
             return InputFieldAction::None;
 
         // Kill Ring
@@ -1050,12 +1058,14 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
 
 void InputField::killToEnd()
 {
+    // Forward kill: clear unconditionally. When the cursor is at end (nothing to kill) the ghost
+    // is showing but no longer valid; mid-buffer it was never rendered. Either way, drop it.
+    clearGhostText();
     if (_cursor < _buffer.size())
     {
         saveUndoState();
         auto killed = _buffer.substr(_cursor);
         _buffer.erase(_cursor);
-        clearGhostText(); // Forward kill removes the tail the ghost would extend; clear it.
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1070,17 +1080,22 @@ void InputField::killToStart()
         auto killed = _buffer.substr(0, _cursor);
         _buffer.erase(0, _cursor);
         _cursor = 0;
-        if (wasAtEnd)
-            prependGhostText(killed); // Keep the suggestion stable across the recompute debounce.
-        else
-            clearGhostText();
+        adjustGhostAfterBackwardDelete(killed, wasAtEnd);
         pushKillRing(std::move(killed));
+    }
+    else
+    {
+        // Cursor-at-start no-op: drop any stale ghost (cleared unconditionally pre-commit).
+        clearGhostText();
     }
     _lastWasKill = true;
 }
 
 void InputField::killWord()
 {
+    // Forward kill: clear unconditionally. At end-of-buffer (no word ahead) the kill is a no-op
+    // but the ghost is showing and stale; mid-buffer it was never rendered.
+    clearGhostText();
     auto const start = _cursor;
     // Find end position without modifying cursor
     auto endPos = _cursor;
@@ -1095,7 +1110,6 @@ void InputField::killWord()
         saveUndoState();
         auto killed = _buffer.substr(start, endPos - start);
         _buffer.erase(start, endPos - start);
-        clearGhostText(); // Forward word kill: cursor not at end, ghost was not rendered.
         pushKillRing(std::move(killed));
     }
     _lastWasKill = true;
@@ -1118,11 +1132,13 @@ void InputField::killWordBackward()
         auto killed = _buffer.substr(startPos, end - startPos);
         _buffer.erase(startPos, end - startPos);
         _cursor = startPos;
-        if (wasAtEnd)
-            prependGhostText(killed); // Keep the suggestion stable across the recompute debounce.
-        else
-            clearGhostText();
+        adjustGhostAfterBackwardDelete(killed, wasAtEnd);
         pushKillRing(std::move(killed));
+    }
+    else
+    {
+        // Cursor-at-start no-op: drop any stale ghost (cleared unconditionally pre-commit).
+        clearGhostText();
     }
     _lastWasKill = true;
 }
@@ -1168,17 +1184,20 @@ void InputField::deleteChar()
 void InputField::deleteCharBackward()
 {
     if (_cursor == 0)
+    {
+        clearGhostText(); // Cursor-at-start no-op: drop any stale ghost (cleared unconditionally pre-commit).
         return;
+    }
     bool const wasAtEnd = _cursor == _buffer.size();
     saveUndoState();
     auto const prev = prevGraphemeCluster(_cursor);
-    auto const removed = _buffer.substr(prev, _cursor - prev);
+    // Only materialize the deleted run when it can feed the ghost; the common no-suggestion
+    // backspace then allocates nothing.
+    auto const removed =
+        (wasAtEnd && !_ghostText.empty()) ? _buffer.substr(prev, _cursor - prev) : std::string {};
     _buffer.erase(prev, _cursor - prev);
     _cursor = prev;
-    if (wasAtEnd)
-        prependGhostText(removed); // Keep the suggestion stable across the recompute debounce.
-    else
-        clearGhostText();
+    adjustGhostAfterBackwardDelete(removed, wasAtEnd);
 }
 
 void InputField::moveToStart()
@@ -1512,7 +1531,25 @@ void InputField::prependGhostText(std::string_view deleted)
     // Guard on a non-empty ghost so we never invent a suggestion that wasn't showing.
     if (_ghostText.empty() || deleted.empty())
         return;
+    // Mirror setGhostText: the ghost is single-line. A deleted newline (multiline buffer)
+    // must not enter the suggestion, where it would render invisibly yet still be committed
+    // verbatim on accept.
+    if (auto const pos = deleted.find('\n'); pos != std::string_view::npos)
+        deleted = deleted.substr(0, pos);
+    if (deleted.empty())
+        return;
     _ghostText.insert(0, deleted);
+}
+
+void InputField::adjustGhostAfterBackwardDelete(std::string_view deletedRun, bool wasAtEnd)
+{
+    // Re-prepend only when the deletion was at the buffer end (where the ghost renders) and
+    // text still remains. A mid-buffer delete isn't rendered, and a delete that empties the
+    // buffer must not resurrect the just-killed line as a suggestion.
+    if (wasAtEnd && !_buffer.empty())
+        prependGhostText(deletedRun);
+    else
+        clearGhostText();
 }
 
 void InputField::acceptGhostText()
