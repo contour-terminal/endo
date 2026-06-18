@@ -98,6 +98,22 @@ namespace
         }
         return result;
     }
+
+    /// @brief Truncates text at the first line break for use as single-line ghost text.
+    ///
+    /// The inline suggestion renders on one line and is committed verbatim on accept, so any
+    /// content past the first '\n' or '\r' must be dropped — a bare '\r' would otherwise render
+    /// as a stray control glyph and be committed unsanitized (unlike buffer text, which goes
+    /// through sanitizeForSingleLine). Centralizes the rule shared by setGhostText and
+    /// prependGhostText so they cannot drift.
+    /// @param ghost The candidate ghost text.
+    /// @return @p ghost truncated at the first '\n' or '\r' (whichever comes first).
+    auto firstGhostLine(std::string_view ghost) -> std::string_view
+    {
+        if (auto const pos = ghost.find_first_of("\r\n"); pos != std::string_view::npos)
+            ghost = ghost.substr(0, pos);
+        return ghost;
+    }
 } // namespace
 
 auto InputField::processEvent(InputEvent const& event) -> InputFieldAction
@@ -574,9 +590,10 @@ void InputField::clear()
     _cursor = 0;
     _hScrollOffset = 0;
     clearSelection();
-    // A wholesale buffer replacement invalidates the consumed-ghost memory; without this a later
-    // backspace could restore a suggestion that belonged to the previous buffer.
-    _ghostConsumed.clear();
+    // A wholesale buffer replacement invalidates the ghost state; drop BOTH the displayed
+    // suggestion and the consumed-prefix memory. Clearing only _ghostConsumed would leave a
+    // stale _ghostText rendering over (or being re-prepended onto) the new buffer.
+    clearGhostText();
 }
 
 void InputField::setText(std::string_view text)
@@ -585,7 +602,9 @@ void InputField::setText(std::string_view text)
     _cursor = _buffer.size();
     _hScrollOffset = 0;
     clearSelection();
-    _ghostConsumed.clear();
+    // Wholesale buffer replacement: drop both the displayed suggestion and the consumed memory
+    // (see clear()), otherwise a previous buffer's ghost renders/restores on the new text.
+    clearGhostText();
 }
 
 void InputField::setCursor(size_t pos)
@@ -1162,6 +1181,9 @@ void InputField::yank()
     if (_killRing.empty())
         return;
     saveUndoState();
+    // Yank rewrites the buffer tail; any displayed suggestion and consumed-prefix memory now
+    // belong to the pre-yank text. Drop both so a later backspace can't restore a stale ghost.
+    clearGhostText();
     _killRingIndex = _killRing.size() - 1;
     insertText(_killRing[_killRingIndex]);
 }
@@ -1171,6 +1193,8 @@ void InputField::yankPop()
     if (_killRing.empty())
         return;
     saveUndoState();
+    // Yank-pop rewrites the buffer tail (see yank()): invalidate the stale ghost state.
+    clearGhostText();
     // Remove the previously yanked text and insert the next one in the ring
     if (_killRingIndex < _killRing.size())
     {
@@ -1268,6 +1292,9 @@ void InputField::historyPrev()
         _buffer = _multiline ? _history[_historyIndex] : sanitizeForSingleLine(_history[_historyIndex]);
         _cursor = _buffer.size();
         clearSelection();
+        // Recalled entry replaces the buffer wholesale (bypassing setText); drop the previous
+        // buffer's ghost state so a later backspace can't restore a suggestion from it.
+        clearGhostText();
     }
 }
 
@@ -1287,6 +1314,8 @@ void InputField::historyNext()
     }
     _cursor = _buffer.size();
     clearSelection();
+    // Recalled entry replaces the buffer wholesale (see historyPrev): invalidate stale ghost state.
+    clearGhostText();
 }
 
 void InputField::transpose()
@@ -1294,6 +1323,9 @@ void InputField::transpose()
     if (_cursor == 0 || _buffer.size() < 2)
         return;
     saveUndoState();
+    // Transpose rewrites characters at the buffer tail; any displayed suggestion / consumed-prefix
+    // memory no longer matches. Drop them so a later backspace can't restore a stale ghost.
+    clearGhostText();
     // If at end, transpose the two characters before cursor
     auto pos = _cursor;
     if (pos == _buffer.size())
@@ -1532,9 +1564,7 @@ auto InputField::maxLines() const noexcept -> int
 
 void InputField::setGhostText(std::string_view ghost)
 {
-    if (auto const pos = ghost.find('\n'); pos != std::string_view::npos)
-        ghost = ghost.substr(0, pos);
-    _ghostText = std::string(ghost);
+    _ghostText = std::string(firstGhostLine(ghost));
     // A freshly supplied suggestion supersedes any consumed-prefix memory: the restore-on-backspace
     // shortcut only makes sense relative to the ghost that was actually being shown.
     _ghostConsumed.clear();
@@ -1551,11 +1581,9 @@ void InputField::prependGhostText(std::string_view deleted)
     // Guard on a non-empty ghost so we never invent a suggestion that wasn't showing.
     if (_ghostText.empty() || deleted.empty())
         return;
-    // Mirror setGhostText: the ghost is single-line. A deleted newline (multiline buffer)
-    // must not enter the suggestion, where it would render invisibly yet still be committed
-    // verbatim on accept.
-    if (auto const pos = deleted.find('\n'); pos != std::string_view::npos)
-        deleted = deleted.substr(0, pos);
+    // The ghost is single-line (see firstGhostLine): a deleted line break (multiline buffer) must
+    // not enter the suggestion, where it would render as a control glyph yet be committed verbatim.
+    deleted = firstGhostLine(deleted);
     if (deleted.empty())
         return;
     _ghostText.insert(0, deleted);
@@ -1577,6 +1605,16 @@ void InputField::adjustGhostAfterBackwardDelete(std::string_view deletedRun, boo
         {
             _ghostText.insert(0, deletedRun);
             _ghostConsumed.erase(_ghostConsumed.size() - deletedRun.size());
+        }
+        else if (!_ghostConsumed.empty())
+        {
+            // We are in the consumed-memory regime (chars were eaten off the ghost head or a
+            // suffix was accepted), but the deleted grapheme cluster is NOT a tail of that memory.
+            // This happens when a single deleted cluster blends an un-consumed base character with
+            // a consumed combining mark: the cluster is longer than _ghostConsumed, so prepending
+            // it verbatim would splice the base character (never part of the suggestion) into the
+            // ghost — and commit it on accept. Don't guess; clear and let the debounce recompute.
+            clearGhostText();
         }
         else
         {
@@ -1600,12 +1638,16 @@ void InputField::acceptGhostText()
     // tail of it can restore the ghost synchronously via adjustGhostAfterBackwardDelete, with no
     // debounce gap. This is what kills the flicker when the user accepts (e.g. Ctrl+E) and then
     // word-deletes. Setting the members directly — NOT clearGhostText() — preserves the seed.
-    // The ghost is always single-line (setGhostText/prependGhostText strip newlines), so the seed
-    // can never carry a newline.
-    auto accepted = std::move(_ghostText);
-    insertText(accepted);
+    //
+    // The seed MUST be the bytes that actually landed in the buffer, not the raw ghost: in
+    // single-line mode insertText runs sanitizeForSingleLine (strips '\r', maps '\n'→space). If the
+    // seed kept the raw bytes, a later backward delete materializes deletedRun from the sanitized
+    // buffer and _ghostConsumed.ends_with(deletedRun) would mismatch, skipping the synchronous
+    // restore (a flicker). Capture the buffer tail post-insert so seed and buffer agree byte-for-byte.
+    auto const before = _cursor;
+    insertText(_ghostText);
     _ghostText.clear();
-    _ghostConsumed = std::move(accepted);
+    _ghostConsumed = _buffer.substr(before, _cursor - before);
 }
 
 auto InputField::ghostText() const noexcept -> std::string_view

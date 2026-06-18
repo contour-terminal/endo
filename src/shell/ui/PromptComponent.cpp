@@ -1157,22 +1157,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
                 || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
-                // Confirm the suggestion for the current text before committing it. A delete may
-                // have left a re-prepended guess whose debounced recompute has not run yet;
-                // recomputing here (cache-backed) ensures we accept the real suggestion, not the
-                // guess, and clears it if the completer no longer offers one.
-                updateGhostText();
-                if (_inputField.hasGhostText())
-                {
-                    _inputField.acceptGhostText();
-                    // acceptGhostText seeds the consumed-prefix memory so a following backward
-                    // delete restores the ghost synchronously. Suppress any pending debounced
-                    // recompute (possibly armed by the prior keystroke): for the now-complete
-                    // accepted text the completer returns nothing, and the resulting
-                    // clearGhostText() would wipe that seed before the user can delete.
-                    _ghostTextDirty = false;
-                    _ghostTextPendingSince.reset();
-                }
+                // Confirm and accept the suggestion, suppressing the pending recompute so the
+                // consumed-prefix seed survives for a synchronous restore-on-backspace. The recompute
+                // may clear a re-prepended guess the completer no longer offers; in that case nothing
+                // is accepted. Right/End/Ctrl+E at end-of-buffer are no-ops anyway, so swallowing the
+                // key (always Changed) is harmless.
+                (void) tui::acceptGhostText(
+                    _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince);
                 return Action::Changed;
             }
         }

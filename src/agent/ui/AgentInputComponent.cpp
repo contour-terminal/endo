@@ -414,38 +414,29 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         if (_escapeHintVisible)
             restoreFromEscapeHint();
 
-        // Tab with ghost text: accept ghost text before trying completion
+        // Tab with ghost text: accept ghost text before trying completion.
         if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
             && _inputField.hasGhostText())
         {
-            // Confirm the suggestion before committing it (a delete may have left an
-            // un-recomputed re-prepended guess); recompute is cache-backed.
-            updateGhostText();
-            if (_inputField.hasGhostText())
-            {
-                _inputField.acceptGhostText();
-                // Preserve the consumed-prefix seed acceptGhostText just set (so a following
-                // backward delete restores the ghost synchronously): suppress the pending
-                // recompute that would otherwise clear it. See PromptComponent for rationale.
-                _ghostTextDirty = false;
-                _ghostTextPendingSince.reset();
-            }
-            return Action::Changed;
+            // Confirm and accept the suggestion, suppressing the pending recompute so the
+            // consumed-prefix seed survives for a synchronous restore-on-backspace. If the recompute
+            // clears a re-prepended guess the completer no longer offers, nothing is accepted — fall
+            // through to the no-ghost Tab handling below so Tab still triggers completion.
+            if (tui::acceptGhostText(
+                    _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince))
+                return Action::Changed;
         }
 
-        // Right arrow or End at end of line accepts ghost text
+        // Right arrow or End at end of line accepts ghost text.
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
             if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
                 || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
-                updateGhostText();
-                if (_inputField.hasGhostText())
-                {
-                    _inputField.acceptGhostText();
-                    _ghostTextDirty = false;
-                    _ghostTextPendingSince.reset();
-                }
+                // Right/End/Ctrl+E at end-of-buffer are no-ops anyway, so swallowing the key when the
+                // recompute leaves nothing to accept is harmless.
+                (void) tui::acceptGhostText(
+                    _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince);
                 return Action::Changed;
             }
         }
