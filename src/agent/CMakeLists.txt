@@ -203,6 +203,7 @@ add_executable(test-endo-agent
     tools/DiffRenderer_test.cpp
 
     # UI tests
+    ui/AgentInputComponent_test.cpp
     ui/ToolStatusComponent_test.cpp
 
     # Local inference tests

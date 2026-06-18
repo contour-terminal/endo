@@ -1157,8 +1157,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
                 || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
-                _inputField.acceptGhostText();
-                updateGhostText();
+                // Confirm and accept the suggestion, suppressing the pending recompute so the
+                // consumed-prefix seed survives for a synchronous restore-on-backspace. The recompute
+                // may clear a re-prepended guess the completer no longer offers; in that case nothing
+                // is accepted. Right/End/Ctrl+E at end-of-buffer are no-ops anyway, so swallowing the
+                // key (always Changed) is harmless.
+                (void) tui::acceptGhostText(
+                    _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince);
                 return Action::Changed;
             }
         }
@@ -1270,6 +1275,14 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
 
 void PromptComponent::updateGhostText()
 {
+    // Prefer the injected suggestion source (used by tests and any non-Completer provider); fall
+    // back to the Completer. With neither available there is nothing to suggest.
+    if (_suggestFn)
+    {
+        tui::updateGhostText(_inputField, _suggestCacheText, _suggestCacheResult, _suggestFn);
+        return;
+    }
+
     if (!_completer)
     {
         _inputField.clearGhostText();

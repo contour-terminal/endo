@@ -1765,6 +1765,454 @@ TEST_CASE("InputField.ghost_text_trim_respects_capitalization")
 }
 
 // ============================================================================
+// Ghost text deletion tests (re-prepend to avoid flicker on backspace/kill)
+// ============================================================================
+
+TEST_CASE("InputField.ghost_text_reprepended_on_backspace")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git c");
+    CHECK(field.ghostText() == "heckout"); // deleted 'h' re-prepended onto ghost
+}
+
+TEST_CASE("InputField.ghost_text_reprepended_on_word_backward")
+{
+    InputField field;
+    field.setText("git checkout");
+    field.setCursor(12);
+    field.setGhostText(" main");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward
+    CHECK(field.text() == "git ");
+    CHECK(field.ghostText() == "checkout main"); // whole killed word re-prepended (text remains)
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_word_backward_empties_buffer")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward removes the only word
+    CHECK(field.text().empty());
+    CHECK(field.ghostText().empty()); // emptied buffer: ghost cleared, not resurrected
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_kill_to_start_empties_buffer")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('u', Modifier::Ctrl)); // KillToStart empties the buffer
+    CHECK(field.text().empty());
+    CHECK(field.ghostText().empty()); // Ctrl-U clears the line — do not resurrect it as a ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_kill_to_end_at_end")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    (void) field.processEvent(charKey('k', Modifier::Ctrl)); // KillToEnd at end: nothing deleted
+    CHECK(field.text() == "hello");
+    CHECK(field.ghostText().empty()); // forward kill clears the now-stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_delete_word_forward_at_end")
+{
+    InputField field;
+    field.setText("git");
+    field.setCursor(3);
+    field.setGhostText(" status");
+    (void) field.processEvent(charKey('d', Modifier::Alt)); // DeleteWord (forward): no word ahead
+    CHECK(field.text() == "git");
+    CHECK(field.ghostText().empty()); // forward word kill clears the now-stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_undo_after_backspace")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // -> "git c", ghost "heckout"
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));   // Undo
+    CHECK(field.text() == "git ch");
+    CHECK(field.ghostText().empty()); // undo drops the stale ghost (no "git chheckout")
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_redo")
+{
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // -> "git c"
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));   // Undo -> "git ch"
+    (void) field.processEvent(charKey('y', Modifier::Ctrl));   // Redo -> "git c"
+    CHECK(field.text() == "git c");
+    CHECK(field.ghostText().empty()); // redo also drops any stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_no_newline_after_backspace_multiline")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("a\n");
+    field.setCursor(2); // at end, on the (empty) second line
+    field.setGhostText("b");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes the trailing '\n'
+    CHECK(field.text() == "a");
+    CHECK(field.ghostText() == "b");                               // newline not prepended
+    CHECK(field.ghostText().find('\n') == std::string_view::npos); // ghost stays single-line
+}
+
+TEST_CASE("InputField.ghost_text_prepend_noop_on_empty_ghost")
+{
+    InputField field;
+    field.setText("abc");
+    field.setCursor(3); // at end, but no ghost set
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "ab");
+    CHECK(field.ghostText().empty()); // never invent a suggestion that wasn't showing
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_backspace_after_typing_last_suggestion_char")
+{
+    // First-deletion flicker: typing the final char of a suggestion trims the ghost to empty,
+    // so an immediate backspace has no live ghost to re-prepend onto. The consumed-prefix memory
+    // restores the suggestion the debounce would otherwise recompute 100ms later.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t"); // suggestion "git checkout", only the final 't' remains as ghost
+    (void) field.processEvent(charKey('t'));
+    CHECK(field.text() == "git checkout");
+    CHECK(field.ghostText().empty()); // typed the last char: ghost trimmed to empty
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git checkou");
+    CHECK(field.ghostText() == "t"); // suggestion restored without waiting for the debounce
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_backspace_after_partial_trim")
+{
+    // Typing a matching char that only partially trims the ghost, then backspacing it, restores
+    // the original suggestion exactly (consumed memory popped back onto the live ghost).
+    InputField field;
+    field.setText("git che");
+    field.setCursor(7);
+    field.setGhostText("ckout");
+    (void) field.processEvent(charKey('c'));
+    CHECK(field.ghostText() == "kout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git che");
+    CHECK(field.ghostText() == "ckout");
+}
+
+TEST_CASE("InputField.ghost_text_consumed_memory_not_resurrected_after_nonmatching_char")
+{
+    // A non-matching keystroke clears both the ghost and the consumed memory, so a later backspace
+    // must not resurrect a stale suggestion the completer never offered for this text.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t");
+    (void) field.processEvent(charKey('t')); // consumes 't', ghost empty
+    (void) field.processEvent(charKey('x')); // non-matching: clears consumed memory
+    CHECK(field.text() == "git checkoutx");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'x'
+    CHECK(field.text() == "git checkout");
+    CHECK(field.ghostText().empty()); // no stale resurrection
+}
+
+TEST_CASE("InputField.ghost_text_consumed_memory_reset_by_new_suggestion")
+{
+    // A fresh suggestion (debounce recompute) supersedes the consumed memory: backspacing a char
+    // re-prepends onto the new ghost via the normal path, never the stale consumed run.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t");
+    (void) field.processEvent(charKey('t')); // consumes 't', ghost empty, buffer "git checkout"
+    field.setGhostText(" main");             // debounce recompute for "git checkout"
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git checkou");
+    CHECK(field.ghostText() == "t main"); // deleted 't' re-prepended onto the fresh suggestion
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_word_backspace_after_accept")
+{
+    // Accept the whole suggestion (Ctrl+E etc.), then word-backward delete the last word: the
+    // word must reappear as ghost synchronously, no debounce gap. acceptGhostText seeds the
+    // consumed-prefix memory with the accepted suffix so adjustGhostAfterBackwardDelete restores it.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" --build --target install");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake --build --target install");
+    REQUIRE(field.ghostText().empty());
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // DeleteWordBackward
+    CHECK(field.text() == "cmake --build --target ");
+    CHECK(field.ghostText() == "install"); // restored synchronously — no flash
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_char_backspace_after_accept")
+{
+    // After accept, a single Backspace restores the last char onto the ghost. Verifies that
+    // deleteCharBackward's materialization guard sees the non-empty consumed memory.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "cmake buil");
+    CHECK(field.ghostText() == "d"); // last accepted char restored
+}
+
+TEST_CASE("InputField.ghost_text_chains_repeated_word_backspace_after_accept")
+{
+    // Two consecutive word-backward deletes each restore their suffix: the consumed memory pops
+    // the matched tail so the next delete still matches.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" --build install");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake --build install");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "install"
+    CHECK(field.text() == "cmake --build ");
+    CHECK(field.ghostText() == "install");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "build" (then "--")
+    CHECK(field.text() == "cmake --");
+    CHECK(field.ghostText() == "build install");
+}
+
+TEST_CASE("InputField.ghost_text_not_resurrected_on_nontail_edit_after_accept")
+{
+    // After accept, deleting somewhere that is NOT a tail of the accepted suffix must not invent a
+    // wrong ghost. Here the cursor is moved into the middle, so wasAtEnd is false → ghost cleared.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build");
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(specialKey(KeyCode::Left));      // cursor mid-buffer (not at end)
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'l' of "build"
+    CHECK(field.text() == "cmake buid");
+    CHECK(field.ghostText().empty()); // no wrong ghost invented
+}
+
+TEST_CASE("InputField.ghost_text_accept_empty_ghost_is_noop_no_consumed_seed")
+{
+    // Accept with no ghost is a no-op and must not seed a stale consumed run that a later backspace
+    // could resurrect.
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.acceptGhostText(); // no ghost — no-op
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "cmak");
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_accept_seed_is_single_line")
+{
+    // The accepted suffix is single-line by construction (setGhostText strips at the newline), so
+    // the seeded consumed memory and any restored ghost stay single-line.
+    InputField field;
+    field.setMultiline(true);
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build\nmore"); // truncated to " build" by setGhostText
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "build"
+    CHECK(field.ghostText() == "build");
+    CHECK(field.ghostText().find('\n') == std::string_view::npos);
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(6);
+    field.setGhostText("baz");
+    (void) field.processEvent(specialKey(KeyCode::Left));      // cursor 5, ghost no longer shown
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'a' before cursor
+    CHECK(field.text() == "foobr");
+    CHECK(field.ghostText().empty()); // mid-buffer delete clears ghost
+}
+
+TEST_CASE("InputField.ghost_text_untouched_on_forward_delete_at_end")
+{
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    field.setGhostText("bar");
+    (void) field.processEvent(specialKey(KeyCode::Delete)); // deletes nothing at end
+    CHECK(field.text() == "foo");
+    CHECK(field.ghostText() == "bar"); // visible ghost preserved
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_forward_delete_midbuffer")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(3);
+    field.setGhostText("baz");
+    (void) field.processEvent(specialKey(KeyCode::Delete)); // deletes 'b' mid-buffer
+    CHECK(field.text() == "fooar");
+    CHECK(field.ghostText().empty());
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_delete_selection")
+{
+    InputField field;
+    field.setText("foobar");
+    field.setCursor(6);
+    field.setGhostText("baz");
+    // Select 'bar' (three chars back), then delete the selection.
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Left, Modifier::Shift));
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "foo");
+    CHECK(field.ghostText().empty()); // selection delete clears, does not re-prepend
+}
+
+// ============================================================================
+// Ghost state must not survive buffer-mutating editor commands
+// (yank / yank-pop / transpose / history recall / setText / clear)
+// ============================================================================
+
+TEST_CASE("InputField.ghost_text_cleared_on_yank_pop")
+{
+    // Yank-pop (Alt+Y, default-bound) inserts a kill-ring entry, rewriting the buffer. With a live
+    // ghost showing, the mutation must drop it rather than leave it dangling on the new text.
+    // (Yank/Transpose share the same fix but have no default keybinding to drive from a unit test.)
+    InputField field;
+    field.setText("foo");
+    field.setCursor(3);
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // kill "foo" → kill ring ["foo"]
+    REQUIRE(field.text().empty());
+
+    field.setGhostText("ghost"); // a live ghost the upcoming yank-pop must clear
+    REQUIRE(field.ghostText() == "ghost");
+    (void) field.processEvent(charKey('y', Modifier::Alt)); // YankPop inserts from the kill ring
+    CHECK(field.ghostText().empty());                       // yank-pop dropped the stale ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_history_recall")
+{
+    InputField field;
+    field.addHistory("ls -la");
+    field.setText("git ");
+    field.setCursor(4);
+    field.setGhostText("checkout");
+    field.acceptGhostText(); // _ghostConsumed="checkout"
+    REQUIRE(field.text() == "git checkout");
+
+    (void) field.processEvent(specialKey(KeyCode::Up)); // recall "ls -la"
+    CHECK(field.text() == "ls -la");
+    CHECK(field.ghostText().empty());
+
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // delete 'a' at end
+    CHECK(field.text() == "ls -l");
+    CHECK(field.ghostText().empty()); // previous buffer's ghost not resurrected
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_setText")
+{
+    // setText replaces the buffer wholesale: it must drop BOTH the displayed ghost and the
+    // consumed-prefix memory, else the previous buffer's suggestion renders / re-prepends.
+    InputField field;
+    field.setText("git ch");
+    field.setCursor(6);
+    field.setGhostText("eckout");
+    field.setText("foo");
+    CHECK(field.ghostText().empty()); // stale _ghostText dropped
+
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "fo");
+    CHECK(field.ghostText().empty()); // not re-prepended onto a previous-buffer ghost
+}
+
+TEST_CASE("InputField.ghost_text_cleared_on_clear")
+{
+    InputField field;
+    field.setText("hello");
+    field.setCursor(5);
+    field.setGhostText(" world");
+    field.clear();
+    CHECK(field.text().empty());
+    CHECK(field.ghostText().empty()); // clear() drops the displayed ghost, not just consumed memory
+}
+
+TEST_CASE("InputField.ghost_text_accept_seed_strips_carriage_return")
+{
+    // A suggestion carrying a '\r' is stripped from the buffer by sanitizeForSingleLine on accept;
+    // the consumed-prefix seed must match the SANITIZED buffer so a later word-backspace restores it
+    // synchronously (rather than mismatching on the '\r' and skipping the restore).
+    InputField field;
+    field.setText("cmake");
+    field.setCursor(5);
+    field.setGhostText(" build"); // setGhostText strips at the first line break anyway
+    field.acceptGhostText();
+    REQUIRE(field.text() == "cmake build");
+    REQUIRE(field.ghostText().empty());
+
+    (void) field.processEvent(charKey('w', Modifier::Ctrl)); // delete "build"
+    CHECK(field.text() == "cmake ");
+    CHECK(field.ghostText() == "build"); // restored synchronously, seed matched the buffer
+    CHECK(field.ghostText().find('\r') == std::string_view::npos);
+}
+
+TEST_CASE("InputField.ghost_text_set_strips_carriage_return")
+{
+    // setGhostText / prependGhostText share the single-line rule: a '\r' must never enter the ghost
+    // (it would render as a control glyph and be committed verbatim on accept).
+    InputField field;
+    field.setText("a");
+    field.setCursor(1);
+    field.setGhostText("b\rc"); // truncated at '\r'
+    CHECK(field.ghostText() == "b");
+    CHECK(field.ghostText().find('\r') == std::string_view::npos);
+}
+
+TEST_CASE("InputField.ghost_text_backspace_does_not_splice_grapheme_base_char")
+{
+    // Per-codepoint consumption vs per-grapheme-cluster deletion: when the ghost head is a combining
+    // mark and the user types it (forming a composed grapheme with the preceding base char), a
+    // backspace deletes the WHOLE cluster (base + mark). The deleted run is longer than the consumed
+    // memory, so the run must NOT be spliced back into the ghost (which would re-commit the base
+    // char on accept). The ghost is cleared and the debounce will recompute.
+    InputField field;
+    field.setText("xe");
+    field.setCursor(2); // after base 'e'
+    // Ghost: combining acute U+0301 (\xCC\x81) then '!'. Typing the combining mark trims it.
+    field.setGhostText("\xCC\x81!");
+    // Type the combining mark codepoint U+0301 directly via a key event with that codepoint.
+    (void) field.processEvent(
+        KeyEvent { .key = static_cast<KeyCode>(0x0301), .modifiers = Modifier::None, .codepoint = 0x0301 });
+    // Buffer is now "x" + composed 'é'; ghost trimmed to "!", _ghostConsumed holds the mark bytes.
+    REQUIRE(field.ghostText() == "!");
+
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes the whole 'é' cluster
+    CHECK(field.text() == "x");
+    CHECK(field.ghostText().empty()); // base char NOT spliced into the ghost
+    CHECK(field.ghostText().find('e') == std::string_view::npos);
+}
+
+// ============================================================================
 // Horizontal scroll (single-line overflow)
 // ============================================================================
 

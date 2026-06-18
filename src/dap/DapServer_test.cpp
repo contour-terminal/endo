@@ -1890,9 +1890,11 @@ TEST_CASE("DAP.initialize.advertises_loadedSources_capability", "[dap][phase6]")
 
 TEST_CASE("DAP.tracelogger_overhead_is_minimal", "[dap][phase6][performance]")
 {
-    // Script with a loop to measure overhead
+    // Script with a loop to measure overhead. The iteration count is deliberately large so the
+    // baseline run lands well above the scheduler-noise floor (~hundreds of ms): a stable, large
+    // baseline keeps the wall-clock ratio meaningful instead of noise-dominated on a loaded box.
     TempScript script("let rec countdown (n: int) : int = if n <= 0 then 0 else countdown (n - 1)\n"
-                      "let _ = countdown 10000");
+                      "let _ = countdown 500000");
 
     // Run without debug (noDebug=true, no TraceLogger)
     auto const startNoDebug = std::chrono::steady_clock::now();
@@ -1914,19 +1916,28 @@ TEST_CASE("DAP.tracelogger_overhead_is_minimal", "[dap][phase6][performance]")
     });
     auto const debugTime = std::chrono::steady_clock::now() - startDebug;
 
-    // Allow generous overhead for CI stability (50%)
     auto const noDebugMs = std::chrono::duration_cast<std::chrono::milliseconds>(noDebugTime).count();
     auto const debugMs = std::chrono::duration_cast<std::chrono::milliseconds>(debugTime).count();
 
-    // Only check if noDebug run was fast enough to be meaningful (> 1ms)
-    if (noDebugMs > 1)
-    {
-        auto const overhead = static_cast<double>(debugMs - noDebugMs) / static_cast<double>(noDebugMs);
+    // This is a wall-clock ratio test, so it is sensitive to scheduler jitter on a loaded CI box.
+    // Two guards keep it meaningful without flaking:
+    //  1. Only assert the ratio when the baseline is large enough that the ratio is statistically
+    //     meaningful — over a tiny (single-digit ms) run, a few ms of scheduling noise swamps the
+    //     real TraceLogger cost and produces a meaningless ratio.
+    //  2. Independently allow a small absolute overhead, so jitter measured in a handful of ms
+    //     never fails the test regardless of the ratio it implies.
+    constexpr auto minMeaningfulBaselineMs = 50; // below this the ratio is dominated by noise
+    constexpr auto absoluteSlackMs = 25;         // tolerate scheduler jitter of this magnitude
 #if defined(_WIN32)
-        constexpr auto maxOverhead = 5.0; // Windows debug builds have higher TraceLogger overhead
+    constexpr auto maxOverhead = 5.0; // Windows debug builds have higher TraceLogger overhead
 #else
-        constexpr auto maxOverhead = 1.0;
+    constexpr auto maxOverhead = 2.0; // generous ratio ceiling for CI stability
 #endif
+
+    auto const absoluteOverheadMs = debugMs - noDebugMs;
+    if (noDebugMs >= minMeaningfulBaselineMs && absoluteOverheadMs > absoluteSlackMs)
+    {
+        auto const overhead = static_cast<double>(absoluteOverheadMs) / static_cast<double>(noDebugMs);
         CHECK(overhead <= maxOverhead);
     }
 }

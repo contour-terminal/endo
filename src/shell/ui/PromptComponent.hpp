@@ -107,6 +107,20 @@ class PromptComponent: public tui::Component
     /// @brief Sets the completer for autocompletion.
     void setCompleter(Completer* completer) { _completer = completer; }
 
+    /// @brief Function that produces the ghost-text suggestion suffix for the given input.
+    /// @param text   The current input buffer.
+    /// @param cursor The cursor byte offset within @p text.
+    /// @return The suggestion suffix to display as ghost text, or nullopt for none.
+    using SuggestFn = std::function<std::optional<std::string>(std::string_view text, std::size_t cursor)>;
+
+    /// @brief Injects the ghost-text suggestion source, decoupling ghosting from the full Completer.
+    ///
+    /// When set, this function is used to compute ghost text instead of the injected Completer.
+    /// This is the seam tests use to drive the ghost-text lifecycle deterministically without
+    /// constructing a real Completer. Passing an empty function restores Completer-backed behaviour.
+    /// @param fn The suggestion function, or an empty function to fall back to the Completer.
+    void setSuggestFn(SuggestFn fn) { _suggestFn = std::move(fn); }
+
     /// @brief Sets the command resolver for tooltip display.
     void setCommandResolver(CommandResolver* resolver) { _commandResolver = resolver; }
 
@@ -269,6 +283,7 @@ class PromptComponent: public tui::Component
     tui::FuzzyPickerPopup _fuzzyFileFinder;
     tui::CommandRegistry* _commandRegistry = nullptr;
     Completer* _completer = nullptr;
+    SuggestFn _suggestFn;         ///< Optional injected ghost-text source; overrides _completer when set.
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
