@@ -102,7 +102,10 @@ static std::vector<PromptConfig> const& presets()
             0x252545_rgb, // deep indigo (wrap)
         },
         .enableSixelFade = false,
-        .colorOverrides = { .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } } }, // Blue → Teal gradient
+        .colorOverrides = {
+            .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } }, // Blue → Teal gradient
+            .transparentBackground = true,
+        },
     },
     };
     return value;

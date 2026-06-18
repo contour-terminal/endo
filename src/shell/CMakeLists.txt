@@ -133,6 +133,10 @@ add_library(endo-shell STATIC
     DirectoryConfig.hpp
     DirectoryConfig.cpp
 
+    # Configuration bootstrap
+    config/DefaultInitScript.hpp
+    config/DefaultInitScript.cpp
+
     # Builtins
     builtins/InlineCommandDescriptor.hpp
     builtins/InlineCommandDescriptors.cpp
@@ -263,6 +267,7 @@ add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
     DirectoryConfig_test.cpp
+    config/DefaultInitScript_test.cpp
     builtins/InlineArgParser_test.cpp
     commands/FindExpression_test.cpp
     commands/GrepCommand_test.cpp

@@ -13,7 +13,11 @@ namespace endo
 // ---------------------------------------------------------------------------
 
 // clang-format off
+// The first entry is the startup default (see `Prompt::Prompt()`), so it's
+// listed first in completion and used as the example value when the default
+// `init.endo` template is auto-generated on first run.
 static constexpr std::array presetValues = {
+    EnumValueEntry { .value="endo-signature", .description="Endo signature prompt (default)" },
     EnumValueEntry { .value="minimal-arrow", .description="Clean arrow-based prompt" },
     EnumValueEntry { .value="lambda-clean", .description="Lambda symbol prompt" },
     EnumValueEntry { .value="opencode-bar", .description="OpenCode-style bar prompt" },
@@ -23,26 +27,28 @@ static constexpr std::array presetValues = {
     EnumValueEntry { .value="boxed-module", .description="Boxed module prompt" },
     EnumValueEntry { .value="gradient-glow", .description="Gradient glow prompt" },
     EnumValueEntry { .value="context-adaptive", .description="Context-adaptive prompt" },
-    EnumValueEntry { .value="endo-signature", .description="Endo signature prompt" },
 };
 
+// Default preset (`endo-signature`) uses two-line / rounded, so those lead
+// their respective enums to keep completion and init.endo examples aligned
+// with the actual startup configuration.
 static constexpr std::array layoutValues = {
+    EnumValueEntry { .value="two-line", .description="Two line prompt (default)" },
     EnumValueEntry { .value="single-line", .description="Single line prompt" },
-    EnumValueEntry { .value="two-line", .description="Two line prompt" },
     EnumValueEntry { .value="boxed", .description="Boxed prompt layout" },
     EnumValueEntry { .value="powerline", .description="Powerline prompt layout" },
 };
 
 static constexpr std::array separatorValues = {
+    EnumValueEntry { .value="rounded", .description="Rounded separator (default)" },
     EnumValueEntry { .value="none", .description="No separator" },
     EnumValueEntry { .value="bar", .description="Bar separator (|)" },
     EnumValueEntry { .value="powerline", .description="Powerline separator" },
-    EnumValueEntry { .value="rounded", .description="Rounded separator" },
     EnumValueEntry { .value="boxed", .description="Boxed separator" },
 };
 
 static constexpr std::array transientValues = {
-    EnumValueEntry { .value="off", .description="Disable transient prompt" },
+    EnumValueEntry { .value="off", .description="Disable transient prompt (default)" },
     EnumValueEntry { .value="minimal", .description="Minimal transient prompt" },
     EnumValueEntry { .value="arrow", .description="Arrow transient prompt" },
 };

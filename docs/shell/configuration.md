@@ -13,6 +13,14 @@ settings, aliases, and key bindings.
 Endo loads `~/.config/endo/init.endo` automatically on startup. This file is executed as
 regular Endo code, so you can use any shell commands or F# expressions.
 
+On the very first interactive launch, if no `init.endo` exists, Endo writes a fully
+documented template to that path so you can discover every configurable property by
+editing your own file. All assignments in the template are commented out, so the built-in
+defaults remain in effect until you edit something. To regenerate the template from the
+current defaults, delete the file and start a new interactive Endo session. If the
+filesystem is read-only, the shell silently skips writing the template and continues with
+the baked-in defaults.
+
 ```endo
 # ~/.config/endo/init.endo
 

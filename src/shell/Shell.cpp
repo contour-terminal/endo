@@ -2,6 +2,7 @@
 #include "Shell.hpp"
 #include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
+#include <shell/config/DefaultInitScript.hpp>
 #include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/Prompt.hpp>
 #include <shell/ui/PromptPresets.hpp>
@@ -968,6 +969,23 @@ void Shell::loadInitScript()
     if (auto const configDir = platform::configHome())
     {
         auto const initPath = *configDir / "endo" / "init.endo";
+
+        // First-run bootstrap: when no init.endo exists yet, drop a fully
+        // documented template so users can discover configuration options
+        // by editing their config file. The write is best-effort — on a
+        // read-only filesystem we silently continue; the baked-in C++
+        // defaults still apply regardless of whether the file exists.
+        if (!_fs.exists(initPath))
+        {
+            if (auto const dirResult = _fs.createDirectories(initPath.parent_path()); dirResult)
+            {
+                // Write is best-effort: on a read-only filesystem we silently
+                // continue; the baked-in C++ defaults still apply.
+                auto const writeResult = _fs.writeFile(initPath, generateDefaultInitEndo());
+                static_cast<void>(writeResult);
+            }
+        }
+
         if (_fs.exists(initPath))
         {
             if (auto content = _fs.readFile(initPath))
