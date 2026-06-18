@@ -1882,6 +1882,69 @@ TEST_CASE("InputField.ghost_text_prepend_noop_on_empty_ghost")
     CHECK(field.ghostText().empty()); // never invent a suggestion that wasn't showing
 }
 
+TEST_CASE("InputField.ghost_text_restored_on_backspace_after_typing_last_suggestion_char")
+{
+    // First-deletion flicker: typing the final char of a suggestion trims the ghost to empty,
+    // so an immediate backspace has no live ghost to re-prepend onto. The consumed-prefix memory
+    // restores the suggestion the debounce would otherwise recompute 100ms later.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t"); // suggestion "git checkout", only the final 't' remains as ghost
+    (void) field.processEvent(charKey('t'));
+    CHECK(field.text() == "git checkout");
+    CHECK(field.ghostText().empty()); // typed the last char: ghost trimmed to empty
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git checkou");
+    CHECK(field.ghostText() == "t"); // suggestion restored without waiting for the debounce
+}
+
+TEST_CASE("InputField.ghost_text_restored_on_backspace_after_partial_trim")
+{
+    // Typing a matching char that only partially trims the ghost, then backspacing it, restores
+    // the original suggestion exactly (consumed memory popped back onto the live ghost).
+    InputField field;
+    field.setText("git che");
+    field.setCursor(7);
+    field.setGhostText("ckout");
+    (void) field.processEvent(charKey('c'));
+    CHECK(field.ghostText() == "kout");
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git che");
+    CHECK(field.ghostText() == "ckout");
+}
+
+TEST_CASE("InputField.ghost_text_consumed_memory_not_resurrected_after_nonmatching_char")
+{
+    // A non-matching keystroke clears both the ghost and the consumed memory, so a later backspace
+    // must not resurrect a stale suggestion the completer never offered for this text.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t");
+    (void) field.processEvent(charKey('t')); // consumes 't', ghost empty
+    (void) field.processEvent(charKey('x')); // non-matching: clears consumed memory
+    CHECK(field.text() == "git checkoutx");
+    (void) field.processEvent(specialKey(KeyCode::Backspace)); // deletes 'x'
+    CHECK(field.text() == "git checkout");
+    CHECK(field.ghostText().empty()); // no stale resurrection
+}
+
+TEST_CASE("InputField.ghost_text_consumed_memory_reset_by_new_suggestion")
+{
+    // A fresh suggestion (debounce recompute) supersedes the consumed memory: backspacing a char
+    // re-prepends onto the new ghost via the normal path, never the stale consumed run.
+    InputField field;
+    field.setText("git checkou");
+    field.setCursor(11);
+    field.setGhostText("t");
+    (void) field.processEvent(charKey('t')); // consumes 't', ghost empty, buffer "git checkout"
+    field.setGhostText(" main");             // debounce recompute for "git checkout"
+    (void) field.processEvent(specialKey(KeyCode::Backspace));
+    CHECK(field.text() == "git checkou");
+    CHECK(field.ghostText() == "t main"); // deleted 't' re-prepended onto the fresh suggestion
+}
+
 TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
 {
     InputField field;

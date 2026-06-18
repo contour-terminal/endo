@@ -574,6 +574,9 @@ void InputField::clear()
     _cursor = 0;
     _hScrollOffset = 0;
     clearSelection();
+    // A wholesale buffer replacement invalidates the consumed-ghost memory; without this a later
+    // backspace could restore a suggestion that belonged to the previous buffer.
+    _ghostConsumed.clear();
 }
 
 void InputField::setText(std::string_view text)
@@ -582,6 +585,7 @@ void InputField::setText(std::string_view text)
     _cursor = _buffer.size();
     _hScrollOffset = 0;
     clearSelection();
+    _ghostConsumed.clear();
 }
 
 void InputField::setCursor(size_t pos)
@@ -1039,9 +1043,19 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
         {
             auto const typed = encodeUtf8(cp);
             if (_ghostText.starts_with(typed))
+            {
+                // Matching keystroke: eat the char off the ghost head and remember it. Should the
+                // very next edit be a backspace of this char, adjustGhostAfterBackwardDelete()
+                // restores the suggestion from _ghostConsumed rather than waiting for the debounced
+                // recompute. This is what kills the first-deletion flicker when the typed char
+                // trims the ghost all the way to empty.
+                _ghostConsumed += typed;
                 _ghostText.erase(0, typed.size());
+            }
             else
+            {
                 clearGhostText();
+            }
         }
         else
         {
@@ -1191,10 +1205,12 @@ void InputField::deleteCharBackward()
     bool const wasAtEnd = _cursor == _buffer.size();
     saveUndoState();
     auto const prev = prevGraphemeCluster(_cursor);
-    // Only materialize the deleted run when it can feed the ghost; the common no-suggestion
-    // backspace then allocates nothing.
-    auto const removed =
-        (wasAtEnd && !_ghostText.empty()) ? _buffer.substr(prev, _cursor - prev) : std::string {};
+    // Only materialize the deleted run when it can feed the ghost: either a live ghost to
+    // re-prepend onto, or a consumed-prefix memory to restore from (the trimmed-to-empty case).
+    // The common no-suggestion backspace then allocates nothing.
+    auto const removed = (wasAtEnd && (!_ghostText.empty() || !_ghostConsumed.empty()))
+                             ? _buffer.substr(prev, _cursor - prev)
+                             : std::string {};
     _buffer.erase(prev, _cursor - prev);
     _cursor = prev;
     adjustGhostAfterBackwardDelete(removed, wasAtEnd);
@@ -1519,11 +1535,15 @@ void InputField::setGhostText(std::string_view ghost)
     if (auto const pos = ghost.find('\n'); pos != std::string_view::npos)
         ghost = ghost.substr(0, pos);
     _ghostText = std::string(ghost);
+    // A freshly supplied suggestion supersedes any consumed-prefix memory: the restore-on-backspace
+    // shortcut only makes sense relative to the ghost that was actually being shown.
+    _ghostConsumed.clear();
 }
 
 void InputField::clearGhostText()
 {
     _ghostText.clear();
+    _ghostConsumed.clear();
 }
 
 void InputField::prependGhostText(std::string_view deleted)
@@ -1547,9 +1567,26 @@ void InputField::adjustGhostAfterBackwardDelete(std::string_view deletedRun, boo
     // text still remains. A mid-buffer delete isn't rendered, and a delete that empties the
     // buffer must not resurrect the just-killed line as a suggestion.
     if (wasAtEnd && !_buffer.empty())
-        prependGhostText(deletedRun);
+    {
+        // First-deletion case: typing the tail of a suggestion trims the ghost to empty (e.g. the
+        // last 't' of "git checkout"), so there is no live ghost to re-prepend onto. If the just
+        // deleted run is exactly the run we consumed off the ghost head while typing, undo that
+        // consumption: restore the run onto the ghost and pop it from the memory. This reconstructs
+        // the suggestion the debounce would recompute, with zero flicker.
+        if (!_ghostConsumed.empty() && _ghostConsumed.ends_with(deletedRun))
+        {
+            _ghostText.insert(0, deletedRun);
+            _ghostConsumed.erase(_ghostConsumed.size() - deletedRun.size());
+        }
+        else
+        {
+            prependGhostText(deletedRun);
+        }
+    }
     else
+    {
         clearGhostText();
+    }
 }
 
 void InputField::acceptGhostText()
@@ -1559,7 +1596,7 @@ void InputField::acceptGhostText()
 
     saveUndoState();
     insertText(_ghostText);
-    _ghostText.clear();
+    clearGhostText();
 }
 
 auto InputField::ghostText() const noexcept -> std::string_view

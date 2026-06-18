@@ -349,6 +349,9 @@ class InputField: public Component
     KeyBindings _keyBindings = KeyBindings::defaults();
     InputFieldStyles _styles;                      ///< Custom styles (nullopt values use theme defaults)
     std::string _ghostText;                        ///< Ghost text suggestion (displayed dimmed after cursor)
+    std::string _ghostConsumed;                    ///< Ghost head chars eaten by matching keystrokes, so a
+                                                   ///< backspace can restore the suggestion even after the
+                                                   ///< last char trimmed the ghost to empty (anti-flicker).
     TextDecorator const* _textDecorator = nullptr; ///< Optional decorator for custom rendering.
     std::string _continuationPrompt;               ///< Continuation prompt for non-first lines.
     bool _masked = false;

@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <string_view>
 #include <thread>
 
 #include "PromptComponent.hpp"
@@ -27,6 +28,28 @@ tui::InputEvent charEvent(char ch)
     return tui::KeyEvent { .key = static_cast<tui::KeyCode>(ch),
                            .modifiers = tui::Modifier::None,
                            .codepoint = static_cast<char32_t>(ch) };
+}
+
+/// @brief Creates a Backspace key event.
+tui::InputEvent backspaceEvent()
+{
+    return tui::KeyEvent { .key = tui::KeyCode::Backspace, .modifiers = tui::Modifier::None };
+}
+
+/// @brief Builds a prefix-consistent suggest function: completes any prefix of @p word to @p word.
+///
+/// Mirrors a real prefix completer just enough to exercise the ghost-text lifecycle, and lets a
+/// test count how often the (notionally expensive) completer is consulted.
+PromptComponent::SuggestFn prefixSuggest(std::string word, int* calls = nullptr)
+{
+    return [word = std::move(word), calls](std::string_view text,
+                                           std::size_t /*cursor*/) -> std::optional<std::string> {
+        if (calls)
+            ++*calls;
+        if (!text.empty() && word.starts_with(text) && text.size() < word.size())
+            return word.substr(text.size());
+        return std::nullopt;
+    };
 }
 
 } // namespace
@@ -82,6 +105,59 @@ TEST_CASE("PromptComponent.typing_after_ctrl_d_clears_hint", "[prompt]")
     CHECK(typed == PromptComponent::Action::Changed);
     // Ghost text should be cleared (the exit hint was dismissed)
     CHECK_FALSE(comp.inputField().hasGhostText());
+}
+
+// ============================================================================
+// Ghost-text first-deletion flicker (typing the last suggestion char, then backspace)
+// ============================================================================
+
+TEST_CASE("PromptComponent.ghost_text_no_flicker_on_first_backspace", "[prompt]")
+{
+    // Reproduces the first-deletion flicker: a stable ghost is showing; the user types the final
+    // char of the suggestion (trimming the ghost to empty) and immediately backspaces, BEFORE the
+    // 100ms ghost-text debounce fires. Without the consumed-prefix restore, the ghost would be
+    // blank for that frame and only reappear after the debounce — a visible flash.
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("git checkout"));
+
+    for (char const ch: std::string_view("git checkou"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110)); // let the ghost debounce elapse
+    comp.flushDeferredUpdates();                                 // settle: ghost is "t" and stable
+    REQUIRE(comp.inputField().text() == "git checkou");
+    REQUIRE(comp.inputField().ghostText() == "t");
+
+    // Type the final 't' — trims the ghost to empty (suggestion fully consumed).
+    (void) comp.processInput(charEvent('t'));
+    CHECK(comp.inputField().text() == "git checkout");
+    CHECK(comp.inputField().ghostText().empty());
+
+    // Immediate backspace, no debounce flush in between: the ghost must already be correct.
+    (void) comp.processInput(backspaceEvent());
+    CHECK(comp.inputField().text() == "git checkou");
+    CHECK(comp.inputField().ghostText() == "t"); // restored synchronously — no flash
+}
+
+TEST_CASE("PromptComponent.ghost_text_first_backspace_survives_debounce_recompute", "[prompt]")
+{
+    // The synchronously restored ghost must agree with what the debounced recompute produces, so the
+    // later flush is a no-op rather than a second visible change.
+    int calls = 0;
+    auto comp = PromptComponent();
+    comp.setSuggestFn(prefixSuggest("git checkout", &calls));
+
+    for (char const ch: std::string_view("git checkou"))
+        (void) comp.processInput(charEvent(ch));
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    (void) comp.processInput(charEvent('t'));
+    (void) comp.processInput(backspaceEvent());
+    REQUIRE(comp.inputField().ghostText() == "t");
+
+    // Let the debounce fire: recompute for "git checkou" yields the same "t" — ghost unchanged.
+    std::this_thread::sleep_for(std::chrono::milliseconds(110));
+    comp.flushDeferredUpdates();
+    CHECK(comp.inputField().ghostText() == "t");
 }
 
 TEST_CASE("PromptComponent.ctrl_d_immediate_exit_when_disabled", "[prompt]")

@@ -1275,6 +1275,14 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
 
 void PromptComponent::updateGhostText()
 {
+    // Prefer the injected suggestion source (used by tests and any non-Completer provider); fall
+    // back to the Completer. With neither available there is nothing to suggest.
+    if (_suggestFn)
+    {
+        tui::updateGhostText(_inputField, _suggestCacheText, _suggestCacheResult, _suggestFn);
+        return;
+    }
+
     if (!_completer)
     {
         _inputField.clearGhostText();
