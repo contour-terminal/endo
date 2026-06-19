@@ -70,16 +70,18 @@ add_library(endo-lsp STATIC
 target_link_libraries(endo-lsp PUBLIC endo-editor-protocol endo nlohmann_json::nlohmann_json)
 target_include_directories(endo-lsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# Tests
-add_executable(test-endo-lsp
-    test_main.cpp
-    LspServer_test.cpp
-)
-target_link_libraries(test-endo-lsp endo-lsp Catch2::Catch2)
-add_test(NAME test-endo-lsp COMMAND test-endo-lsp)
-
-# Enable sanitizers and clang-tidy for all targets
+# Enable sanitizers and clang-tidy for the production library (always).
 enable_sanitizers(endo-lsp)
 enable_clang_tidy(endo-lsp)
-enable_sanitizers(test-endo-lsp)
-enable_clang_tidy(test-endo-lsp)
+
+# Tests
+if(ENDO_TESTING)
+    add_executable(test-endo-lsp
+        test_main.cpp
+        LspServer_test.cpp
+    )
+    target_link_libraries(test-endo-lsp endo-lsp Catch2::Catch2)
+    add_test(NAME test-endo-lsp COMMAND test-endo-lsp)
+    enable_sanitizers(test-endo-lsp)
+    enable_clang_tidy(test-endo-lsp)
+endif()
