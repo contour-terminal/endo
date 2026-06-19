@@ -505,9 +505,9 @@ Keys are specified as modifier+key combinations:
 | `backspace` | Delete character backward |
 | `delete` | Delete character forward |
 | `ctrl+d` | Delete character forward (EOF on empty line) |
-| `ctrl+backspace` | Delete word backward |
-| `alt+backspace` | Delete word backward |
-| `ctrl+w` | Delete word backward |
+| `ctrl+backspace` | Delete word backward (stops at `/`, `.`, `-` boundaries) |
+| `alt+backspace` | Delete whole whitespace-delimited word backward |
+| `ctrl+w` | Delete word backward (stops at `/`, `.`, `-` boundaries) |
 | `alt+d` | Delete word forward |
 | `ctrl+k` | Kill to end of line |
 | `ctrl+u` | Kill to start of line |

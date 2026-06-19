@@ -457,17 +457,19 @@ class InputField: public Component
     [[nodiscard]] auto nextGraphemeCluster(std::size_t pos) const -> std::size_t;
     [[nodiscard]] auto prevGraphemeCluster(std::size_t pos) const -> std::size_t;
 
-    // Word boundary helpers (fish-style: path separators break words)
-    [[nodiscard]] static auto isWordChar(char c) -> bool;
-    [[nodiscard]] static auto isBigWordChar(char c) -> bool;
+    // Word boundary helpers (fish-style: path separators break words). These classify a whole
+    // Unicode codepoint (char32_t), not a single UTF-8 byte, so multibyte separators (e.g. the
+    // ideographic space U+3000) are recognized correctly.
+    [[nodiscard]] static auto isWordChar(char32_t c) -> bool;
+    [[nodiscard]] static auto isBigWordChar(char32_t c) -> bool;
     [[nodiscard]] auto findWordStart(std::size_t pos) const -> std::size_t;
     [[nodiscard]] auto findWordEnd(std::size_t pos) const -> std::size_t;
 
     /// Kill backward from the cursor to the start of the previous word, using the given
-    /// boundary predicate to decide which characters count as part of a word. Handles ghost
+    /// boundary predicate to decide which codepoints count as part of a word. Handles ghost
     /// text, the kill ring, and undo state. Backs both small-word and bigword backward kills.
-    /// @param isWordCharFn Returns true for characters that belong to a word (non-boundary).
-    void killWordBackwardWith(bool (*isWordCharFn)(char));
+    /// @param isWordCharFn Returns true for codepoints that belong to a word (non-boundary).
+    void killWordBackwardWith(bool (*isWordCharFn)(char32_t));
 
     // Mouse helpers
     [[nodiscard]] auto detectClickCount(int line, int column) -> int;

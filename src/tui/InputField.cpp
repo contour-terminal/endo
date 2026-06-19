@@ -2,12 +2,14 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <ranges>
 #include <string>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
+#include <libunicode/ucd.h>
 #include <libunicode/utf8_grapheme_segmenter.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
@@ -77,6 +79,66 @@ namespace
         while (pos > 0 && (static_cast<unsigned char>(s[pos]) & 0xC0) == 0x80)
             --pos;
         return pos;
+    }
+
+    /// @brief Decodes the UTF-8 codepoint that starts at the given byte offset.
+    /// @param s UTF-8 encoded text.
+    /// @param pos Byte offset of a codepoint's lead byte (must be a codepoint boundary).
+    /// @return The decoded codepoint, or U+FFFD (replacement) for malformed input.
+    auto decodeUtf8At(std::string_view s, std::size_t pos) -> char32_t
+    {
+        if (pos >= s.size())
+            return U'�';
+        auto const lead = static_cast<unsigned char>(s[pos]);
+        if (lead < 0x80)
+            return static_cast<char32_t>(lead);
+
+        auto extraBytes = std::size_t { 0 };
+        auto cp = char32_t { 0 };
+        if ((lead & 0xE0) == 0xC0)
+        {
+            extraBytes = 1;
+            cp = lead & 0x1F;
+        }
+        else if ((lead & 0xF0) == 0xE0)
+        {
+            extraBytes = 2;
+            cp = lead & 0x0F;
+        }
+        else if ((lead & 0xF8) == 0xF0)
+        {
+            extraBytes = 3;
+            cp = lead & 0x07;
+        }
+        else
+        {
+            return U'�'; // Stray continuation byte or invalid lead byte.
+        }
+
+        if (pos + extraBytes >= s.size())
+            return U'�';
+        for (auto const i: std::views::iota(std::size_t { 1 }, extraBytes + 1))
+        {
+            auto const cont = static_cast<unsigned char>(s[pos + i]);
+            if ((cont & 0xC0) != 0x80)
+                return U'�';
+            cp = (cp << 6) | (cont & 0x3F);
+        }
+        return cp;
+    }
+
+    /// @brief Tests whether a codepoint is whitespace for word-boundary purposes.
+    /// Covers ASCII whitespace plus Unicode space/line/paragraph separators (e.g. U+00A0 NBSP,
+    /// U+2003 EM SPACE, U+3000 IDEOGRAPHIC SPACE), so multibyte separators delimit words too.
+    /// @param cp The codepoint to test.
+    /// @return True if the codepoint is whitespace.
+    auto isUnicodeWhitespace(char32_t cp) -> bool
+    {
+        if (cp < 0x80)
+            return std::isspace(static_cast<unsigned char>(cp)) != 0;
+        return unicode::general_category::is_space_separator(cp)
+               || unicode::general_category::is_line_separator(cp)
+               || unicode::general_category::is_paragraph_separator(cp);
     }
 
     /// @brief Sanitizes text for single-line display.
@@ -1137,9 +1199,9 @@ void InputField::killWord()
     // Find end position without modifying cursor
     auto endPos = _cursor;
     auto const size = _buffer.size();
-    while (endPos < size && !isWordChar(_buffer[endPos]))
+    while (endPos < size && !isWordChar(static_cast<unsigned char>(_buffer[endPos])))
         endPos = nextGraphemeCluster(endPos);
-    while (endPos < size && isWordChar(_buffer[endPos]))
+    while (endPos < size && isWordChar(static_cast<unsigned char>(_buffer[endPos])))
         endPos = nextGraphemeCluster(endPos);
 
     if (endPos > start)
@@ -1162,16 +1224,18 @@ void InputField::killBigWordBackward()
     killWordBackwardWith(&InputField::isBigWordChar);
 }
 
-void InputField::killWordBackwardWith(bool (*isWordCharFn)(char))
+void InputField::killWordBackwardWith(bool (*isWordCharFn)(char32_t))
 {
     auto const end = _cursor;
     bool const wasAtEnd = _cursor == _buffer.size();
-    // Find start position without modifying cursor
+    // Find start position without modifying cursor. Walk by codepoint (prevUtf8 is O(1), unlike
+    // prevGraphemeCluster which re-segments the whole prefix on every call) and classify the whole
+    // decoded codepoint so multibyte separators such as U+3000 are recognized as boundaries.
     auto startPos = _cursor;
-    while (startPos > 0 && !isWordCharFn(_buffer[prevGraphemeCluster(startPos)]))
-        startPos = prevGraphemeCluster(startPos);
-    while (startPos > 0 && isWordCharFn(_buffer[prevGraphemeCluster(startPos)]))
-        startPos = prevGraphemeCluster(startPos);
+    while (startPos > 0 && !isWordCharFn(decodeUtf8At(_buffer, prevUtf8(_buffer, startPos))))
+        startPos = prevUtf8(_buffer, startPos);
+    while (startPos > 0 && isWordCharFn(decodeUtf8At(_buffer, prevUtf8(_buffer, startPos))))
+        startPos = prevUtf8(_buffer, startPos);
 
     if (startPos < end)
     {
@@ -1278,19 +1342,19 @@ void InputField::moveForwardWord()
 {
     auto const size = _buffer.size();
     // Emacs forward-word: skip non-word chars, then skip word chars
-    while (_cursor < size && !isWordChar(_buffer[_cursor]))
+    while (_cursor < size && !isWordChar(decodeUtf8At(_buffer, _cursor)))
         _cursor = nextUtf8(_buffer, _cursor);
-    while (_cursor < size && isWordChar(_buffer[_cursor]))
+    while (_cursor < size && isWordChar(decodeUtf8At(_buffer, _cursor)))
         _cursor = nextUtf8(_buffer, _cursor);
 }
 
 void InputField::moveBackwardWord()
 {
     // Skip whitespace/non-word characters
-    while (_cursor > 0 && !isWordChar(_buffer[prevUtf8(_buffer, _cursor)]))
+    while (_cursor > 0 && !isWordChar(decodeUtf8At(_buffer, prevUtf8(_buffer, _cursor))))
         _cursor = prevUtf8(_buffer, _cursor);
     // Skip word characters
-    while (_cursor > 0 && isWordChar(_buffer[prevUtf8(_buffer, _cursor)]))
+    while (_cursor > 0 && isWordChar(decodeUtf8At(_buffer, prevUtf8(_buffer, _cursor))))
         _cursor = prevUtf8(_buffer, _cursor);
 }
 
@@ -1437,24 +1501,24 @@ auto InputField::prevGraphemeCluster(std::size_t pos) const -> std::size_t
     return lastBoundaryOffset;
 }
 
-auto InputField::isWordChar(char c) -> bool
+auto InputField::isWordChar(char32_t c) -> bool
 {
     // Fish-style word boundaries: alphanumeric and underscore are word characters.
     // Path separators, punctuation, and whitespace are boundaries.
-    if (std::isalnum(static_cast<unsigned char>(c)))
+    if (c < 0x80 && std::isalnum(static_cast<unsigned char>(c)))
         return true;
-    if (c == '_')
+    if (c == U'_')
         return true;
     // Everything else (including '/', '.', '-', whitespace, etc.) is a boundary
     return false;
 }
 
-auto InputField::isBigWordChar(char c) -> bool
+auto InputField::isBigWordChar(char32_t c) -> bool
 {
     // Fish-style "bigword" boundaries: only whitespace separates words. Every non-whitespace
     // character (including '/', '.', '-', and punctuation) is part of the word, so a backward
     // kill removes a whole space-delimited token (e.g. all of "git checkout -b" at once).
-    return std::isspace(static_cast<unsigned char>(c)) == 0;
+    return !isUnicodeWhitespace(c);
 }
 
 // ============================================================================
@@ -1631,11 +1695,17 @@ void InputField::adjustGhostAfterBackwardDelete(std::string_view deletedRun, boo
         else if (!_ghostConsumed.empty())
         {
             // We are in the consumed-memory regime (chars were eaten off the ghost head or a
-            // suffix was accepted), but the deleted grapheme cluster is NOT a tail of that memory.
-            // This happens when a single deleted cluster blends an un-consumed base character with
-            // a consumed combining mark: the cluster is longer than _ghostConsumed, so prepending
-            // it verbatim would splice the base character (never part of the suggestion) into the
-            // ghost — and commit it on accept. Don't guess; clear and let the debounce recompute.
+            // suffix was accepted), but the deleted run is NOT a tail of that memory. Two ways to
+            // get here, both un-restorable:
+            //   1. A single deleted grapheme cluster blends an un-consumed base character with a
+            //      consumed combining mark, so the cluster is longer than _ghostConsumed.
+            //   2. A backward kill (notably the whitespace-delimited "bigword" kill bound to
+            //      Alt+Backspace) removes more than the accepted/consumed suggestion tail — i.e.
+            //      user-typed buffer text that preceded the suggestion is gone too.
+            // In both cases the suggestion is no longer valid for the new buffer prefix: prepending
+            // the deleted run verbatim would splice text that was never part of the suggestion into
+            // the ghost (and commit it on accept), and the typed context the suggestion depended on
+            // has been deleted. Don't guess; clear and let the debounce recompute.
             clearGhostText();
         }
         else
@@ -2184,14 +2254,14 @@ auto InputField::findWordStart(std::size_t pos) const -> std::size_t
         current = prevGraphemeCluster(current);
 
     // If we're on a non-word char, just return current position
-    if (!isWordChar(_buffer[current]))
+    if (!isWordChar(decodeUtf8At(_buffer, current)))
         return pos;
 
     // Move backward while on word characters
     while (current > 0)
     {
         std::size_t prev = prevGraphemeCluster(current);
-        if (!isWordChar(_buffer[prev]))
+        if (!isWordChar(decodeUtf8At(_buffer, prev)))
             break;
         current = prev;
     }
@@ -2209,11 +2279,11 @@ auto InputField::findWordEnd(std::size_t pos) const -> std::size_t
         return _buffer.size();
 
     // If we're on a non-word char, just return current position
-    if (!isWordChar(_buffer[current]))
+    if (!isWordChar(decodeUtf8At(_buffer, current)))
         return pos;
 
     // Move forward while on word characters
-    while (current < _buffer.size() && isWordChar(_buffer[current]))
+    while (current < _buffer.size() && isWordChar(decodeUtf8At(_buffer, current)))
     {
         current = nextGraphemeCluster(current);
     }
@@ -2231,7 +2301,7 @@ void InputField::selectWord(std::size_t position)
         position = !_buffer.empty() ? _buffer.size() - 1 : 0;
 
     // If on a non-word character, don't select anything meaningful
-    if (!isWordChar(_buffer[position]))
+    if (!isWordChar(decodeUtf8At(_buffer, position)))
     {
         // Select just this character
         _selectionAnchor = position;
