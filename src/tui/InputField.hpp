@@ -412,7 +412,8 @@ class InputField: public Component
     void killToEnd();            ///< Ctrl+K: Kill from cursor to end of line.
     void killToStart();          ///< Ctrl+U: Kill from cursor to start of line.
     void killWord();             ///< Alt+D: Kill word forward.
-    void killWordBackward();     ///< Alt+Backspace / Ctrl+W: Kill word backward.
+    void killWordBackward();     ///< Ctrl+W / Ctrl+Backspace: Kill word backward.
+    void killBigWordBackward();  ///< Alt+Backspace: Kill whitespace-delimited word backward.
     void yank();                 ///< Ctrl+Y: Yank (paste) from kill ring.
     void yankPop();              ///< Alt+Y: Cycle kill ring.
     void deleteChar();           ///< Delete / Ctrl+D: Delete character at cursor.
@@ -458,8 +459,15 @@ class InputField: public Component
 
     // Word boundary helpers (fish-style: path separators break words)
     [[nodiscard]] static auto isWordChar(char c) -> bool;
+    [[nodiscard]] static auto isBigWordChar(char c) -> bool;
     [[nodiscard]] auto findWordStart(std::size_t pos) const -> std::size_t;
     [[nodiscard]] auto findWordEnd(std::size_t pos) const -> std::size_t;
+
+    /// Kill backward from the cursor to the start of the previous word, using the given
+    /// boundary predicate to decide which characters count as part of a word. Handles ghost
+    /// text, the kill ring, and undo state. Backs both small-word and bigword backward kills.
+    /// @param isWordCharFn Returns true for characters that belong to a word (non-boundary).
+    void killWordBackwardWith(bool (*isWordCharFn)(char));
 
     // Mouse helpers
     [[nodiscard]] auto detectClickCount(int line, int column) -> int;

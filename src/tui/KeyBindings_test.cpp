@@ -332,6 +332,9 @@ TEST_CASE("KeyBindings.defaults_delete_backspace")
     CHECK(bindings.lookup(keyEvent(KeyCode::Backspace)) == EditAction::DeleteCharBackward);
     CHECK(bindings.lookup(keyEvent(KeyCode::Delete)) == EditAction::DeleteCharForward);
     CHECK(bindings.lookup(keyEvent(KeyCode::Backspace, Modifier::Ctrl)) == EditAction::DeleteWordBackward);
+    // Alt+Backspace deletes a whole whitespace-delimited word (Fish bigword), distinct from
+    // Ctrl+Backspace / Ctrl+W which use small-word boundaries.
+    CHECK(bindings.lookup(keyEvent(KeyCode::Backspace, Modifier::Alt)) == EditAction::DeleteBigWordBackward);
 }
 
 TEST_CASE("KeyBindings.defaults_kill")
@@ -550,6 +553,7 @@ TEST_CASE("parseEditAction.editing_actions")
     CHECK(parseEditAction("delete-char-forward") == EditAction::DeleteCharForward);
     CHECK(parseEditAction("delete-word") == EditAction::DeleteWord);
     CHECK(parseEditAction("delete-word-backward") == EditAction::DeleteWordBackward);
+    CHECK(parseEditAction("delete-big-word-backward") == EditAction::DeleteBigWordBackward);
     CHECK(parseEditAction("kill-to-end") == EditAction::KillToEnd);
     CHECK(parseEditAction("kill-to-start") == EditAction::KillToStart);
     CHECK(parseEditAction("transpose") == EditAction::Transpose);
@@ -614,6 +618,7 @@ TEST_CASE("editActionToString_parseEditAction_roundtrip")
     testRoundtrip(EditAction::Paste);
     testRoundtrip(EditAction::MoveForwardChar);
     testRoundtrip(EditAction::DeleteWordBackward);
+    testRoundtrip(EditAction::DeleteBigWordBackward);
     testRoundtrip(EditAction::KillToEnd);
     testRoundtrip(EditAction::Yank);
     testRoundtrip(EditAction::Submit);

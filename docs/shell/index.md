@@ -128,7 +128,8 @@ See [Configuration](configuration.md) for full prompt customization options.
 | Ctrl+Y | Redo |
 | Ctrl+A / Ctrl+E | Smart cursor to line start / end |
 | Ctrl+K / Ctrl+U | Kill to end / start of line |
-| Ctrl+W | Delete word backward |
+| Ctrl+W / Ctrl+Backspace | Delete word backward (stops at `/`, `.`, `-` boundaries) |
+| Alt+Backspace | Delete whole whitespace-delimited word backward |
 | Ctrl+D | Delete character (or EOF on empty line) |
 | Ctrl+L | Clear screen |
 | Ctrl+R | History search |
