@@ -2109,6 +2109,97 @@ TEST_CASE("InputField.bigword_backward_restores_ghost_text_after_accept")
     CHECK(field.ghostText() == "install"); // restored synchronously — no flash
 }
 
+TEST_CASE("InputField.bigword_backward_mid_buffer_deletes_and_clears_ghost")
+{
+    // Cursor NOT at end (wasAtEnd == false): the bigword kill removes the token before the cursor
+    // and the trailing text is preserved. A mid-buffer delete is never rendered with a ghost, so
+    // any live ghost is dropped.
+    InputField field;
+    field.setText("foo bar baz");
+    field.setCursor(7); // just after "bar"
+    field.setGhostText("ghost");
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(field.text() == "foo  baz"); // "bar" removed, surrounding spaces and "baz" intact
+    CHECK(field.cursor() == 4);
+    CHECK(field.ghostText().empty()); // mid-buffer delete clears the ghost
+}
+
+TEST_CASE("InputField.bigword_backward_reprepends_live_ghost")
+{
+    // Live-ghost re-prepend path: no consumed-prefix memory, a ghost is showing, and the delete is
+    // at end-of-buffer. The killed run is prepended onto the live ghost (mirrors the small-word
+    // path) so the suggestion still renders without a debounce gap.
+    InputField field;
+    field.setText("git remote");
+    field.setCursor(10);
+    field.setGhostText(" add");
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt)); // delete "remote"
+    CHECK(field.text() == "git ");
+    CHECK(field.ghostText() == "remote add"); // killed token prepended onto the live ghost
+}
+
+TEST_CASE("InputField.bigword_backward_past_suggestion_clears_ghost")
+{
+    // When the bigword kill removes MORE than the accepted suggestion tail — i.e. user-typed text
+    // that the suggestion depended on — the suggestion is no longer valid for the new buffer
+    // prefix, so the ghost is cleared rather than showing a stale suggestion. (The small-word path
+    // would delete only the accepted "b" and could restore it; bigword deletes "-b" and cannot.)
+    InputField field;
+    field.setText("git checkout -");
+    field.setCursor(14);
+    field.setGhostText("b");
+    field.acceptGhostText(); // _ghostConsumed = "b", buffer = "git checkout -b"
+    REQUIRE(field.text() == "git checkout -b");
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt)); // deletes "-b"
+    CHECK(field.text() == "git checkout ");
+    CHECK(field.ghostText().empty()); // "b" alone is not a valid suggestion after '-' is gone
+}
+
+TEST_CASE("InputField.bigword_backward_stops_at_unicode_whitespace")
+{
+    // isBigWordChar classifies a whole codepoint, so multibyte Unicode separators delimit words.
+    // U+3000 IDEOGRAPHIC SPACE (\xE3\x80\x80) must stop the bigword kill at the space boundary
+    // rather than being treated as a word character and swallowed.
+    InputField ideographic;
+    ideographic.setText("foo\xE3\x80\x80"
+                        "bar"); // "foo" + U+3000 + "bar"
+    ideographic.setCursor(9);   // after "bar" (3 + 3 + 3 bytes)
+    (void) ideographic.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(ideographic.text() == "foo\xE3\x80\x80"); // only "bar" removed; the space remains
+
+    InputField nbsp;
+    nbsp.setText("foo\xC2\xA0"
+                 "bar"); // "foo" + U+00A0 NBSP + "bar"
+    nbsp.setCursor(8);   // after "bar" (3 + 2 + 3 bytes)
+    (void) nbsp.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(nbsp.text() == "foo\xC2\xA0"); // only "bar" removed
+}
+
+TEST_CASE("InputField.bigword_backward_skips_multiple_interior_spaces")
+{
+    // Several ASCII spaces before the token are skipped (boundary run) and the whole word plus its
+    // leading whitespace run back to the previous token is removed, matching emacs backward-kill.
+    InputField field;
+    field.setText("echo    hello");
+    field.setCursor(13);
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    CHECK(field.text() == "echo    "); // "hello" removed, the space run before it kept
+}
+
+TEST_CASE("InputField.bigword_backward_pushes_killed_token_to_kill_ring")
+{
+    // The bigword kill shares the kill ring: the removed token is yankable. Verifies the kill-ring
+    // round-trip rather than only the resulting buffer text.
+    InputField field;
+    field.keyBindings().bind(KeyChord::fromChar('v', Modifier::Ctrl), EditAction::Paste);
+    field.setText("make foo/bar");
+    field.setCursor(12);
+    (void) field.processEvent(specialKey(KeyCode::Backspace, Modifier::Alt));
+    REQUIRE(field.text() == "make ");
+    (void) field.processEvent(charKey('v', Modifier::Ctrl)); // yank
+    CHECK(field.text() == "make foo/bar");                   // whole bigword "foo/bar" was on the kill ring
+}
+
 TEST_CASE("InputField.ghost_text_cleared_on_backspace_when_cursor_not_at_end")
 {
     InputField field;

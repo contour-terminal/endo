@@ -975,7 +975,7 @@ bind --help
 | Category | Actions |
 |----------|---------|
 | Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, `move-backward-word`, `move-to-line-start`, `move-to-line-end`, `move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, `smart-move-to-line-start`, `smart-move-to-line-end` |
-| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, `delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |
+| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, `delete-word-backward`, `delete-big-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |
 | Undo/Redo | `undo`, `redo` |
 | Kill Ring | `yank`, `yank-pop` |
 | Selection | `select-all` |
