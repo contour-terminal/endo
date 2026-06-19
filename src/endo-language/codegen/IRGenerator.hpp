@@ -12,6 +12,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <format>
 #include <memory>
 #include <optional>
 #include <span>
@@ -1006,5 +1007,29 @@ class IRGenerator final: public ast::Visitor
     /// Keeps body pointers valid until the end of IR generation.
     std::vector<std::unique_ptr<ast::Expr>> _syntheticAST;
 };
+
+// These variadic templates are defined here (not in the .cpp) so that every
+// translation unit that calls them — e.g. HOFCodegen.cpp, OptionCombinatorsCodegen.cpp —
+// can instantiate them. With the definitions in IRGenerator.cpp, instantiations used only
+// by other TUs were never emitted, breaking the link in builds where no test TU happened
+// to force them.
+template <typename... Args>
+void IRGenerator::reportTypeError(std::format_string<Args...> f, Args&&... args)
+{
+    auto const msg = std::format(f, std::forward<Args>(args)...);
+    _report.typeError(_builder.sourceLocation(), "{}", std::string_view(msg));
+    _hasErrors = true;
+}
+
+template <typename... Args>
+void IRGenerator::reportTypeErrorWithSuggestions(std::vector<std::string> suggestions,
+                                                 std::format_string<Args...> f,
+                                                 Args&&... args)
+{
+    auto const msg = std::format(f, std::forward<Args>(args)...);
+    _report.typeErrorWithSuggestions(
+        _builder.sourceLocation(), std::move(suggestions), std::nullopt, "{}", std::string_view(msg));
+    _hasErrors = true;
+}
 
 } // namespace endo

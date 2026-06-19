@@ -55,7 +55,7 @@ endmacro()
 # ==============================================================================
 # Catch2 v3 - Unit testing framework
 # ==============================================================================
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND ENDO_TESTING)
     find_package(Catch2 3 QUIET)
     if(TARGET Catch2::Catch2)
         set(THIRDPARTY_BUILTIN_Catch2 "system package")

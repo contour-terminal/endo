@@ -130,7 +130,12 @@ if(ENDO_HAS_LOCAL_LLM)
 endif()
 target_include_directories(endo-agent PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
+# Enable sanitizers and clang-tidy for the production library (always).
+enable_sanitizers(endo-agent)
+enable_clang_tidy(endo-agent)
+
 # Unit tests
+if(ENDO_TESTING)
 add_executable(test-endo-agent
     test_main.cpp
     Types_test.cpp
@@ -221,8 +226,6 @@ add_executable(test-endo-agent
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
 
-# Enable sanitizers and clang-tidy
-enable_sanitizers(endo-agent)
-enable_clang_tidy(endo-agent)
 enable_sanitizers(test-endo-agent)
 enable_clang_tidy(test-endo-agent)
+endif()

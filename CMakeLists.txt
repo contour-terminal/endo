@@ -118,6 +118,18 @@ if(NOT DEFINED ENDO_TRACE_LEXER)
 endif()
 
 
+# ENDO_TESTING must be defined before include(EndoThirdParties): the Catch2 fetch
+# there is guarded by it, so the variable has to exist by the time it runs.
+if(EMSCRIPTEN)
+    set(ENDO_TESTING OFF)
+else()
+    option(ENDO_TESTING "Build unit tests [default: ON]" ON)
+endif()
+
+if(ENDO_TESTING)
+    enable_testing()
+endif()
+
 include(EnableCcache)
 include(StaticLinking)
 include(EndoThirdParties)
@@ -143,17 +155,8 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-D_GLIBCXX_ASSERTIONS)
 endif()
 
-if(EMSCRIPTEN)
-    set(ENDO_TESTING OFF)
-else()
-    option(ENDO_TESTING "Build unit tests [default: ON]" ON)
-endif()
-
-if(ENDO_TESTING)
-    enable_testing()
-endif()
-
 # crispy is vendored from contour — pass through its testing flag
+# (ENDO_TESTING is defined earlier, before include(EndoThirdParties).)
 set(CONTOUR_TESTING ${ENDO_TESTING})
 
 option(ENDO_BUILTIN_CRARHDUMP "Enable built-in crashdump reporter, say NO to use system wide crashdump collection like coredumpctl [default: ON]" ON)

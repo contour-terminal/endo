@@ -73,32 +73,34 @@ enable_clang_tidy(tui)
 set_source_files_properties(StbImageImpl.cpp PROPERTIES COMPILE_OPTIONS "-fno-sanitize=undefined")
 
 # Tests
-add_executable(test-tui
-    test_main.cpp
-    CommandPalettePopup_test.cpp
-    CommandRegistry_test.cpp
-    GenericSyntaxHighlighter_test.cpp
-    InputField_test.cpp
-    KeyBindings_test.cpp
-    Renderer_test.cpp
-    Completer_test.cpp
-    CompletionPopup_test.cpp
-    FuzzyPickerPopup_test.cpp
-    PopupKeyDispatch_test.cpp
-    ScrollableSelection_test.cpp
-    Screen_test.cpp
-    SmartCaseMatch_test.cpp
-    FuzzyMatch_test.cpp
-    MarkdownTable_test.cpp
-    MarkdownRenderer_test.cpp
-    QuestionComponent_test.cpp
-    StyledText_test.cpp
-    Unicode_test.cpp
-    VtParser_test.cpp
-    ImageLoader_test.cpp
-    SemanticBlockClient_test.cpp
-)
-target_link_libraries(test-tui tui Catch2::Catch2)
-add_test(NAME test-tui COMMAND test-tui)
-enable_sanitizers(test-tui)
-enable_clang_tidy(test-tui)
+if(ENDO_TESTING)
+    add_executable(test-tui
+        test_main.cpp
+        CommandPalettePopup_test.cpp
+        CommandRegistry_test.cpp
+        GenericSyntaxHighlighter_test.cpp
+        InputField_test.cpp
+        KeyBindings_test.cpp
+        Renderer_test.cpp
+        Completer_test.cpp
+        CompletionPopup_test.cpp
+        FuzzyPickerPopup_test.cpp
+        PopupKeyDispatch_test.cpp
+        ScrollableSelection_test.cpp
+        Screen_test.cpp
+        SmartCaseMatch_test.cpp
+        FuzzyMatch_test.cpp
+        MarkdownTable_test.cpp
+        MarkdownRenderer_test.cpp
+        QuestionComponent_test.cpp
+        StyledText_test.cpp
+        Unicode_test.cpp
+        VtParser_test.cpp
+        ImageLoader_test.cpp
+        SemanticBlockClient_test.cpp
+    )
+    target_link_libraries(test-tui tui Catch2::Catch2)
+    add_test(NAME test-tui COMMAND test-tui)
+    enable_sanitizers(test-tui)
+    enable_clang_tidy(test-tui)
+endif()

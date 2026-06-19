@@ -96,23 +96,25 @@ enable_sanitizers(endo-platform)
 enable_clang_tidy(endo-platform)
 
 # Tests
-add_executable(test-endo-platform
-    test_main.cpp
-    PlatformError_test.cpp
-    Process_test.cpp
-    Pipe_test.cpp
-    EnvironmentProvider_test.cpp
-    FileInfoProvider_test.cpp
-    Wakeup_test.cpp
-    MessageQueue_test.cpp
-    ProjectFileTree_test.cpp
-    WindowsPlatform_test.cpp
-    LinuxProcessProvider_test.cpp
-    DarwinProcessProvider_test.cpp
-)
+if(ENDO_TESTING)
+    add_executable(test-endo-platform
+        test_main.cpp
+        PlatformError_test.cpp
+        Process_test.cpp
+        Pipe_test.cpp
+        EnvironmentProvider_test.cpp
+        FileInfoProvider_test.cpp
+        Wakeup_test.cpp
+        MessageQueue_test.cpp
+        ProjectFileTree_test.cpp
+        WindowsPlatform_test.cpp
+        LinuxProcessProvider_test.cpp
+        DarwinProcessProvider_test.cpp
+    )
 
-target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test-endo-platform endo-platform Catch2::Catch2)
-add_test(NAME test-endo-platform COMMAND test-endo-platform)
-enable_sanitizers(test-endo-platform)
-enable_clang_tidy(test-endo-platform)
+    target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(test-endo-platform endo-platform Catch2::Catch2)
+    add_test(NAME test-endo-platform COMMAND test-endo-platform)
+    enable_sanitizers(test-endo-platform)
+    enable_clang_tidy(test-endo-platform)
+endif()

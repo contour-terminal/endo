@@ -26,16 +26,18 @@ add_library(endo-dap STATIC
 target_link_libraries(endo-dap PUBLIC endo-editor-protocol endo nlohmann_json::nlohmann_json CoreVM)
 target_include_directories(endo-dap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# Tests
-add_executable(test-endo-dap
-    test_main.cpp
-    DapServer_test.cpp
-)
-target_link_libraries(test-endo-dap endo-dap Catch2::Catch2)
-add_test(NAME test-endo-dap COMMAND test-endo-dap)
-
-# Enable sanitizers and clang-tidy for all targets
+# Enable sanitizers and clang-tidy for the production library (always).
 enable_sanitizers(endo-dap)
 enable_clang_tidy(endo-dap)
-enable_sanitizers(test-endo-dap)
-enable_clang_tidy(test-endo-dap)
+
+# Tests
+if(ENDO_TESTING)
+    add_executable(test-endo-dap
+        test_main.cpp
+        DapServer_test.cpp
+    )
+    target_link_libraries(test-endo-dap endo-dap Catch2::Catch2)
+    add_test(NAME test-endo-dap COMMAND test-endo-dap)
+    enable_sanitizers(test-endo-dap)
+    enable_clang_tidy(test-endo-dap)
+endif()

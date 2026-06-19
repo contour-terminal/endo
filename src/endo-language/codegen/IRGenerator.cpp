@@ -1562,24 +1562,8 @@ CoreVM::Value* IRGenerator::codegen(ast::Node const* node)
     return _result;
 }
 
-template <typename... Args>
-void IRGenerator::reportTypeError(std::format_string<Args...> f, Args&&... args)
-{
-    auto const msg = std::format(f, std::forward<Args>(args)...);
-    _report.typeError(_builder.sourceLocation(), "{}", std::string_view(msg));
-    _hasErrors = true;
-}
-
-template <typename... Args>
-void IRGenerator::reportTypeErrorWithSuggestions(std::vector<std::string> suggestions,
-                                                 std::format_string<Args...> f,
-                                                 Args&&... args)
-{
-    auto const msg = std::format(f, std::forward<Args>(args)...);
-    _report.typeErrorWithSuggestions(
-        _builder.sourceLocation(), std::move(suggestions), std::nullopt, "{}", std::string_view(msg));
-    _hasErrors = true;
-}
+// reportTypeError / reportTypeErrorWithSuggestions are defined as inline templates in
+// IRGenerator.hpp so that all calling translation units can instantiate them.
 
 std::string IRGenerator::wrappedTypeName(CoreVM::Value* value, uint16_t typeId)
 {

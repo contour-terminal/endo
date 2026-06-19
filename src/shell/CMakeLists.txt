@@ -259,66 +259,68 @@ set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
 target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp endo-dap)
 enable_static_linking(endo-bin)
 
-add_executable(test-endo-shell
-    test_main.cpp
-    Shell_test.cpp
-    DirectoryConfig_test.cpp
-    builtins/InlineArgParser_test.cpp
-    commands/FindExpression_test.cpp
-    commands/GrepCommand_test.cpp
-    commands/TimeoutCommand_test.cpp
-    commands/PkillCommand_test.cpp
-    ui/PromptComponent_test.cpp
-    ui/modules/GitModule_test.cpp
-    ui/Gradient_test.cpp
-    completion/Completer_test.cpp
-    completion/FSharpCompleter_test.cpp
-    completion/CommandSpecCompleter_test.cpp
-    completion/CompleterFunctionRegistry_test.cpp
-    completion/ScriptedCompleter_test.cpp
-    history/History_test.cpp
-    history/PersistentHistory_test.cpp
-    history/RequiredPaths_test.cpp
-    output/OutputDefinitionRegistry_test.cpp
-    output/OutputParser_test.cpp
-    util/CommandResolver_test.cpp
-    util/Suggestions_test.cpp
-    ui/RichConsoleReport_test.cpp
-    ui/SyntaxHighlighter_test.cpp
-)
-
-if(NOT ENDO_BUILTIN_CRARHDUMP)
-target_sources(test-endo-shell PUBLIC
-  CrashHandler_test.cpp
-)
-endif()
-
-target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
-target_compile_definitions(test-endo-shell PRIVATE
-    ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
-    ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
-)
-
-add_test(NAME test-endo-shell COMMAND test-endo-shell)
-set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 120)
-if(WIN32)
-    set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 300)
-endif()
-
-# Documentation snippet validation test
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_FOUND)
-    add_test(
-        NAME check-doc-snippets
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/scripts/check-doc-snippets.py
-            --endo-path $<TARGET_FILE:endo-bin>
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+if(ENDO_TESTING)
+    add_executable(test-endo-shell
+        test_main.cpp
+        Shell_test.cpp
+        DirectoryConfig_test.cpp
+        builtins/InlineArgParser_test.cpp
+        commands/FindExpression_test.cpp
+        commands/GrepCommand_test.cpp
+        commands/TimeoutCommand_test.cpp
+        commands/PkillCommand_test.cpp
+        ui/PromptComponent_test.cpp
+        ui/modules/GitModule_test.cpp
+        ui/Gradient_test.cpp
+        completion/Completer_test.cpp
+        completion/FSharpCompleter_test.cpp
+        completion/CommandSpecCompleter_test.cpp
+        completion/CompleterFunctionRegistry_test.cpp
+        completion/ScriptedCompleter_test.cpp
+        history/History_test.cpp
+        history/PersistentHistory_test.cpp
+        history/RequiredPaths_test.cpp
+        output/OutputDefinitionRegistry_test.cpp
+        output/OutputParser_test.cpp
+        util/CommandResolver_test.cpp
+        util/Suggestions_test.cpp
+        ui/RichConsoleReport_test.cpp
+        ui/SyntaxHighlighter_test.cpp
     )
-    set_tests_properties(check-doc-snippets PROPERTIES
-        TIMEOUT 120
-        LABELS "docs"
+
+    if(NOT ENDO_BUILTIN_CRARHDUMP)
+        target_sources(test-endo-shell PUBLIC
+            CrashHandler_test.cpp
+        )
+    endif()
+
+    target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
+    target_compile_definitions(test-endo-shell PRIVATE
+        ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+        ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
     )
+
+    add_test(NAME test-endo-shell COMMAND test-endo-shell)
+    set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 120)
+    if(WIN32)
+        set_tests_properties(test-endo-shell PROPERTIES TIMEOUT 300)
+    endif()
+
+    # Documentation snippet validation test
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_FOUND)
+        add_test(
+            NAME check-doc-snippets
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/scripts/check-doc-snippets.py
+                --endo-path $<TARGET_FILE:endo-bin>
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+        set_tests_properties(check-doc-snippets PROPERTIES
+            TIMEOUT 120
+            LABELS "docs"
+        )
+    endif()
 endif()
 
 # Installation
