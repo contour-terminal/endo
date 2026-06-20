@@ -202,21 +202,18 @@ std::expected<void, PlatformError> WindowsProcessManager::sendSignal(ProcessId p
 {
     if (signal == SIGINT)
     {
-        if (!GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid))
-            return std::unexpected(PlatformError::SignalFailed);
-        return {};
+        // CTRL_C can only be delivered to a console process group. This succeeds for a
+        // child created in its own group (CREATE_NEW_PROCESS_GROUP). A foreground child
+        // that shares the shell's console group is not a group leader, so the event cannot
+        // be targeted at it individually; fall back to terminating it by handle so callers
+        // like `timeout --foreground -s INT` still stop the command.
+        if (GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid))
+            return {};
+        return terminateByHandle(pid);
     }
 
     if (signal == SIGTERM || signal == SIGKILL)
-    {
-        auto const it = _processHandles.find(pid);
-        if (it == _processHandles.end())
-            return std::unexpected(PlatformError::SignalFailed);
-
-        if (!TerminateProcess(it->second, 1))
-            return std::unexpected(PlatformError::SignalFailed);
-        return {};
-    }
+        return terminateByHandle(pid);
 
     if (signal == SIGTSTP)
         return suspendProcess(pid);
@@ -224,6 +221,17 @@ std::expected<void, PlatformError> WindowsProcessManager::sendSignal(ProcessId p
     if (signal == SIGCONT)
         return resumeProcess(pid);
 
+    return {};
+}
+
+auto WindowsProcessManager::terminateByHandle(ProcessId pid) -> std::expected<void, PlatformError>
+{
+    auto const it = _processHandles.find(pid);
+    if (it == _processHandles.end())
+        return std::unexpected(PlatformError::SignalFailed);
+
+    if (!TerminateProcess(it->second, 1))
+        return std::unexpected(PlatformError::SignalFailed);
     return {};
 }
 

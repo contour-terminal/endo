@@ -189,6 +189,15 @@ class WindowsProcessManager final: public ProcessManager
     std::unordered_map<ProcessId, HANDLE> _processHandles;               ///< PID -> process HANDLE
     std::unordered_map<ProcessId, std::vector<ProcessId>> _groupMembers; ///< group -> PIDs
 
+    /// @brief Terminates a process by its tracked handle.
+    ///
+    /// Used as the delivery mechanism for SIGTERM/SIGKILL, and as the fallback for SIGINT
+    /// when the target is not its own console process group (so CTRL_C cannot be delivered
+    /// to it individually).
+    ///
+    /// @param pid Process ID whose handle should be terminated.
+    /// @return Success, or PlatformError::SignalFailed if the handle is unknown or termination fails.
+    [[nodiscard]] auto terminateByHandle(ProcessId pid) -> std::expected<void, PlatformError>;
     /// @brief Suspends all threads of a process using Toolhelp32.
     [[nodiscard]] auto suspendProcess(ProcessId pid) -> std::expected<void, PlatformError>;
     /// @brief Resumes all threads of a process using Toolhelp32.
