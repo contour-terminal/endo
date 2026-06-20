@@ -2,8 +2,15 @@
 #
 # description: which accepts multiple program names via the variadic overload
 # mode: shell
-# mock-which: ls=/usr/bin/ls
-# mock-which: cat=/usr/bin/cat
-# expect-nonempty
-
-which ls cat
+# expect: /test/bin/ls
+# expect: /test/bin/cat
+# aux-file: bin/ls
+#!/bin/sh
+# aux-file: bin/cat
+#!/bin/sh
+# main-file:
+# Resolve two absolute paths in one call to exercise the variadic overload. Using
+# paths (not bare names) keeps the test deterministic: which resolves a path
+# argument against the injected (in-memory) filesystem rather than the host PATH,
+# so it does not depend on ls/cat actually being installed on the test machine.
+which /test/bin/ls /test/bin/cat
