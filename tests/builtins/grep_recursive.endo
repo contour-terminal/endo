@@ -8,4 +8,4 @@ nothing to see here
 # aux-file: dir/b.txt
 has a needle inside
 # main-file:
-grep -r needle /test/dir
+grep -r --color=never needle /test/dir

@@ -74,10 +74,10 @@ class Generator
         }
 
         /// Start suspended so the first value is produced on the first iteration.
-        std::suspend_always initial_suspend() const noexcept { return {}; }
+        [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
         /// Suspend at the end so the handle stays valid for `done()` queries.
-        std::suspend_always final_suspend() const noexcept { return {}; }
+        [[nodiscard]] std::suspend_always final_suspend() const noexcept { return {}; }
 
         /// Records the address of the yielded value and suspends.
         std::suspend_always yield_value(T const& v) noexcept
