@@ -78,9 +78,12 @@ int TuiRuntime::computeTimeoutMs() const
 
 void TuiRuntime::routeDecodedEvent(InputEvent&& event)
 {
-    // TODO(#19): route protocol reports to one-shot Terminal query awaiters and
-    // the Terminal's color-scheme/focus handlers. Until then they are consumed
-    // here so they never surface as application input.
+    // Defensive net: the production EventSource already consumes color-scheme /
+    // focus / cursor / cell reports (Terminal::consumeProtocolReports), but a
+    // source is only contracted to deliver decoded events, not to pre-filter —
+    // and DecModeReport / DcsResponse are not stripped upstream. Drop any report
+    // here so it never surfaces as application input regardless of the source.
+    // TODO(#19): route reports to one-shot Terminal query awaiters when those land.
     if (isProtocolReport(event))
         return;
     _inputBuffer.push_back(std::move(event));

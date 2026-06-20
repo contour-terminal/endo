@@ -23,8 +23,11 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
 
     handles[count++] = input.inputNativeHandle();
 
+    // The resize event is null until the terminal is initialized; WaitForMultipleObjects
+    // rejects a null handle, so only include it once it is a real event. (Its absent
+    // value is nullptr, not InvalidHandle/INVALID_HANDLE_VALUE.)
     auto const resizeHandle = input.resizeNativeHandle();
-    if (resizeHandle != endo::platform::InvalidHandle)
+    if (resizeHandle != nullptr && resizeHandle != endo::platform::InvalidHandle)
         handles[count++] = resizeHandle;
 
     if (_agentWakeup != nullptr)

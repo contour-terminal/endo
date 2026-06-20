@@ -194,7 +194,7 @@ class [[nodiscard]] Task
 
     /// @return The result of a completed root task, rethrowing any body exception.
     /// @pre `done()` is true.
-    T result()
+    [[nodiscard]] T result()
     {
         if (_handle.promise().exception)
             std::rethrow_exception(_handle.promise().exception);

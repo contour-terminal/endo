@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <ranges>
 #include <vector>
 
 #include <coro/Cancellation.hpp>
@@ -32,7 +33,7 @@ Task<int> awaitOneKeyCodepoint(TuiRuntime& runtime)
 Task<int> sumKeyCodepoints(TuiRuntime& runtime, int count)
 {
     auto sum = 0;
-    for (auto i = 0; i < count; ++i)
+    for ([[maybe_unused]] auto const index: std::views::iota(0, count))
     {
         auto const event = co_await runtime.nextEvent();
         sum += static_cast<int>(std::get<KeyEvent>(event).codepoint);
