@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+/// @file
+/// Coroutine-driven modal interactions for the TUI.
+///
+/// A @c ModalComponent is a self-contained interaction (a question, a picker, a
+/// confirmation) that the runtime drives to a single @c Result. `runModal`
+/// turns the hand-rolled "loop polling input until the prompt resolves" pattern
+/// — duplicated across the agent auth flow, the AskUser prompt, and the
+/// permission prompt — into one awaitable:
+///
+/// @code
+/// auto answer = co_await runModal(runtime, question, &screen);
+/// @endcode
+
+#include <tui/Component.hpp>
+#include <tui/InputEvent.hpp>
+#include <tui/Screen.hpp>
+#include <tui/runtime/TuiRuntime.hpp>
+
+#include <optional>
+
+#include <coro/Cancellation.hpp>
+#include <coro/Task.hpp>
+
+namespace tui::runtime
+{
+
+/// A component that drives a self-contained modal interaction to completion.
+///
+/// `render()` stays synchronous (it runs every frame); the modal advances by
+/// feeding events to `step()`, which returns a @c Result to finish or
+/// std::nullopt to keep going. This keeps the existing per-frame render/dispatch
+/// contract while making the *interaction* awaitable.
+/// @tparam Result The value the interaction yields when it completes.
+template <typename Result>
+class ModalComponent: public Component
+{
+  public:
+    /// Feeds one input event to the interaction.
+    /// @param event The event to process.
+    /// @return The final result to end the modal, or std::nullopt to continue.
+    [[nodiscard]] virtual std::optional<Result> step(InputEvent const& event) = 0;
+};
+
+/// Drives @p modal to completion on @p runtime, returning its result.
+///
+/// Each event is dispatched through @p screen first (so hover, tooltips, and
+/// focus bookkeeping keep working) and then offered to `modal.step()`; the
+/// screen is redrawn after every event the modal consumes. If the flow is
+/// cancelled while awaiting input (Ctrl+C), the modal ends with std::nullopt,
+/// matching the existing "Escape / cancelled" behavior.
+///
+/// The caller is responsible for placing @p modal in the screen tree (or as an
+/// overlay) and for focus, before awaiting; `runModal` only drives the
+/// interaction.
+///
+/// @param runtime The runtime whose input the modal consumes.
+/// @param modal The interaction to drive.
+/// @param screen Optional screen to dispatch events through and redraw.
+/// @return The modal's result, or std::nullopt if cancelled.
+template <typename Result>
+[[nodiscard]] endo::coro::Task<std::optional<Result>> runModal(TuiRuntime& runtime,
+                                                               ModalComponent<Result>& modal,
+                                                               Screen* screen = nullptr)
+{
+    if (screen != nullptr)
+        screen->draw();
+
+    for (;;)
+    {
+        InputEvent event;
+        try
+        {
+            event = co_await runtime.nextEvent();
+        }
+        catch (endo::coro::OperationCancelled const&)
+        {
+            co_return std::nullopt;
+        }
+
+        if (screen != nullptr)
+            (void) screen->dispatchEvent(event);
+
+        if (auto result = modal.step(event))
+            co_return std::move(result);
+
+        if (screen != nullptr)
+            screen->draw();
+    }
+}
+
+} // namespace tui::runtime

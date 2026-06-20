@@ -103,6 +103,7 @@ if(ENDO_TESTING)
         ImageLoader_test.cpp
         SemanticBlockClient_test.cpp
         runtime/TuiRuntime_test.cpp
+        runtime/Modal_test.cpp
     )
     target_link_libraries(test-tui tui Catch2::Catch2)
     add_test(NAME test-tui COMMAND test-tui)
