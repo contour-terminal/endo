@@ -2,6 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <string>
+#include <system_error>
 #include <vector>
 
 #include <platform/testing/InMemoryFileSystem.hpp>
@@ -61,13 +63,35 @@ TEST_CASE("walkDirectoryRecursive stops when the consumer breaks out", "[FileSys
     REQUIRE(visitCount == 1);
 }
 
-TEST_CASE("walkDirectoryRecursive yields nothing for a non-directory", "[FileSystem]")
+TEST_CASE("walkDirectoryRecursive yields each directory before its own contents", "[FileSystem]")
+{
+    auto const fs = makeTree();
+
+    // Parents must precede their children (pre-order), the contract cp/rm depend on. Record the
+    // order each path is first seen and assert every entry comes after its parent directory.
+    auto order = std::vector<std::string> {};
+    for (auto const& entry: fs.walkDirectoryRecursive("/root"))
+        order.push_back(entry.path.generic_string());
+
+    auto const indexOf = [&](std::string const& p) {
+        return std::distance(order.begin(), std::ranges::find(order, p));
+    };
+    REQUIRE(indexOf("/root/a") < indexOf("/root/a/file1.txt"));
+    REQUIRE(indexOf("/root/a") < indexOf("/root/a/file2.txt"));
+    REQUIRE(indexOf("/root/b") < indexOf("/root/b/file3.txt"));
+}
+
+TEST_CASE("walkDirectoryRecursive yields nothing for a non-directory and reports the error", "[FileSystem]")
 {
     auto const fs = makeTree();
 
     auto visitCount = 0;
-    for ([[maybe_unused]] auto const& entry: fs.walkDirectoryRecursive("/does/not/exist"))
+    auto ec = std::error_code {};
+    for ([[maybe_unused]] auto const& entry: fs.walkDirectoryRecursive("/does/not/exist", &ec))
         ++visitCount;
 
     REQUIRE(visitCount == 0);
+    // The error channel lets destructive callers (cp/mv/rm) tell "empty directory" apart from
+    // "could not enumerate", so they don't act on a partial/empty walk.
+    REQUIRE(ec);
 }

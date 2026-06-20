@@ -42,6 +42,14 @@ struct Expr
     /// @param entry The filesystem entry to test.
     /// @return true if the entry matches this expression.
     [[nodiscard]] virtual bool evaluate(FindEntry const& entry) const = 0;
+
+    /// @return Whether evaluating this expression reads the entry's size, so the
+    ///         caller can skip the per-entry size stat when no predicate needs it.
+    [[nodiscard]] virtual bool requiresSize() const { return false; }
+
+    /// @return Whether evaluating this expression reads the entry's mtime, so the
+    ///         caller can skip the per-entry mtime stat when no predicate needs it.
+    [[nodiscard]] virtual bool requiresMtime() const { return false; }
 };
 
 /// Matches filename against a glob pattern (-name, -iname).
@@ -85,6 +93,8 @@ struct SizeExpr final: public Expr
     SizeExpr(CompareMode m, uintmax_t b): mode(m), bytes(b) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresSize() const override { return true; }
 };
 
 /// Matches modification time (-mtime [+|-]N).
@@ -96,6 +106,8 @@ struct MtimeExpr final: public Expr
     MtimeExpr(CompareMode m, int d): mode(m), days(d) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresMtime() const override { return true; }
 };
 
 /// Matches files newer than a reference file (-newer FILE).
@@ -106,12 +118,16 @@ struct NewerExpr final: public Expr
     explicit NewerExpr(std::filesystem::file_time_type t): referenceTime(t) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresMtime() const override { return true; }
 };
 
 /// Matches empty files or directories (-empty).
 struct EmptyExpr final: public Expr
 {
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresSize() const override { return true; }
 };
 
 /// Always evaluates to true (used for -print, -print0 actions).
@@ -129,6 +145,13 @@ struct AndExpr final: public Expr
     AndExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r)) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresSize() const override { return left->requiresSize() || right->requiresSize(); }
+
+    [[nodiscard]] bool requiresMtime() const override
+    {
+        return left->requiresMtime() || right->requiresMtime();
+    }
 };
 
 /// Logical OR of two expressions (-o, -or).
@@ -140,6 +163,13 @@ struct OrExpr final: public Expr
     OrExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r)) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresSize() const override { return left->requiresSize() || right->requiresSize(); }
+
+    [[nodiscard]] bool requiresMtime() const override
+    {
+        return left->requiresMtime() || right->requiresMtime();
+    }
 };
 
 /// Logical NOT of an expression (-not, !).
@@ -150,6 +180,10 @@ struct NotExpr final: public Expr
     explicit NotExpr(std::unique_ptr<Expr> op): operand(std::move(op)) {}
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+
+    [[nodiscard]] bool requiresSize() const override { return operand->requiresSize(); }
+
+    [[nodiscard]] bool requiresMtime() const override { return operand->requiresMtime(); }
 };
 
 /// Parsed global options that are not part of the expression tree.

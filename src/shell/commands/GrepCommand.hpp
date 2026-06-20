@@ -97,9 +97,11 @@ using ErrorWriter = std::function<void(std::string_view)>;
 [[nodiscard]] std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts);
 
 /// Checks if a file appears to be binary by scanning for null bytes.
+/// @param fs FileSystem abstraction used to open the file (so it works against
+///           any injected backend, not just the real on-disk filesystem).
 /// @param path Path to the file to check.
-/// @return true if the file appears to be binary.
-[[nodiscard]] bool isBinaryFile(std::filesystem::path const& path);
+/// @return true if the file appears to be binary (or cannot be opened).
+[[nodiscard]] bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path);
 
 /// Collects the list of files to search based on options.
 ///

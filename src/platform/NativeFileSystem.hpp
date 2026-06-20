@@ -48,7 +48,8 @@ class NativeFileSystem final: public FileSystem
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
         std::filesystem::path const& path) const override;
-    [[nodiscard]] Generator<DirectoryEntry> walkDirectoryRecursive(std::filesystem::path path) const override;
+    [[nodiscard]] Generator<DirectoryEntry> walkDirectoryRecursive(
+        std::filesystem::path path, std::error_code* outError = nullptr) const override;
 
     [[nodiscard]] std::expected<std::uintmax_t, std::string> fileSize(
         std::filesystem::path const& path) const override;

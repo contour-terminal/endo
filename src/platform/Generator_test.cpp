@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,7 +15,7 @@ namespace
 /// A coroutine yielding the integers [0, n).
 Generator<int> countTo(int n)
 {
-    for (auto i = 0; i < n; ++i)
+    for (auto const i: std::views::iota(0, n))
         co_yield i;
 }
 
@@ -36,7 +37,7 @@ Generator<std::string> words()
 
 Generator<int> infinite()
 {
-    for (auto i = 0;; ++i)
+    for (auto const i: std::views::iota(0))
         co_yield i;
 }
 } // namespace

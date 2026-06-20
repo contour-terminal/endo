@@ -8,6 +8,7 @@
 #include <stop_token>
 #include <vector>
 
+#include <platform/NativeFileSystem.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 
@@ -601,7 +602,7 @@ TEST_CASE("grep.binary.text_file", "[grep]")
         std::ofstream f(textFile);
         f << "hello world\nthis is text\n";
     }
-    CHECK_FALSE(isBinaryFile(textFile));
+    CHECK_FALSE(isBinaryFile(endo::platform::NativeFileSystem::instance(), textFile));
     fs::remove_all(tmpDir);
 }
 
@@ -617,6 +618,6 @@ TEST_CASE("grep.binary.null_bytes", "[grep]")
         f.put('\0');
         f << "world";
     }
-    CHECK(isBinaryFile(binFile));
+    CHECK(isBinaryFile(endo::platform::NativeFileSystem::instance(), binFile));
     fs::remove_all(tmpDir);
 }

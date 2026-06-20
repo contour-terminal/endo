@@ -208,27 +208,6 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
     return std::pair { rangeStart, rangeEnd };
 }
 
-/// Lazily yields the lines of @p in (newline-delimited, trailing CR stripped) as
-/// a coroutine. Consuming it one line at a time lets the caller poll for Ctrl+C
-/// between lines, so reading even a very large file stays interruptible.
-///
-/// The stream is taken by value (owned by the coroutine frame) so the coroutine
-/// has no dangling-reference parameter and the stream lives exactly as long as
-/// the generator.
-///
-/// @param in Input stream to read from; ownership is moved into the generator.
-/// @return A generator of lines without their terminating newline.
-endo::Generator<std::string> readLines(std::unique_ptr<std::istream> in)
-{
-    std::string line;
-    while (std::getline(*in, line))
-    {
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        co_yield line;
-    }
-}
-
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
 /// Calls onChunk(data, size) for each chunk of data read.
 ///
@@ -1282,13 +1261,22 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
                 // be undefined. Both the collect and the delete phases poll for Ctrl+C, and we
                 // only print in verbose mode — this unifies what used to be separate verbose /
                 // removeAll() paths, the latter of which was a single non-interruptible call.
-                auto rmThrottle = InterruptThrottle {};
+                auto rmThrottle = InterruptThrottle { 1 };
+                std::error_code walkError;
                 auto entries = std::vector<std::filesystem::path> {};
-                for (auto const& entry: _fs.walkDirectoryRecursive(path))
+                for (auto const& entry: _fs.walkDirectoryRecursive(path, &walkError))
                 {
                     if (rmThrottle.pending())
                         return 130;
                     entries.push_back(entry.path);
+                }
+                // If the tree could not be fully enumerated, report it and skip removal so we do
+                // not delete a partial subtree (and leave the still-referenced remainder dangling).
+                if (walkError)
+                {
+                    error("rm: cannot remove '{}': {}", path, walkError.message());
+                    success = false;
+                    continue;
                 }
                 std::ranges::reverse(entries); // children before their parents
 
@@ -1635,10 +1623,11 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
         if (recursive && _fs.isDirectory(srcPath))
         {
             // Recursive directory copy: stream entries from the lazy walk and copy each as it
-            // arrives, polling for Ctrl+C between entries so a large tree aborts promptly.
-            // recursive_directory_iterator yields parents before their contents, which is the
-            // order cp needs (create a directory, then populate it). We copy only — never mutate
-            // the source while walking it.
+            // arrives, polling for Ctrl+C between entries (interval 1 — each entry does real I/O)
+            // so a large tree aborts promptly. The walk yields parents before their contents, which
+            // is the order cp needs (create a directory, then populate it). We copy only — never
+            // mutate the source while walking it. walkError captures an enumeration failure so a
+            // partial copy is reported rather than silently succeeding.
 
             // Create the top-level target directory
             if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
@@ -1650,8 +1639,9 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                 continue;
             }
 
-            auto cpThrottle = InterruptThrottle {};
-            for (auto const& entry: _fs.walkDirectoryRecursive(srcPath))
+            auto cpThrottle = InterruptThrottle { 1 };
+            std::error_code walkError;
+            for (auto const& entry: _fs.walkDirectoryRecursive(srcPath, &walkError))
             {
                 if (cpThrottle.pending())
                     return 130;
@@ -1699,6 +1689,14 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                                                 platform::normalizePath(entry.path),
                                                 platform::normalizePath(entryTarget)));
                 }
+            }
+
+            // The source tree could not be fully enumerated; report it rather than reporting
+            // success for a partial copy.
+            if (walkError)
+            {
+                error("cp: cannot copy '{}': {}", src, walkError.message());
+                success = false;
             }
         }
         else
@@ -1920,10 +1918,14 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                 }
                 // Cross-device move falls back to a recursive copy (then the source is removed
                 // below). Stream the lazy walk and copy each entry as it arrives, polling for
-                // Ctrl+C between entries. Copy only — the source is not touched until the walk
-                // has fully completed.
-                auto mvThrottle = InterruptThrottle {};
-                for (auto const& entry: _fs.walkDirectoryRecursive(srcPath))
+                // Ctrl+C between entries (interval 1 — each entry does real I/O). Copy only — the
+                // source is not touched until the walk has fully completed. walkError captures an
+                // enumeration failure: if the source could not be fully read, we treat it as a copy
+                // failure so the source is NOT removed (otherwise a partial copy + removeAll would
+                // lose the un-copied remainder).
+                auto mvThrottle = InterruptThrottle { 1 };
+                std::error_code walkError;
+                for (auto const& entry: _fs.walkDirectoryRecursive(srcPath, &walkError))
                 {
                     if (mvThrottle.pending())
                         return 130;
@@ -1956,6 +1958,14 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                             break;
                         }
                     }
+                }
+
+                // A failed/partial enumeration must abort the move so removeAll does not delete a
+                // source that was only partially copied.
+                if (walkError && !copyFailed)
+                {
+                    copyFailed = true;
+                    copyError = walkError.message();
                 }
             }
             else
@@ -2099,6 +2109,12 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
     auto const separator = options.print0 ? std::string_view("\0", 1) : std::string_view("\n");
 
+    // Only stat for size/mtime when a predicate actually needs it; otherwise `find -name`/`-type`/
+    // `-path` would issue two wasted stat syscalls (fileSize + lastWriteTime) per entry on a large
+    // tree. The expression tree is scanned once here.
+    auto const needsSize = expression && expression->requiresSize();
+    auto const needsMtime = expression && expression->requiresMtime();
+
     // Helper to derive std::filesystem::file_type from FileSystem::DirectoryEntry booleans
     auto entryFileType = [](FileSystem::DirectoryEntry const& de) -> std::filesystem::file_type {
         if (de.isSymlink)
@@ -2133,17 +2149,19 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
             }
 
             auto const ftype = pathFileType(searchPath);
-            auto const isFile = _fs.isRegularFile(searchPath);
-            auto const sizeResult =
-                isFile ? _fs.fileSize(searchPath) : std::expected<std::uintmax_t, std::string>(0);
-            auto const mtimeResult = _fs.lastWriteTime(searchPath);
+            auto const isFile = ftype == std::filesystem::file_type::regular;
+            auto const size =
+                (needsSize && isFile) ? _fs.fileSize(searchPath).value_or(0) : std::uintmax_t {};
+            auto const mtime =
+                needsMtime ? _fs.lastWriteTime(searchPath).value_or(std::filesystem::file_time_type {})
+                           : std::filesystem::file_time_type {};
 
             find::FindEntry entry {
                 .path = searchPath,
                 .filename = searchPath.filename().string(),
                 .type = ftype,
-                .size = sizeResult.value_or(0),
-                .mtime = mtimeResult.value_or(std::filesystem::file_time_type {}),
+                .size = size,
+                .mtime = mtime,
                 .depth = 0,
             };
 
@@ -2179,16 +2197,18 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
 
             auto const ftype = entryFileType(dirEntry);
-            auto const sizeResult = dirEntry.isRegularFile ? _fs.fileSize(dirEntry.path)
-                                                           : std::expected<std::uintmax_t, std::string>(0);
-            auto const mtimeResult = _fs.lastWriteTime(dirEntry.path);
+            auto const size = (needsSize && dirEntry.isRegularFile) ? _fs.fileSize(dirEntry.path).value_or(0)
+                                                                    : std::uintmax_t {};
+            auto const mtime =
+                needsMtime ? _fs.lastWriteTime(dirEntry.path).value_or(std::filesystem::file_time_type {})
+                           : std::filesystem::file_time_type {};
 
             find::FindEntry entry {
                 .path = dirEntry.path,
                 .filename = dirEntry.path.filename().string(),
                 .type = ftype,
-                .size = sizeResult.value_or(0),
-                .mtime = mtimeResult.value_or(std::filesystem::file_time_type {}),
+                .size = size,
+                .mtime = mtime,
                 .depth = depth,
             };
 
@@ -2362,7 +2382,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 return 130;
 
             // Binary detection
-            if (opts.skipBinary && grep::isBinaryFile(filePath))
+            if (opts.skipBinary && grep::isBinaryFile(_fs, filePath))
                 continue;
 
             // Read file
@@ -2375,15 +2395,18 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
             }
 
-            // Stream the file's lines through the coroutine reader so a large file stays
-            // interruptible during the read, not just during the search below. Ownership of the
-            // stream moves into the generator, which keeps it alive for the duration of the read.
+            // Read the file line by line, polling for Ctrl+C so a large file stays interruptible
+            // during the read (not just during the search below) and moving each line into the
+            // buffer to avoid a per-line copy.
             std::vector<std::string> lines;
-            for (auto const& line: readLines(std::move(fileStream)))
+            std::string line;
+            while (std::getline(*fileStream, line))
             {
                 if (throttle.pending())
                     return 130;
-                lines.push_back(line);
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                lines.push_back(std::move(line));
             }
 
             auto const matches = grep::searchLines(

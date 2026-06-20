@@ -230,15 +230,20 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     return entries;
 }
 
-Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(fs::path path) const
+Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
+    fs::path path, std::error_code* outError) const
 {
     // recursive_directory_iterator reads directories lazily as it advances, so
     // co_yield-ing per entry streams the walk to the consumer one entry at a
-    // time. The error_code overload is used so a bad/unreadable root yields
-    // nothing rather than throwing out of the coroutine (callers pre-check).
+    // time. The error_code overload is used so a bad/unreadable root or a
+    // mid-walk error yields nothing/partial rather than throwing out of the
+    // coroutine; the error is surfaced via outError (when provided) so
+    // destructive callers can avoid acting on an incomplete enumeration.
     std::error_code ec;
     auto it = fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec);
     auto const end = fs::recursive_directory_iterator {};
+    // C-style loop is intentional here: a range-based for would use the throwing operator++,
+    // whereas we must thread an error_code through the non-throwing increment(ec) overload.
     for (; !ec && it != end; it.increment(ec))
     {
         auto const& entry = *it;
@@ -249,6 +254,8 @@ Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(f
             .isSymlink = entry.is_symlink(),
         };
     }
+    if (ec && outError != nullptr)
+        *outError = ec;
 }
 
 std::expected<std::uintmax_t, std::string> NativeFileSystem::fileSize(fs::path const& path) const

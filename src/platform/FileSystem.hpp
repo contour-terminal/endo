@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <platform/Generator.hpp>
@@ -89,12 +90,20 @@ class FileSystem
     /// @param path Root directory to walk. Taken BY VALUE: the implementation is
     ///             a coroutine, so a by-reference parameter would dangle in the
     ///             coroutine frame once the caller's argument expires.
+    /// @param outError Optional out-parameter (taken by pointer, not reference,
+    ///             to keep the coroutine free of reference parameters; it must
+    ///             outlive the returned generator). When non-null, it is set to
+    ///             the error that aborted the walk — a non-existent/non-directory
+    ///             root, or an iteration error (other than skipped
+    ///             permission-denied subtrees). Destructive callers (cp/mv/rm)
+    ///             pass it so they can avoid acting on a partial enumeration;
+    ///             read-only callers (find/grep) leave it null and tolerate a
+    ///             partial walk. It is left untouched on a fully successful walk.
     /// @return A generator of entries. A non-existent or non-directory root, or
-    ///         an unreadable root, simply yields nothing; callers that must
-    ///         report such errors should pre-check with exists()/isDirectory().
-    ///         The owning FileSystem must outlive the returned generator.
+    ///         an unreadable root, simply yields nothing. The owning FileSystem
+    ///         must outlive the returned generator.
     [[nodiscard]] virtual Generator<DirectoryEntry> walkDirectoryRecursive(
-        std::filesystem::path path) const = 0;
+        std::filesystem::path path, std::error_code* outError = nullptr) const = 0;
 
     // Metadata
     [[nodiscard]] virtual std::expected<std::uintmax_t, std::string> fileSize(

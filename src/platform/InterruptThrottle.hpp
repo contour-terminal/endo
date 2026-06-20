@@ -44,15 +44,19 @@ class InterruptThrottle
 
     /// Polls for a pending interrupt at the throttled cadence.
     ///
-    /// On the calls where it actually polls, it drains pending signals and, if a
-    /// SIGINT/Ctrl+C is pending, consumes it (clears the flag so the next REPL
-    /// prompt is not spuriously interrupted) and returns true. The caller should
-    /// then abort its loop and return exit code 130.
+    /// Polls on the very first call and then every @c interval calls (the counter
+    /// is post-incremented from 0, so 0 % interval == 0 fires immediately). This
+    /// matters for short loops: with a pre-increment a loop running fewer than
+    /// @c interval iterations would never poll at all and could ignore Ctrl+C
+    /// entirely. On the calls where it actually polls, it drains pending signals
+    /// and, if a SIGINT/Ctrl+C is pending, consumes it (clears the flag so the
+    /// next REPL prompt is not spuriously interrupted) and returns true. The
+    /// caller should then abort its loop and return exit code 130.
     ///
     /// @return true if an interrupt was pending (and has been consumed).
     [[nodiscard]] bool pending() noexcept
     {
-        if (++_counter % _interval != 0)
+        if (_counter++ % _interval != 0)
             return false;
         SignalHandler::processSignalFd();
         if (!SignalHandler::hasPendingSigint())

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
+
 #include <platform/InterruptThrottle.hpp>
 #include <platform/SignalHandler.hpp>
 
@@ -24,7 +26,7 @@ TEST_CASE("InterruptThrottle reports no interrupt when none is pending", "[Inter
     auto const _ = SigintGuard {};
     auto throttle = InterruptThrottle { 1 };
 
-    for (auto i = 0; i < 10; ++i)
+    for ([[maybe_unused]] auto const i: std::views::iota(0, 10))
         REQUIRE_FALSE(throttle.pending());
 }
 
@@ -41,21 +43,25 @@ TEST_CASE("InterruptThrottle detects and consumes a pending interrupt", "[Interr
     REQUIRE_FALSE(throttle.pending());
 }
 
-TEST_CASE("InterruptThrottle only polls every `interval` calls", "[InterruptThrottle]")
+TEST_CASE("InterruptThrottle polls on the first call and then every `interval` calls", "[InterruptThrottle]")
 {
     auto const _ = SigintGuard {};
     auto throttle = InterruptThrottle { 4 };
 
+    // The very first call polls immediately (so short loops are never poll-blind);
+    // with no interrupt pending it returns false.
+    REQUIRE_FALSE(throttle.pending());
+
     SignalHandler::simulateSigint();
 
-    // The first three calls do not reach a poll boundary, so they ignore the
-    // pending interrupt (and must leave the flag untouched).
+    // The next three calls are between poll boundaries, so they ignore the pending
+    // interrupt and leave the flag untouched.
     REQUIRE_FALSE(throttle.pending());
     REQUIRE_FALSE(throttle.pending());
     REQUIRE_FALSE(throttle.pending());
     REQUIRE(SignalHandler::hasPendingSigint());
 
-    // The fourth call polls and observes the interrupt.
+    // The next call reaches the interval boundary, polls, and observes the interrupt.
     REQUIRE(throttle.pending());
     REQUIRE_FALSE(SignalHandler::hasPendingSigint());
 }

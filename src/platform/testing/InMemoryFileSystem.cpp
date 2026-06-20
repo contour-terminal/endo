@@ -500,49 +500,49 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> InMemoryFile
 }
 
 Generator<FileSystem::DirectoryEntry> InMemoryFileSystem::walkDirectoryRecursive(
-    std::filesystem::path path) const
+    std::filesystem::path path, std::error_code* outError) const
 {
     auto const dirKey = normalize(path);
     if (!_directories.contains(dirKey))
+    {
+        if (outError != nullptr)
+            *outError = std::make_error_code(std::errc::not_a_directory);
         co_return; // Non-directory root yields nothing (callers pre-check, like NativeFileSystem).
+    }
 
     auto const prefix = dirKey.ends_with('/') ? dirKey : dirKey + "/";
 
+    // Gather every entry under the prefix, then yield in sorted path order so that
+    // a directory always precedes its own contents ("a/b" < "a/b/c"), matching
+    // NativeFileSystem's pre-order recursive_directory_iterator. (The maps are
+    // sorted individually, but files-then-dirs-then-symlinks would otherwise break
+    // the parents-before-children ordering that cp/rm rely on.)
+    auto entries = std::vector<DirectoryEntry> {};
     for (auto const& [filePath, _]: _files)
-    {
         if (filePath.starts_with(prefix))
-            co_yield DirectoryEntry {
-                .path = std::filesystem::path(filePath),
-                .isDirectory = false,
-                .isRegularFile = true,
-                .isSymlink = _symlinks.contains(filePath),
-            };
-    }
-
+            entries.push_back({ .path = std::filesystem::path(filePath),
+                                .isDirectory = false,
+                                .isRegularFile = true,
+                                .isSymlink = _symlinks.contains(filePath) });
     for (auto const& dirPath: _directories)
-    {
         if (dirPath.starts_with(prefix))
-            co_yield DirectoryEntry {
-                .path = std::filesystem::path(dirPath),
-                .isDirectory = true,
-                .isRegularFile = false,
-                .isSymlink = _symlinks.contains(dirPath),
-            };
-    }
-
-    // Yield symlink-only entries (not already in _files or _directories)
+            entries.push_back({ .path = std::filesystem::path(dirPath),
+                                .isDirectory = true,
+                                .isRegularFile = false,
+                                .isSymlink = _symlinks.contains(dirPath) });
     for (auto const& [symlinkPath, _]: _symlinks)
-    {
-        if (!symlinkPath.starts_with(prefix))
-            continue;
-        if (!_files.contains(symlinkPath) && !_directories.contains(symlinkPath))
-            co_yield DirectoryEntry {
-                .path = std::filesystem::path(symlinkPath),
-                .isDirectory = false,
-                .isRegularFile = false,
-                .isSymlink = true,
-            };
-    }
+        if (symlinkPath.starts_with(prefix) && !_files.contains(symlinkPath)
+            && !_directories.contains(symlinkPath))
+            entries.push_back({ .path = std::filesystem::path(symlinkPath),
+                                .isDirectory = false,
+                                .isRegularFile = false,
+                                .isSymlink = true });
+
+    std::ranges::sort(
+        entries, std::ranges::less {}, [](DirectoryEntry const& e) { return e.path.generic_string(); });
+
+    for (auto const& entry: entries)
+        co_yield entry;
 }
 
 std::expected<std::uintmax_t, std::string> InMemoryFileSystem::fileSize(

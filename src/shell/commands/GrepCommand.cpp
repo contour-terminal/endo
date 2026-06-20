@@ -127,7 +127,7 @@ namespace
     /// @param counter Per-loop iteration counter, advanced on every call.
     /// @param stopToken External cancellation token (may be empty).
     /// @return true if the loop should stop.
-    bool shouldAbort(std::size_t& counter, std::stop_token const& stopToken)
+    [[nodiscard]] bool shouldAbort(std::size_t& counter, std::stop_token const& stopToken)
     {
         if (++counter % InterruptPollInterval != 0)
             return false;
@@ -472,19 +472,21 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
     }
 }
 
-bool isBinaryFile(std::filesystem::path const& path)
+bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path)
 {
-    auto file = std::ifstream(path, std::ios::binary);
-    if (!file.is_open())
+    // Open through the injected FileSystem so binary detection works against any
+    // backend (e.g. InMemoryFileSystem in tests), consistent with collectFiles.
+    auto stream = fs.openRead(path);
+    if (!stream || !stream->good())
         return true;
 
     auto buffer = std::array<char, BinaryCheckSize> {};
-    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    auto const bytesRead = static_cast<size_t>(file.gcount());
+    stream->read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    auto const bytesRead = static_cast<size_t>(stream->gcount());
 
-    return std::any_of(buffer.begin(),
-                       buffer.begin() + static_cast<std::ptrdiff_t>(bytesRead),
-                       [](char c) { return c == '\0'; });
+    return std::any_of(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(bytesRead), [](char c) {
+        return c == '\0';
+    });
 }
 
 std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
