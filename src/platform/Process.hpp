@@ -25,9 +25,12 @@ struct SpawnConfig
     NativeHandle stdinFd = InvalidHandle;  ///< File descriptor/handle for stdin (InvalidHandle = standard)
     NativeHandle stdoutFd = InvalidHandle; ///< File descriptor/handle for stdout (InvalidHandle = standard)
     NativeHandle stderrFd = InvalidHandle; ///< File descriptor/handle for stderr (InvalidHandle = standard)
-    std::optional<ProcessId> processGroup = std::nullopt; ///< Process group ID (0 for new group)
-    bool closeExtraFds = true;                            ///< Close file descriptors > 2 after fork
-    std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
+    /// POSIX process group ID (0 for a new group), driving setpgid. On Windows this only
+    /// feeds process-group bookkeeping for waitPgid; creating a new *console* process group
+    /// (CREATE_NEW_PROCESS_GROUP) is controlled separately by @ref newConsoleProcessGroup.
+    std::optional<ProcessId> processGroup = std::nullopt;
+    bool closeExtraFds = true;             ///< Close file descriptors > 2 after fork
+    std::vector<NativeHandle> keepOpenFds; ///< Fds to keep open even with closeExtraFds
 
     /// On Windows, create the child in a new console process group
     /// (CREATE_NEW_PROCESS_GROUP), shielding it from the console's Ctrl+C. Set this

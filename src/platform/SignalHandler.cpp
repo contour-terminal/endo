@@ -89,8 +89,11 @@ int SignalHandler::initialize(SignalCallback* callback)
 void SignalHandler::restore()
 {
 #if defined(_WIN32)
-    // Deregister the console control handler installed in initialize().
+    // Deregister the console control handler installed in initialize() and clear any
+    // interrupt it may have recorded, so a pending flag does not survive shell teardown
+    // into a later SignalHandler user.
     SetConsoleCtrlHandler(&SignalHandler::consoleCtrlHandler, FALSE);
+    _sigintPending.store(false);
 #elif defined(__linux__)
     if (_signalFd >= 0)
     {

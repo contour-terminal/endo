@@ -1429,6 +1429,14 @@ int Shell::run()
             }
 
             {
+                // Reset any interrupt left pending from a prior command so the new
+                // command starts with a clean SIGINT state. Without this, a Ctrl+C
+                // delivered during the previous command (on Windows the console control
+                // handler sets the flag for the shell itself) would leak into the next
+                // in-process builtin, which checks hasPendingSigint() before its first
+                // read and would spuriously return 130 with no output.
+                SignalHandler::clearPendingSigint();
+
                 auto const _ = Prompt::ScopedSuspend(prompt);
                 emitWindowTitle(lineBuffer);
                 emitCommandStart();
@@ -1546,6 +1554,13 @@ int Shell::run()
         }
 
         {
+            // Reset any interrupt left pending from a prior command so the new command
+            // starts with a clean SIGINT state. Without this, a Ctrl+C delivered during
+            // the previous command (the Windows console control handler sets the flag for
+            // the shell itself) would leak into the next in-process builtin, which checks
+            // hasPendingSigint() before its first read and would spuriously return 130.
+            SignalHandler::clearPendingSigint();
+
             auto const _ = Prompt::ScopedSuspend(prompt);
             emitWindowTitle(lineBuffer);
             emitCommandStart();

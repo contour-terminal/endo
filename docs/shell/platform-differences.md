@@ -53,9 +53,10 @@ default handler (which would call `ExitProcess` on the shell) never runs.
 Foreground children are launched **in the shell's console process group**, so the console
 delivers the Ctrl+C to them directly: a child with no handler is terminated, while an
 interactive child (e.g. a REPL) receives `CTRL_C_EVENT` and handles it itself. Background
-jobs are launched with `CREATE_NEW_PROCESS_GROUP`, which shields them from the console's
-Ctrl+C. Long-running in-process builtins poll the recorded interrupt flag and abort,
-matching the POSIX behavior.
+jobs are launched with `CREATE_NEW_PROCESS_GROUP`, so Ctrl+C is disabled for them by
+default (a child that re-enables it via `SetConsoleCtrlHandler` can still receive it).
+Long-running in-process builtins poll the recorded interrupt flag and abort, matching the
+POSIX behavior.
 
 ---
 
