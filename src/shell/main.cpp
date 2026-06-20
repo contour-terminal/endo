@@ -261,6 +261,12 @@ void setupWindowsUtf8()
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
     std::setlocale(LC_ALL, ".UTF-8");
+    // Keep numeric parsing/formatting locale-independent: the language always uses
+    // '.' as the decimal separator (float literals, `{:g}` formatting), but
+    // LC_ALL=".UTF-8" adopts the user's regional decimal separator. On locales that
+    // use ',' (e.g. German) std::stod("3.14") would otherwise stop at the '.' and
+    // yield 3.0, truncating every float / Size / TimeSpan literal.
+    std::setlocale(LC_NUMERIC, "C");
 }
 #endif
 

@@ -461,7 +461,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
     config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
     config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
-    config.processGroup = std::make_optional<ProcessId>(0); // Create new process group
+    config.markBackgroundGroup(); // New process group, shielded from the console's Ctrl+C (Windows)
     config.closeExtraFds = true;
     config.keepOpenFds = _procSubstExposedFds;
 
@@ -551,7 +551,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
     config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
     config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
-    config.processGroup = std::make_optional<ProcessId>(0); // Create new process group
+    config.markBackgroundGroup(); // New process group, shielded from the console's Ctrl+C (Windows)
     config.closeExtraFds = true;
 
     applyRedirects(config);

@@ -25,9 +25,29 @@ struct SpawnConfig
     NativeHandle stdinFd = InvalidHandle;  ///< File descriptor/handle for stdin (InvalidHandle = standard)
     NativeHandle stdoutFd = InvalidHandle; ///< File descriptor/handle for stdout (InvalidHandle = standard)
     NativeHandle stderrFd = InvalidHandle; ///< File descriptor/handle for stderr (InvalidHandle = standard)
-    std::optional<ProcessId> processGroup = std::nullopt; ///< Process group ID (0 for new group)
-    bool closeExtraFds = true;                            ///< Close file descriptors > 2 after fork
-    std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
+    /// POSIX process group ID (0 for a new group), driving setpgid. On Windows this only
+    /// feeds process-group bookkeeping for waitPgid; creating a new *console* process group
+    /// (CREATE_NEW_PROCESS_GROUP) is controlled separately by @ref newConsoleProcessGroup.
+    std::optional<ProcessId> processGroup = std::nullopt;
+    bool closeExtraFds = true;             ///< Close file descriptors > 2 after fork
+    std::vector<NativeHandle> keepOpenFds; ///< Fds to keep open even with closeExtraFds
+
+    /// On Windows, create the child in a new console process group
+    /// (CREATE_NEW_PROCESS_GROUP), shielding it from the console's Ctrl+C. Set this
+    /// for background/detached jobs. Foreground jobs must leave this false so they
+    /// share the shell's console group and receive the console's Ctrl+C. Ignored on
+    /// POSIX, where process-group placement is driven by @ref processGroup.
+    bool newConsoleProcessGroup = false;
+
+    /// Configures this spawn as a background/detached job: places the child in a new
+    /// process group and, on Windows, a new console process group so it is shielded
+    /// from the console's Ctrl+C. Keeps @ref processGroup and @ref
+    /// newConsoleProcessGroup in lockstep so callers express background intent once.
+    void markBackgroundGroup() noexcept
+    {
+        processGroup = 0;
+        newConsoleProcessGroup = true;
+    }
 };
 
 /// Flags for controlling wait behavior.
@@ -169,6 +189,15 @@ class WindowsProcessManager final: public ProcessManager
     std::unordered_map<ProcessId, HANDLE> _processHandles;               ///< PID -> process HANDLE
     std::unordered_map<ProcessId, std::vector<ProcessId>> _groupMembers; ///< group -> PIDs
 
+    /// @brief Terminates a process by its tracked handle.
+    ///
+    /// Used as the delivery mechanism for SIGTERM/SIGKILL, and as the fallback for SIGINT
+    /// when the target is not its own console process group (so CTRL_C cannot be delivered
+    /// to it individually).
+    ///
+    /// @param pid Process ID whose handle should be terminated.
+    /// @return Success, or PlatformError::SignalFailed if the handle is unknown or termination fails.
+    [[nodiscard]] auto terminateByHandle(ProcessId pid) -> std::expected<void, PlatformError>;
     /// @brief Suspends all threads of a process using Toolhelp32.
     [[nodiscard]] auto suspendProcess(ProcessId pid) -> std::expected<void, PlatformError>;
     /// @brief Resumes all threads of a process using Toolhelp32.

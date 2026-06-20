@@ -96,10 +96,28 @@ class SignalHandler
     /// After the process is resumed (SIGCONT), the custom handler is reinstalled.
     static void suspendSelf();
 
+    /// Decides whether a Windows console control event should be treated as a
+    /// user interrupt that the shell handles itself (keeping the shell alive)
+    /// rather than letting the default handler terminate the process.
+    ///
+    /// Exposed as a pure function so the policy is unit-testable without
+    /// registering a real OS console control handler.
+    ///
+    /// @param ctrlType The Win32 console control type (e.g. CTRL_C_EVENT).
+    /// @return true for Ctrl+C / Ctrl+Break, false otherwise.
+    [[nodiscard]] static bool isInterruptCtrlEvent(unsigned long ctrlType) noexcept;
+
   private:
     static SignalCallback* _callback;        // NOLINT(readability-identifier-naming)
     static int _signalFd;                    // NOLINT(readability-identifier-naming)
     static std::atomic<bool> _sigintPending; // NOLINT(readability-identifier-naming)
+
+#if defined(_WIN32)
+    /// Win32 console control handler. Intercepts Ctrl+C / Ctrl+Break so the
+    /// shell survives (records a pending interrupt and returns TRUE); lets the
+    /// default handler process other control events (e.g. CTRL_CLOSE_EVENT).
+    static int __stdcall consoleCtrlHandler(unsigned long ctrlType);
+#endif
 
 #if !defined(__linux__)
     /// Traditional signal handlers for non-Linux platforms.

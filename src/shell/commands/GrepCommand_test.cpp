@@ -7,6 +7,11 @@
 #include <fstream>
 #include <vector>
 
+#include <platform/InterruptThrottle.hpp>
+#include <platform/NativeFileSystem.hpp>
+#include <platform/SignalHandler.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
+
 using namespace endo::grep;
 
 // ============================================================================
@@ -381,6 +386,60 @@ TEST_CASE("grep.search.no_match", "[grep]")
     CHECK(count == 0);
 }
 
+// ============================================================================
+// Cancellation / FileSystem-routing tests
+// ============================================================================
+
+TEST_CASE("grep.collect.recursive_uses_filesystem", "[grep]")
+{
+    using endo::platform::testing::InMemoryFileSystem;
+
+    auto const fs = InMemoryFileSystem {
+        { .path = "/root", .isDirectory = true },
+        { .path = "/root/a.txt", .content = "x" },
+        { .path = "/root/sub", .isDirectory = true },
+        { .path = "/root/sub/b.txt", .content = "y" },
+    };
+
+    GrepOptions opts;
+    opts.patterns = { "x" };
+    opts.recursive = true;
+    opts.files = { "/root" };
+
+    auto hasError = false;
+    auto const files = collectFiles(fs, opts, [](std::string_view) {}, hasError);
+
+    REQUIRE_FALSE(hasError);
+    // Both regular files are collected through the FileSystem's coroutine walk;
+    // directories are not search targets.
+    REQUIRE(files.size() == 2);
+}
+
+TEST_CASE("grep.search.interrupt_aborts_early", "[grep]")
+{
+    using endo::platform::SignalHandler;
+    SignalHandler::clearPendingSigint();
+
+    // More lines than the interrupt poll interval so the throttled check is reached.
+    auto const lines = std::vector<std::string>(1000, "match");
+    GrepOptions opts;
+    opts.patterns = { "match" };
+    auto regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    // Simulate a pending Ctrl+C (consistent with InterruptThrottle_test); the throttle peeks at
+    // it on its first poll and searchLines bails out, leaving the flag set for the caller.
+    SignalHandler::simulateSigint();
+    auto throttle = endo::platform::InterruptThrottle {};
+
+    auto const count = searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {}, &throttle);
+
+    // The match loop aborts at the first poll boundary, long before all 1000 lines.
+    CHECK(count < 1000);
+    CHECK(SignalHandler::hasPendingSigint()); // peek does not consume the flag
+    SignalHandler::clearPendingSigint();      // do not leak into other tests
+}
+
 TEST_CASE("grep.search.invert_match", "[grep]")
 {
     std::vector<std::string> lines = { "foo", "bar", "baz" };
@@ -547,7 +606,7 @@ TEST_CASE("grep.binary.text_file", "[grep]")
         std::ofstream f(textFile);
         f << "hello world\nthis is text\n";
     }
-    CHECK_FALSE(isBinaryFile(textFile));
+    CHECK_FALSE(isBinaryFile(endo::platform::NativeFileSystem::instance(), textFile));
     fs::remove_all(tmpDir);
 }
 
@@ -563,6 +622,6 @@ TEST_CASE("grep.binary.null_bytes", "[grep]")
         f.put('\0');
         f << "world";
     }
-    CHECK(isBinaryFile(binFile));
+    CHECK(isBinaryFile(endo::platform::NativeFileSystem::instance(), binFile));
     fs::remove_all(tmpDir);
 }

@@ -22,12 +22,12 @@ class NativeFileSystem final: public FileSystem
     [[nodiscard]] std::expected<std::string, std::string> readFile(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> writeFile(std::filesystem::path const& path,
-                                                              std::string_view content) const override;
+                                                             std::string_view content) const override;
     [[nodiscard]] std::expected<void, std::string> appendFile(std::filesystem::path const& path,
-                                                               std::string_view content) const override;
+                                                              std::string_view content) const override;
     [[nodiscard]] std::unique_ptr<std::istream> openRead(std::filesystem::path const& path) const override;
     [[nodiscard]] std::unique_ptr<std::ostream> openWrite(std::filesystem::path const& path,
-                                                           bool append = false) const override;
+                                                          bool append = false) const override;
     [[nodiscard]] std::unique_ptr<std::iostream> openReadWrite(
         std::filesystem::path const& path) const override;
 
@@ -39,15 +39,15 @@ class NativeFileSystem final: public FileSystem
     [[nodiscard]] std::expected<std::uintmax_t, std::string> removeAll(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> copyFile(std::filesystem::path const& from,
-                                                             std::filesystem::path const& to,
-                                                             bool overwrite = false) const override;
+                                                            std::filesystem::path const& to,
+                                                            bool overwrite = false) const override;
     [[nodiscard]] std::expected<void, std::string> rename(std::filesystem::path const& from,
-                                                           std::filesystem::path const& to) const override;
+                                                          std::filesystem::path const& to) const override;
 
     [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectory(
         std::filesystem::path const& path) const override;
-    [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
-        std::filesystem::path const& path) const override;
+    [[nodiscard]] Generator<DirectoryEntry> walkDirectoryRecursive(
+        std::filesystem::path path, std::error_code* outError = nullptr) const override;
 
     [[nodiscard]] std::expected<std::uintmax_t, std::string> fileSize(
         std::filesystem::path const& path) const override;

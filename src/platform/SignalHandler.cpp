@@ -3,7 +3,9 @@
 
 #include <csignal>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    #include <windows.h>
+#else
     #include <unistd.h>
     #if defined(__linux__)
         #include <sys/signalfd.h>
@@ -28,7 +30,11 @@ int SignalHandler::initialize(SignalCallback* callback)
     _callback = callback;
 
 #if defined(_WIN32)
-    // Windows doesn't have POSIX signals
+    // Windows has no POSIX signals. Install a console control handler so that
+    // Ctrl+C / Ctrl+Break interrupt the foreground child instead of terminating
+    // the shell. The handler records a pending interrupt and returns TRUE,
+    // preventing the default handler from calling ExitProcess on the shell.
+    SetConsoleCtrlHandler(&SignalHandler::consoleCtrlHandler, TRUE);
     return -1;
 #elif defined(__linux__)
     // Block signals so they can be received via signalfd
@@ -83,7 +89,11 @@ int SignalHandler::initialize(SignalCallback* callback)
 void SignalHandler::restore()
 {
 #if defined(_WIN32)
-    // Nothing to restore on Windows
+    // Deregister the console control handler installed in initialize() and clear any
+    // interrupt it may have recorded, so a pending flag does not survive shell teardown
+    // into a later SignalHandler user.
+    SetConsoleCtrlHandler(&SignalHandler::consoleCtrlHandler, FALSE);
+    _sigintPending.store(false);
 #elif defined(__linux__)
     if (_signalFd >= 0)
     {
@@ -297,5 +307,35 @@ void SignalHandler::simulateSigint() noexcept
 {
     _sigintPending.store(true);
 }
+
+bool SignalHandler::isInterruptCtrlEvent(unsigned long ctrlType) noexcept
+{
+#if defined(_WIN32)
+    return ctrlType == CTRL_C_EVENT || ctrlType == CTRL_BREAK_EVENT;
+#else
+    // Mirror the Win32 CTRL_C_EVENT (0) and CTRL_BREAK_EVENT (1) values so the
+    // interrupt policy can be unit-tested on any platform.
+    constexpr unsigned long kCtrlCEvent = 0;
+    constexpr unsigned long kCtrlBreakEvent = 1;
+    return ctrlType == kCtrlCEvent || ctrlType == kCtrlBreakEvent;
+#endif
+}
+
+#if defined(_WIN32)
+int __stdcall SignalHandler::consoleCtrlHandler(unsigned long ctrlType)
+{
+    if (isInterruptCtrlEvent(ctrlType))
+    {
+        // Record the interrupt so in-process builtins polling hasPendingSigint()
+        // can abort, and return TRUE so the shell is not terminated. The
+        // foreground child shares the console process group and receives its own
+        // CTRL_C_EVENT from the OS; background jobs are shielded by being created
+        // in a separate console process group.
+        _sigintPending.store(true);
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
 
 } // namespace endo::platform

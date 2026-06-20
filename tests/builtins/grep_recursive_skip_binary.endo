@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: grep -rI detects binary files through the injected FileSystem (text files are searched)
+# mode: shell
+# expect: /test/dir/b.txt:has a needle
+# aux-file: dir/a.txt
+nothing to see here
+# aux-file: dir/b.txt
+has a needle
+# main-file:
+grep -rI --color=never needle /test/dir

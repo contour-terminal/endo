@@ -209,25 +209,35 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     return entries;
 }
 
-std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSystem::listDirectoryRecursive(
-    fs::path const& path) const
+Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
+    fs::path path, std::error_code* outError) const
 {
+    // recursive_directory_iterator reads directories lazily as it advances, so
+    // co_yield-ing per entry streams the walk to the consumer one entry at a
+    // time. The error_code overload is used so a bad/unreadable root or a
+    // mid-walk error yields nothing/partial rather than throwing out of the
+    // coroutine; the error is surfaced via outError (when provided) so
+    // destructive callers can avoid acting on an incomplete enumeration.
     std::error_code ec;
-    auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry:
-         fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
+    auto it = fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec);
+    auto const end = fs::recursive_directory_iterator {};
+    // C-style loop is intentional here: a range-based for would use the throwing operator++,
+    // whereas we must thread an error_code through the non-throwing increment(ec) overload.
+    for (; !ec && it != end; it.increment(ec))
     {
-        entries.push_back(DirectoryEntry {
+        auto const& entry = *it;
+        co_yield DirectoryEntry {
             .path = entry.path(),
             .isDirectory = entry.is_directory(),
             .isRegularFile = entry.is_regular_file(),
             .isSymlink = entry.is_symlink(),
-        });
+            // recursive_directory_iterator::depth() is 0 for a direct child; +1 to match the
+            // walk-root-relative convention (direct child = depth 1) consumers expect.
+            .depth = it.depth() + 1,
+        };
     }
-    if (ec)
-        return std::unexpected(
-            std::format("Cannot recursively list directory '{}': {}", path.string(), ec.message()));
-    return entries;
+    if (ec && outError != nullptr)
+        *outError = ec;
 }
 
 std::expected<std::uintmax_t, std::string> NativeFileSystem::fileSize(fs::path const& path) const

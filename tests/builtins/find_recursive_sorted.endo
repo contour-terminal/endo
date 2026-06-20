@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: find streams every entry in the tree (sorted for a stable order)
+# mode: shell
+# expect: /test
+# expect: /test/a.txt
+# expect: /test/sub
+# expect: /test/sub/b.txt
+# aux-file: a.txt
+alpha
+# aux-file: sub/b.txt
+beta
+# main-file:
+find /test | sort

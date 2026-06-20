@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 
+#include <platform/FileSystem.hpp>
+#include <platform/InterruptThrottle.hpp>
+
 namespace endo::grep
 {
 
@@ -94,18 +97,34 @@ using ErrorWriter = std::function<void(std::string_view)>;
 [[nodiscard]] std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts);
 
 /// Checks if a file appears to be binary by scanning for null bytes.
+/// @param fs FileSystem abstraction used to open the file (so it works against
+///           any injected backend, not just the real on-disk filesystem).
 /// @param path Path to the file to check.
-/// @return true if the file appears to be binary.
-[[nodiscard]] bool isBinaryFile(std::filesystem::path const& path);
+/// @return true if the file appears to be binary (or cannot be opened).
+[[nodiscard]] bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path);
 
 /// Collects the list of files to search based on options.
+///
+/// Recursion is driven through the injected FileSystem's lazy coroutine walk
+/// (`walkDirectoryRecursive`), so a large tree is enumerated incrementally and
+/// can be aborted: @p throttle polls for a pending Ctrl+C (drained from the OS,
+/// so it works on Linux too) between entries, returning the files gathered so
+/// far when one is observed. The pending flag is left set (peek, not consume) so
+/// the driver consumes it once and exits with code 130.
+///
+/// @param fs FileSystem abstraction used to test paths and walk directories.
 /// @param opts Parsed grep options with files and recursion settings.
 /// @param errWriter Callback for error messages.
 /// @param hasError Set to true if any error occurred.
-/// @return Vector of file paths to search.
-[[nodiscard]] std::vector<std::filesystem::path> collectFiles(GrepOptions const& opts,
-                                                              ErrorWriter const& errWriter,
-                                                              bool& hasError);
+/// @param throttle Optional throttled, non-consuming interrupt poll shared with the driver; when
+///                 null (the default) the walk runs to completion without polling for Ctrl+C.
+/// @return Vector of file paths to search (possibly partial if interrupted).
+[[nodiscard]] std::vector<std::filesystem::path> collectFiles(
+    platform::FileSystem const& fs,
+    GrepOptions const& opts,
+    ErrorWriter const& errWriter,
+    bool& hasError,
+    platform::InterruptThrottle* throttle = nullptr);
 
 /// Searches lines for regex matches and writes formatted output.
 /// @param lines The lines of text to search (without trailing newlines).
@@ -115,13 +134,17 @@ using ErrorWriter = std::function<void(std::string_view)>;
 /// @param showFilename Whether to prefix output with filename.
 /// @param useColor Whether to colorize the output.
 /// @param writer Callback for writing output.
-/// @return Number of matching lines found.
+/// @param throttle Optional throttled, non-consuming interrupt poll; when non-null, searching
+///                 stops early once a pending Ctrl+C is observed (the flag is left set for the
+///                 driver to consume). Null (the default) disables polling.
+/// @return Number of matching lines found (possibly partial if interrupted).
 [[nodiscard]] size_t searchLines(std::vector<std::string> const& lines,
                                  std::regex const& regex,
                                  GrepOptions const& opts,
                                  std::string_view filename,
                                  bool showFilename,
                                  bool useColor,
-                                 OutputWriter const& writer);
+                                 OutputWriter const& writer,
+                                 platform::InterruptThrottle* throttle = nullptr);
 
 } // namespace endo::grep

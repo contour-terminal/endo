@@ -99,6 +99,9 @@ enable_clang_tidy(endo-platform)
 if(ENDO_TESTING)
     add_executable(test-endo-platform
         test_main.cpp
+        FileSystem_test.cpp
+        Generator_test.cpp
+        InterruptThrottle_test.cpp
         PlatformError_test.cpp
         Process_test.cpp
         Pipe_test.cpp

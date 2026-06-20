@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: find -type d lists the search root and nested directories
+# mode: shell
+# expect: /test
+# expect: /test/sub
+# aux-file: a.txt
+alpha
+# aux-file: sub/b.txt
+beta
+# main-file:
+find /test -type d
