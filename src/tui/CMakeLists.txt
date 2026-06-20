@@ -36,6 +36,7 @@ add_library(tui
     completer/Completer.cpp
     completer/FuzzyMatch.cpp
     completer/SmartCaseMatch.cpp
+    runtime/TuiRuntime.cpp
 )
 
 # Platform-specific terminal implementations
@@ -60,6 +61,7 @@ target_include_directories(tui PUBLIC
 target_link_libraries(tui PUBLIC
     unicode::unicode
     endo-platform
+    endo-coro
     stb_image
 )
 
@@ -98,6 +100,7 @@ if(ENDO_TESTING)
         VtParser_test.cpp
         ImageLoader_test.cpp
         SemanticBlockClient_test.cpp
+        runtime/TuiRuntime_test.cpp
     )
     target_link_libraries(test-tui tui Catch2::Catch2)
     add_test(NAME test-tui COMMAND test-tui)
