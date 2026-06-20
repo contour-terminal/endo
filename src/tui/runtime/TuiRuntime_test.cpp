@@ -23,37 +23,37 @@ namespace
 {
 
 /// Returns the codepoint of the next key event the runtime delivers.
-Task<int> awaitOneKeyCodepoint(TuiRuntime& runtime)
+Task<char32_t> awaitOneKeyCodepoint(TuiRuntime* runtime)
 {
-    auto const event = co_await runtime.nextEvent();
-    co_return static_cast<int>(std::get<KeyEvent>(event).codepoint);
+    auto const event = co_await runtime->nextEvent();
+    co_return std::get<KeyEvent>(event).codepoint;
 }
 
 /// Collects the codepoints of @p count key events in arrival order.
-Task<int> sumKeyCodepoints(TuiRuntime& runtime, int count)
+Task<int> sumKeyCodepoints(TuiRuntime* runtime, int count)
 {
     auto sum = 0;
     for ([[maybe_unused]] auto const index: std::views::iota(0, count))
     {
-        auto const event = co_await runtime.nextEvent();
+        auto const event = co_await runtime->nextEvent();
         sum += static_cast<int>(std::get<KeyEvent>(event).codepoint);
     }
     co_return sum;
 }
 
 /// Returns true once the agent-ready wakeup is observed.
-Task<bool> awaitAgentReady(TuiRuntime& runtime)
+Task<bool> awaitAgentReady(TuiRuntime* runtime)
 {
-    co_await runtime.nextAgentReady();
+    co_await runtime->nextAgentReady();
     co_return true;
 }
 
 /// Awaits input; returns a sentinel if cancelled instead.
-Task<int> awaitKeyOrCancel(TuiRuntime& runtime, int cancelSentinel)
+Task<int> awaitKeyOrCancel(TuiRuntime* runtime, int cancelSentinel)
 {
     try
     {
-        auto const event = co_await runtime.nextEvent();
+        auto const event = co_await runtime->nextEvent();
         co_return static_cast<int>(std::get<KeyEvent>(event).codepoint);
     }
     catch (OperationCancelled const&)
@@ -63,18 +63,18 @@ Task<int> awaitKeyOrCancel(TuiRuntime& runtime, int cancelSentinel)
 }
 
 /// Resumes immediately when the delay has already elapsed (the ready path).
-Task<int> awaitZeroDelay(TuiRuntime& runtime)
+Task<int> awaitZeroDelay(TuiRuntime* runtime)
 {
-    co_await runtime.delay(std::chrono::milliseconds { 0 });
+    co_await runtime->delay(std::chrono::milliseconds { 0 });
     co_return 7;
 }
 
 /// Parks on a long delay; returns a sentinel when cancelled.
-Task<int> awaitDelayOrCancel(TuiRuntime& runtime, int cancelSentinel)
+Task<int> awaitDelayOrCancel(TuiRuntime* runtime, int cancelSentinel)
 {
     try
     {
-        co_await runtime.delay(std::chrono::milliseconds { 500 });
+        co_await runtime->delay(std::chrono::milliseconds { 500 });
         co_return 0;
     }
     catch (OperationCancelled const&)
@@ -96,9 +96,9 @@ TEST_CASE("Runtime delivers a scripted input event to a waiting flow", "[TuiRunt
     source.pushEvents({ InputEvent { keyOf(U'x') } });
     auto runtime = TuiRuntime { source };
 
-    auto const result = runtime.blockOn(awaitOneKeyCodepoint(runtime));
+    auto const result = runtime.blockOn(awaitOneKeyCodepoint(&runtime));
 
-    REQUIRE(result == static_cast<int>(U'x'));
+    REQUIRE(result == U'x');
 }
 
 TEST_CASE("Runtime delivers buffered events in arrival order", "[TuiRuntime]")
@@ -108,7 +108,7 @@ TEST_CASE("Runtime delivers buffered events in arrival order", "[TuiRuntime]")
     source.pushEvents({ InputEvent { keyOf(U'a') }, InputEvent { keyOf(U'b') } });
     auto runtime = TuiRuntime { source };
 
-    auto const result = runtime.blockOn(sumKeyCodepoints(runtime, 2));
+    auto const result = runtime.blockOn(sumKeyCodepoints(&runtime, 2));
 
     REQUIRE(result == static_cast<int>(U'a') + static_cast<int>(U'b'));
 }
@@ -119,7 +119,7 @@ TEST_CASE("Runtime resumes a flow when the agent wakeup fires", "[TuiRuntime]")
     source.pushAgentReady();
     auto runtime = TuiRuntime { source };
 
-    auto const ready = runtime.blockOn(awaitAgentReady(runtime));
+    auto const ready = runtime.blockOn(awaitAgentReady(&runtime));
 
     REQUIRE(ready);
 }
@@ -131,9 +131,9 @@ TEST_CASE("Protocol reports never surface as input events", "[TuiRuntime]")
     source.pushEvents({ InputEvent { tui::FocusEvent { .focused = true } }, InputEvent { keyOf(U'z') } });
     auto runtime = TuiRuntime { source };
 
-    auto const result = runtime.blockOn(awaitOneKeyCodepoint(runtime));
+    auto const result = runtime.blockOn(awaitOneKeyCodepoint(&runtime));
 
-    REQUIRE(result == static_cast<int>(U'z'));
+    REQUIRE(result == U'z');
 }
 
 TEST_CASE("Interrupt cancels a flow parked on input", "[TuiRuntime]")
@@ -143,7 +143,7 @@ TEST_CASE("Interrupt cancels a flow parked on input", "[TuiRuntime]")
     auto runtime = TuiRuntime { source };
 
     constexpr auto sentinel = -99;
-    auto const result = runtime.blockOn(awaitKeyOrCancel(runtime, sentinel));
+    auto const result = runtime.blockOn(awaitKeyOrCancel(&runtime, sentinel));
 
     REQUIRE(result == sentinel);
 }
@@ -153,7 +153,7 @@ TEST_CASE("delay(0) resumes without waiting", "[TuiRuntime]")
     auto source = MockEventSource {};
     auto runtime = TuiRuntime { source };
 
-    auto const result = runtime.blockOn(awaitZeroDelay(runtime));
+    auto const result = runtime.blockOn(awaitZeroDelay(&runtime));
 
     REQUIRE(result == 7);
     REQUIRE(source.waitCount() == 0); // ready path never blocks
@@ -166,7 +166,7 @@ TEST_CASE("A pending delay bounds the wait timeout", "[TuiRuntime]")
     auto runtime = TuiRuntime { source };
 
     constexpr auto sentinel = -7;
-    auto const result = runtime.blockOn(awaitDelayOrCancel(runtime, sentinel));
+    auto const result = runtime.blockOn(awaitDelayOrCancel(&runtime, sentinel));
 
     REQUIRE(result == sentinel);
     REQUIRE(source.waitCount() >= 1);

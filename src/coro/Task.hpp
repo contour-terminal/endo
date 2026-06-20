@@ -49,12 +49,12 @@ namespace detail
     /// driven directly by the runtime).
     struct FinalAwaiter
     {
-        [[nodiscard]] bool await_ready() const noexcept { return false; }
+        [[nodiscard]] static bool await_ready() noexcept { return false; }
 
         /// @return The continuation to resume via symmetric transfer.
         template <typename Promise>
-        [[nodiscard]] std::coroutine_handle<> await_suspend(
-            std::coroutine_handle<Promise> self) const noexcept
+        [[nodiscard]] static std::coroutine_handle<> await_suspend(
+            std::coroutine_handle<Promise> self) noexcept
         {
             auto const continuation = self.promise().continuation;
             return continuation ? continuation : std::noop_coroutine();
@@ -68,15 +68,15 @@ namespace detail
     /// from the awaiting coroutine.
     struct TaskPromiseBase
     {
-        std::coroutine_handle<> continuation {}; ///< Resumed on completion (empty for a root).
-        std::exception_ptr exception;            ///< Captured body exception, rethrown to the awaiter.
-        StopToken token;                         ///< Inherited from the awaiting coroutine.
+        std::coroutine_handle<> continuation; ///< Resumed on completion (empty for a root).
+        std::exception_ptr exception;         ///< Captured body exception, rethrown to the awaiter.
+        StopToken token;                      ///< Inherited from the awaiting coroutine.
 
         /// Start suspended so a continuation can be attached before the body runs.
-        [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
+        [[nodiscard]] static std::suspend_always initial_suspend() noexcept { return {}; }
 
         /// Suspend at the end and tail-transfer to the continuation.
-        [[nodiscard]] FinalAwaiter final_suspend() const noexcept { return {}; }
+        [[nodiscard]] static FinalAwaiter final_suspend() noexcept { return {}; }
 
         /// Captures an exception escaping the coroutine body for later rethrow.
         void unhandled_exception() noexcept { exception = std::current_exception(); }
@@ -202,7 +202,7 @@ class [[nodiscard]] Task
     }
 
   private:
-    handle_type _handle {};
+    handle_type _handle;
 };
 
 /// Specialization for tasks producing no value.
@@ -294,7 +294,7 @@ class [[nodiscard]] Task<void>
     }
 
   private:
-    handle_type _handle {};
+    handle_type _handle;
 };
 
 } // namespace endo::coro

@@ -54,15 +54,17 @@ class ModalComponent: public Component
 ///
 /// The caller is responsible for placing @p modal in the screen tree (or as an
 /// overlay) and for focus, before awaiting; `runModal` only drives the
-/// interaction.
+/// interaction. Arguments are passed by pointer (not reference) because they are
+/// coroutine parameters that outlive the suspension: the pointee must stay alive
+/// for the whole call (see cppcoreguidelines-avoid-reference-coroutine-parameters).
 ///
-/// @param runtime The runtime whose input the modal consumes.
-/// @param modal The interaction to drive.
+/// @param runtime The runtime whose input the modal consumes (must outlive the call).
+/// @param modal The interaction to drive (must outlive the call).
 /// @param screen Optional screen to dispatch events through and redraw.
 /// @return The modal's result, or std::nullopt if cancelled.
 template <typename Result>
-[[nodiscard]] endo::coro::Task<std::optional<Result>> runModal(TuiRuntime& runtime,
-                                                               ModalComponent<Result>& modal,
+[[nodiscard]] endo::coro::Task<std::optional<Result>> runModal(TuiRuntime* runtime,
+                                                               ModalComponent<Result>* modal,
                                                                Screen* screen = nullptr)
 {
     if (screen != nullptr)
@@ -73,7 +75,7 @@ template <typename Result>
         InputEvent event;
         try
         {
-            event = co_await runtime.nextEvent();
+            event = co_await runtime->nextEvent();
         }
         catch (endo::coro::OperationCancelled const&)
         {
@@ -83,7 +85,7 @@ template <typename Result>
         if (screen != nullptr)
             (void) screen->dispatchEvent(event);
 
-        if (auto result = modal.step(event))
+        if (auto result = modal->step(event))
             co_return std::move(result);
 
         if (screen != nullptr)

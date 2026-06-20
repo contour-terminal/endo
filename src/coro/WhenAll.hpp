@@ -36,9 +36,9 @@ namespace detail
     /// first exception (if any) observed across the children.
     struct WhenAllState
     {
-        std::size_t remaining = 0;               ///< Live children plus one for the start phase.
-        std::coroutine_handle<> continuation {}; ///< The `whenAll` awaiter's coroutine.
-        std::exception_ptr exception;            ///< First child exception, rethrown to the awaiter.
+        std::size_t remaining = 0;            ///< Live children plus one for the start phase.
+        std::coroutine_handle<> continuation; ///< The `whenAll` awaiter's coroutine.
+        std::exception_ptr exception;         ///< First child exception, rethrown to the awaiter.
     };
 
     /// A child wrapper coroutine. It awaits one task, records any exception, and
@@ -60,16 +60,16 @@ namespace detail
                 return WhenAllRunner { std::coroutine_handle<PromiseType>::from_promise(*this) };
             }
 
-            [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
+            [[nodiscard]] static std::suspend_always initial_suspend() noexcept { return {}; }
 
             /// Final awaiter that decrements the join counter and tail-transfers
             /// to the awaiting coroutine when this is the last child to finish.
             struct FinalAwaiter
             {
-                [[nodiscard]] bool await_ready() const noexcept { return false; }
+                [[nodiscard]] static bool await_ready() noexcept { return false; }
 
-                [[nodiscard]] std::coroutine_handle<> await_suspend(
-                    std::coroutine_handle<PromiseType> self) const noexcept
+                [[nodiscard]] static std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<PromiseType> self) noexcept
                 {
                     auto* const state = self.promise().state;
                     if (--state->remaining == 0 && state->continuation)
@@ -80,7 +80,7 @@ namespace detail
                 void await_resume() const noexcept {}
             };
 
-            [[nodiscard]] FinalAwaiter final_suspend() const noexcept { return {}; }
+            [[nodiscard]] static FinalAwaiter final_suspend() noexcept { return {}; }
 
             /// A runner body never lets an exception escape (it try/catches the
             /// awaited task), so this is unreachable in practice; capture defensively.
@@ -126,7 +126,7 @@ namespace detail
         [[nodiscard]] handle_type handle() const noexcept { return _handle; }
 
       private:
-        handle_type _handle {};
+        handle_type _handle;
     };
 
     /// Wraps one task so it participates in the join (records exceptions, does not

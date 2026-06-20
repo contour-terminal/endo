@@ -22,15 +22,15 @@ namespace
 {
 
 /// A trivial modal that completes with the codepoint of the first key it sees.
-class KeyCaptureModal: public ModalComponent<int>
+class KeyCaptureModal: public ModalComponent<char32_t>
 {
   public:
     void render(Canvas& /*canvas*/) override {}
 
-    [[nodiscard]] std::optional<int> step(InputEvent const& event) override
+    [[nodiscard]] std::optional<char32_t> step(InputEvent const& event) override
     {
         if (auto const* key = std::get_if<KeyEvent>(&event))
-            return static_cast<int>(key->codepoint);
+            return key->codepoint;
         return std::nullopt;
     }
 };
@@ -44,10 +44,10 @@ TEST_CASE("runModal resolves with the modal's result", "[Modal]")
     auto runtime = TuiRuntime { source };
     auto modal = KeyCaptureModal {};
 
-    auto const result = runtime.blockOn(runModal(runtime, modal));
+    auto const result = runtime.blockOn(runModal(&runtime, &modal));
 
     REQUIRE(result.has_value());
-    REQUIRE(*result == static_cast<int>(U'q'));
+    REQUIRE(*result == U'q');
 }
 
 TEST_CASE("runModal returns nullopt when cancelled", "[Modal]")
@@ -57,7 +57,7 @@ TEST_CASE("runModal returns nullopt when cancelled", "[Modal]")
     auto runtime = TuiRuntime { source };
     auto modal = KeyCaptureModal {};
 
-    auto const result = runtime.blockOn(runModal(runtime, modal));
+    auto const result = runtime.blockOn(runModal(&runtime, &modal));
 
     REQUIRE_FALSE(result.has_value());
 }
@@ -71,8 +71,8 @@ TEST_CASE("runModal keeps stepping until the modal completes", "[Modal]")
     auto runtime = TuiRuntime { source };
     auto modal = KeyCaptureModal {};
 
-    auto const result = runtime.blockOn(runModal(runtime, modal));
+    auto const result = runtime.blockOn(runModal(&runtime, &modal));
 
     REQUIRE(result.has_value());
-    REQUIRE(*result == static_cast<int>(U'k'));
+    REQUIRE(*result == U'k');
 }

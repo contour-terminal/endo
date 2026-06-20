@@ -48,7 +48,7 @@ InputEvent TuiRuntime::popBufferedInput()
 void TuiRuntime::scheduleTimer(std::chrono::steady_clock::time_point deadline, std::coroutine_handle<> waiter)
 {
     _timers.push_back(TimerEntry { .deadline = deadline, .handle = waiter });
-    std::push_heap(_timers.begin(), _timers.end(), soonestFirst);
+    std::ranges::push_heap(_timers, soonestFirst);
 }
 
 void TuiRuntime::drainReadyQueue()
@@ -94,7 +94,7 @@ void TuiRuntime::fireExpiredTimers()
     auto const now = std::chrono::steady_clock::now();
     while (!_timers.empty() && _timers.front().deadline <= now)
     {
-        std::pop_heap(_timers.begin(), _timers.end(), soonestFirst);
+        std::ranges::pop_heap(_timers, soonestFirst);
         auto const entry = _timers.back();
         _timers.pop_back();
         if (entry.handle && !entry.handle.done())

@@ -27,9 +27,14 @@ Task<int> answerPlusOne()
 }
 
 /// A void task with an observable side effect.
-Task<void> increment(int& counter)
+///
+/// Counters/buffers are passed by pointer, not reference: clang-tidy's
+/// cppcoreguidelines-avoid-reference-coroutine-parameters forbids reference
+/// coroutine parameters (they dangle if the referent dies before the coroutine);
+/// the pointee here is a test local that outlives the coroutine.
+Task<void> increment(int* counter)
 {
-    ++counter;
+    ++*counter;
     co_return;
 }
 
@@ -47,7 +52,7 @@ struct ManualEvent
 {
     std::vector<std::coroutine_handle<>>* waiters;
 
-    [[nodiscard]] bool await_ready() const noexcept { return false; }
+    [[nodiscard]] static bool await_ready() noexcept { return false; }
 
     void await_suspend(std::coroutine_handle<> waiting) const { waiters->push_back(waiting); }
 
@@ -55,35 +60,35 @@ struct ManualEvent
 };
 
 /// Suspends on a ManualEvent, then increments a counter once resumed.
-Task<void> waitThenIncrement(std::vector<std::coroutine_handle<>>& waiters, int& counter)
+Task<void> waitThenIncrement(std::vector<std::coroutine_handle<>>* waiters, int* counter)
 {
-    co_await ManualEvent { &waiters };
-    ++counter;
+    co_await ManualEvent { waiters };
+    ++*counter;
 }
 
 // The whenAll drivers below are free functions, not immediately-invoked lambdas:
 // a lambda-coroutine's closure is a temporary destroyed once the Task is created,
 // so a body that resumes later would read captures through a dangling `this`.
-// Coroutine reference parameters are kept in the frame and stay valid instead.
+// Pointer parameters keep the (longer-lived) test locals reachable from the frame.
 
 /// Runs two increments concurrently via whenAll.
-Task<void> incrementTwiceConcurrently(int& counter)
+Task<void> incrementTwiceConcurrently(int* counter)
 {
     co_await whenAll(increment(counter), increment(counter));
 }
 
 /// Joins two manually-completed waiters, then marks completion.
-Task<void> joinTwoWaiters(std::vector<std::coroutine_handle<>>& waiters, int& counter)
+Task<void> joinTwoWaiters(std::vector<std::coroutine_handle<>>* waiters, int* counter)
 {
     co_await whenAll(waitThenIncrement(waiters, counter), waitThenIncrement(waiters, counter));
-    counter += 100; // marker proving the join resumed the parent exactly once
+    *counter += 100; // marker proving the join resumed the parent exactly once
 }
 
 /// Awaits an empty whenAll, then records that it completed immediately.
-Task<void> awaitEmptyWhenAll(bool& reached)
+Task<void> awaitEmptyWhenAll(bool* reached)
 {
     co_await whenAll(std::vector<Task<void>> {});
-    reached = true;
+    *reached = true;
 }
 
 } // namespace
@@ -102,7 +107,7 @@ TEST_CASE("Task produces a value when driven to completion", "[Task]")
 TEST_CASE("Task<void> runs its body to completion", "[Task]")
 {
     auto counter = 0;
-    auto task = increment(counter);
+    auto task = increment(&counter);
     REQUIRE(counter == 0); // lazy: nothing runs before resume
 
     task.handle().resume();
@@ -147,7 +152,7 @@ TEST_CASE("Deep co_await chains keep the stack bounded (symmetric transfer)", "[
 TEST_CASE("whenAll completes synchronously when every child does", "[Task][whenAll]")
 {
     auto counter = 0;
-    auto root = incrementTwiceConcurrently(counter);
+    auto root = incrementTwiceConcurrently(&counter);
 
     root.handle().resume();
 
@@ -159,7 +164,7 @@ TEST_CASE("whenAll resumes the awaiting coroutine only after the last child fini
 {
     auto waiters = std::vector<std::coroutine_handle<>> {};
     auto counter = 0;
-    auto root = joinTwoWaiters(waiters, counter);
+    auto root = joinTwoWaiters(&waiters, &counter);
 
     root.handle().resume();
     REQUIRE(waiters.size() == 2);
@@ -178,7 +183,7 @@ TEST_CASE("whenAll resumes the awaiting coroutine only after the last child fini
 TEST_CASE("whenAll over no tasks completes immediately", "[Task][whenAll]")
 {
     auto reached = false;
-    auto root = awaitEmptyWhenAll(reached);
+    auto root = awaitEmptyWhenAll(&reached);
 
     root.handle().resume();
 
