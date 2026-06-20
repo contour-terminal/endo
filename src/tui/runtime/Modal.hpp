@@ -14,9 +14,9 @@
 /// auto answer = co_await runModal(runtime, question, &screen);
 /// @endcode
 
-#include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/Screen.hpp>
+#include <tui/runtime/ModalComponent.hpp>
 #include <tui/runtime/TuiRuntime.hpp>
 
 #include <optional>
@@ -26,23 +26,6 @@
 
 namespace tui::runtime
 {
-
-/// A component that drives a self-contained modal interaction to completion.
-///
-/// `render()` stays synchronous (it runs every frame); the modal advances by
-/// feeding events to `step()`, which returns a @c Result to finish or
-/// std::nullopt to keep going. This keeps the existing per-frame render/dispatch
-/// contract while making the *interaction* awaitable.
-/// @tparam Result The value the interaction yields when it completes.
-template <typename Result>
-class ModalComponent: public Component
-{
-  public:
-    /// Feeds one input event to the interaction.
-    /// @param event The event to process.
-    /// @return The final result to end the modal, or std::nullopt to continue.
-    [[nodiscard]] virtual std::optional<Result> step(InputEvent const& event) = 0;
-};
 
 /// Drives @p modal to completion on @p runtime, returning its result.
 ///

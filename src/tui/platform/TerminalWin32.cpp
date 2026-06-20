@@ -124,8 +124,13 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
         return {};
 
     auto events = _input.poll(timeoutMs);
+    consumeProtocolReports(events);
+    return events;
+}
 
-    // Consume protocol-level response events internally — do not pass to application
+void Terminal::consumeProtocolReports(std::vector<InputEvent>& events)
+{
+    // Consume protocol-level response events internally — do not pass to application.
     std::erase_if(events, [this](InputEvent const& event) {
         if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
         {
@@ -138,14 +143,9 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
             handleFocusEvent(fe->focused);
             return true;
         }
-        if (std::holds_alternative<CursorPositionReport>(event))
-            return true;
-        if (std::holds_alternative<CellSizeReport>(event))
-            return true;
-        return false;
+        return std::holds_alternative<CursorPositionReport>(event)
+               || std::holds_alternative<CellSizeReport>(event);
     });
-
-    return events;
 }
 
 auto Terminal::columns() const noexcept -> int

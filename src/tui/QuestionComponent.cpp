@@ -334,6 +334,23 @@ auto QuestionComponent::processInput(InputEvent const& event) -> QuestionAction
     }
 }
 
+std::optional<QuestionResult> QuestionComponent::step(InputEvent const& event)
+{
+    switch (processInput(event))
+    {
+        case QuestionAction::Confirmed:
+            return QuestionResult { .confirmed = true,
+                                    .selectedIndex = selectedIndex(),
+                                    .checkedIndices = checkedIndices(),
+                                    .answer = answer(),
+                                    .otherActive = isOtherActive() };
+        case QuestionAction::Cancelled: return QuestionResult {}; // confirmed defaults to false
+        case QuestionAction::Changed:
+        case QuestionAction::None: return std::nullopt;
+    }
+    return std::nullopt;
+}
+
 auto QuestionComponent::answer() const -> std::string
 {
     if (isFreeTextOnly())
