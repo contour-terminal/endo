@@ -212,12 +212,16 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
 /// a coroutine. Consuming it one line at a time lets the caller poll for Ctrl+C
 /// between lines, so reading even a very large file stays interruptible.
 ///
-/// @param in Input stream to read from; must outlive the returned generator.
+/// The stream is taken by value (owned by the coroutine frame) so the coroutine
+/// has no dangling-reference parameter and the stream lives exactly as long as
+/// the generator.
+///
+/// @param in Input stream to read from; ownership is moved into the generator.
 /// @return A generator of lines without their terminating newline.
-endo::Generator<std::string> readLines(std::istream& in)
+endo::Generator<std::string> readLines(std::unique_ptr<std::istream> in)
 {
     std::string line;
-    while (std::getline(in, line))
+    while (std::getline(*in, line))
     {
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
@@ -2372,9 +2376,10 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             }
 
             // Stream the file's lines through the coroutine reader so a large file stays
-            // interruptible during the read, not just during the search below.
+            // interruptible during the read, not just during the search below. Ownership of the
+            // stream moves into the generator, which keeps it alive for the duration of the read.
             std::vector<std::string> lines;
-            for (auto const& line: readLines(*fileStream))
+            for (auto const& line: readLines(std::move(fileStream)))
             {
                 if (throttle.pending())
                     return 130;

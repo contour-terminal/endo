@@ -482,14 +482,16 @@ bool isBinaryFile(std::filesystem::path const& path)
     file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
     auto const bytesRead = static_cast<size_t>(file.gcount());
 
-    return std::any_of(buffer.begin(), buffer.begin() + bytesRead, [](char c) { return c == '\0'; });
+    return std::any_of(buffer.begin(),
+                       buffer.begin() + static_cast<std::ptrdiff_t>(bytesRead),
+                       [](char c) { return c == '\0'; });
 }
 
 std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
                                                 GrepOptions const& opts,
                                                 ErrorWriter const& errWriter,
                                                 bool& hasError,
-                                                std::stop_token stopToken)
+                                                std::stop_token const& stopToken)
 {
     namespace stdfs = std::filesystem;
     std::vector<stdfs::path> result;
@@ -580,7 +582,7 @@ size_t searchLines(std::vector<std::string> const& lines,
                    bool showFilename,
                    bool useColor,
                    OutputWriter const& writer,
-                   std::stop_token stopToken)
+                   std::stop_token const& stopToken)
 {
     auto const beforeCtx = opts.effectiveBeforeContext();
     auto const afterCtx = opts.effectiveAfterContext();

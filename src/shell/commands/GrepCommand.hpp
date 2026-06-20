@@ -120,7 +120,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
                                                               GrepOptions const& opts,
                                                               ErrorWriter const& errWriter,
                                                               bool& hasError,
-                                                              std::stop_token stopToken = {});
+                                                              std::stop_token const& stopToken = {});
 
 /// Searches lines for regex matches and writes formatted output.
 /// @param lines The lines of text to search (without trailing newlines).
@@ -140,6 +140,6 @@ using ErrorWriter = std::function<void(std::string_view)>;
                                  bool showFilename,
                                  bool useColor,
                                  OutputWriter const& writer,
-                                 std::stop_token stopToken = {});
+                                 std::stop_token const& stopToken = {});
 
 } // namespace endo::grep
