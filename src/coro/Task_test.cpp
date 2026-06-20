@@ -61,6 +61,31 @@ Task<void> waitThenIncrement(std::vector<std::coroutine_handle<>>& waiters, int&
     ++counter;
 }
 
+// The whenAll drivers below are free functions, not immediately-invoked lambdas:
+// a lambda-coroutine's closure is a temporary destroyed once the Task is created,
+// so a body that resumes later would read captures through a dangling `this`.
+// Coroutine reference parameters are kept in the frame and stay valid instead.
+
+/// Runs two increments concurrently via whenAll.
+Task<void> incrementTwiceConcurrently(int& counter)
+{
+    co_await whenAll(increment(counter), increment(counter));
+}
+
+/// Joins two manually-completed waiters, then marks completion.
+Task<void> joinTwoWaiters(std::vector<std::coroutine_handle<>>& waiters, int& counter)
+{
+    co_await whenAll(waitThenIncrement(waiters, counter), waitThenIncrement(waiters, counter));
+    counter += 100; // marker proving the join resumed the parent exactly once
+}
+
+/// Awaits an empty whenAll, then records that it completed immediately.
+Task<void> awaitEmptyWhenAll(bool& reached)
+{
+    co_await whenAll(std::vector<Task<void>> {});
+    reached = true;
+}
+
 } // namespace
 
 TEST_CASE("Task produces a value when driven to completion", "[Task]")
@@ -122,9 +147,7 @@ TEST_CASE("Deep co_await chains keep the stack bounded (symmetric transfer)", "[
 TEST_CASE("whenAll completes synchronously when every child does", "[Task][whenAll]")
 {
     auto counter = 0;
-    auto root = [&]() -> Task<void> {
-        co_await whenAll(increment(counter), increment(counter));
-    }();
+    auto root = incrementTwiceConcurrently(counter);
 
     root.handle().resume();
 
@@ -136,10 +159,7 @@ TEST_CASE("whenAll resumes the awaiting coroutine only after the last child fini
 {
     auto waiters = std::vector<std::coroutine_handle<>> {};
     auto counter = 0;
-    auto root = [&]() -> Task<void> {
-        co_await whenAll(waitThenIncrement(waiters, counter), waitThenIncrement(waiters, counter));
-        counter += 100; // marker proving the join resumed the parent exactly once
-    }();
+    auto root = joinTwoWaiters(waiters, counter);
 
     root.handle().resume();
     REQUIRE(waiters.size() == 2);
@@ -158,10 +178,7 @@ TEST_CASE("whenAll resumes the awaiting coroutine only after the last child fini
 TEST_CASE("whenAll over no tasks completes immediately", "[Task][whenAll]")
 {
     auto reached = false;
-    auto root = [&]() -> Task<void> {
-        co_await whenAll(std::vector<Task<void>> {});
-        reached = true;
-    }();
+    auto root = awaitEmptyWhenAll(reached);
 
     root.handle().resume();
 

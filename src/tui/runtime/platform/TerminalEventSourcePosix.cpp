@@ -4,6 +4,7 @@
 #if !defined(_WIN32)
 
     #include <array>
+    #include <cstddef>
     #include <iterator>
 
     #include <poll.h>
@@ -62,7 +63,7 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         return finalize(std::move(outcome));
 
     auto const ready = [&](int index) {
-        return index >= 0 && (fds[index].revents & POLLIN) != 0;
+        return index >= 0 && (fds[static_cast<std::size_t>(index)].revents & POLLIN) != 0;
     };
 
     if (ready(resizeIndex))
@@ -78,7 +79,7 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     if (ready(interruptIndex))
         _interruptWakeup->reset();
 
-    if (signalIndex >= 0 && (fds[signalIndex].revents & POLLIN) != 0)
+    if (ready(signalIndex))
         endo::platform::SignalHandler::processSignalFd();
 
     if ((fds[inputIndex].revents & POLLIN) != 0)
