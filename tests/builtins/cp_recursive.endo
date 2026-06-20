@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cp -r copies a directory tree via the streaming walk
+# mode: shell
+# expect: /test/dst
+# expect: /test/dst/a.txt
+# expect: /test/dst/sub
+# expect: /test/dst/sub/b.txt
+# aux-file: src/a.txt
+alpha
+# aux-file: src/sub/b.txt
+beta
+# main-file:
+cp -r /test/src /test/dst
+find /test/dst | sort

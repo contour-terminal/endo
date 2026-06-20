@@ -5,7 +5,11 @@
 
 #include <filesystem>
 #include <fstream>
+#include <stop_token>
 #include <vector>
+
+#include <platform/SignalHandler.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
 
 using namespace endo::grep;
 
@@ -379,6 +383,56 @@ TEST_CASE("grep.search.no_match", "[grep]")
 
     auto count = searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {});
     CHECK(count == 0);
+}
+
+// ============================================================================
+// Cancellation / FileSystem-routing tests
+// ============================================================================
+
+TEST_CASE("grep.collect.recursive_uses_filesystem", "[grep]")
+{
+    using endo::platform::testing::InMemoryFileSystem;
+
+    auto const fs = InMemoryFileSystem {
+        { .path = "/root", .isDirectory = true },
+        { .path = "/root/a.txt", .content = "x" },
+        { .path = "/root/sub", .isDirectory = true },
+        { .path = "/root/sub/b.txt", .content = "y" },
+    };
+
+    GrepOptions opts;
+    opts.patterns = { "x" };
+    opts.recursive = true;
+    opts.files = { "/root" };
+
+    auto hasError = false;
+    auto const files = collectFiles(fs, opts, [](std::string_view) {}, hasError);
+
+    REQUIRE_FALSE(hasError);
+    // Both regular files are collected through the FileSystem's coroutine walk;
+    // directories are not search targets.
+    REQUIRE(files.size() == 2);
+}
+
+TEST_CASE("grep.search.stop_token_aborts_early", "[grep]")
+{
+    endo::platform::SignalHandler::clearPendingSigint();
+
+    // More lines than the interrupt poll interval so the throttled check is reached.
+    auto const lines = std::vector<std::string>(1000, "match");
+    GrepOptions opts;
+    opts.patterns = { "match" };
+    auto regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto source = std::stop_source {};
+    source.request_stop();
+
+    auto const count =
+        searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {}, source.get_token());
+
+    // The match loop aborts at the first poll boundary, long before all 1000 lines.
+    CHECK(count < 1000);
 }
 
 TEST_CASE("grep.search.invert_match", "[grep]")

@@ -7,8 +7,11 @@
 #include <functional>
 #include <regex>
 #include <span>
+#include <stop_token>
 #include <string>
 #include <vector>
+
+#include <platform/FileSystem.hpp>
 
 namespace endo::grep
 {
@@ -99,13 +102,25 @@ using ErrorWriter = std::function<void(std::string_view)>;
 [[nodiscard]] bool isBinaryFile(std::filesystem::path const& path);
 
 /// Collects the list of files to search based on options.
+///
+/// Recursion is driven through the injected FileSystem's lazy coroutine walk
+/// (`walkDirectoryRecursive`), so a large tree is enumerated incrementally and
+/// can be aborted: the walk polls for a pending Ctrl+C (drained from the OS, so
+/// it works on Linux too) and for @p stopToken between entries, returning the
+/// files gathered so far when either is observed.
+///
+/// @param fs FileSystem abstraction used to test paths and walk directories.
 /// @param opts Parsed grep options with files and recursion settings.
 /// @param errWriter Callback for error messages.
 /// @param hasError Set to true if any error occurred.
-/// @return Vector of file paths to search.
-[[nodiscard]] std::vector<std::filesystem::path> collectFiles(GrepOptions const& opts,
+/// @param stopToken Optional external cancellation; collection stops early when
+///                  stop is requested (used by tests; default = no cancellation).
+/// @return Vector of file paths to search (possibly partial if interrupted).
+[[nodiscard]] std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
+                                                              GrepOptions const& opts,
                                                               ErrorWriter const& errWriter,
-                                                              bool& hasError);
+                                                              bool& hasError,
+                                                              std::stop_token stopToken = {});
 
 /// Searches lines for regex matches and writes formatted output.
 /// @param lines The lines of text to search (without trailing newlines).
@@ -115,13 +130,16 @@ using ErrorWriter = std::function<void(std::string_view)>;
 /// @param showFilename Whether to prefix output with filename.
 /// @param useColor Whether to colorize the output.
 /// @param writer Callback for writing output.
-/// @return Number of matching lines found.
+/// @param stopToken Optional external cancellation; searching stops early when a
+///                  pending Ctrl+C or stop request is observed (default = none).
+/// @return Number of matching lines found (possibly partial if interrupted).
 [[nodiscard]] size_t searchLines(std::vector<std::string> const& lines,
                                  std::regex const& regex,
                                  GrepOptions const& opts,
                                  std::string_view filename,
                                  bool showFilename,
                                  bool useColor,
-                                 OutputWriter const& writer);
+                                 OutputWriter const& writer,
+                                 std::stop_token stopToken = {});
 
 } // namespace endo::grep

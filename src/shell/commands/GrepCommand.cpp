@@ -5,12 +5,16 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cstddef>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <ranges>
 #include <regex>
+#include <stop_token>
 #include <utility>
+
+#include <platform/SignalHandler.hpp>
 
 namespace endo::grep
 {
@@ -105,6 +109,30 @@ namespace
         auto const dirname = dirPath.filename().string();
         return std::ranges::any_of(opts.excludeDirs,
                                    [&](auto const& pattern) { return globMatchFilename(dirname, pattern); });
+    }
+
+    /// Number of loop iterations between interrupt polls. Draining the OS signal
+    /// has a small cost, so cheap loops (directory scans, line matching) only
+    /// poll every so often.
+    constexpr auto InterruptPollInterval = std::size_t { 256 };
+
+    /// Throttled, non-clearing check for whether a long grep loop should abort.
+    ///
+    /// Drains pending OS signals (required on Linux, where SIGINT arrives via
+    /// signalfd) and reports whether a Ctrl+C is pending or @p stopToken has
+    /// requested a stop. The pending-SIGINT flag is deliberately NOT cleared
+    /// here: the caller leaves it set so the grep driver can observe it after the
+    /// pure helper returns, consume it once, and exit with code 130.
+    ///
+    /// @param counter Per-loop iteration counter, advanced on every call.
+    /// @param stopToken External cancellation token (may be empty).
+    /// @return true if the loop should stop.
+    bool shouldAbort(std::size_t& counter, std::stop_token const& stopToken)
+    {
+        if (++counter % InterruptPollInterval != 0)
+            return false;
+        platform::SignalHandler::processSignalFd();
+        return platform::SignalHandler::hasPendingSigint() || stopToken.stop_requested();
     }
 
 } // namespace
@@ -457,81 +485,73 @@ bool isBinaryFile(std::filesystem::path const& path)
     return std::any_of(buffer.begin(), buffer.begin() + bytesRead, [](char c) { return c == '\0'; });
 }
 
-std::vector<std::filesystem::path> collectFiles(GrepOptions const& opts,
+std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
+                                                GrepOptions const& opts,
                                                 ErrorWriter const& errWriter,
-                                                bool& hasError)
+                                                bool& hasError,
+                                                std::stop_token stopToken)
 {
-    namespace fs = std::filesystem;
-    std::vector<fs::path> result;
+    namespace stdfs = std::filesystem;
+    std::vector<stdfs::path> result;
+    std::size_t pollCounter = 0;
+
+    // Expands one directory root recursively via the FileSystem's lazy coroutine
+    // walk, applying grep's include/exclude filters. Returns false if the walk
+    // was interrupted (Ctrl+C or external stop), so the caller can stop early.
+    auto const recurseInto = [&](stdfs::path const& root) -> bool {
+        for (auto const& entry: fs.walkDirectoryRecursive(root))
+        {
+            if (shouldAbort(pollCounter, stopToken))
+                return false;
+            if (!entry.isRegularFile)
+                continue;
+
+            // Check parent directories (relative to the root) against --exclude-dir.
+            auto const rel = entry.path.lexically_relative(root);
+            auto excluded = false;
+            for (auto const& component: rel)
+            {
+                if (component == rel.filename())
+                    break;
+                if (isExcludedDir(component, opts))
+                {
+                    excluded = true;
+                    break;
+                }
+            }
+            if (excluded || !matchesFilters(entry.path, opts))
+                continue;
+            result.push_back(entry.path);
+        }
+        return true;
+    };
 
     if (opts.files.empty())
     {
+        // No file arguments: recurse the current directory (-r) or read stdin (caller).
         if (opts.recursive)
-        {
-            // Recurse current directory
-            std::error_code ec;
-            for (auto const& entry:
-                 fs::recursive_directory_iterator(".", fs::directory_options::skip_permission_denied, ec))
-            {
-                if (!entry.is_regular_file(ec))
-                    continue;
-                if (isExcludedDir(entry.path().parent_path(), opts))
-                    continue;
-                if (!matchesFilters(entry.path(), opts))
-                    continue;
-                result.push_back(entry.path());
-            }
-        }
-        // else: no files means stdin (handled by caller)
+            recurseInto(".");
         return result;
     }
 
     for (auto const& fileArg: opts.files)
     {
-        auto const path = fs::path(fileArg);
-        std::error_code ec;
-        auto const status = fs::status(path, ec);
+        auto const path = stdfs::path(fileArg);
 
-        if (ec || !fs::exists(status))
+        if (!fs.exists(path))
         {
             if (!opts.suppressErrors)
-            {
                 errWriter(std::format("grep: {}: No such file or directory\n", fileArg));
-            }
             hasError = true;
             continue;
         }
 
-        if (fs::is_directory(status))
+        if (fs.isDirectory(path))
         {
             if (opts.recursive)
             {
-                for (auto const& entry: fs::recursive_directory_iterator(
-                         path, fs::directory_options::skip_permission_denied, ec))
-                {
-                    if (!entry.is_regular_file(ec))
-                        continue;
-
-                    // Check parent directories against exclude-dir
-                    auto rel = fs::relative(entry.path(), path, ec);
-                    bool excluded = false;
-                    for (auto const& component: rel)
-                    {
-                        if (component == rel.filename())
-                            break;
-                        if (isExcludedDir(component, opts))
-                        {
-                            excluded = true;
-                            break;
-                        }
-                    }
-                    if (excluded)
-                        continue;
-
-                    if (!matchesFilters(entry.path(), opts))
-                        continue;
-                    result.push_back(entry.path());
-                }
+                if (!recurseInto(path))
+                    return result; // interrupted
             }
             else
             {
@@ -542,7 +562,7 @@ std::vector<std::filesystem::path> collectFiles(GrepOptions const& opts,
             continue;
         }
 
-        if (fs::is_regular_file(status))
+        if (fs.isRegularFile(path))
         {
             if (!matchesFilters(path, opts))
                 continue;
@@ -559,17 +579,24 @@ size_t searchLines(std::vector<std::string> const& lines,
                    std::string_view filename,
                    bool showFilename,
                    bool useColor,
-                   OutputWriter const& writer)
+                   OutputWriter const& writer,
+                   std::stop_token stopToken)
 {
     auto const beforeCtx = opts.effectiveBeforeContext();
     auto const afterCtx = opts.effectiveAfterContext();
     auto const hasContext = beforeCtx > 0 || afterCtx > 0;
     auto const lineCount = static_cast<int>(lines.size());
+    std::size_t pollCounter = 0;
 
-    // Find all matching line indices
+    // Find all matching line indices. Polling here keeps grep on a single huge
+    // file interruptible — regex_search over millions of lines is CPU-bound and
+    // would otherwise ignore Ctrl+C until the whole file is scanned.
     std::vector<int> matchIndices;
     for (auto const i: std::views::iota(0, lineCount))
     {
+        if (shouldAbort(pollCounter, stopToken))
+            return matchIndices.size();
+
         auto const matches = std::regex_search(lines[static_cast<size_t>(i)], regex);
         auto const isMatch = opts.invertMatch ? !matches : matches;
         if (isMatch)
@@ -657,6 +684,9 @@ size_t searchLines(std::vector<std::string> const& lines,
     int lastPrintedLine = -2; // Track for group separators
     for (auto const& [lineIndex, isMatch]: outputLines)
     {
+        if (shouldAbort(pollCounter, stopToken))
+            return matchCount;
+
         // Print group separator between non-contiguous groups
         if (hasContext && lastPrintedLine >= 0 && lineIndex > lastPrintedLine + 1)
         {

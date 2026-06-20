@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: find -name matches a file deep in the tree via the streaming walk
+# mode: shell
+# expect: /test/sub/b.txt
+# aux-file: a.txt
+alpha
+# aux-file: sub/b.txt
+beta
+# main-file:
+find /test -name b.txt

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rm -r removes a directory tree via the interruptible collect-then-delete path
+# mode: shell
+# expect: /test
+# aux-file: tree/a.txt
+alpha
+# aux-file: tree/sub/b.txt
+beta
+# main-file:
+rm -r /test/tree
+find /test

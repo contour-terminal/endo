@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/FileSystem.hpp>
-
 #include <initializer_list>
 #include <map>
 #include <set>
 #include <string>
+
+#include <platform/FileSystem.hpp>
 
 namespace endo::platform::testing
 {
@@ -17,9 +17,9 @@ struct FileEntry
     std::filesystem::path path;
     std::string content;
     std::filesystem::perms perms = std::filesystem::perms::owner_read | std::filesystem::perms::owner_write;
-    bool isExecutable = false;     ///< Shorthand for adding owner_exec to perms.
-    bool isDirectory = false;      ///< If true, creates a directory instead of a file.
-    bool isSymlink = false;        ///< If true, content is treated as symlink target.
+    bool isExecutable = false; ///< Shorthand for adding owner_exec to perms.
+    bool isDirectory = false;  ///< If true, creates a directory instead of a file.
+    bool isSymlink = false;    ///< If true, content is treated as symlink target.
 };
 
 /// In-memory filesystem implementation for testing.
@@ -55,12 +55,12 @@ class InMemoryFileSystem final: public FileSystem
     [[nodiscard]] std::expected<std::string, std::string> readFile(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> writeFile(std::filesystem::path const& path,
-                                                              std::string_view content) const override;
+                                                             std::string_view content) const override;
     [[nodiscard]] std::expected<void, std::string> appendFile(std::filesystem::path const& path,
-                                                               std::string_view content) const override;
+                                                              std::string_view content) const override;
     [[nodiscard]] std::unique_ptr<std::istream> openRead(std::filesystem::path const& path) const override;
     [[nodiscard]] std::unique_ptr<std::ostream> openWrite(std::filesystem::path const& path,
-                                                           bool append = false) const override;
+                                                          bool append = false) const override;
     [[nodiscard]] std::unique_ptr<std::iostream> openReadWrite(
         std::filesystem::path const& path) const override;
 
@@ -69,21 +69,21 @@ class InMemoryFileSystem final: public FileSystem
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> createDirectories(
         std::filesystem::path const& path) const override;
-    [[nodiscard]] std::expected<bool, std::string> remove(
-        std::filesystem::path const& path) const override;
+    [[nodiscard]] std::expected<bool, std::string> remove(std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<std::uintmax_t, std::string> removeAll(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<void, std::string> copyFile(std::filesystem::path const& from,
-                                                             std::filesystem::path const& to,
-                                                             bool overwrite = false) const override;
+                                                            std::filesystem::path const& to,
+                                                            bool overwrite = false) const override;
     [[nodiscard]] std::expected<void, std::string> rename(std::filesystem::path const& from,
-                                                           std::filesystem::path const& to) const override;
+                                                          std::filesystem::path const& to) const override;
 
     // Directory listing
     [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectory(
         std::filesystem::path const& path) const override;
     [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
         std::filesystem::path const& path) const override;
+    [[nodiscard]] Generator<DirectoryEntry> walkDirectoryRecursive(std::filesystem::path path) const override;
 
     // Metadata
     [[nodiscard]] std::expected<std::uintmax_t, std::string> fileSize(
@@ -105,7 +105,8 @@ class InMemoryFileSystem final: public FileSystem
     void setCurrentPath(std::filesystem::path const& path);
 
     /// Adds a file with the given content and optional permissions.
-    void addFile(std::filesystem::path const& path, std::string content,
+    void addFile(std::filesystem::path const& path,
+                 std::string content,
                  std::filesystem::perms perms = std::filesystem::perms::owner_read
                                                 | std::filesystem::perms::owner_write);
 
@@ -125,11 +126,11 @@ class InMemoryFileSystem final: public FileSystem
     [[nodiscard]] std::string normalize(std::filesystem::path const& path) const;
     void ensureParentDirectories(std::filesystem::path const& path) const;
 
-    mutable std::map<std::string, std::string> _files;                 ///< path -> content
-    mutable std::set<std::string> _directories;                        ///< known directories
-    mutable std::map<std::string, std::string> _symlinks;              ///< path -> target
+    mutable std::map<std::string, std::string> _files;                  ///< path -> content
+    mutable std::set<std::string> _directories;                         ///< known directories
+    mutable std::map<std::string, std::string> _symlinks;               ///< path -> target
     mutable std::map<std::string, std::filesystem::perms> _permissions; ///< path -> permissions
-    std::set<std::string> _deniedPaths;                                ///< paths that simulate EACCES
+    std::set<std::string> _deniedPaths;                                 ///< paths that simulate EACCES
     std::filesystem::path _currentPath = "/";
     mutable int _tempCounter = 0;
 };

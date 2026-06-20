@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rm -rv prints each removed entry leaf-to-root and the directory last
+# mode: shell
+# expect: removed '/test/tree/a.txt'
+# expect: removed '/test/tree'
+# aux-file: tree/a.txt
+alpha
+# main-file:
+rm -rv /test/tree

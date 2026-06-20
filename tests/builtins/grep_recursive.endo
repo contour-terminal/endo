@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: grep -r searches a directory tree through the FileSystem coroutine walk
+# mode: shell
+# expect: /test/dir/b.txt:has a needle inside
+# aux-file: dir/a.txt
+nothing to see here
+# aux-file: dir/b.txt
+has a needle inside
+# main-file:
+grep -r needle /test/dir

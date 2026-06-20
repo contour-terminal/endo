@@ -31,6 +31,8 @@
 
 #include <fcntl.h>
 
+#include <platform/Generator.hpp>
+#include <platform/InterruptThrottle.hpp>
 #include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 #include <platform/ProcessProvider.hpp>
@@ -204,6 +206,23 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
         return std::unexpected(std::format("start ({}) must be <= end ({})", *rangeStart, *rangeEnd));
 
     return std::pair { rangeStart, rangeEnd };
+}
+
+/// Lazily yields the lines of @p in (newline-delimited, trailing CR stripped) as
+/// a coroutine. Consuming it one line at a time lets the caller poll for Ctrl+C
+/// between lines, so reading even a very large file stays interruptible.
+///
+/// @param in Input stream to read from; must outlive the returned generator.
+/// @return A generator of lines without their terminating newline.
+endo::Generator<std::string> readLines(std::istream& in)
+{
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        co_yield line;
+    }
 }
 
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
@@ -1253,64 +1272,57 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
         {
             if (recursive)
             {
-                if (verbose)
+                // Collect every entry via the interruptible lazy walk first (so enumerating a
+                // huge tree is itself abortable), then remove leaf-to-root. We collect rather
+                // than delete during the walk because mutating the tree we are iterating would
+                // be undefined. Both the collect and the delete phases poll for Ctrl+C, and we
+                // only print in verbose mode — this unifies what used to be separate verbose /
+                // removeAll() paths, the latter of which was a single non-interruptible call.
+                auto rmThrottle = InterruptThrottle {};
+                auto entries = std::vector<std::filesystem::path> {};
+                for (auto const& entry: _fs.walkDirectoryRecursive(path))
                 {
-                    // Manual recursive traversal to print each entry (matches GNU coreutils rm -vr)
-                    auto const listResult = _fs.listDirectoryRecursive(path);
-                    if (!listResult.has_value())
+                    if (rmThrottle.pending())
+                        return 130;
+                    entries.push_back(entry.path);
+                }
+                std::ranges::reverse(entries); // children before their parents
+
+                auto allOk = true;
+                for (auto const& entry: entries)
+                {
+                    if (rmThrottle.pending())
+                        return 130;
+                    auto const removeResult = _fs.remove(entry);
+                    if (!removeResult.has_value() || !removeResult.value())
                     {
-                        error("rm: cannot remove '{}': {}", path, listResult.error());
-                        success = false;
+                        error("rm: cannot remove '{}': {}",
+                              platform::normalizePath(entry),
+                              removeResult.has_value() ? "Unknown error" : removeResult.error());
+                        allOk = false;
+                        break;
                     }
-                    else
-                    {
-                        // Collect paths and reverse for leaf-to-root removal order
-                        auto entries = std::vector<std::filesystem::path> {};
-                        for (auto const& entry: listResult.value())
-                            entries.push_back(entry.path);
-                        std::ranges::reverse(entries);
-                        auto allOk = true;
-                        for (auto const& entry: entries)
-                        {
-                            auto const removeResult = _fs.remove(entry);
-                            if (!removeResult.has_value() || !removeResult.value())
-                            {
-                                error("rm: cannot remove '{}': {}",
-                                      platform::normalizePath(entry),
-                                      removeResult.has_value() ? "Unknown error" : removeResult.error());
-                                allOk = false;
-                                break;
-                            }
-                            writeOutput(std::format("removed '{}'\n", platform::normalizePath(entry)));
-                        }
-                        if (!allOk)
-                        {
-                            success = false;
-                        }
-                        else
-                        {
-                            auto const removeResult = _fs.remove(path);
-                            if (!removeResult.has_value() || !removeResult.value())
-                            {
-                                error("rm: cannot remove '{}': {}",
-                                      path,
-                                      removeResult.has_value() ? "Unknown error" : removeResult.error());
-                                success = false;
-                            }
-                            else
-                            {
-                                writeOutput(std::format("removed '{}'\n", path));
-                            }
-                        }
-                    }
+                    if (verbose)
+                        writeOutput(std::format("removed '{}'\n", platform::normalizePath(entry)));
+                }
+
+                if (!allOk)
+                {
+                    success = false;
                 }
                 else
                 {
-                    auto const removeResult = _fs.removeAll(path);
-                    if (!removeResult.has_value())
+                    auto const removeResult = _fs.remove(path);
+                    if (!removeResult.has_value() || !removeResult.value())
                     {
-                        error("rm: cannot remove '{}': {}", path, removeResult.error());
+                        error("rm: cannot remove '{}': {}",
+                              path,
+                              removeResult.has_value() ? "Unknown error" : removeResult.error());
                         success = false;
+                    }
+                    else if (verbose)
+                    {
+                        writeOutput(std::format("removed '{}'\n", path));
                     }
                 }
             }
@@ -1618,14 +1630,11 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
 
         if (recursive && _fs.isDirectory(srcPath))
         {
-            // Recursive directory copy: list all entries and copy individually
-            auto const listResult = _fs.listDirectoryRecursive(srcPath);
-            if (!listResult.has_value())
-            {
-                error("cp: cannot copy '{}': {}", src, listResult.error());
-                success = false;
-                continue;
-            }
+            // Recursive directory copy: stream entries from the lazy walk and copy each as it
+            // arrives, polling for Ctrl+C between entries so a large tree aborts promptly.
+            // recursive_directory_iterator yields parents before their contents, which is the
+            // order cp needs (create a directory, then populate it). We copy only — never mutate
+            // the source while walking it.
 
             // Create the top-level target directory
             if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
@@ -1637,8 +1646,12 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                 continue;
             }
 
-            for (auto const& entry: listResult.value())
+            auto cpThrottle = InterruptThrottle {};
+            for (auto const& entry: _fs.walkDirectoryRecursive(srcPath))
             {
+                if (cpThrottle.pending())
+                    return 130;
+
                 auto const relativePath = entry.path.lexically_relative(srcPath);
                 auto const entryTarget = target / relativePath;
 
@@ -1901,18 +1914,16 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                     success = false;
                     continue;
                 }
-                auto const listResult = _fs.listDirectoryRecursive(srcPath);
-                if (!listResult.has_value())
+                // Cross-device move falls back to a recursive copy (then the source is removed
+                // below). Stream the lazy walk and copy each entry as it arrives, polling for
+                // Ctrl+C between entries. Copy only — the source is not touched until the walk
+                // has fully completed.
+                auto mvThrottle = InterruptThrottle {};
+                for (auto const& entry: _fs.walkDirectoryRecursive(srcPath))
                 {
-                    error("mv: cannot move '{}' to '{}': {}",
-                          src,
-                          platform::normalizePath(target),
-                          listResult.error());
-                    success = false;
-                    continue;
-                }
-                for (auto const& entry: listResult.value())
-                {
+                    if (mvThrottle.pending())
+                        return 130;
+
                     auto const relativePath = entry.path.lexically_relative(srcPath);
                     auto const entryTarget = target / relativePath;
                     if (entry.isDirectory)
@@ -2143,12 +2154,16 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
         if (options.maxDepth.has_value() && options.maxDepth.value() == 0)
             continue;
 
-        auto const listResult = _fs.listDirectoryRecursive(searchPath);
-        if (!listResult.has_value())
-            continue;
+        // Stream entries lazily from the coroutine walk rather than materializing the whole
+        // subtree first: output appears immediately, and we poll for Ctrl+C between entries so a
+        // long walk aborts promptly with exit code 130 (128 + SIGINT), matching sleep/tail.
+        auto throttle = InterruptThrottle {};
 
-        for (auto const& dirEntry: listResult.value())
+        for (auto const& dirEntry: _fs.walkDirectoryRecursive(searchPath))
         {
+            if (throttle.pending())
+                return 130;
+
             // Compute depth from relative path
             auto const relativePath = dirEntry.path.lexically_relative(searchPath);
             auto const depth = static_cast<int>(std::distance(relativePath.begin(), relativePath.end()));
@@ -2284,8 +2299,14 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         error("{}", sv.substr(0, sv.size() - (sv.ends_with('\n') ? 1 : 0)));
     };
 
-    // Collect files
-    auto files = grep::collectFiles(opts, errWriter, hasError);
+    // Collect files. The recursive walk inside collectFiles polls for Ctrl+C and leaves the
+    // pending flag set when interrupted, so we consume it here and exit with 130.
+    auto files = grep::collectFiles(_fs, opts, errWriter, hasError);
+    if (SignalHandler::hasPendingSigint())
+    {
+        SignalHandler::clearPendingSigint();
+        return 130;
+    }
 
     // Determine file count for filename display
     auto const readingStdin = opts.files.empty() && !opts.recursive;
@@ -2321,12 +2342,21 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
 
         totalMatches =
             grep::searchLines(lines, *regex, opts, "(standard input)", showFilename, useColor, writer);
+        if (SignalHandler::hasPendingSigint())
+        {
+            SignalHandler::clearPendingSigint();
+            return 130;
+        }
     }
     else
     {
         // Search files
+        auto throttle = InterruptThrottle {};
         for (auto const& filePath: files)
         {
+            if (throttle.pending())
+                return 130;
+
             // Binary detection
             if (opts.skipBinary && grep::isBinaryFile(filePath))
                 continue;
@@ -2341,17 +2371,23 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
             }
 
+            // Stream the file's lines through the coroutine reader so a large file stays
+            // interruptible during the read, not just during the search below.
             std::vector<std::string> lines;
-            std::string line;
-            while (std::getline(*fileStream, line))
+            for (auto const& line: readLines(*fileStream))
             {
-                if (!line.empty() && line.back() == '\r')
-                    line.pop_back();
-                lines.push_back(std::move(line));
+                if (throttle.pending())
+                    return 130;
+                lines.push_back(line);
             }
 
             auto const matches = grep::searchLines(
                 lines, *regex, opts, platform::normalizePath(filePath), showFilename, useColor, writer);
+            if (SignalHandler::hasPendingSigint())
+            {
+                SignalHandler::clearPendingSigint();
+                return 130;
+            }
             totalMatches += matches;
 
             // For -q, bail out early on first match

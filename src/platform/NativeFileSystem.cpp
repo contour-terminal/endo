@@ -230,6 +230,27 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     return entries;
 }
 
+Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(fs::path path) const
+{
+    // recursive_directory_iterator reads directories lazily as it advances, so
+    // co_yield-ing per entry streams the walk to the consumer one entry at a
+    // time. The error_code overload is used so a bad/unreadable root yields
+    // nothing rather than throwing out of the coroutine (callers pre-check).
+    std::error_code ec;
+    auto it = fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec);
+    auto const end = fs::recursive_directory_iterator {};
+    for (; !ec && it != end; it.increment(ec))
+    {
+        auto const& entry = *it;
+        co_yield DirectoryEntry {
+            .path = entry.path(),
+            .isDirectory = entry.is_directory(),
+            .isRegularFile = entry.is_regular_file(),
+            .isSymlink = entry.is_symlink(),
+        };
+    }
+}
+
 std::expected<std::uintmax_t, std::string> NativeFileSystem::fileSize(fs::path const& path) const
 {
     std::error_code ec;
