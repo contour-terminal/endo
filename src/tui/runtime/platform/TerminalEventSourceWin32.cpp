@@ -64,8 +64,12 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     // The console input handle stays signalled for non-key records too; reading
     // is non-blocking and returns nothing if there is no decodable input.
     auto parsed = input.readReadyInput();
-    outcome.events.insert(
-        outcome.events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
+    if (outcome.events.empty())
+        outcome.events = std::move(parsed);
+    else
+        outcome.events.insert(outcome.events.end(),
+                              std::make_move_iterator(parsed.begin()),
+                              std::make_move_iterator(parsed.end()));
 
     return finalize(std::move(outcome));
 }

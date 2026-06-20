@@ -138,6 +138,10 @@ class TuiRuntime
     /// Moves expired timers' coroutines into the ready queue.
     void fireExpiredTimers();
 
+    /// Moves a parked waiter (if any) into the ready queue and clears the slot.
+    /// @param waiter The waiter slot to wake.
+    void wakeWaiter(std::coroutine_handle<>& waiter);
+
     /// Wakes every parked flow so cancelled awaitables can unwind.
     void wakeAllWaiters();
 

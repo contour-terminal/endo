@@ -9,7 +9,7 @@
 #include <tui/Terminal.hpp>
 #include <tui/runtime/EventSource.hpp>
 
-#include <variant>
+#include <utility>
 
 #include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
@@ -48,36 +48,14 @@ class TerminalEventSource: public EventSource
     [[nodiscard]] WaitOutcome wait(int timeoutMs) override;
 
   private:
-    /// Consumes protocol-response events in @p events, dispatching color-scheme
-    /// and focus reports to the terminal's handlers and dropping the rest, so the
-    /// runtime only ever sees application input. Mirrors @c Terminal::poll().
-    /// @param events The decoded events to filter in place.
-    void consumeProtocolReports(std::vector<InputEvent>& events) const
-    {
-        std::erase_if(events, [this](InputEvent const& event) {
-            if (auto const* report = std::get_if<ColorSchemeReport>(&event))
-            {
-                _terminal.handleColorSchemeReport((report->mode == 2) ? ColorScheme::Light
-                                                                      : ColorScheme::Dark);
-                return true;
-            }
-            if (auto const* focus = std::get_if<FocusEvent>(&event))
-            {
-                _terminal.handleFocusEvent(focus->focused);
-                return true;
-            }
-            return std::holds_alternative<CursorPositionReport>(event)
-                   || std::holds_alternative<CellSizeReport>(event);
-        });
-    }
-
-    /// Folds a pending SIGINT into the outcome and clears the flag, so the runtime
-    /// observes each interrupt exactly once.
+    /// Consumes protocol-response events (via @c Terminal::consumeProtocolReports
+    /// so the policy lives in one place) and folds a pending SIGINT into the
+    /// outcome, clearing the flag so the runtime observes each interrupt once.
     /// @param outcome The outcome assembled from the wait so far.
-    /// @return @p outcome with @c interrupted set if a SIGINT was pending.
-    [[nodiscard]] WaitOutcome finalize(WaitOutcome outcome) const noexcept
+    /// @return @p outcome with reports stripped and @c interrupted set if pending.
+    [[nodiscard]] WaitOutcome finalize(WaitOutcome outcome)
     {
-        consumeProtocolReports(outcome.events);
+        _terminal.consumeProtocolReports(outcome.events);
         if (endo::platform::SignalHandler::hasPendingSigint())
         {
             endo::platform::SignalHandler::clearPendingSigint();

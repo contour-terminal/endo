@@ -84,9 +84,12 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     if ((fds[inputIndex].revents & POLLIN) != 0)
     {
         auto parsed = input.readReadyInput();
-        outcome.events.insert(outcome.events.end(),
-                              std::make_move_iterator(parsed.begin()),
-                              std::make_move_iterator(parsed.end()));
+        if (outcome.events.empty())
+            outcome.events = std::move(parsed);
+        else
+            outcome.events.insert(outcome.events.end(),
+                                  std::make_move_iterator(parsed.begin()),
+                                  std::make_move_iterator(parsed.end()));
     }
 
     return finalize(std::move(outcome));

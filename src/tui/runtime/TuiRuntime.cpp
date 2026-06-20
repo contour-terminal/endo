@@ -99,20 +99,19 @@ void TuiRuntime::fireExpiredTimers()
     }
 }
 
+void TuiRuntime::wakeWaiter(std::coroutine_handle<>& waiter)
+{
+    if (!waiter)
+        return;
+    auto const handle = std::exchange(waiter, {});
+    if (!handle.done())
+        _ready.push_back(handle);
+}
+
 void TuiRuntime::wakeAllWaiters()
 {
-    if (_inputWaiter)
-    {
-        auto const handle = std::exchange(_inputWaiter, {});
-        if (!handle.done())
-            _ready.push_back(handle);
-    }
-    if (_agentWaiter)
-    {
-        auto const handle = std::exchange(_agentWaiter, {});
-        if (!handle.done())
-            _ready.push_back(handle);
-    }
+    wakeWaiter(_inputWaiter);
+    wakeWaiter(_agentWaiter);
     for (auto const& entry: _timers)
         if (entry.handle && !entry.handle.done())
             _ready.push_back(entry.handle);
@@ -146,22 +145,19 @@ void TuiRuntime::pumpOnce()
         routeDecodedEvent(std::move(event));
 
     if (_inputWaiter && hasBufferedInput())
-    {
-        auto const handle = std::exchange(_inputWaiter, {});
-        _ready.push_back(handle);
-    }
+        wakeWaiter(_inputWaiter);
 
     if (outcome.agentReady)
     {
         _agentPending = true;
-        if (_agentWaiter)
-        {
-            auto const handle = std::exchange(_agentWaiter, {});
-            _ready.push_back(handle);
-        }
+        wakeWaiter(_agentWaiter);
     }
 
     fireExpiredTimers();
+
+    // Resume coroutines woken during this iteration so an event is delivered in
+    // the same pump it arrived, rather than on the next one.
+    drainReadyQueue();
 }
 
 NextInputEventAwaiter TuiRuntime::nextEvent() noexcept
