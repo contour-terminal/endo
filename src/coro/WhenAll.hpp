@@ -60,16 +60,16 @@ namespace detail
                 return WhenAllRunner { std::coroutine_handle<PromiseType>::from_promise(*this) };
             }
 
-            [[nodiscard]] static std::suspend_always initial_suspend() noexcept { return {}; }
+            [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
             /// Final awaiter that decrements the join counter and tail-transfers
             /// to the awaiting coroutine when this is the last child to finish.
             struct FinalAwaiter
             {
-                [[nodiscard]] static bool await_ready() noexcept { return false; }
+                [[nodiscard]] bool await_ready() const noexcept { return false; }
 
-                [[nodiscard]] static std::coroutine_handle<> await_suspend(
-                    std::coroutine_handle<PromiseType> self) noexcept
+                [[nodiscard]] std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<PromiseType> self) const noexcept
                 {
                     auto* const state = self.promise().state;
                     if (--state->remaining == 0 && state->continuation)
@@ -80,7 +80,7 @@ namespace detail
                 void await_resume() const noexcept {}
             };
 
-            [[nodiscard]] static FinalAwaiter final_suspend() noexcept { return {}; }
+            [[nodiscard]] FinalAwaiter final_suspend() const noexcept { return {}; }
 
             /// A runner body never lets an exception escape (it try/catches the
             /// awaited task), so this is unreachable in practice; capture defensively.

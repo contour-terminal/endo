@@ -49,12 +49,18 @@ namespace detail
     /// driven directly by the runtime).
     struct FinalAwaiter
     {
-        [[nodiscard]] static bool await_ready() noexcept { return false; }
+        // Coroutine awaiter/promise hooks stay non-static instance methods: their
+        // names are fixed snake_case by the language, and the promise hooks must
+        // be instance methods (a static initial_suspend/final_suspend would make
+        // the compiler-generated promise.hook() calls trip static-accessed-through-
+        // instance). readability-convert-member-functions-to-static is therefore
+        // disabled for this directory (see src/coro/.clang-tidy).
+        [[nodiscard]] bool await_ready() const noexcept { return false; }
 
         /// @return The continuation to resume via symmetric transfer.
         template <typename Promise>
-        [[nodiscard]] static std::coroutine_handle<> await_suspend(
-            std::coroutine_handle<Promise> self) noexcept
+        [[nodiscard]] std::coroutine_handle<> await_suspend(
+            std::coroutine_handle<Promise> self) const noexcept
         {
             auto const continuation = self.promise().continuation;
             return continuation ? continuation : std::noop_coroutine();
@@ -73,10 +79,10 @@ namespace detail
         StopToken token;                      ///< Inherited from the awaiting coroutine.
 
         /// Start suspended so a continuation can be attached before the body runs.
-        [[nodiscard]] static std::suspend_always initial_suspend() noexcept { return {}; }
+        [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
         /// Suspend at the end and tail-transfer to the continuation.
-        [[nodiscard]] static FinalAwaiter final_suspend() noexcept { return {}; }
+        [[nodiscard]] FinalAwaiter final_suspend() const noexcept { return {}; }
 
         /// Captures an exception escaping the coroutine body for later rethrow.
         void unhandled_exception() noexcept { exception = std::current_exception(); }

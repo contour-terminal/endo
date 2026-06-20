@@ -1,0 +1,11 @@
+# Coroutine awaiter and promise hooks (await_ready, await_suspend, await_resume,
+# initial_suspend, final_suspend, return_value, …) are part of the C++ coroutine
+# protocol: their names are fixed snake_case by the language, and the promise
+# hooks must be non-static instance methods — a static initial_suspend /
+# final_suspend makes the compiler-generated `promise.hook()` calls trip
+# readability-static-accessed-through-instance. The stateless ones therefore
+# cannot be turned into static members, so this directory disables
+# readability-convert-member-functions-to-static (otherwise a false positive on
+# every awaiter/promise hook). All other checks are inherited from the repo root.
+InheritParentConfig: true
+Checks: '-readability-convert-member-functions-to-static'

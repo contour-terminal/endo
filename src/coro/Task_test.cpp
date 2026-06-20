@@ -52,7 +52,7 @@ struct ManualEvent
 {
     std::vector<std::coroutine_handle<>>* waiters;
 
-    [[nodiscard]] static bool await_ready() noexcept { return false; }
+    [[nodiscard]] bool await_ready() const noexcept { return false; }
 
     void await_suspend(std::coroutine_handle<> waiting) const { waiters->push_back(waiting); }
 
