@@ -28,6 +28,23 @@ struct SpawnConfig
     std::optional<ProcessId> processGroup = std::nullopt; ///< Process group ID (0 for new group)
     bool closeExtraFds = true;                            ///< Close file descriptors > 2 after fork
     std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
+
+    /// On Windows, create the child in a new console process group
+    /// (CREATE_NEW_PROCESS_GROUP), shielding it from the console's Ctrl+C. Set this
+    /// for background/detached jobs. Foreground jobs must leave this false so they
+    /// share the shell's console group and receive the console's Ctrl+C. Ignored on
+    /// POSIX, where process-group placement is driven by @ref processGroup.
+    bool newConsoleProcessGroup = false;
+
+    /// Configures this spawn as a background/detached job: places the child in a new
+    /// process group and, on Windows, a new console process group so it is shielded
+    /// from the console's Ctrl+C. Keeps @ref processGroup and @ref
+    /// newConsoleProcessGroup in lockstep so callers express background intent once.
+    void markBackgroundGroup() noexcept
+    {
+        processGroup = 0;
+        newConsoleProcessGroup = true;
+    }
 };
 
 /// Flags for controlling wait behavior.

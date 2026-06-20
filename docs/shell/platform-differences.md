@@ -43,6 +43,20 @@ behavior:
 Child process termination is detected by waiting on the process handle rather than
 receiving a signal. The shell polls for child state changes using the Windows wait APIs.
 
+#### Ctrl+C handling
+
+To keep the shell itself alive when **Ctrl+C** is pressed while a command is running, Endo
+installs a console control handler (`SetConsoleCtrlHandler`). On `CTRL_C_EVENT` /
+`CTRL_BREAK_EVENT` the handler records a pending interrupt and returns `TRUE`, so the
+default handler (which would call `ExitProcess` on the shell) never runs.
+
+Foreground children are launched **in the shell's console process group**, so the console
+delivers the Ctrl+C to them directly: a child with no handler is terminated, while an
+interactive child (e.g. a REPL) receives `CTRL_C_EVENT` and handles it itself. Background
+jobs are launched with `CREATE_NEW_PROCESS_GROUP`, which shields them from the console's
+Ctrl+C. Long-running in-process builtins poll the recorded interrupt flag and abort,
+matching the POSIX behavior.
+
 ---
 
 ## Shell Suspension (Ctrl+Z)

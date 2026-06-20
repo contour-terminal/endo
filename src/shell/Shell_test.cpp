@@ -865,6 +865,22 @@ TEST_CASE("shell.builtin.tee_sigint_returns_130")
     endo::platform::SignalHandler::clearPendingSigint();
 }
 
+TEST_CASE("shell.signal.isInterruptCtrlEvent")
+{
+    using endo::platform::SignalHandler;
+
+    // Win32 console control type values (CTRL_C_EVENT=0, CTRL_BREAK_EVENT=1, ...).
+    // These are the events that must keep the shell alive while interrupting the
+    // foreground command.
+    CHECK(SignalHandler::isInterruptCtrlEvent(0)); // CTRL_C_EVENT
+    CHECK(SignalHandler::isInterruptCtrlEvent(1)); // CTRL_BREAK_EVENT
+
+    // Other control events fall through to the default handler.
+    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(2)); // CTRL_CLOSE_EVENT
+    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(5)); // CTRL_LOGOFF_EVENT
+    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(6)); // CTRL_SHUTDOWN_EVENT
+}
+
 // ============================================================================
 // Sleep Builtin
 // ============================================================================

@@ -98,7 +98,7 @@ std::expected<ProcessId, PlatformError> WindowsProcessManager::spawn(SpawnConfig
     si.hStdError = mapHandle(config.stderrFd, STD_ERROR_HANDLE);
 
     DWORD flags = CREATE_UNICODE_ENVIRONMENT;
-    if (config.processGroup.has_value())
+    if (config.newConsoleProcessGroup)
         flags |= CREATE_NEW_PROCESS_GROUP;
 
     PROCESS_INFORMATION pi {};

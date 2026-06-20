@@ -2441,7 +2441,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandl
         config.arguments.push_back(opts.command[i]);
     config.stdoutFd = outputFd;
     if (!opts.foreground)
-        config.processGroup = 0; // New process group
+        config.markBackgroundGroup(); // New process group, shielded from the console's Ctrl+C (Windows)
 
     // Spawn the sub-command
     auto spawnResult = _processManager.spawn(config);
