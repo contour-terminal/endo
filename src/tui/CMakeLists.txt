@@ -45,12 +45,14 @@ if(WIN32)
         platform/TerminalInputWin32.cpp
         platform/TerminalOutputWin32.cpp
         platform/TerminalWin32.cpp
+        runtime/platform/TerminalEventSourceWin32.cpp
     )
 else()
     target_sources(tui PRIVATE
         platform/TerminalInput.cpp
         platform/TerminalOutput.cpp
         platform/Terminal.cpp
+        runtime/platform/TerminalEventSourcePosix.cpp
     )
 endif()
 

@@ -74,28 +74,53 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     auto const waitResult = WaitForMultipleObjects(handleCount, handles, FALSE, timeout);
 
     if (waitResult == WAIT_TIMEOUT)
-        return _parser.timeout();
+        return parserTimeout();
 
     if (waitResult == WAIT_FAILED)
         return {};
 
     auto events = std::vector<InputEvent> {};
 
-    // Check resize event
-    if (_resizeEvent != nullptr && WaitForSingleObject(_resizeEvent, 0) == WAIT_OBJECT_0)
-    {
-        ResetEvent(_resizeEvent);
+    if (auto const resize = drainResize())
+        events.emplace_back(*resize);
 
-        // Query actual terminal size
-        CONSOLE_SCREEN_BUFFER_INFO csbi {};
-        if (GetConsoleScreenBufferInfo(_hStdout, &csbi))
-        {
-            auto const cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-            auto const rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-            events.emplace_back(
-                ResizeEvent { .columns = static_cast<int>(cols), .rows = static_cast<int>(rows) });
-        }
+    auto parsed = readReadyInput();
+    events.insert(
+        events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
+
+    return events;
+}
+
+auto TerminalInput::inputNativeHandle() const noexcept -> endo::platform::NativeHandle
+{
+    return _hStdin;
+}
+
+auto TerminalInput::resizeNativeHandle() const noexcept -> endo::platform::NativeHandle
+{
+    return _resizeEvent;
+}
+
+auto TerminalInput::drainResize() -> std::optional<ResizeEvent>
+{
+    if (_resizeEvent == nullptr || WaitForSingleObject(_resizeEvent, 0) != WAIT_OBJECT_0)
+        return std::nullopt;
+
+    ResetEvent(_resizeEvent);
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi {};
+    if (GetConsoleScreenBufferInfo(_hStdout, &csbi))
+    {
+        auto const cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        auto const rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+        return ResizeEvent { .columns = static_cast<int>(cols), .rows = static_cast<int>(rows) };
     }
+    return std::nullopt;
+}
+
+auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
+{
+    auto events = std::vector<InputEvent> {};
 
     // Process console input records
     DWORD numEvents = 0;
@@ -144,6 +169,11 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     }
 
     return events;
+}
+
+auto TerminalInput::parserTimeout() -> std::vector<InputEvent>
+{
+    return _parser.timeout();
 }
 
 void TerminalInput::notifyResize(int /*cols*/, int /*rows*/)

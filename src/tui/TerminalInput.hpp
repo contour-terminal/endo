@@ -5,6 +5,7 @@
 #include <tui/InputEvent.hpp>
 #include <tui/VtParser.hpp>
 
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -64,6 +65,29 @@ class TerminalInput
     /// @brief Returns the file descriptor for the resize notification pipe (read end).
     /// On Windows, returns -1 (resize is event-based).
     [[nodiscard]] auto resizePipeReadFd() const noexcept -> int;
+
+    /// @brief Returns the native handle for the input stream (stdin / console input).
+    ///
+    /// Used by the coroutine runtime's multiplexer to wait on input alongside
+    /// other sources, rather than calling the all-in-one poll().
+    [[nodiscard]] auto inputNativeHandle() const noexcept -> endo::platform::NativeHandle;
+
+    /// @brief Returns the native handle that becomes ready on terminal resize.
+    /// @return The resize pipe read end (POSIX) or resize event (Windows);
+    ///         @c InvalidHandle if not yet initialized.
+    [[nodiscard]] auto resizeNativeHandle() const noexcept -> endo::platform::NativeHandle;
+
+    /// @brief Reads and parses input currently ready on the input handle (non-blocking).
+    /// @return Parsed events (may be empty if no decodable input was ready).
+    [[nodiscard]] auto readReadyInput() -> std::vector<InputEvent>;
+
+    /// @brief Drains a pending resize notification and queries the new size.
+    /// @return The resize event if one was pending, else std::nullopt.
+    [[nodiscard]] auto drainResize() -> std::optional<ResizeEvent>;
+
+    /// @brief Flushes a timed-out partial escape sequence into completed events.
+    /// @return Parsed events (may be empty).
+    [[nodiscard]] auto parserTimeout() -> std::vector<InputEvent>;
 
     /// @brief Suspends terminal protocols and raw mode for external command execution.
     ///
