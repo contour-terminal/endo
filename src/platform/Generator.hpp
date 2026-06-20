@@ -11,7 +11,11 @@
 /// `<coroutine>` but not yet `<generator>`. Both spellings expose the same
 /// `endo::Generator<T>` alias so call sites are identical across platforms.
 
-#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+// Define ENDO_GENERATOR_FORCE_FALLBACK to compile the self-contained fallback even
+// when std::generator is available — used to exercise the fallback on platforms whose
+// standard library ships <generator> (e.g. MSVC STL).
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L \
+    && !defined(ENDO_GENERATOR_FORCE_FALLBACK)
 
     #include <generator>
 
@@ -55,23 +59,25 @@ class Generator
 {
   public:
     /// The coroutine promise that records the currently-yielded value and any
-    /// exception escaping the coroutine body.
-    struct promise_type
+    /// exception escaping the coroutine body. The coroutine machinery refers to
+    /// it through the mandatory `promise_type` alias below; the struct itself is
+    /// named per the project convention.
+    struct PromiseType
     {
-        T const* value = nullptr;          ///< Points at the value live in the frame.
-        std::exception_ptr exception = {}; ///< Captured exception, rethrown to the consumer.
+        T const* value = nullptr;     ///< Points at the value live in the frame.
+        std::exception_ptr exception; ///< Captured exception, rethrown to the consumer.
 
         /// @return The owning generator wrapping this coroutine.
         Generator get_return_object() noexcept
         {
-            return Generator { std::coroutine_handle<promise_type>::from_promise(*this) };
+            return Generator { std::coroutine_handle<PromiseType>::from_promise(*this) };
         }
 
         /// Start suspended so the first value is produced on the first iteration.
-        static std::suspend_always initial_suspend() noexcept { return {}; }
+        std::suspend_always initial_suspend() const noexcept { return {}; }
 
         /// Suspend at the end so the handle stays valid for `done()` queries.
-        static std::suspend_always final_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() const noexcept { return {}; }
 
         /// Records the address of the yielded value and suspends.
         std::suspend_always yield_value(T const& v) noexcept
@@ -80,7 +86,7 @@ class Generator
             return {};
         }
 
-        void return_void() noexcept {}
+        void return_void() const noexcept {}
 
         /// Captures an exception escaping the coroutine body for later rethrow.
         void unhandled_exception() noexcept { exception = std::current_exception(); }
@@ -89,15 +95,18 @@ class Generator
         void await_transform() = delete;
     };
 
-    using handle_type = std::coroutine_handle<promise_type>;
+    /// Name the coroutine machinery requires; the C++ standard looks up
+    /// `Generator<T>::promise_type` to drive the coroutine.
+    using promise_type = PromiseType;
+    using handle_type = std::coroutine_handle<PromiseType>;
 
     /// Sentinel marking the end of the sequence.
-    struct sentinel
+    struct Sentinel
     {
     };
 
     /// Input iterator that resumes the coroutine on increment.
-    class iterator
+    class Iterator
     {
       public:
         using iterator_category = std::input_iterator_tag;
@@ -106,11 +115,11 @@ class Generator
         using reference = T const&;
         using pointer = T const*;
 
-        iterator() noexcept = default;
+        Iterator() noexcept = default;
 
-        explicit iterator(handle_type handle) noexcept: _handle(handle) {}
+        explicit Iterator(handle_type handle) noexcept: _handle(handle) {}
 
-        iterator& operator++()
+        Iterator& operator++()
         {
             resume();
             return *this;
@@ -122,7 +131,7 @@ class Generator
 
         [[nodiscard]] pointer operator->() const noexcept { return _handle.promise().value; }
 
-        [[nodiscard]] bool operator==(sentinel /*end*/) const noexcept { return !_handle || _handle.done(); }
+        [[nodiscard]] bool operator==(Sentinel /*end*/) const noexcept { return !_handle || _handle.done(); }
 
       private:
         void resume()
@@ -162,7 +171,7 @@ class Generator
     }
 
     /// Resumes to the first element and returns an iterator to it.
-    [[nodiscard]] iterator begin()
+    [[nodiscard]] Iterator begin()
     {
         if (_handle)
         {
@@ -170,10 +179,10 @@ class Generator
             if (_handle.done())
                 rethrowIfFailed(_handle);
         }
-        return iterator { _handle };
+        return Iterator { _handle };
     }
 
-    [[nodiscard]] sentinel end() noexcept { return {}; }
+    [[nodiscard]] Sentinel end() noexcept { return {}; }
 
   private:
     /// Rethrows an exception captured by the coroutine body, if any.
