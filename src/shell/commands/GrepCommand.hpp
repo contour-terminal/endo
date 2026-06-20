@@ -7,11 +7,11 @@
 #include <functional>
 #include <regex>
 #include <span>
-#include <stop_token>
 #include <string>
 #include <vector>
 
 #include <platform/FileSystem.hpp>
+#include <platform/InterruptThrottle.hpp>
 
 namespace endo::grep
 {
@@ -107,22 +107,24 @@ using ErrorWriter = std::function<void(std::string_view)>;
 ///
 /// Recursion is driven through the injected FileSystem's lazy coroutine walk
 /// (`walkDirectoryRecursive`), so a large tree is enumerated incrementally and
-/// can be aborted: the walk polls for a pending Ctrl+C (drained from the OS, so
-/// it works on Linux too) and for @p stopToken between entries, returning the
-/// files gathered so far when either is observed.
+/// can be aborted: @p throttle polls for a pending Ctrl+C (drained from the OS,
+/// so it works on Linux too) between entries, returning the files gathered so
+/// far when one is observed. The pending flag is left set (peek, not consume) so
+/// the driver consumes it once and exits with code 130.
 ///
 /// @param fs FileSystem abstraction used to test paths and walk directories.
 /// @param opts Parsed grep options with files and recursion settings.
 /// @param errWriter Callback for error messages.
 /// @param hasError Set to true if any error occurred.
-/// @param stopToken Optional external cancellation; collection stops early when
-///                  stop is requested (used by tests; default = no cancellation).
+/// @param throttle Optional throttled, non-consuming interrupt poll shared with the driver; when
+///                 null (the default) the walk runs to completion without polling for Ctrl+C.
 /// @return Vector of file paths to search (possibly partial if interrupted).
-[[nodiscard]] std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
-                                                              GrepOptions const& opts,
-                                                              ErrorWriter const& errWriter,
-                                                              bool& hasError,
-                                                              std::stop_token const& stopToken = {});
+[[nodiscard]] std::vector<std::filesystem::path> collectFiles(
+    platform::FileSystem const& fs,
+    GrepOptions const& opts,
+    ErrorWriter const& errWriter,
+    bool& hasError,
+    platform::InterruptThrottle* throttle = nullptr);
 
 /// Searches lines for regex matches and writes formatted output.
 /// @param lines The lines of text to search (without trailing newlines).
@@ -132,8 +134,9 @@ using ErrorWriter = std::function<void(std::string_view)>;
 /// @param showFilename Whether to prefix output with filename.
 /// @param useColor Whether to colorize the output.
 /// @param writer Callback for writing output.
-/// @param stopToken Optional external cancellation; searching stops early when a
-///                  pending Ctrl+C or stop request is observed (default = none).
+/// @param throttle Optional throttled, non-consuming interrupt poll; when non-null, searching
+///                 stops early once a pending Ctrl+C is observed (the flag is left set for the
+///                 driver to consume). Null (the default) disables polling.
 /// @return Number of matching lines found (possibly partial if interrupted).
 [[nodiscard]] size_t searchLines(std::vector<std::string> const& lines,
                                  std::regex const& regex,
@@ -142,6 +145,6 @@ using ErrorWriter = std::function<void(std::string_view)>;
                                  bool showFilename,
                                  bool useColor,
                                  OutputWriter const& writer,
-                                 std::stop_token const& stopToken = {});
+                                 platform::InterruptThrottle* throttle = nullptr);
 
 } // namespace endo::grep

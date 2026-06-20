@@ -5,9 +5,9 @@
 
 #include <filesystem>
 #include <fstream>
-#include <stop_token>
 #include <vector>
 
+#include <platform/InterruptThrottle.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
@@ -415,9 +415,10 @@ TEST_CASE("grep.collect.recursive_uses_filesystem", "[grep]")
     REQUIRE(files.size() == 2);
 }
 
-TEST_CASE("grep.search.stop_token_aborts_early", "[grep]")
+TEST_CASE("grep.search.interrupt_aborts_early", "[grep]")
 {
-    endo::platform::SignalHandler::clearPendingSigint();
+    using endo::platform::SignalHandler;
+    SignalHandler::clearPendingSigint();
 
     // More lines than the interrupt poll interval so the throttled check is reached.
     auto const lines = std::vector<std::string>(1000, "match");
@@ -426,14 +427,17 @@ TEST_CASE("grep.search.stop_token_aborts_early", "[grep]")
     auto regex = buildRegex(opts);
     REQUIRE(regex.has_value());
 
-    auto source = std::stop_source {};
-    source.request_stop();
+    // Simulate a pending Ctrl+C (consistent with InterruptThrottle_test); the throttle peeks at
+    // it on its first poll and searchLines bails out, leaving the flag set for the caller.
+    SignalHandler::simulateSigint();
+    auto throttle = endo::platform::InterruptThrottle {};
 
-    auto const count =
-        searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {}, source.get_token());
+    auto const count = searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {}, &throttle);
 
     // The match loop aborts at the first poll boundary, long before all 1000 lines.
     CHECK(count < 1000);
+    CHECK(SignalHandler::hasPendingSigint()); // peek does not consume the flag
+    SignalHandler::clearPendingSigint();      // do not leak into other tests
 }
 
 TEST_CASE("grep.search.invert_match", "[grep]")

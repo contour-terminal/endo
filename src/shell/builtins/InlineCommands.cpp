@@ -2186,9 +2186,9 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
             if (throttle.pending())
                 return 130;
 
-            // Compute depth from relative path
-            auto const relativePath = dirEntry.path.lexically_relative(searchPath);
-            auto const depth = static_cast<int>(std::distance(relativePath.begin(), relativePath.end()));
+            // Depth is supplied by the walk (root-relative: direct child = 1), so no per-entry
+            // lexically_relative + distance recompute is needed here.
+            auto const depth = dirEntry.depth;
 
             if (options.maxDepth.has_value() && depth > options.maxDepth.value())
                 continue;
@@ -2323,14 +2323,20 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         error("{}", sv.substr(0, sv.size() - (sv.ends_with('\n') ? 1 : 0)));
     };
 
-    // Collect files. The recursive walk inside collectFiles polls for Ctrl+C and leaves the
-    // pending flag set when interrupted, so we consume it here and exit with 130.
-    auto files = grep::collectFiles(_fs, opts, errWriter, hasError);
-    if (SignalHandler::hasPendingSigint())
-    {
+    // One throttle drives the whole grep run (collect, read, search) at a single cadence; the grep
+    // helpers poll it non-consumingly (peek) and leave the pending flag set, so `interrupted()`
+    // consumes it once and the driver exits with 130.
+    auto throttle = InterruptThrottle {};
+    auto const interrupted = [] {
+        if (!SignalHandler::hasPendingSigint())
+            return false;
         SignalHandler::clearPendingSigint();
+        return true;
+    };
+
+    auto files = grep::collectFiles(_fs, opts, errWriter, hasError, &throttle);
+    if (interrupted())
         return 130;
-    }
 
     // Determine file count for filename display
     auto const readingStdin = opts.files.empty() && !opts.recursive;
@@ -2364,18 +2370,14 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         if (!currentLine.empty())
             lines.push_back(std::move(currentLine));
 
-        totalMatches =
-            grep::searchLines(lines, *regex, opts, "(standard input)", showFilename, useColor, writer);
-        if (SignalHandler::hasPendingSigint())
-        {
-            SignalHandler::clearPendingSigint();
+        totalMatches = grep::searchLines(
+            lines, *regex, opts, "(standard input)", showFilename, useColor, writer, &throttle);
+        if (interrupted())
             return 130;
-        }
     }
     else
     {
         // Search files
-        auto throttle = InterruptThrottle {};
         for (auto const& filePath: files)
         {
             if (throttle.pending())
@@ -2409,13 +2411,16 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                 lines.push_back(std::move(line));
             }
 
-            auto const matches = grep::searchLines(
-                lines, *regex, opts, platform::normalizePath(filePath), showFilename, useColor, writer);
-            if (SignalHandler::hasPendingSigint())
-            {
-                SignalHandler::clearPendingSigint();
+            auto const matches = grep::searchLines(lines,
+                                                   *regex,
+                                                   opts,
+                                                   platform::normalizePath(filePath),
+                                                   showFilename,
+                                                   useColor,
+                                                   writer,
+                                                   &throttle);
+            if (interrupted())
                 return 130;
-            }
             totalMatches += matches;
 
             // For -q, bail out early on first match

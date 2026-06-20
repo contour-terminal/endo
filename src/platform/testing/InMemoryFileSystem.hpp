@@ -81,8 +81,6 @@ class InMemoryFileSystem final: public FileSystem
     // Directory listing
     [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectory(
         std::filesystem::path const& path) const override;
-    [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
-        std::filesystem::path const& path) const override;
     [[nodiscard]] Generator<DirectoryEntry> walkDirectoryRecursive(
         std::filesystem::path path, std::error_code* outError = nullptr) const override;
 

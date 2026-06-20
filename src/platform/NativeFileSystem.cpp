@@ -209,27 +209,6 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     return entries;
 }
 
-std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSystem::listDirectoryRecursive(
-    fs::path const& path) const
-{
-    std::error_code ec;
-    auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry:
-         fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec))
-    {
-        entries.push_back(DirectoryEntry {
-            .path = entry.path(),
-            .isDirectory = entry.is_directory(),
-            .isRegularFile = entry.is_regular_file(),
-            .isSymlink = entry.is_symlink(),
-        });
-    }
-    if (ec)
-        return std::unexpected(
-            std::format("Cannot recursively list directory '{}': {}", path.string(), ec.message()));
-    return entries;
-}
-
 Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
     fs::path path, std::error_code* outError) const
 {
@@ -252,6 +231,9 @@ Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
             .isDirectory = entry.is_directory(),
             .isRegularFile = entry.is_regular_file(),
             .isSymlink = entry.is_symlink(),
+            // recursive_directory_iterator::depth() is 0 for a direct child; +1 to match the
+            // walk-root-relative convention (direct child = depth 1) consumers expect.
+            .depth = it.depth() + 1,
         };
     }
     if (ec && outError != nullptr)

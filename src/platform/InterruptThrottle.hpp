@@ -42,7 +42,7 @@ class InterruptThrottle
     ///                 relative to the work and maximizes responsiveness.
     explicit InterruptThrottle(std::size_t interval = defaultInterval) noexcept: _interval(interval) {}
 
-    /// Polls for a pending interrupt at the throttled cadence.
+    /// Polls for a pending interrupt at the throttled cadence and consumes it.
     ///
     /// Polls on the very first call and then every @c interval calls (the counter
     /// is post-incremented from 0, so 0 % interval == 0 fires immediately). This
@@ -56,16 +56,35 @@ class InterruptThrottle
     /// @return true if an interrupt was pending (and has been consumed).
     [[nodiscard]] bool pending() noexcept
     {
-        if (_counter++ % _interval != 0)
-            return false;
-        SignalHandler::processSignalFd();
-        if (!SignalHandler::hasPendingSigint())
+        if (!polledAndPending())
             return false;
         SignalHandler::clearPendingSigint();
         return true;
     }
 
+    /// Polls for a pending interrupt at the throttled cadence WITHOUT consuming it.
+    ///
+    /// Same throttled drain-and-check as @ref pending, but the SIGINT flag is left
+    /// set. Use this from library code that polls deep inside a call tree and
+    /// returns partial results: the flag stays set so the driver can observe it
+    /// after the helper returns, consume it once (via
+    /// @ref SignalHandler::clearPendingSigint), and exit with code 130.
+    ///
+    /// @return true if an interrupt is pending (and has been left pending).
+    [[nodiscard]] bool peek() noexcept { return polledAndPending(); }
+
   private:
+    /// Drains pending signals at the throttled cadence and reports whether a
+    /// SIGINT/Ctrl+C is pending, without clearing it. Shared by @ref pending and
+    /// @ref peek so both honor the same cadence and first-call semantics.
+    [[nodiscard]] bool polledAndPending() noexcept
+    {
+        if (_counter++ % _interval != 0)
+            return false;
+        SignalHandler::processSignalFd();
+        return SignalHandler::hasPendingSigint();
+    }
+
     std::size_t _interval;
     std::size_t _counter = 0;
 };

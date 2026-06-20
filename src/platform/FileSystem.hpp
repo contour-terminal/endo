@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -70,12 +71,34 @@ class FileSystem
         bool isDirectory = false;
         bool isRegularFile = false;
         bool isSymlink = false;
+        /// Depth below the walk root: 1 for a direct child, 2 for a grandchild, etc.
+        /// 0 for entries that are not the product of a recursive walk (e.g. listDirectory).
+        int depth = 0;
     };
 
     [[nodiscard]] virtual std::expected<std::vector<DirectoryEntry>, std::string> listDirectory(
         std::filesystem::path const& path) const = 0;
-    [[nodiscard]] virtual std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
-        std::filesystem::path const& path) const = 0;
+
+    /// Materializes @ref walkDirectoryRecursive into a vector (parents before their contents).
+    ///
+    /// Implemented once here in terms of the lazy walk, so backends only provide the coroutine.
+    /// Prefer @ref walkDirectoryRecursive directly for large trees or interruptible consumers;
+    /// this convenience eagerly buffers the whole tree.
+    ///
+    /// @param path Root directory to list recursively.
+    /// @return Every entry under @p path, or an error string if enumeration failed.
+    [[nodiscard]] std::expected<std::vector<DirectoryEntry>, std::string> listDirectoryRecursive(
+        std::filesystem::path const& path) const
+    {
+        std::error_code ec;
+        auto entries = std::vector<DirectoryEntry> {};
+        for (auto const& entry: walkDirectoryRecursive(path, &ec))
+            entries.push_back(entry);
+        if (ec)
+            return std::unexpected(
+                std::format("Cannot recursively list directory '{}': {}", path.string(), ec.message()));
+        return entries;
+    }
 
     /// Lazily walks @p path recursively, yielding each entry as it is discovered
     /// (parents before their contents) without materializing the whole tree.

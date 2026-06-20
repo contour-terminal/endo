@@ -136,15 +136,15 @@ struct TrueExpr final: public Expr
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
 };
 
-/// Logical AND of two expressions (-a, implicit).
-struct AndExpr final: public Expr
+/// Common base for binary boolean expressions (-a / -o). Holds the two operands and
+/// derives the size/mtime requirements as the union of both operands' requirements, so
+/// And/Or only need to define how the operands are combined in @ref evaluate.
+struct BinaryExpr: public Expr
 {
-    std::unique_ptr<Expr> left;
-    std::unique_ptr<Expr> right;
+    std::unique_ptr<Expr> left;  ///< Left operand.
+    std::unique_ptr<Expr> right; ///< Right operand.
 
-    AndExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r)) {}
-
-    [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+    BinaryExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r)) {}
 
     [[nodiscard]] bool requiresSize() const override { return left->requiresSize() || right->requiresSize(); }
 
@@ -154,22 +154,20 @@ struct AndExpr final: public Expr
     }
 };
 
-/// Logical OR of two expressions (-o, -or).
-struct OrExpr final: public Expr
+/// Logical AND of two expressions (-a, implicit).
+struct AndExpr final: public BinaryExpr
 {
-    std::unique_ptr<Expr> left;
-    std::unique_ptr<Expr> right;
-
-    OrExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r)) {}
+    using BinaryExpr::BinaryExpr;
 
     [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
+};
 
-    [[nodiscard]] bool requiresSize() const override { return left->requiresSize() || right->requiresSize(); }
+/// Logical OR of two expressions (-o, -or).
+struct OrExpr final: public BinaryExpr
+{
+    using BinaryExpr::BinaryExpr;
 
-    [[nodiscard]] bool requiresMtime() const override
-    {
-        return left->requiresMtime() || right->requiresMtime();
-    }
+    [[nodiscard]] bool evaluate(FindEntry const& entry) const override;
 };
 
 /// Logical NOT of an expression (-not, !).
