@@ -8,12 +8,14 @@
 #include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
+#include <tui/runtime/TuiRuntime.hpp>
 
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
 
+#include <coro/Task.hpp>
 #include <platform/Types.hpp>
 
 namespace endo
@@ -44,11 +46,14 @@ class Prompt
     /// @brief Returns whether the prompt is ready to accept input.
     [[nodiscard]] bool ready() const;
 
-    /// @brief Reads a line of input from the user.
+    /// @brief Reads a line of input from the user, driven by the coroutine runtime.
     ///
-    /// Blocks until the user submits (Enter) or aborts (Ctrl+C/Ctrl+D).
+    /// Suspends on the runtime's input awaitable until the user submits (Enter) or
+    /// aborts (Ctrl+C/Ctrl+D); the caller drives it with `runtime.blockOn(...)`.
+    /// @param runtime The runtime whose input the prompt consumes (must outlive the
+    ///        call; passed by pointer because reference coroutine parameters can dangle).
     /// @return The input line, or empty string on EOF/abort.
-    [[nodiscard]] std::string read();
+    [[nodiscard]] coro::Task<std::string> read(tui::runtime::TuiRuntime* runtime);
 
     /// @brief Sets the prompt string displayed before user input.
     /// @param promptStr The prompt string.

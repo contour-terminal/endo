@@ -116,27 +116,30 @@ void Prompt::initialize()
     _initialized = true;
 }
 
-std::string Prompt::read()
+coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
 {
     initialize();
     if (_aborted)
-        return {};
+        co_return {};
 
     // Clear and prepare for new input
     _promptComponent->clear();
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
-    // Update component area based on content
-    auto prefSize = _promptComponent->preferredSize();
-    _promptComponent->setArea(
-        tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
+    // Resizes the component area to fit the current content.
+    auto const resizeToContent = [this] {
+        auto const pSize = _promptComponent->preferredSize();
+        _promptComponent->setArea(
+            tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+    };
+    resizeToContent();
 
     // Render initial state (skip if display() already drew current state)
     if (!_displayDrewCurrentState)
         _screen->draw();
     _displayDrewCurrentState = false;
 
-    // Event loop
+    // Event loop — driven by the coroutine runtime instead of terminal.poll().
     while (ready())
     {
         // When unfocused, use a long poll timeout and skip deferred updates
@@ -161,63 +164,67 @@ std::string Prompt::read()
         {
             timeout = 5000; // Idle when unfocused — just wait for events
         }
-        auto events = _terminal.poll(timeout);
 
-        // Re-read focus state after poll — FocusEvent may have been consumed during poll()
+        // Await the next event (one at a time); a negative timeout blocks indefinitely.
+        auto event = std::optional<tui::InputEvent> {};
+        try
+        {
+            if (timeout < 0)
+                event = co_await runtime->nextEvent();
+            else
+                event = co_await runtime->nextEventFor(std::chrono::milliseconds { timeout });
+        }
+        catch (endo::coro::OperationCancelled const&)
+        {
+            // SIGINT/cancellation while waiting — abandon this read.
+            co_return {};
+        }
+
+        // Re-read focus state after the wait — a FocusEvent may have been consumed.
         auto const nowFocused = _terminal.isFocused();
         auto const focusChanged = (wasFocused != nowFocused);
 
-        // If no events received (timeout or only internal events like FocusEvent)
-        if (events.empty())
+        // No event (timeout): run idle ticks (focus dimming / hover) and keep waiting.
+        if (!event)
         {
             if (focusChanged)
             {
-                // Focus just changed — redraw to show/hide dim effect
                 _promptComponent->flushDeferredUpdates();
-                auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(
-                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+                resizeToContent();
                 _screen->draw();
             }
             else if (nowFocused)
             {
                 _screen->tickHover();
                 _promptComponent->flushDeferredUpdates();
-                auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(
-                    tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+                resizeToContent();
                 _screen->draw();
             }
             continue;
         }
 
         auto needsRedraw = false;
-        for (auto const& event: events)
+        auto const& ev = *event;
+
+        // Handle resize events
+        if (std::holds_alternative<tui::ResizeEvent>(ev))
         {
-            // Handle resize events
-            if (std::holds_alternative<tui::ResizeEvent>(event))
-            {
-                onResize();
-                needsRedraw = true;
-                continue;
-            }
-
-            // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
-            // These produce no text and no editing action; processing them would cause
-            // unnecessary redraws that force the terminal viewport to scroll to the bottom.
-            if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
-                continue;
-
-            // Dispatch all events through Screen (updates hover state, auto-hides tooltips on key press,
-            // and routes mouse events to PromptComponent::onEvent for click-to-cursor positioning)
-            auto const screenResult = _screen->dispatchEvent(event);
-            if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(event))
+            onResize();
+            needsRedraw = true;
+        }
+        // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
+        else if (auto const* key = std::get_if<tui::KeyEvent>(&ev); key && tui::isModifierOnlyKey(key->key))
+        {
+            // No-op: produces no text or editing action.
+        }
+        else
+        {
+            // Dispatch through Screen (hover, tooltip hide, mouse → click-to-cursor)
+            auto const screenResult = _screen->dispatchEvent(ev);
+            if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(ev))
                 needsRedraw = true;
 
-            // Process event through PromptComponent
-            auto action = _promptComponent->processInput(event);
-
-            switch (action)
+            switch (_promptComponent->processInput(ev))
             {
                 case PromptComponent::Action::Submit: {
                     // Redraw to clear ghost text before moving cursor
@@ -243,7 +250,7 @@ std::string Prompt::read()
                     out.enableReflow();
                     out.flush();
                     _lastAction = PromptComponent::Action::Submit;
-                    return inputText;
+                    co_return inputText;
                 }
                 case PromptComponent::Action::NewPrompt: {
                     // Abandon current input and start a fresh prompt
@@ -268,7 +275,7 @@ std::string Prompt::read()
                     out.enableReflow();
                     out.flush();
                     _lastAction = PromptComponent::Action::NewPrompt;
-                    return {};
+                    co_return {};
                 }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
@@ -279,7 +286,7 @@ std::string Prompt::read()
                     _terminal.output().flush();
                     _promptComponent->clear();
                     _lastAction = PromptComponent::Action::Abort;
-                    return {};
+                    co_return {};
                 case PromptComponent::Action::Eof:
                     // Ctrl+D on empty line - signal EOF
                     _terminal.output().carriageReturn();
@@ -288,12 +295,12 @@ std::string Prompt::read()
                     _terminal.output().flush();
                     _aborted = true;
                     _lastAction = PromptComponent::Action::Eof;
-                    return {};
+                    co_return {};
                 case PromptComponent::Action::AgentMode: {
                     _promptComponent->clear();
                     _screen->clearAndRelease();
                     _lastAction = PromptComponent::Action::AgentMode;
-                    return {};
+                    co_return {};
                 }
                 case PromptComponent::Action::CommandPalette: needsRedraw = true; break;
                 case PromptComponent::Action::Changed: needsRedraw = true; break;
@@ -330,9 +337,7 @@ std::string Prompt::read()
             out.saveCursor();
             // Re-render prompt below the errors
             _promptComponent->flushDeferredUpdates();
-            auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(
-                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+            resizeToContent();
             _screen->draw();
             continue; // skip the normal needsRedraw path
         }
@@ -340,14 +345,12 @@ std::string Prompt::read()
         if (needsRedraw)
         {
             _promptComponent->flushDeferredUpdates();
-            auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(
-                tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+            resizeToContent();
             _screen->draw();
         }
     }
 
-    return {};
+    co_return {};
 }
 
 void Prompt::setPrompt(std::string_view promptStr)

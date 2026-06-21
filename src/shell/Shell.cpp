@@ -27,6 +27,8 @@
 #include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
+#include <tui/runtime/TerminalEventSource.hpp>
+#include <tui/runtime/TuiRuntime.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -1325,15 +1327,20 @@ int Shell::run()
     loadCompleters();
     onDirectoryChanged();
 
+    // Drive the interactive prompt through the coroutine runtime. The event source
+    // multiplexes terminal input with the POSIX signal fd (job control); Ctrl+C at
+    // the prompt is a key in raw mode, so SIGINT is ignored here (a no-op interrupt
+    // handler keeps it from tripping the runtime's root cancellation across reads).
+#if defined(_WIN32)
+    auto promptEventSource = tui::runtime::TerminalEventSource(prompt.terminal());
+#else
+    auto promptEventSource =
+        tui::runtime::TerminalEventSource(prompt.terminal(), nullptr, nullptr, _signalFd);
+#endif
+    auto promptRuntime = tui::runtime::TuiRuntime(promptEventSource);
+    promptRuntime.setInterruptHandler([] {});
+
 #if !defined(_WIN32)
-    pollfd fds[2];
-    fds[0].fd = _tty.inputFd();
-    fds[0].events = POLLIN;
-    fds[1].fd = _signalFd; // -1 on non-Linux (ignored by poll when nfds=1)
-    fds[1].events = POLLIN;
-
-    int const nfds = (_signalFd >= 0) ? 2 : 1;
-
     while (!_quit && prompt.ready())
     {
         // Check for pending signals on non-signalfd platforms
@@ -1388,29 +1395,14 @@ int Shell::run()
 
         emitPromptEnd();
 
-        // Wait for input or signals
-        int const pollResult = poll(fds, static_cast<nfds_t>(nfds), -1);
-        if (pollResult < 0)
-        {
-            if (errno == EINTR)
-                continue; // Interrupted by signal, retry
-            break;
-        }
+        // Wait for input. The runtime's event source multiplexes the signal fd,
+        // so job-control signals are handled during the wait; report them after.
+        auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
 
-        // Process signals first (if signalfd is readable)
-        if (_signalFd >= 0 && (fds[1].revents & POLLIN))
-            SignalHandler::processSignalFd();
-
-        // Check for pending signals again
         SignalHandler::processPendingSignals();
-
-        // Report any newly completed jobs
         reportJobStatus();
 
-        // Process input (if available)
-        if (fds[0].revents & POLLIN)
         {
-            auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
     #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -1530,7 +1522,7 @@ int Shell::run()
 
         emitPromptEnd();
 
-        auto const lineBuffer = prompt.read();
+        auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
         debugLog()()("input buffer: {}", lineBuffer);
 
     #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
