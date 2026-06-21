@@ -41,6 +41,13 @@ Task<int> sumKeyCodepoints(TuiRuntime* runtime, int count)
     co_return sum;
 }
 
+/// Returns 1 if nextEventFor yielded an event, 0 if it timed out.
+Task<int> awaitEventForResult(TuiRuntime* runtime, int timeoutMs)
+{
+    auto const event = co_await runtime->nextEventFor(std::chrono::milliseconds { timeoutMs });
+    co_return event.has_value() ? 1 : 0;
+}
+
 /// Returns true once the agent-ready wakeup is observed.
 Task<bool> awaitAgentReady(TuiRuntime* runtime)
 {
@@ -134,6 +141,28 @@ TEST_CASE("Protocol reports never surface as input events", "[TuiRuntime]")
     auto const result = runtime.blockOn(awaitOneKeyCodepoint(&runtime));
 
     REQUIRE(result == U'z');
+}
+
+TEST_CASE("nextEventFor yields an event that arrives before the timeout", "[TuiRuntime]")
+{
+    auto source = MockEventSource {};
+    source.pushEvents({ InputEvent { keyOf(U'e') } });
+    auto runtime = TuiRuntime { source };
+
+    auto const result = runtime.blockOn(awaitEventForResult(&runtime, 500));
+
+    REQUIRE(result == 1);
+}
+
+TEST_CASE("nextEventFor returns nullopt when its timeout elapses", "[TuiRuntime]")
+{
+    auto source = MockEventSource {};
+    source.pushTimeout(); // wait returns with no event; the 0ms deadline has passed
+    auto runtime = TuiRuntime { source };
+
+    auto const result = runtime.blockOn(awaitEventForResult(&runtime, 0));
+
+    REQUIRE(result == 0);
 }
 
 TEST_CASE("Interrupt cancels a flow parked on input", "[TuiRuntime]")

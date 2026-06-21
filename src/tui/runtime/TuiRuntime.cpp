@@ -64,15 +64,21 @@ void TuiRuntime::drainReadyQueue()
 
 int TuiRuntime::computeTimeoutMs() const
 {
-    if (_timers.empty())
+    // The soonest of the next timer and a timed input waiter's deadline.
+    auto soonest = std::optional<std::chrono::steady_clock::time_point> {};
+    if (!_timers.empty())
+        soonest = _timers.front().deadline;
+    if (_inputDeadline && (!soonest || *_inputDeadline < *soonest))
+        soonest = _inputDeadline;
+
+    if (!soonest)
         return -1; // Block indefinitely until a source becomes ready.
 
     auto const now = std::chrono::steady_clock::now();
-    auto const deadline = _timers.front().deadline;
-    if (deadline <= now)
+    if (*soonest <= now)
         return 0;
 
-    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(*soonest - now).count();
     return static_cast<int>(std::min<long long>(ms, std::numeric_limits<int>::max()));
 }
 
@@ -106,6 +112,8 @@ void TuiRuntime::wakeWaiter(std::coroutine_handle<>& waiter)
 {
     if (!waiter)
         return;
+    if (&waiter == &_inputWaiter)
+        _inputDeadline.reset();
     auto const handle = std::exchange(waiter, {});
     if (!handle.done())
         _ready.push_back(handle);
@@ -147,7 +155,9 @@ void TuiRuntime::pumpOnce()
     for (auto& event: outcome.events)
         routeDecodedEvent(std::move(event));
 
-    if (_inputWaiter && hasBufferedInput())
+    // Wake the input waiter when an event is ready, or when its timed wait elapsed
+    // (nextEventFor resumes with std::nullopt so the caller can run idle ticks).
+    if (_inputWaiter && (hasBufferedInput() || inputDeadlinePassed()))
         wakeWaiter(_inputWaiter);
 
     if (outcome.agentReady)
@@ -166,6 +176,11 @@ void TuiRuntime::pumpOnce()
 NextInputEventAwaiter TuiRuntime::nextEvent() noexcept
 {
     return NextInputEventAwaiter { *this };
+}
+
+NextEventForAwaiter TuiRuntime::nextEventFor(std::chrono::milliseconds timeout) noexcept
+{
+    return NextEventForAwaiter { *this, std::chrono::steady_clock::now() + timeout };
 }
 
 DelayAwaiter TuiRuntime::delay(std::chrono::milliseconds duration) noexcept

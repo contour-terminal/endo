@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include <coro/Cancellation.hpp>
@@ -28,6 +29,7 @@ namespace tui::runtime
 {
 
 class NextInputEventAwaiter;
+class NextEventForAwaiter;
 class DelayAwaiter;
 class NextAgentReadyAwaiter;
 
@@ -79,6 +81,11 @@ class TuiRuntime
     /// @return An awaitable yielding the next input event.
     [[nodiscard]] NextInputEventAwaiter nextEvent() noexcept;
 
+    /// @param timeout How long to wait for an event before giving up.
+    /// @return An awaitable yielding the next input event, or std::nullopt if
+    ///         @p timeout elapses first (so the caller can run idle ticks).
+    [[nodiscard]] NextEventForAwaiter nextEventFor(std::chrono::milliseconds timeout) noexcept;
+
     /// @param duration How long to suspend.
     /// @return An awaitable that resumes after @p duration elapses.
     [[nodiscard]] DelayAwaiter delay(std::chrono::milliseconds duration) noexcept;
@@ -93,7 +100,23 @@ class TuiRuntime
 
     [[nodiscard]] InputEvent popBufferedInput();
 
-    void registerInputWaiter(std::coroutine_handle<> waiter) noexcept { _inputWaiter = waiter; }
+    /// Parks @p waiter for the next input event, optionally with a deadline after
+    /// which it is resumed with no event (a timeout).
+    /// @param waiter The coroutine to resume.
+    /// @param deadline Resume-by time for a timed wait, or std::nullopt to block.
+    void registerInputWaiter(
+        std::coroutine_handle<> waiter,
+        std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt) noexcept
+    {
+        _inputWaiter = waiter;
+        _inputDeadline = deadline;
+    }
+
+    /// @return True if the parked input waiter's deadline has elapsed.
+    [[nodiscard]] bool inputDeadlinePassed() const noexcept
+    {
+        return _inputDeadline.has_value() && *_inputDeadline <= std::chrono::steady_clock::now();
+    }
 
     void scheduleTimer(std::chrono::steady_clock::time_point deadline, std::coroutine_handle<> waiter);
 
@@ -149,7 +172,8 @@ class TuiRuntime
     std::deque<std::coroutine_handle<>> _ready; ///< Coroutines ready to resume now.
     std::vector<TimerEntry> _timers;            ///< Min-heap by deadline (soonest at front).
     std::deque<InputEvent> _inputBuffer;        ///< Decoded input awaiting a consumer.
-    std::coroutine_handle<> _inputWaiter;       ///< Flow parked in nextEvent(), if any.
+    std::coroutine_handle<> _inputWaiter;       ///< Flow parked in nextEvent()/nextEventFor(), if any.
+    std::optional<std::chrono::steady_clock::time_point> _inputDeadline; ///< Timeout for a timed input wait.
     std::coroutine_handle<> _agentWaiter;       ///< Flow parked in nextAgentReady(), if any.
     bool _agentPending = false;                 ///< Agent wakeup fired since last consumed.
     std::vector<endo::coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
@@ -190,6 +214,48 @@ class NextInputEventAwaiter
 
   private:
     TuiRuntime& _runtime;
+    endo::coro::StopToken _token;
+};
+
+/// Awaitable yielding the next input event, or std::nullopt if a timeout elapses
+/// first. Throws @c OperationCancelled if the flow is cancelled while parked.
+class NextEventForAwaiter
+{
+  public:
+    NextEventForAwaiter(TuiRuntime& runtime, std::chrono::steady_clock::time_point deadline) noexcept:
+        _runtime(runtime), _deadline(deadline)
+    {
+    }
+
+    [[nodiscard]] bool await_ready() const noexcept { return _runtime.hasBufferedInput(); }
+
+    /// @param awaiting The coroutine performing the `co_await`.
+    /// @return False (resume now) if already cancelled, true to park with a deadline.
+    template <typename Promise>
+    [[nodiscard]] bool await_suspend(std::coroutine_handle<Promise> awaiting) noexcept
+    {
+        if constexpr (requires { awaiting.promise().stopToken(); })
+            _token = awaiting.promise().stopToken();
+        if (_token.stop_requested())
+            return false;
+        _runtime.registerInputWaiter(awaiting, _deadline);
+        return true;
+    }
+
+    /// @return The next buffered input event, or std::nullopt on timeout.
+    /// @throws OperationCancelled if the flow was cancelled while parked.
+    [[nodiscard]] std::optional<InputEvent> await_resume()
+    {
+        if (_token.stop_requested())
+            throw endo::coro::OperationCancelled {};
+        if (_runtime.hasBufferedInput())
+            return _runtime.popBufferedInput();
+        return std::nullopt; // timed out
+    }
+
+  private:
+    TuiRuntime& _runtime;
+    std::chrono::steady_clock::time_point _deadline;
     endo::coro::StopToken _token;
 };
 
