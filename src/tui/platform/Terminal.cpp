@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <csignal>
+#include <tuple>
 
 #include <unistd.h>
 
@@ -151,27 +152,7 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
         return {};
 
     auto events = _input.poll(timeoutMs);
-
-    // Consume protocol-level response events internally — do not pass to application
-    std::erase_if(events, [this](InputEvent const& event) {
-        if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
-        {
-            auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
-            handleColorSchemeReport(scheme);
-            return true;
-        }
-        if (auto const* fe = std::get_if<FocusEvent>(&event))
-        {
-            handleFocusEvent(fe->focused);
-            return true;
-        }
-        if (std::holds_alternative<CursorPositionReport>(event))
-            return true;
-        if (std::holds_alternative<CellSizeReport>(event))
-            return true;
-        return false;
-    });
-
+    std::ignore = consumeProtocolReports(events);
     return events;
 }
 
@@ -382,16 +363,6 @@ auto Terminal::isFocused() const noexcept -> bool
 void Terminal::onFocusChanged(std::function<void(bool)> callback)
 {
     _focusCallbacks.push_back(std::move(callback));
-}
-
-void Terminal::handleFocusEvent(bool focused)
-{
-    if (focused == _focused)
-        return;
-
-    _focused = focused;
-    for (auto const& cb: _focusCallbacks)
-        cb(focused);
 }
 
 } // namespace tui

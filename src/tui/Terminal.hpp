@@ -111,6 +111,27 @@ class Terminal
     /// @param scheme The reported color scheme.
     void handleColorSchemeReport(ColorScheme scheme);
 
+    /// @brief Consumes a focus-change report, updating state and notifying handlers.
+    ///
+    /// Public so the coroutine runtime's event source can route the report the
+    /// same way poll() does (it is otherwise an internal protocol response).
+    /// @param focused True if the terminal gained focus, false if it lost focus.
+    /// @return True if the focus state actually changed (handlers were notified).
+    bool handleFocusEvent(bool focused);
+
+    /// @brief Removes protocol-response events from @p events, dispatching the
+    /// color-scheme and focus reports to their handlers and dropping the rest.
+    ///
+    /// Shared by poll() and the coroutine runtime's event source so the
+    /// "what is an internal report vs. application input" policy lives in one
+    /// place (the @c tui::isProtocolReport predicate). @c CursorPositionReport /
+    /// @c CellSizeReport are dropped (their values are consumed synchronously by
+    /// the query methods).
+    /// @param events The decoded events to filter in place.
+    /// @return True if a focus-change report was dispatched (so a caller waiting
+    ///         on activity can redraw); false otherwise.
+    bool consumeProtocolReports(std::vector<InputEvent>& events);
+
     /// @brief Returns whether the terminal window currently has focus.
     [[nodiscard]] auto isFocused() const noexcept -> bool;
 
@@ -139,10 +160,6 @@ class Terminal
     std::vector<std::function<void(bool)>> _focusCallbacks;
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
     int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).
-
-    /// @brief Called internally when a focus event is received.
-    /// @param focused True if terminal gained focus, false if lost.
-    void handleFocusEvent(bool focused);
 
     /// @brief Queries a DEC private mode via DECRQM and waits for the response.
     /// @param mode The DEC private mode number to query.

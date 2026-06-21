@@ -20,6 +20,7 @@ if(_need_fetch)
     endif()
 endif()
 
+add_subdirectory(coro)
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
 set_target_properties(crispy-core PROPERTIES SYSTEM TRUE)

@@ -4,6 +4,9 @@
 #include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
+#include <tui/runtime/Modal.hpp>
+#include <tui/runtime/TerminalEventSource.hpp>
+#include <tui/runtime/TuiRuntime.hpp>
 
 #include <cstdlib>
 #include <print>
@@ -15,18 +18,13 @@ namespace endo::agent
 
 namespace
 {
-    /// @brief Result from the TUI question event loop.
-    struct QuestionResult
-    {
-        bool confirmed = false;
-        std::size_t selectedIndex = 0;
-        std::string answer;
-    };
-
-    /// @brief Runs a QuestionComponent in an inline Terminal+Screen event loop.
+    /// @brief Runs a QuestionComponent to completion on its own coroutine runtime.
+    ///
+    /// This auth prompt runs outside the shell's main loop, so it owns a fresh
+    /// Terminal, Screen, and TuiRuntime and drives the question with `runModal`.
     /// @param config The question configuration.
     /// @return The result of the question interaction.
-    auto runQuestion(tui::QuestionConfig config) -> QuestionResult
+    auto runQuestion(tui::QuestionConfig config) -> tui::QuestionResult
     {
         auto terminal = tui::Terminal {};
         if (auto result = terminal.initialize(); !result)
@@ -48,36 +46,14 @@ namespace
         screen.root().addChild(question, { .area = area });
         screen.setFocus(&question);
 
-        auto result = QuestionResult {};
-        auto running = true;
-        while (running)
-        {
-            screen.draw();
-
-            for (auto const& event: terminal.poll(-1))
-            {
-                auto const action = question.processInput(event);
-                switch (action)
-                {
-                    case tui::QuestionAction::Confirmed:
-                        result.confirmed = true;
-                        result.selectedIndex = question.selectedIndex();
-                        result.answer = question.answer();
-                        running = false;
-                        break;
-                    case tui::QuestionAction::Cancelled: running = false; break;
-                    case tui::QuestionAction::Changed: screen.invalidate(question); break;
-                    case tui::QuestionAction::None: break;
-                }
-                if (!running)
-                    break;
-            }
-        }
+        auto source = tui::runtime::TerminalEventSource(terminal);
+        auto runtime = tui::runtime::TuiRuntime(source);
+        auto const result = runtime.blockOn(tui::runtime::runModal(&runtime, &question, &screen));
 
         screen.clearAndRelease();
         terminal.shutdown();
 
-        return result;
+        return result.value_or(tui::QuestionResult {});
     }
 } // namespace
 

@@ -79,7 +79,7 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     {
         // Timeout or error — check for pending partial sequences
         if (pollResult == 0)
-            return _parser.timeout();
+            return parserTimeout();
         return {};
     }
 
@@ -87,17 +87,8 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
 
     // Check resize pipe
     if (nfds >= 2 && (fds[1].revents & POLLIN) != 0)
-    {
-        // Drain the pipe
-        auto buf = char {};
-        while (safeRead(_resizePipe[0], &buf, 1) > 0)
-            ;
-
-        // Query actual terminal size
-        auto ws = winsize {};
-        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0)
-            events.emplace_back(ResizeEvent { .columns = ws.ws_col, .rows = ws.ws_row });
-    }
+        if (auto const resize = drainResize())
+            events.emplace_back(*resize);
 
     // Check wakeup fd — just drain it; the actual messages are in the MessageQueue.
     if (nfds >= 3 && (fds[2].revents & POLLIN) != 0)
@@ -106,17 +97,54 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     // Check stdin
     if ((fds[0].revents & POLLIN) != 0)
     {
-        auto buf = std::array<char, 512> {};
-        auto const n = safeRead(_fd, buf.data(), buf.size());
-        if (n > 0)
-        {
-            auto parsed = _parser.feed(std::string_view(buf.data(), static_cast<size_t>(n)));
-            events.insert(
-                events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
-        }
+        auto parsed = readReadyInput();
+        events.insert(
+            events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
     }
 
     return events;
+}
+
+auto TerminalInput::inputNativeHandle() const noexcept -> endo::platform::NativeHandle
+{
+    return _fd;
+}
+
+auto TerminalInput::resizeNativeHandle() const noexcept -> endo::platform::NativeHandle
+{
+    return _resizePipe[0];
+}
+
+auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
+{
+    auto events = std::vector<InputEvent> {};
+    auto buf = std::array<char, 512> {};
+    auto const n = safeRead(_fd, buf.data(), buf.size());
+    if (n > 0)
+    {
+        auto parsed = _parser.feed(std::string_view(buf.data(), static_cast<size_t>(n)));
+        events.insert(
+            events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
+    }
+    return events;
+}
+
+auto TerminalInput::drainResize() -> std::optional<ResizeEvent>
+{
+    // Drain the self-pipe so the next resize re-arms the notification.
+    auto buf = char {};
+    while (safeRead(_resizePipe[0], &buf, 1) > 0)
+        ;
+
+    auto ws = winsize {};
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0)
+        return ResizeEvent { .columns = ws.ws_col, .rows = ws.ws_row };
+    return std::nullopt;
+}
+
+auto TerminalInput::parserTimeout() -> std::vector<InputEvent>
+{
+    return _parser.timeout();
 }
 
 void TerminalInput::setWakeup(endo::platform::Wakeup* wakeup)

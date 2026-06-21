@@ -556,7 +556,19 @@ class Shell final: public SignalCallback
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     // --- Agent mode ---
+    /// @brief Enters interactive agent mode (thin wrapper that owns the coroutine runtime).
+    /// @param initialMessage An optional first user message to send to the agent.
     void runAgentMode(std::optional<std::string> initialMessage = std::nullopt);
+
+    /// @brief The agent-mode flow, driven by the coroutine runtime.
+    ///
+    /// Sets up the worker, screen, and components, then runs the event loop, awaiting
+    /// runtime.nextActivity() (input / agent message / timeout) instead of polling.
+    /// @param runtime The runtime driving the flow (must outlive the call).
+    /// @param initialMessage An optional first user message to send to the agent.
+    /// @return A task that completes when the user leaves agent mode.
+    [[nodiscard]] coro::Task<void> runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
+                                                    std::optional<std::string> initialMessage);
 
     /// @brief Offers error recovery after a failed command.
     /// @param exitCode The exit code of the failed command.
@@ -639,9 +651,10 @@ class Shell final: public SignalCallback
     bool _lsIcons = true;               ///< Show Nerd Font icons in ls output
     bool _lsDirectorySlash = true;      ///< Append trailing '/' to directory names
     ProcessId _shellPid = 0;
-    ProcessId _shellPgid = 0; ///< Shell's process group ID
-    int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise
-    int _shellLevel = 0;      ///< Shell nesting depth (0 = outermost)
+    ProcessId _shellPgid = 0;          ///< Shell's process group ID
+    int _signalFd = -1;                ///< signalfd for Linux, -1 otherwise
+    platform::Wakeup _interruptWakeup; ///< Signalled by SignalHandler on Ctrl+C to wake a blocked wait.
+    int _shellLevel = 0;               ///< Shell nesting depth (0 = outermost)
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
     bool _interactiveReady =

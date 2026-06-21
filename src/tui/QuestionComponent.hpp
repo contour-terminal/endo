@@ -4,8 +4,10 @@
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
 #include <tui/List.hpp>
+#include <tui/runtime/ModalComponent.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,20 @@ enum class QuestionAction : std::uint8_t
     Changed,   ///< Content changed, re-render needed.
     Confirmed, ///< User confirmed their answer (Enter pressed).
     Cancelled, ///< User cancelled (Escape pressed).
+};
+
+/// @brief The outcome of a completed question interaction.
+///
+/// Yielded by QuestionComponent's modal `step()` so callers (the agent auth
+/// flow, the AskUser / permission prompts) get the full answer in one value
+/// instead of querying the component after the loop.
+struct QuestionResult
+{
+    bool confirmed = false;                  ///< True if confirmed, false if cancelled.
+    std::size_t selectedIndex = 0;           ///< Selected option (single-select mode).
+    std::vector<std::size_t> checkedIndices; ///< Checked options (multi-select mode).
+    std::string answer;                      ///< The answer text (see QuestionComponent::answer()).
+    bool otherActive = false;                ///< Whether the free-text "Other..." input was active.
 };
 
 /// @brief Configuration for creating a QuestionComponent.
@@ -41,7 +57,11 @@ struct QuestionConfig
 ///    If allowOther, toggling "Other..." shows/hides an InputField below the list.
 ///
 /// Renders with left-bar chrome (╭─/│/╰─) matching AgentInputComponent style.
-class QuestionComponent: public Component
+///
+/// It is a @c runtime::ModalComponent<QuestionResult>, so it can be driven to a
+/// result with `co_await runModal(...)` as well as via the synchronous
+/// `processInput` API.
+class QuestionComponent: public runtime::ModalComponent<QuestionResult>
 {
   public:
     /// @brief Constructs a question component with the given configuration.
@@ -73,6 +93,15 @@ class QuestionComponent: public Component
     /// @return The action resulting from the event.
     [[nodiscard]] auto processInput(InputEvent const& event) -> QuestionAction;
 
+    /// @brief Modal step: processes an event and yields the result when done.
+    /// @param event The input event to process.
+    /// @return The QuestionResult on confirm/cancel, or std::nullopt to continue.
+    [[nodiscard]] std::optional<QuestionResult> step(InputEvent const& event) override;
+
+    /// @brief Whether the most recent step() changed visible state (drives redraw).
+    /// @return True after a Changed/Confirmed step; false for None/Cancelled.
+    [[nodiscard]] bool stepChangedState() const noexcept override;
+
     /// @brief Returns the user's answer as a string.
     ///
     /// - Free-text: the typed text.
@@ -97,8 +126,9 @@ class QuestionComponent: public Component
     QuestionConfig _config;
     List _list;
     InputField _inputField;
-    bool _otherActive = false;  ///< Whether the "Other..." free-text input is shown.
-    bool _inputFocused = false; ///< Whether the InputField has focus (vs the List).
+    bool _otherActive = false;                         ///< Whether the "Other..." free-text input is shown.
+    bool _inputFocused = false;                        ///< Whether the InputField has focus (vs the List).
+    QuestionAction _lastAction = QuestionAction::None; ///< Action from the most recent step().
 
     static constexpr int leftBarWidth = 2; ///< Width of left bar chrome (╭─, ╰─, │).
     static constexpr int barPadding = 1;   ///< Padding after the bar.

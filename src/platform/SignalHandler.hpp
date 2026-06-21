@@ -8,6 +8,8 @@
 namespace endo::platform
 {
 
+class Wakeup;
+
 /// Abstract callback interface for signal notifications.
 ///
 /// Implement this interface to receive signal callbacks from SignalHandler.
@@ -87,6 +89,17 @@ class SignalHandler
     /// Clears the pending SIGINT flag.
     static void clearPendingSigint() noexcept;
 
+    /// Registers a wakeup signalled whenever a SIGINT / Ctrl+C is recorded.
+    ///
+    /// This lets an event loop blocked in poll()/WaitForMultipleObjects() wake
+    /// promptly on Ctrl+C instead of waiting for its timeout — in particular it
+    /// closes the Windows gap where the console control handler only set a flag.
+    /// Signalling happens from a signal handler / console-handler thread, so the
+    /// wakeup must outlive the registration and its signal() must be safe to call
+    /// from that context (the self-pipe / eventfd / Win32 event all are).
+    /// @param wakeup The wakeup to signal on interrupt, or nullptr to clear.
+    static void setInterruptWakeup(Wakeup* wakeup) noexcept;
+
     /// Simulates a SIGINT by setting the pending flag. For testing only.
     static void simulateSigint() noexcept;
 
@@ -108,9 +121,13 @@ class SignalHandler
     [[nodiscard]] static bool isInterruptCtrlEvent(unsigned long ctrlType) noexcept;
 
   private:
-    static SignalCallback* _callback;        // NOLINT(readability-identifier-naming)
-    static int _signalFd;                    // NOLINT(readability-identifier-naming)
-    static std::atomic<bool> _sigintPending; // NOLINT(readability-identifier-naming)
+    static SignalCallback* _callback;             // NOLINT(readability-identifier-naming)
+    static int _signalFd;                         // NOLINT(readability-identifier-naming)
+    static std::atomic<bool> _sigintPending;      // NOLINT(readability-identifier-naming)
+    static std::atomic<Wakeup*> _interruptWakeup; // NOLINT(readability-identifier-naming)
+
+    /// Signals the registered interrupt wakeup, if any. Safe from a handler.
+    static void signalInterruptWakeup() noexcept;
 
 #if defined(_WIN32)
     /// Win32 console control handler. Intercepts Ctrl+C / Ctrl+Break so the

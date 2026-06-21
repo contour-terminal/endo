@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <variant>
 
 namespace tui
@@ -119,5 +120,29 @@ using InputEvent = std::variant<KeyEvent,
                                 FocusEvent,
                                 DcsResponse,
                                 DecModeReport>;
+
+/// @brief Tells whether @p event is an internal protocol-response report rather
+/// than an application input event.
+///
+/// Protocol reports are terminal responses to queries / mode changes
+/// (color-scheme, cursor-position, cell-size, DEC-mode, focus, DCS). They are
+/// consumed internally and never surfaced to application code. This is the
+/// single source of truth for that classification, shared by
+/// @c Terminal::consumeProtocolReports (which also dispatches the color-scheme
+/// and focus reports to their handlers) and by the coroutine runtime's event
+/// router, so the set lives in exactly one place.
+/// @param event The decoded input event to classify.
+/// @return True if @p event is an internal protocol report.
+[[nodiscard]] inline bool isProtocolReport(InputEvent const& event) noexcept
+{
+    return std::visit(
+        [](auto const& concrete) {
+            using T = std::decay_t<decltype(concrete)>;
+            return std::is_same_v<T, ColorSchemeReport> || std::is_same_v<T, CellSizeReport>
+                   || std::is_same_v<T, CursorPositionReport> || std::is_same_v<T, DecModeReport>
+                   || std::is_same_v<T, FocusEvent> || std::is_same_v<T, DcsResponse>;
+        },
+        event);
+}
 
 } // namespace tui

@@ -27,6 +27,8 @@
 #include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
+#include <tui/runtime/TerminalEventSource.hpp>
+#include <tui/runtime/TuiRuntime.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -661,6 +663,12 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
 
+    // Let a blocked event-source wait wake promptly on Ctrl+C. On Windows the
+    // console control handler runs on another thread and WaitForMultipleObjects has
+    // no EINTR, so without this an agent/auth wait would not wake until the next
+    // event or timeout. The wakeup outlives the registration (member of this Shell).
+    SignalHandler::setInterruptWakeup(&_interruptWakeup);
+
     // Seed built-in record type fields, module functions, and command output types from TypeRegistry (cached)
     {
         auto const& cached = cachedTypeRegistryData();
@@ -821,6 +829,9 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
 
 Shell::~Shell()
 {
+    // Clear the interrupt-wakeup registration before _interruptWakeup is destroyed,
+    // so a late signal cannot dereference a dangling pointer.
+    SignalHandler::setInterruptWakeup(nullptr);
     SignalHandler::restore();
 }
 
@@ -1325,15 +1336,29 @@ int Shell::run()
     loadCompleters();
     onDirectoryChanged();
 
+    // Drive the interactive prompt through the coroutine runtime. The event source
+    // multiplexes terminal input with the POSIX signal fd (job control); Ctrl+C at
+    // the prompt is a key in raw mode, so SIGINT is ignored here (a no-op interrupt
+    // handler keeps it from tripping the runtime's root cancellation across reads).
+#if defined(_WIN32)
+    auto promptEventSource = tui::runtime::TerminalEventSource(prompt.terminal(), nullptr, &_interruptWakeup);
+#else
+    auto promptEventSource =
+        tui::runtime::TerminalEventSource(prompt.terminal(), nullptr, &_interruptWakeup, _signalFd);
+#endif
+    auto promptRuntime = tui::runtime::TuiRuntime(promptEventSource);
+    promptRuntime.setInterruptHandler([] {});
+
+    // While read() is blocked waiting for input, the event source reaps job-control
+    // signals (SIGCHLD) during the wait and resumes the prompt with a non-input
+    // activity wake. Report finished jobs on that idle wake so a background job's
+    // completion is announced promptly rather than at the next keystroke.
+    prompt.setOnIdle([this] {
+        SignalHandler::processPendingSignals();
+        reportJobStatus();
+    });
+
 #if !defined(_WIN32)
-    pollfd fds[2];
-    fds[0].fd = _tty.inputFd();
-    fds[0].events = POLLIN;
-    fds[1].fd = _signalFd; // -1 on non-Linux (ignored by poll when nfds=1)
-    fds[1].events = POLLIN;
-
-    int const nfds = (_signalFd >= 0) ? 2 : 1;
-
     while (!_quit && prompt.ready())
     {
         // Check for pending signals on non-signalfd platforms
@@ -1388,29 +1413,14 @@ int Shell::run()
 
         emitPromptEnd();
 
-        // Wait for input or signals
-        int const pollResult = poll(fds, static_cast<nfds_t>(nfds), -1);
-        if (pollResult < 0)
-        {
-            if (errno == EINTR)
-                continue; // Interrupted by signal, retry
-            break;
-        }
+        // Wait for input. The runtime's event source multiplexes the signal fd,
+        // so job-control signals are handled during the wait; report them after.
+        auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
 
-        // Process signals first (if signalfd is readable)
-        if (_signalFd >= 0 && (fds[1].revents & POLLIN))
-            SignalHandler::processSignalFd();
-
-        // Check for pending signals again
         SignalHandler::processPendingSignals();
-
-        // Report any newly completed jobs
         reportJobStatus();
 
-        // Process input (if available)
-        if (fds[0].revents & POLLIN)
         {
-            auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
     #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -1530,7 +1540,7 @@ int Shell::run()
 
         emitPromptEnd();
 
-        auto const lineBuffer = prompt.read();
+        auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
         debugLog()()("input buffer: {}", lineBuffer);
 
     #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -2823,6 +2833,21 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
 // NOLINTNEXTLINE(readability-function-size)
 void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
+    // Own a runtime + event source for the duration of agent mode. The event source
+    // multiplexes terminal input with the agent-message wakeup (fixing the Windows
+    // gap where the input poll never woke on agent messages). SIGINT is ignored here:
+    // Ctrl+C in agent mode is a key the input component turns into an Abort.
+    auto& agentTerminal = prompt.terminal();
+    auto agentEventSource =
+        tui::runtime::TerminalEventSource(agentTerminal, &_agentWakeup, &_interruptWakeup);
+    auto runtime = tui::runtime::TuiRuntime(agentEventSource);
+    runtime.setInterruptHandler([] {});
+    runtime.blockOn(runAgentModeFlow(&runtime, std::move(initialMessage)));
+}
+
+coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
+                                         std::optional<std::string> initialMessage)
+{
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
     {
@@ -2851,7 +2876,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         }
         out.flush();
         out.setInlineRoomReserved(0); // Prevent prompt from overwriting error text
-        return;
+        co_return;
     }
 
     // Create or reuse agent session (preserves conversation history).
@@ -3143,10 +3168,14 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     auto& out = terminal.output();
     auto const& theme = tui::currentTheme();
 
-    // Connect wakeup to terminal input so poll() wakes on agent messages.
+    // Point the outbound-message wakeup at the terminal input. The agent loop now
+    // waits via the coroutine runtime's event source (which also selects on this
+    // wakeup directly), so this keeps any residual TerminalInput::poll() path in
+    // sync; the event source is what actually wakes the agent loop on a message.
     terminal.input().setWakeup(&_agentWakeup);
 
-    // Wakeup poll loop on focus changes so timeout is re-evaluated immediately.
+    // Wake the runtime's wait on focus changes so the poll timeout (focused vs
+    // unfocused) is re-evaluated immediately on the next loop iteration.
     terminal.onFocusChanged([this](bool) { _agentWakeup.signal(); });
 
     // Track the active renderer for tool-use line re-rendering of spinner.
@@ -4295,13 +4324,15 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 pollTimeout = std::min(toolSpinnerTimeout, pollTimeout);
         }
 
-        // 3. Poll terminal input.
-        auto events = terminal.poll(pollTimeout);
+        // 3. Wait for input, an agent message, or a timeout (whichever happens first).
+        auto const activity = co_await runtime->nextActivity(std::chrono::milliseconds { pollTimeout });
+        if (activity.kind == tui::runtime::ActivityKind::AgentReady)
+            continue; // Loop back to drain the agent messages at the top.
 
-        // Re-read focus state after poll — FocusEvent may have been consumed during poll()
+        // Re-read focus state after the wait — a FocusEvent may have been consumed.
         auto const terminalFocused = terminal.isFocused();
 
-        if (events.empty())
+        if (activity.kind == tui::runtime::ActivityKind::Timeout)
         {
             // Check background context loading.
             if (!systemPromptReady
@@ -4386,184 +4417,196 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             continue;
         }
 
-        // 4. Process terminal input events.
+        // 4. Process the terminal input event.
         auto needsRedraw = false;
-        for (auto const& event: events)
         {
-            if (std::holds_alternative<tui::ResizeEvent>(event))
-            {
+            auto const& event = *activity.event;
+            // A resize only needs a redraw; skip all per-event dispatch and fall
+            // through to the redraw blocks below, which re-layout the input
+            // component and re-render any active inline prompt at the new width.
+            auto const isResize = std::holds_alternative<tui::ResizeEvent>(event);
+            if (isResize)
                 needsRedraw = true;
-                continue;
-            }
 
+            // A modifier-only keypress (bare Ctrl/Shift/Alt) produces no text or
+            // action; ignore it with no redraw. (Never a resize, so order is moot.)
             if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
                 continue;
 
-            // During ask-user, route input to the question component.
-            if (askUserPrompt.active && askUserPrompt.component)
+            // Dispatch the event only when it is not a resize.
+            if (!isResize)
             {
-                auto const action = askUserPrompt.component->processInput(event);
-                switch (action)
+                // During ask-user, route input to the question component.
+                if (askUserPrompt.active && askUserPrompt.component)
                 {
-                    case tui::QuestionAction::Confirmed: {
-                        auto const answerText = askUserPrompt.component->answer();
-                        auto const qConfig = askUserPrompt.component->config();
-                        auto const selectedIdx = askUserPrompt.component->selectedIndex();
-                        auto const checkedIdx = askUserPrompt.component->checkedIndices();
-                        auto const otherActive = askUserPrompt.component->isOtherActive();
-                        worker.inbound().push(agent::UserAnswerMessage {
-                            .requestId = askUserPrompt.requestId,
-                            .answer = agent::UserAnswer { .answer = answerText } });
-                        askUserPrompt.clear(out);
-                        // Echo question + options with selection to scrollback
+                    // Drive the question through its modal step(); a returned result
+                    // means confirmed/cancelled, std::nullopt means continue (redraw
+                    // only when the step changed visible state).
+                    auto const stepResult = askUserPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
+                    {
                         {
-                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const questionStyle = tui::Style { .fg = theme.colors.text };
-                            auto const normalStyle =
-                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                            auto const selectedStyle =
-                                tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
-                            // Question text
-                            out.writeText("\u2502 ", barStyle);
-                            out.writeText(qConfig.questionText, questionStyle);
-                            out.linefeed();
-                            // Options
-                            if (qConfig.multiSelect)
+                            auto const& answerText = stepResult->answer;
+                            auto const qConfig = askUserPrompt.component->config();
+                            auto const selectedIdx = stepResult->selectedIndex;
+                            auto const& checkedIdx = stepResult->checkedIndices;
+                            auto const otherActive = stepResult->otherActive;
+                            worker.inbound().push(agent::UserAnswerMessage {
+                                .requestId = askUserPrompt.requestId,
+                                .answer = agent::UserAnswer { .answer = answerText } });
+                            askUserPrompt.clear(out);
+                            // Echo question + options with selection to scrollback
                             {
-                                auto const checkedSet =
-                                    std::set<std::size_t>(checkedIdx.begin(), checkedIdx.end());
-                                for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                                auto const questionStyle = tui::Style { .fg = theme.colors.text };
+                                auto const normalStyle =
+                                    tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                                auto const selectedStyle =
+                                    tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+                                // Question text
+                                out.writeText("\u2502 ", barStyle);
+                                out.writeText(qConfig.questionText, questionStyle);
+                                out.linefeed();
+                                // Options
+                                if (qConfig.multiSelect)
                                 {
-                                    auto const checked = checkedSet.contains(i);
+                                    auto const checkedSet =
+                                        std::set<std::size_t>(checkedIdx.begin(), checkedIdx.end());
+                                    for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                    {
+                                        auto const checked = checkedSet.contains(i);
+                                        out.writeText("\u2502 ", barStyle);
+                                        if (checked)
+                                        {
+                                            out.writeText(" \xe2\x96\xb6 " + qConfig.options[i],
+                                                          selectedStyle);
+                                        }
+                                        else
+                                        {
+                                            out.writeText("   " + qConfig.options[i], normalStyle);
+                                        }
+                                        out.linefeed();
+                                    }
+                                }
+                                else
+                                {
+                                    for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                    {
+                                        out.writeText("\u2502 ", barStyle);
+                                        if (!otherActive && i == selectedIdx)
+                                        {
+                                            out.writeText(" \xe2\x96\xb6 " + qConfig.options[i],
+                                                          selectedStyle);
+                                        }
+                                        else
+                                        {
+                                            out.writeText("   " + qConfig.options[i], normalStyle);
+                                        }
+                                        out.linefeed();
+                                    }
+                                }
+                                // Custom "Other..." text
+                                if (otherActive)
+                                {
                                     out.writeText("\u2502 ", barStyle);
-                                    if (checked)
-                                    {
-                                        out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
-                                    }
-                                    else
-                                    {
-                                        out.writeText("   " + qConfig.options[i], normalStyle);
-                                    }
+                                    out.writeText(" \xe2\x96\xb6 " + answerText, selectedStyle);
                                     out.linefeed();
                                 }
+                                out.writeText("\u2502", barStyle);
+                                out.linefeed();
+                                out.flush();
                             }
-                            else
+                            askUserPrompt.reset();
+                        }
+                    }
+                    else if (stepResult)
+                    {
+                        {
+                            auto const qConfig = askUserPrompt.component->config();
+                            worker.inbound().push(agent::UserAnswerMessage {
+                                .requestId = askUserPrompt.requestId,
+                                .answer = agent::UserAnswer { .cancelled = true } });
+                            askUserPrompt.clear(out);
+                            // Echo question + options with cancellation to scrollback
                             {
-                                for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                                auto const questionStyle = tui::Style { .fg = theme.colors.text };
+                                auto const normalStyle =
+                                    tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                                auto const dimStyle =
+                                    tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                                // Question text
+                                out.writeText("\u2502 ", barStyle);
+                                out.writeText(qConfig.questionText, questionStyle);
+                                out.linefeed();
+                                // Options (all unselected)
+                                for (auto const& opt: qConfig.options)
                                 {
                                     out.writeText("\u2502 ", barStyle);
-                                    if (!otherActive && i == selectedIdx)
-                                    {
-                                        out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
-                                    }
-                                    else
-                                    {
-                                        out.writeText("   " + qConfig.options[i], normalStyle);
-                                    }
+                                    out.writeText("   " + opt, normalStyle);
                                     out.linefeed();
                                 }
-                            }
-                            // Custom "Other..." text
-                            if (otherActive)
-                            {
+                                // Cancellation notice
                                 out.writeText("\u2502 ", barStyle);
-                                out.writeText(" \xe2\x96\xb6 " + answerText, selectedStyle);
+                                out.writeText(" (cancelled)", dimStyle);
                                 out.linefeed();
-                            }
-                            out.writeText("\u2502", barStyle);
-                            out.linefeed();
-                            out.flush();
-                        }
-                        askUserPrompt.reset();
-                        break;
-                    }
-                    case tui::QuestionAction::Cancelled: {
-                        auto const qConfig = askUserPrompt.component->config();
-                        worker.inbound().push(
-                            agent::UserAnswerMessage { .requestId = askUserPrompt.requestId,
-                                                       .answer = agent::UserAnswer { .cancelled = true } });
-                        askUserPrompt.clear(out);
-                        // Echo question + options with cancellation to scrollback
-                        {
-                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const questionStyle = tui::Style { .fg = theme.colors.text };
-                            auto const normalStyle =
-                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                            auto const dimStyle =
-                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                            // Question text
-                            out.writeText("\u2502 ", barStyle);
-                            out.writeText(qConfig.questionText, questionStyle);
-                            out.linefeed();
-                            // Options (all unselected)
-                            for (auto const& opt: qConfig.options)
-                            {
-                                out.writeText("\u2502 ", barStyle);
-                                out.writeText("   " + opt, normalStyle);
+                                out.writeText("\u2502", barStyle);
                                 out.linefeed();
+                                out.flush();
                             }
-                            // Cancellation notice
-                            out.writeText("\u2502 ", barStyle);
-                            out.writeText(" (cancelled)", dimStyle);
-                            out.linefeed();
-                            out.writeText("\u2502", barStyle);
-                            out.linefeed();
-                            out.flush();
+                            askUserPrompt.reset();
                         }
-                        askUserPrompt.reset();
-                        break;
                     }
-                    case tui::QuestionAction::Changed: {
+                    else if (askUserPrompt.component->stepChangedState())
+                    {
                         auto guard = out.syncGuard();
                         askUserPrompt.clear(out);
                         askUserPrompt.render(out, terminal);
-                        break;
                     }
-                    case tui::QuestionAction::None: break;
+                    continue;
                 }
-                continue;
-            }
 
-            // During permission prompt, route input to the permission component.
-            if (permissionPrompt.active && permissionPrompt.component)
-            {
-                auto const action = permissionPrompt.component->processInput(event);
-                switch (action)
+                // During permission prompt, route input to the permission component.
+                if (permissionPrompt.active && permissionPrompt.component)
                 {
-                    case tui::QuestionAction::Confirmed: {
-                        auto const selectedIdx = permissionPrompt.component->selectedIndex();
-                        permissionPrompt.clear(out);
-
-                        auto decision = agent::PermissionDecision::Denied;
-                        if (selectedIdx == 0) // "Yes"
-                            decision = agent::PermissionDecision::Approved;
-                        else if (selectedIdx == 1) // "Yes, always for this tool"
-                            decision = agent::PermissionDecision::Approved;
-                        else // "No"
-                            decision = agent::PermissionDecision::Denied;
-
-                        worker.inbound().push(agent::PermissionResponseMessage {
-                            .requestId = permissionPrompt.requestId,
-                            .decision = decision,
-                        });
-
-                        // Echo the permission decision to scrollback.
+                    auto const stepResult = permissionPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
+                    {
                         {
-                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.writeText("\u2502 ", barStyle);
-                            if (decision == agent::PermissionDecision::Approved)
-                                out.writeText("Approved", dimStyle);
-                            else
-                                out.writeText("Denied", dimStyle);
-                            out.linefeed();
-                            out.flush();
-                        }
+                            auto const selectedIdx = stepResult->selectedIndex;
+                            permissionPrompt.clear(out);
 
-                        permissionPrompt.reset();
-                        break;
+                            auto decision = agent::PermissionDecision::Denied;
+                            if (selectedIdx == 0) // "Yes"
+                                decision = agent::PermissionDecision::Approved;
+                            else if (selectedIdx == 1) // "Yes, always for this tool"
+                                decision = agent::PermissionDecision::Approved;
+                            else // "No"
+                                decision = agent::PermissionDecision::Denied;
+
+                            worker.inbound().push(agent::PermissionResponseMessage {
+                                .requestId = permissionPrompt.requestId,
+                                .decision = decision,
+                            });
+
+                            // Echo the permission decision to scrollback.
+                            {
+                                auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                                auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                                out.writeText("\u2502 ", barStyle);
+                                if (decision == agent::PermissionDecision::Approved)
+                                    out.writeText("Approved", dimStyle);
+                                else
+                                    out.writeText("Denied", dimStyle);
+                                out.linefeed();
+                                out.flush();
+                            }
+
+                            permissionPrompt.reset();
+                        }
                     }
-                    case tui::QuestionAction::Cancelled: {
+                    else if (stepResult)
+                    {
                         permissionPrompt.clear(out);
                         worker.inbound().push(agent::PermissionResponseMessage {
                             .requestId = permissionPrompt.requestId,
@@ -4578,134 +4621,135 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         out.flush();
 
                         permissionPrompt.reset();
-                        break;
                     }
-                    case tui::QuestionAction::Changed: {
+                    else if (permissionPrompt.component->stepChangedState())
+                    {
                         auto guard = out.syncGuard();
                         permissionPrompt.clear(out);
                         permissionPrompt.render(out, terminal);
-                        break;
                     }
-                    case tui::QuestionAction::None: break;
+                    continue;
                 }
-                continue;
-            }
 
-            // During session picker, route input to the session picker component.
-            if (sessionPickerPrompt.active && sessionPickerPrompt.component)
-            {
-                auto const action = sessionPickerPrompt.component->processInput(event);
-                switch (action)
+                // During session picker, route input to the session picker component.
+                if (sessionPickerPrompt.active && sessionPickerPrompt.component)
                 {
-                    case tui::QuestionAction::Confirmed: {
-                        auto const selectedIdx = sessionPickerPrompt.component->selectedIndex();
-                        sessionPickerPrompt.clear(out);
-                        if (selectedIdx < sessionPickerNames.size())
+                    auto const stepResult = sessionPickerPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
+                    {
                         {
-                            auto const& name = sessionPickerNames[selectedIdx];
-                            auto loaded = sessionManager.loadSession(name);
-                            if (loaded.has_value())
+                            auto const selectedIdx = stepResult->selectedIndex;
+                            sessionPickerPrompt.clear(out);
+                            if (selectedIdx < sessionPickerNames.size())
                             {
-                                auto& [meta, messages] = *loaded;
-                                (*_agentSession).reset();
-                                historyProviderPtr->setEntries({});
-                                for (auto const& msg: messages)
+                                auto const& name = sessionPickerNames[selectedIdx];
+                                auto loaded = sessionManager.loadSession(name);
+                                if (loaded.has_value())
                                 {
-                                    if (msg.role == agent::Role::User)
+                                    auto& [meta, messages] = *loaded;
+                                    (*_agentSession).reset();
+                                    historyProviderPtr->setEntries({});
+                                    for (auto const& msg: messages)
                                     {
-                                        auto const text =
-                                            agent::FileReferenceExpander::stripExpansions(msg.textContent());
-                                        if (!text.empty())
-                                            historyProviderPtr->addEntry(text);
+                                        if (msg.role == agent::Role::User)
+                                        {
+                                            auto const text = agent::FileReferenceExpander::stripExpansions(
+                                                msg.textContent());
+                                            if (!text.empty())
+                                                historyProviderPtr->addEntry(text);
+                                        }
                                     }
+                                    _agentSession->loadPersistedMessages(std::move(messages));
+                                    _activeSessionName = name;
+                                    _sessionCreatedAt = meta.createdAt;
+                                    sessionManager.setLastActiveSession(name);
+                                    out.writeText("Session '" + name + "' loaded.\n");
                                 }
-                                _agentSession->loadPersistedMessages(std::move(messages));
-                                _activeSessionName = name;
-                                _sessionCreatedAt = meta.createdAt;
-                                sessionManager.setLastActiveSession(name);
-                                out.writeText("Session '" + name + "' loaded.\n");
+                                else
+                                {
+                                    auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                                    out.writeText("Failed to load session: " + loaded.error().message + "\n",
+                                                  errorStyle);
+                                }
                             }
-                            else
-                            {
-                                auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                out.writeText("Failed to load session: " + loaded.error().message + "\n",
-                                              errorStyle);
-                            }
+                            sessionPickerPrompt.reset();
+                            sessionPickerNames.clear();
+                            out.flush();
                         }
-                        sessionPickerPrompt.reset();
-                        sessionPickerNames.clear();
-                        out.flush();
-                        break;
                     }
-                    case tui::QuestionAction::Cancelled:
+                    else if (stepResult)
+                    {
                         sessionPickerPrompt.clear(out);
                         sessionPickerPrompt.reset();
                         sessionPickerNames.clear();
-                        break;
-                    case tui::QuestionAction::Changed: {
+                    }
+                    else if (sessionPickerPrompt.component->stepChangedState())
+                    {
                         auto guard = out.syncGuard();
                         sessionPickerPrompt.clear(out);
                         sessionPickerPrompt.render(out, terminal);
-                        break;
                     }
-                    case tui::QuestionAction::None: break;
+                    continue;
                 }
-                continue;
-            }
 
-            // During plan approval, route input to the approval component.
-            if (planApprovalPrompt.isActive())
-            {
-                auto const action = planApprovalPrompt.component->processInput(event);
-                switch (action)
+                // During plan approval, route input to the approval component.
+                if (planApprovalPrompt.isActive())
                 {
-                    case tui::QuestionAction::Confirmed: {
-                        auto const selectedIdx = planApprovalPrompt.component->selectedIndex();
-                        planApprovalPrompt.clear(out);
-                        planApprovalPrompt.reset();
-                        if (selectedIdx == 0) // "Yes, execute"
+                    auto const stepResult = planApprovalPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
+                    {
                         {
-                            worker.inbound().push(
-                                agent::PlanApproveMessage { .plan = std::move(*pendingPlan) });
-                            pendingPlan.reset();
-                            streaming = true;
-                            inputComponent.setThinkingActive(true);
-                            inputComponent.setActivityLabel("Executing plan...");
+                            auto const selectedIdx = stepResult->selectedIndex;
+                            planApprovalPrompt.clear(out);
+                            planApprovalPrompt.reset();
+                            if (selectedIdx == 0) // "Yes, execute"
+                            {
+                                worker.inbound().push(
+                                    agent::PlanApproveMessage { .plan = std::move(*pendingPlan) });
+                                pendingPlan.reset();
+                                streaming = true;
+                                inputComponent.setThinkingActive(true);
+                                inputComponent.setActivityLabel("Executing plan...");
+                            }
+                            else if (selectedIdx == 1) // "Yes, compact context first"
+                            {
+                                worker.inbound().push(agent::PlanApproveMessage {
+                                    .plan = std::move(*pendingPlan), .compactFirst = true });
+                                pendingPlan.reset();
+                                streaming = true;
+                                inputComponent.setThinkingActive(true);
+                                inputComponent.setActivityLabel("Compacting context...");
+                            }
+                            else if (selectedIdx == 2) // "No, discard"
+                            {
+                                pendingPlan.reset();
+                                auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                                out.writeText("Plan discarded.\n", dimStyle);
+                                out.flush();
+                                screen.releaseCursor();
+                                auto const newPrefSize = inputComponent.preferredSize();
+                                inputComponent.setArea(tui::Rect { .x = 0,
+                                                                   .y = 0,
+                                                                   .width = terminal.columns(),
+                                                                   .height = newPrefSize.height });
+                                screen.draw();
+                            }
+                            else // "Revise"
+                            {
+                                pendingPlan.reset();
+                                // Stay in plan mode for revision.
+                                screen.releaseCursor();
+                                auto const newPrefSize = inputComponent.preferredSize();
+                                inputComponent.setArea(tui::Rect { .x = 0,
+                                                                   .y = 0,
+                                                                   .width = terminal.columns(),
+                                                                   .height = newPrefSize.height });
+                                screen.draw();
+                            }
                         }
-                        else if (selectedIdx == 1) // "Yes, compact context first"
-                        {
-                            worker.inbound().push(agent::PlanApproveMessage { .plan = std::move(*pendingPlan),
-                                                                              .compactFirst = true });
-                            pendingPlan.reset();
-                            streaming = true;
-                            inputComponent.setThinkingActive(true);
-                            inputComponent.setActivityLabel("Compacting context...");
-                        }
-                        else if (selectedIdx == 2) // "No, discard"
-                        {
-                            pendingPlan.reset();
-                            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.writeText("Plan discarded.\n", dimStyle);
-                            out.flush();
-                            screen.releaseCursor();
-                            auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(tui::Rect {
-                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                            screen.draw();
-                        }
-                        else // "Revise"
-                        {
-                            pendingPlan.reset();
-                            // Stay in plan mode for revision.
-                            screen.releaseCursor();
-                            auto const newPrefSize = inputComponent.preferredSize();
-                            inputComponent.setArea(tui::Rect {
-                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                            screen.draw();
-                        }
-                        break;
                     }
-                    case tui::QuestionAction::Cancelled:
+                    else if (stepResult)
+                    {
                         planApprovalPrompt.clear(out);
                         planApprovalPrompt.reset();
                         pendingPlan.reset();
@@ -4716,290 +4760,293 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                                 .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                             screen.draw();
                         }
-                        break;
-                    case tui::QuestionAction::Changed: {
+                    }
+                    else if (planApprovalPrompt.component->stepChangedState())
+                    {
                         auto guard = out.syncGuard();
                         planApprovalPrompt.clear(out);
                         planApprovalPrompt.render(out, terminal);
-                        break;
                     }
-                    case tui::QuestionAction::None: break;
+                    continue;
                 }
-                continue;
-            }
 
-            // During streaming, only handle Escape (cancel) and Ctrl+L (clear).
-            if (streaming)
-            {
+                // During streaming, only handle Escape (cancel) and Ctrl+L (clear).
+                if (streaming)
+                {
+                    auto const action = inputComponent.processInput(event);
+                    switch (action)
+                    {
+                        case agent::AgentInputComponent::Action::Abort:
+                            streamCancelled = true;
+                            worker.inbound().push(agent::CancelMessage {});
+                            break;
+                        case agent::AgentInputComponent::Action::ClearScreen:
+                            out.clearScreen();
+                            out.flush();
+                            streamingPromptVisible = false;
+                            renderStreamingPrompt();
+                            break;
+                        case agent::AgentInputComponent::Action::Changed: {
+                            auto guard = out.syncGuard();
+                            clearStreamingPrompt();
+                            renderStreamingPrompt();
+                            break;
+                        }
+                        default: break;
+                    }
+                    continue;
+                }
+
+                // Not streaming — handle full input.
                 auto const action = inputComponent.processInput(event);
                 switch (action)
                 {
-                    case agent::AgentInputComponent::Action::Abort:
-                        streamCancelled = true;
-                        worker.inbound().push(agent::CancelMessage {});
-                        break;
-                    case agent::AgentInputComponent::Action::ClearScreen:
-                        out.clearScreen();
-                        out.flush();
-                        streamingPromptVisible = false;
-                        renderStreamingPrompt();
-                        break;
-                    case agent::AgentInputComponent::Action::Changed: {
-                        auto guard = out.syncGuard();
-                        clearStreamingPrompt();
-                        renderStreamingPrompt();
-                        break;
-                    }
-                    default: break;
-                }
-                continue;
-            }
+                    case agent::AgentInputComponent::Action::Submit: {
+                        // Poll MCP servers for tool list changes before each LLM turn.
+                        mcpServerManager.processNotifications();
 
-            // Not streaming — handle full input.
-            auto const action = inputComponent.processInput(event);
-            switch (action)
-            {
-                case agent::AgentInputComponent::Action::Submit: {
-                    // Poll MCP servers for tool list changes before each LLM turn.
-                    mcpServerManager.processNotifications();
+                        auto sentToWorker = false;
 
-                    auto sentToWorker = false;
-
-                    // Ensure system prompt is ready.
-                    if (!systemPromptReady)
-                    {
-                        auto result = contextFuture.get();
-                        _agentSession->setSystemPrompt(std::move(result.systemPrompt));
-                        if (auto* explore =
-                                dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
-                            explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
-                        if (!result.gitBranch.empty())
-                            inputComponent.setGitBranch(std::move(result.gitBranch));
-                        if (!result.projectPath.empty())
-                            inputComponent.setProjectPath(std::move(result.projectPath));
-                        filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
-                        _cachedProjectContext = std::move(result.projectContext);
-                        _cachedProjectContextCwd = cwd;
-                        systemPromptReady = true;
-                    }
-
-                    auto const query = std::string(inputComponent.text());
-
-                    // Extract attached images before clearing.
-                    auto attachedImages = std::vector<agent::ImageBlock>(
-                        inputComponent.attachedImages().begin(), inputComponent.attachedImages().end());
-
-                    // Expand @-file references for agent context injection.
-                    auto const expandFileRefs = [&](std::string_view text) {
-                        return agent::FileReferenceExpander::expand(text, std::filesystem::current_path())
-                            .expandedMessage;
-                    };
-
-                    if (!query.starts_with("/"))
-                    {
-                        inputComponent.inputField().addHistory(query);
-                        historyProviderPtr->addEntry(query);
-                    }
-
-                    // Move cursor past the input component, preserving image previews in scrollback.
-                    auto const totalLines = inputComponent.inputField().lineCount();
-                    auto const cursorLine = inputComponent.inputField().cursorLine();
-                    auto const previewLines = inputComponent.imagePreviewHeight();
-                    inputComponent.clear();
-                    auto const linesToMoveDown = totalLines - cursorLine + previewLines;
-                    if (linesToMoveDown > 0)
-                        out.moveDown(linesToMoveDown);
-                    out.carriageReturn();
-                    out.clearLine(); // Clear info line (shortcut hints / spinner)
-                    out.linefeed();
-                    out.clearLine(); // Clear bottom padding (NBSP marker)
-                    out.flush();
-
-                    screen.releaseCursor();
-
-                    // Dispatch slash commands.
-                    if (query.starts_with("/"))
-                    {
-                        auto const spacePos = query.find(' ');
-                        auto const cmdName =
-                            query.substr(1, spacePos == std::string::npos ? std::string::npos : spacePos - 1);
-                        auto const args = spacePos != std::string::npos ? query.substr(spacePos + 1) : "";
-
-                        if (auto const* cmd = slashRegistry.findCommand(cmdName))
+                        // Ensure system prompt is ready.
+                        if (!systemPromptReady)
                         {
-                            auto commandResult = cmd->execute(args);
-                            if (auto const* d = std::get_if<agent::DirectOutput>(&commandResult))
+                            auto result = contextFuture.get();
+                            _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+                            if (auto* explore =
+                                    dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
+                                explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
+                            if (!result.gitBranch.empty())
+                                inputComponent.setGitBranch(std::move(result.gitBranch));
+                            if (!result.projectPath.empty())
+                                inputComponent.setProjectPath(std::move(result.projectPath));
+                            filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
+                            _cachedProjectContext = std::move(result.projectContext);
+                            _cachedProjectContextCwd = cwd;
+                            systemPromptReady = true;
+                        }
+
+                        auto const query = std::string(inputComponent.text());
+
+                        // Extract attached images before clearing.
+                        auto attachedImages = std::vector<agent::ImageBlock>(
+                            inputComponent.attachedImages().begin(), inputComponent.attachedImages().end());
+
+                        // Expand @-file references for agent context injection.
+                        auto const expandFileRefs = [&](std::string_view text) {
+                            return agent::FileReferenceExpander::expand(text, std::filesystem::current_path())
+                                .expandedMessage;
+                        };
+
+                        if (!query.starts_with("/"))
+                        {
+                            inputComponent.inputField().addHistory(query);
+                            historyProviderPtr->addEntry(query);
+                        }
+
+                        // Move cursor past the input component, preserving image previews in scrollback.
+                        auto const totalLines = inputComponent.inputField().lineCount();
+                        auto const cursorLine = inputComponent.inputField().cursorLine();
+                        auto const previewLines = inputComponent.imagePreviewHeight();
+                        inputComponent.clear();
+                        auto const linesToMoveDown = totalLines - cursorLine + previewLines;
+                        if (linesToMoveDown > 0)
+                            out.moveDown(linesToMoveDown);
+                        out.carriageReturn();
+                        out.clearLine(); // Clear info line (shortcut hints / spinner)
+                        out.linefeed();
+                        out.clearLine(); // Clear bottom padding (NBSP marker)
+                        out.flush();
+
+                        screen.releaseCursor();
+
+                        // Dispatch slash commands.
+                        if (query.starts_with("/"))
+                        {
+                            auto const spacePos = query.find(' ');
+                            auto const cmdName = query.substr(
+                                1, spacePos == std::string::npos ? std::string::npos : spacePos - 1);
+                            auto const args = spacePos != std::string::npos ? query.substr(spacePos + 1) : "";
+
+                            if (auto const* cmd = slashRegistry.findCommand(cmdName))
                             {
-                                out.writeText(d->text);
-                                out.flush();
-                            }
-                            else if (auto const* m = std::get_if<agent::MarkdownOutput>(&commandResult))
-                            {
-                                auto mdRenderer = tui::MarkdownRenderer(out);
-                                mdRenderer.setMaxWidth(terminal.columns());
-                                mdRenderer.render(m->markdown);
-                                out.flush();
-                            }
-                            else if (auto const* p = std::get_if<agent::PlanModeRequest>(&commandResult))
-                            {
-                                if (!agentConfig.planMode.enabled)
+                                auto commandResult = cmd->execute(args);
+                                if (auto const* d = std::get_if<agent::DirectOutput>(&commandResult))
                                 {
-                                    auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                    out.writeText("Plan mode is disabled in configuration.\n", errorStyle);
+                                    out.writeText(d->text);
                                     out.flush();
                                 }
-                                else if (p->query.empty())
+                                else if (auto const* m = std::get_if<agent::MarkdownOutput>(&commandResult))
                                 {
-                                    if (!planModeActive)
+                                    auto mdRenderer = tui::MarkdownRenderer(out);
+                                    mdRenderer.setMaxWidth(terminal.columns());
+                                    mdRenderer.render(m->markdown);
+                                    out.flush();
+                                }
+                                else if (auto const* p = std::get_if<agent::PlanModeRequest>(&commandResult))
+                                {
+                                    if (!agentConfig.planMode.enabled)
                                     {
-                                        planModeActive = true;
-                                        inputComponent.setPlanMode(true);
+                                        auto const errorStyle =
+                                            tui::Style { .fg = theme.agentColors.errorText };
+                                        out.writeText("Plan mode is disabled in configuration.\n",
+                                                      errorStyle);
+                                        out.flush();
                                     }
-                                    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                                    out.writeText("Plan mode active. Type your task to generate a plan.\n",
-                                                  infoStyle);
-                                    out.flush();
+                                    else if (p->query.empty())
+                                    {
+                                        if (!planModeActive)
+                                        {
+                                            planModeActive = true;
+                                            inputComponent.setPlanMode(true);
+                                        }
+                                        auto const infoStyle =
+                                            tui::Style { .fg = theme.agentColors.statusText };
+                                        out.writeText(
+                                            "Plan mode active. Type your task to generate a plan.\n",
+                                            infoStyle);
+                                        out.flush();
+                                    }
+                                    else
+                                    {
+                                        // Send plan query to worker.
+                                        worker.inbound().push(agent::UserPromptMessage {
+                                            .text = expandFileRefs(p->query), .planMode = true });
+                                        sentToWorker = true;
+                                    }
                                 }
-                                else
+                                else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
                                 {
-                                    // Send plan query to worker.
-                                    worker.inbound().push(agent::UserPromptMessage {
-                                        .text = expandFileRefs(p->query), .planMode = true });
+                                    // Send rewritten prompt to worker.
+                                    worker.inbound().push(
+                                        agent::UserPromptMessage { .text = expandFileRefs(r->prompt) });
                                     sentToWorker = true;
                                 }
+                                else if (auto const* sp =
+                                             std::get_if<agent::SessionPickerRequest>(&commandResult))
+                                {
+                                    // Show interactive session picker using QuestionComponent.
+                                    sessionPickerNames = sp->sessionNames;
+                                    sessionPickerPrompt.component.emplace(tui::QuestionConfig {
+                                        .questionText = sp->questionText,
+                                        .options = sp->options,
+                                        .multiSelect = false,
+                                        .allowOther = false,
+                                    });
+                                    sessionPickerPrompt.active = true;
+                                    sessionPickerPrompt.render(out, terminal);
+                                }
                             }
-                            else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
+                            else
                             {
-                                // Send rewritten prompt to worker.
-                                worker.inbound().push(
-                                    agent::UserPromptMessage { .text = expandFileRefs(r->prompt) });
-                                sentToWorker = true;
+                                auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                                out.writeText("Unknown command: /" + cmdName + "\n", errorStyle);
+                                out.flush();
                             }
-                            else if (auto const* sp =
-                                         std::get_if<agent::SessionPickerRequest>(&commandResult))
-                            {
-                                // Show interactive session picker using QuestionComponent.
-                                sessionPickerNames = sp->sessionNames;
-                                sessionPickerPrompt.component.emplace(tui::QuestionConfig {
-                                    .questionText = sp->questionText,
-                                    .options = sp->options,
-                                    .multiSelect = false,
-                                    .allowOther = false,
-                                });
-                                sessionPickerPrompt.active = true;
-                                sessionPickerPrompt.render(out, terminal);
-                            }
+                        }
+                        else if (planModeActive && agentConfig.planMode.enabled)
+                        {
+                            // Plan mode: send to worker with planMode flag.
+                            worker.inbound().push(agent::UserPromptMessage {
+                                .text = expandFileRefs(query),
+                                .planMode = true,
+                                .images = std::move(attachedImages),
+                            });
+                            sentToWorker = true;
+                            saveHistory();
                         }
                         else
                         {
-                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.writeText("Unknown command: /" + cmdName + "\n", errorStyle);
-                            out.flush();
+                            // Normal message: send to worker.
+                            worker.inbound().push(agent::UserPromptMessage {
+                                .text = expandFileRefs(query),
+                                .images = std::move(attachedImages),
+                            });
+                            sentToWorker = true;
                         }
-                    }
-                    else if (planModeActive && agentConfig.planMode.enabled)
-                    {
-                        // Plan mode: send to worker with planMode flag.
-                        worker.inbound().push(agent::UserPromptMessage {
-                            .text = expandFileRefs(query),
-                            .planMode = true,
-                            .images = std::move(attachedImages),
-                        });
-                        sentToWorker = true;
-                        saveHistory();
-                    }
-                    else
-                    {
-                        // Normal message: send to worker.
-                        worker.inbound().push(agent::UserPromptMessage {
-                            .text = expandFileRefs(query),
-                            .images = std::move(attachedImages),
-                        });
-                        sentToWorker = true;
-                    }
 
-                    // Re-render input component only for non-streaming commands.
-                    // Streaming responses re-render via CompletionMessage handler.
-                    if (!sentToWorker)
-                    {
-                        auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect {
-                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                        screen.draw();
+                        // Re-render input component only for non-streaming commands.
+                        // Streaming responses re-render via CompletionMessage handler.
+                        if (!sentToWorker)
+                        {
+                            auto const newPrefSize = inputComponent.preferredSize();
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+                            screen.draw();
+                        }
+                        break;
                     }
-                    break;
-                }
-                case agent::AgentInputComponent::Action::Abort: {
-                    // Stop worker before exiting agent mode.
-                    worker.stop();
-                    _agentSession->setPermissionManager(nullptr);
-                    _agentSession->setToolRegistry(nullptr);
-                    _agentSession->setToolStatusCallback(nullptr);
-                    _agentSession->setTracer(nullptr);
-                    terminal.input().setWakeup(nullptr);
-                    screen.clearAndRelease();
-                    return;
-                }
-                case agent::AgentInputComponent::Action::CycleMode: {
-                    planModeActive = !planModeActive;
-                    inputComponent.setPlanMode(planModeActive);
-                    needsRedraw = true;
-                    break;
-                }
-                case agent::AgentInputComponent::Action::CycleThinkingMode: {
-                    // Cycle thinking mode for the active provider.
-                    auto const& pName = _agentProviderFactory->activeProviderName();
-                    auto* thinkingModePtr = static_cast<agent::ThinkingMode*>(nullptr);
-                    if (pName == "claude")
-                        thinkingModePtr = &agentConfig.claude.thinkingMode;
-                    else if (pName == "openai")
-                        thinkingModePtr = &agentConfig.openai.thinkingMode;
-                    else if (pName == "openai_compat")
-                        thinkingModePtr = &agentConfig.openaiCompat.thinkingMode;
-                    else if (pName == "gemini")
-                        thinkingModePtr = &agentConfig.gemini.thinkingMode;
+                    case agent::AgentInputComponent::Action::Abort: {
+                        // Stop worker before exiting agent mode.
+                        worker.stop();
+                        _agentSession->setPermissionManager(nullptr);
+                        _agentSession->setToolRegistry(nullptr);
+                        _agentSession->setToolStatusCallback(nullptr);
+                        _agentSession->setTracer(nullptr);
+                        terminal.input().setWakeup(nullptr);
+                        screen.clearAndRelease();
+                        co_return;
+                    }
+                    case agent::AgentInputComponent::Action::CycleMode: {
+                        planModeActive = !planModeActive;
+                        inputComponent.setPlanMode(planModeActive);
+                        needsRedraw = true;
+                        break;
+                    }
+                    case agent::AgentInputComponent::Action::CycleThinkingMode: {
+                        // Cycle thinking mode for the active provider.
+                        auto const& pName = _agentProviderFactory->activeProviderName();
+                        auto* thinkingModePtr = static_cast<agent::ThinkingMode*>(nullptr);
+                        if (pName == "claude")
+                            thinkingModePtr = &agentConfig.claude.thinkingMode;
+                        else if (pName == "openai")
+                            thinkingModePtr = &agentConfig.openai.thinkingMode;
+                        else if (pName == "openai_compat")
+                            thinkingModePtr = &agentConfig.openaiCompat.thinkingMode;
+                        else if (pName == "gemini")
+                            thinkingModePtr = &agentConfig.gemini.thinkingMode;
 
-                    if (thinkingModePtr)
-                    {
-                        *thinkingModePtr = agent::nextThinkingMode(*thinkingModePtr);
-                        inputComponent.setThinkingMode(*thinkingModePtr);
-                        auto const currentModel = provider->modelInfo().modelName;
-                        switchToModel(pName, currentModel);
+                        if (thinkingModePtr)
+                        {
+                            *thinkingModePtr = agent::nextThinkingMode(*thinkingModePtr);
+                            inputComponent.setThinkingMode(*thinkingModePtr);
+                            auto const currentModel = provider->modelInfo().modelName;
+                            switchToModel(pName, currentModel);
+                        }
+                        needsRedraw = true;
+                        break;
                     }
-                    needsRedraw = true;
-                    break;
-                }
-                case agent::AgentInputComponent::Action::CycleModel: {
-                    // Cycle through hardcoded model list for the active provider.
-                    auto const& pName = _agentProviderFactory->activeProviderName();
-                    auto const models = agent::modelsForProvider(pName);
-                    if (!models.empty())
-                    {
-                        auto const currentModel = provider->modelInfo().modelName;
-                        auto const nextModelName = agent::nextModel(models, currentModel);
-                        switchToModel(pName, nextModelName);
+                    case agent::AgentInputComponent::Action::CycleModel: {
+                        // Cycle through hardcoded model list for the active provider.
+                        auto const& pName = _agentProviderFactory->activeProviderName();
+                        auto const models = agent::modelsForProvider(pName);
+                        if (!models.empty())
+                        {
+                            auto const currentModel = provider->modelInfo().modelName;
+                            auto const nextModelName = agent::nextModel(models, currentModel);
+                            switchToModel(pName, nextModelName);
+                        }
+                        needsRedraw = true;
+                        break;
                     }
-                    needsRedraw = true;
-                    break;
+                    case agent::AgentInputComponent::Action::ClearScreen: {
+                        out.clearScreen();
+                        out.flush();
+                        screen.releaseCursor();
+                        needsRedraw = true;
+                        break;
+                    }
+                    case agent::AgentInputComponent::Action::CommandPalette:
+                        // Palette is shown internally by AgentInputComponent; just redraw.
+                        needsRedraw = true;
+                        break;
+                    case agent::AgentInputComponent::Action::NewPrompt:
+                        inputComponent.clear();
+                        needsRedraw = true;
+                        break;
+                    case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
+                    case agent::AgentInputComponent::Action::None: break;
                 }
-                case agent::AgentInputComponent::Action::ClearScreen: {
-                    out.clearScreen();
-                    out.flush();
-                    screen.releaseCursor();
-                    needsRedraw = true;
-                    break;
-                }
-                case agent::AgentInputComponent::Action::CommandPalette:
-                    // Palette is shown internally by AgentInputComponent; just redraw.
-                    needsRedraw = true;
-                    break;
-                case agent::AgentInputComponent::Action::NewPrompt:
-                    inputComponent.clear();
-                    needsRedraw = true;
-                    break;
-                case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
-                case agent::AgentInputComponent::Action::None: break;
-            }
+            } // if (!isResize)
         }
 
         if (needsRedraw && !streaming)

@@ -824,6 +824,33 @@ Component (base class)
   └── focus group membership
 ```
 
+### Phase 2.3.6: Coroutine-Driven TUI Runtime
+
+**Status:** Complete
+
+**Dependency:** Phase 2.3.5
+
+**Rationale:** Each interactive consumer (the prompt, the agent auth question, the
+AskUser/permission prompts, and the ~2200-line agent-mode loop) hand-rolled its own
+`terminal.poll(timeout)` event loop, duplicating timeout folding, modal input capture, and
+cursor/overlay teardown — the main source of bugs and cursor drift. A single C++23
+coroutine runtime now drives I/O so flows are expressed with `co_await`.
+
+**Tasks:**
+- [x] `endo-coro` library (`src/coro/`): `Task<T>` (lazy, symmetric transfer), `whenAll`,
+  awaitable concepts, and `std::stop_token`-based cancellation
+- [x] `TuiRuntime` (`src/tui/runtime/`): single-threaded driver multiplexing terminal input,
+  the agent-message wakeup, the interrupt wakeup, and timers over an injected `EventSource`
+- [x] Awaitables: `nextEvent`, `nextEventFor(timeout)`, `nextActivity(timeout)`, `delay`,
+  `nextAgentReady`
+- [x] `TerminalEventSource`: production multiplexer (POSIX `poll` / Win32 `WaitForMultipleObjects`),
+  also closing the Windows gap where the input wait never woke on agent messages
+- [x] `SignalHandler` interrupt wakeup so a blocked wait wakes promptly on Ctrl+C
+- [x] `ModalComponent<Result>` / `runModal`; `QuestionComponent` is now an awaitable modal
+- [x] Migrate consumers: agent auth question, `Prompt::read` → `Task`, `Shell::run` REPL
+  bootstrap, and the agent-mode loop (driven by `nextActivity`)
+- [x] Unit tests for the coroutine primitives and the runtime (mock event source)
+
 ### Phase 2.4: Syntax Highlighting
 
 **Status:** Partially Complete (lexer-based token highlighting)

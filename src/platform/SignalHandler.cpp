@@ -3,6 +3,8 @@
 
 #include <csignal>
 
+#include <platform/Wakeup.hpp>
+
 #if defined(_WIN32)
     #include <windows.h>
 #else
@@ -18,6 +20,7 @@ namespace endo::platform
 SignalCallback* SignalHandler::_callback = nullptr;
 int SignalHandler::_signalFd = -1;
 std::atomic<bool> SignalHandler::_sigintPending { false };
+std::atomic<Wakeup*> SignalHandler::_interruptWakeup { nullptr };
 
 #if !defined(__linux__) && !defined(_WIN32)
 std::atomic<bool> SignalHandler::_sigChldPending { false };
@@ -165,6 +168,7 @@ bool SignalHandler::processSignalFd()
                 break;
             case SIGINT:
                 _sigintPending.store(true);
+                signalInterruptWakeup();
                 processed = true;
                 break;
             default: break;
@@ -290,6 +294,7 @@ void SignalHandler::sigcontHandler(int /*sig*/)
 void SignalHandler::sigintHandler(int /*sig*/)
 {
     _sigintPending.store(true);
+    signalInterruptWakeup();
 }
 #endif
 
@@ -301,6 +306,18 @@ bool SignalHandler::hasPendingSigint() noexcept
 void SignalHandler::clearPendingSigint() noexcept
 {
     _sigintPending.store(false);
+}
+
+void SignalHandler::setInterruptWakeup(Wakeup* wakeup) noexcept
+{
+    _interruptWakeup.store(wakeup);
+}
+
+void SignalHandler::signalInterruptWakeup() noexcept
+{
+    // Loaded atomically: registration may race with a handler/console thread.
+    if (auto* const wakeup = _interruptWakeup.load())
+        wakeup->signal();
 }
 
 void SignalHandler::simulateSigint() noexcept
@@ -332,6 +349,7 @@ int __stdcall SignalHandler::consoleCtrlHandler(unsigned long ctrlType)
         // CTRL_C_EVENT from the OS; background jobs are shielded by being created
         // in a separate console process group.
         _sigintPending.store(true);
+        signalInterruptWakeup();
         return TRUE;
     }
     return FALSE;

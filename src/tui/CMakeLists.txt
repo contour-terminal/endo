@@ -36,6 +36,8 @@ add_library(tui
     completer/Completer.cpp
     completer/FuzzyMatch.cpp
     completer/SmartCaseMatch.cpp
+    platform/TerminalShared.cpp
+    runtime/TuiRuntime.cpp
 )
 
 # Platform-specific terminal implementations
@@ -44,12 +46,14 @@ if(WIN32)
         platform/TerminalInputWin32.cpp
         platform/TerminalOutputWin32.cpp
         platform/TerminalWin32.cpp
+        runtime/platform/TerminalEventSourceWin32.cpp
     )
 else()
     target_sources(tui PRIVATE
         platform/TerminalInput.cpp
         platform/TerminalOutput.cpp
         platform/Terminal.cpp
+        runtime/platform/TerminalEventSourcePosix.cpp
     )
 endif()
 
@@ -60,6 +64,7 @@ target_include_directories(tui PUBLIC
 target_link_libraries(tui PUBLIC
     unicode::unicode
     endo-platform
+    endo-coro
     stb_image
 )
 
@@ -98,6 +103,8 @@ if(ENDO_TESTING)
         VtParser_test.cpp
         ImageLoader_test.cpp
         SemanticBlockClient_test.cpp
+        runtime/TuiRuntime_test.cpp
+        runtime/Modal_test.cpp
     )
     target_link_libraries(test-tui tui Catch2::Catch2)
     add_test(NAME test-tui COMMAND test-tui)

@@ -334,6 +334,31 @@ auto QuestionComponent::processInput(InputEvent const& event) -> QuestionAction
     }
 }
 
+std::optional<QuestionResult> QuestionComponent::step(InputEvent const& event)
+{
+    _lastAction = processInput(event);
+    switch (_lastAction)
+    {
+        case QuestionAction::Confirmed:
+            return QuestionResult { .confirmed = true,
+                                    .selectedIndex = selectedIndex(),
+                                    .checkedIndices = checkedIndices(),
+                                    .answer = answer(),
+                                    .otherActive = isOtherActive() };
+        case QuestionAction::Cancelled: return QuestionResult {}; // confirmed defaults to false
+        case QuestionAction::Changed:
+        case QuestionAction::None: return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+bool QuestionComponent::stepChangedState() const noexcept
+{
+    // Redraw only when the last step changed visible state (Changed) — Confirmed
+    // ends the modal before a redraw is needed; None/Cancelled need no redraw.
+    return _lastAction == QuestionAction::Changed || _lastAction == QuestionAction::Confirmed;
+}
+
 auto QuestionComponent::answer() const -> std::string
 {
     if (isFreeTextOnly())
