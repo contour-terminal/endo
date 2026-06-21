@@ -30,8 +30,24 @@ namespace tui::runtime
 
 class NextInputEventAwaiter;
 class NextEventForAwaiter;
+class NextActivityAwaiter;
 class DelayAwaiter;
 class NextAgentReadyAwaiter;
+
+/// What a `nextActivity()` wait observed first.
+enum class ActivityKind : std::uint8_t
+{
+    Event,      ///< An input event is available.
+    AgentReady, ///< The agent-message wakeup fired; drain the agent channel.
+    Timeout,    ///< The wait elapsed with nothing to do (run idle ticks).
+};
+
+/// The result of a `nextActivity()` wait: the kind plus the event (if Event).
+struct Activity
+{
+    ActivityKind kind = ActivityKind::Timeout; ///< Which source resolved the wait.
+    std::optional<InputEvent> event;           ///< The input event, set iff kind == Event.
+};
 
 /// Single-threaded cooperative scheduler driving TUI coroutine flows.
 ///
@@ -86,6 +102,13 @@ class TuiRuntime
     ///         @p timeout elapses first (so the caller can run idle ticks).
     [[nodiscard]] NextEventForAwaiter nextEventFor(std::chrono::milliseconds timeout) noexcept;
 
+    /// Waits for input, an agent message, or a timeout — whichever happens first.
+    /// Used by the agent-mode loop, which must service both input and the agent
+    /// worker in one wait.
+    /// @param timeout How long to wait before reporting ActivityKind::Timeout.
+    /// @return An awaitable yielding the first activity observed.
+    [[nodiscard]] NextActivityAwaiter nextActivity(std::chrono::milliseconds timeout) noexcept;
+
     /// @param duration How long to suspend.
     /// @return An awaitable that resumes after @p duration elapses.
     [[nodiscard]] DelayAwaiter delay(std::chrono::milliseconds duration) noexcept;
@@ -104,12 +127,13 @@ class TuiRuntime
     /// which it is resumed with no event (a timeout).
     /// @param waiter The coroutine to resume.
     /// @param deadline Resume-by time for a timed wait, or std::nullopt to block.
-    void registerInputWaiter(
-        std::coroutine_handle<> waiter,
-        std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt) noexcept
+    void registerInputWaiter(std::coroutine_handle<> waiter,
+                             std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt,
+                             bool wantsAgent = false) noexcept
     {
         _inputWaiter = waiter;
         _inputDeadline = deadline;
+        _inputWaiterWantsAgent = wantsAgent;
     }
 
     /// @return True if the parked input waiter's deadline has elapsed.
@@ -172,10 +196,11 @@ class TuiRuntime
     std::deque<std::coroutine_handle<>> _ready; ///< Coroutines ready to resume now.
     std::vector<TimerEntry> _timers;            ///< Min-heap by deadline (soonest at front).
     std::deque<InputEvent> _inputBuffer;        ///< Decoded input awaiting a consumer.
-    std::coroutine_handle<> _inputWaiter;       ///< Flow parked in nextEvent()/nextEventFor(), if any.
+    std::coroutine_handle<> _inputWaiter;       ///< Flow parked in nextEvent()/nextEventFor()/nextActivity().
     std::optional<std::chrono::steady_clock::time_point> _inputDeadline; ///< Timeout for a timed input wait.
-    std::coroutine_handle<> _agentWaiter;       ///< Flow parked in nextAgentReady(), if any.
-    bool _agentPending = false;                 ///< Agent wakeup fired since last consumed.
+    bool _inputWaiterWantsAgent = false;  ///< Input waiter also wakes on an agent message (nextActivity).
+    std::coroutine_handle<> _agentWaiter; ///< Flow parked in nextAgentReady(), if any.
+    bool _agentPending = false;           ///< Agent wakeup fired since last consumed.
     std::vector<endo::coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
     endo::coro::StopSource _rootStop;           ///< Root cancellation source.
     std::function<void()> _onInterrupt;         ///< Interrupt policy; default cancels the root.
@@ -251,6 +276,56 @@ class NextEventForAwaiter
         if (_runtime.hasBufferedInput())
             return _runtime.popBufferedInput();
         return std::nullopt; // timed out
+    }
+
+  private:
+    TuiRuntime& _runtime;
+    std::chrono::steady_clock::time_point _deadline;
+    endo::coro::StopToken _token;
+};
+
+/// Awaitable that resumes on the first of: an input event, an agent message, or
+/// a timeout. Throws @c OperationCancelled if cancelled while parked.
+class NextActivityAwaiter
+{
+  public:
+    NextActivityAwaiter(TuiRuntime& runtime, std::chrono::steady_clock::time_point deadline) noexcept:
+        _runtime(runtime), _deadline(deadline)
+    {
+    }
+
+    [[nodiscard]] bool await_ready() const noexcept
+    {
+        return _runtime.hasBufferedInput() || _runtime.agentPending();
+    }
+
+    /// @param awaiting The coroutine performing the `co_await`.
+    /// @return False (resume now) if already cancelled, true to park (input + agent + deadline).
+    template <typename Promise>
+    [[nodiscard]] bool await_suspend(std::coroutine_handle<Promise> awaiting) noexcept
+    {
+        if constexpr (requires { awaiting.promise().stopToken(); })
+            _token = awaiting.promise().stopToken();
+        if (_token.stop_requested())
+            return false;
+        _runtime.registerInputWaiter(awaiting, _deadline, /*wantsAgent=*/true);
+        return true;
+    }
+
+    /// @return The first activity observed (event, agent-ready, or timeout).
+    /// @throws OperationCancelled if the flow was cancelled while parked.
+    [[nodiscard]] Activity await_resume()
+    {
+        if (_token.stop_requested())
+            throw endo::coro::OperationCancelled {};
+        if (_runtime.hasBufferedInput())
+            return Activity { .kind = ActivityKind::Event, .event = _runtime.popBufferedInput() };
+        if (_runtime.agentPending())
+        {
+            _runtime.consumeAgentPending();
+            return Activity { .kind = ActivityKind::AgentReady };
+        }
+        return Activity { .kind = ActivityKind::Timeout };
     }
 
   private:

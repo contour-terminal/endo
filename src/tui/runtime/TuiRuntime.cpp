@@ -113,7 +113,10 @@ void TuiRuntime::wakeWaiter(std::coroutine_handle<>& waiter)
     if (!waiter)
         return;
     if (&waiter == &_inputWaiter)
+    {
         _inputDeadline.reset();
+        _inputWaiterWantsAgent = false;
+    }
     auto const handle = std::exchange(waiter, {});
     if (!handle.done())
         _ready.push_back(handle);
@@ -155,16 +158,19 @@ void TuiRuntime::pumpOnce()
     for (auto& event: outcome.events)
         routeDecodedEvent(std::move(event));
 
-    // Wake the input waiter when an event is ready, or when its timed wait elapsed
-    // (nextEventFor resumes with std::nullopt so the caller can run idle ticks).
-    if (_inputWaiter && (hasBufferedInput() || inputDeadlinePassed()))
+    if (outcome.agentReady)
+        _agentPending = true;
+
+    // Wake the input waiter when an event is ready, its timed wait elapsed
+    // (nextEventFor/nextActivity resume so the caller can run idle ticks), or — for
+    // nextActivity, which also services the agent worker — when a message is pending.
+    if (_inputWaiter
+        && (hasBufferedInput() || inputDeadlinePassed() || (_inputWaiterWantsAgent && _agentPending)))
         wakeWaiter(_inputWaiter);
 
-    if (outcome.agentReady)
-    {
-        _agentPending = true;
+    // Wake a dedicated nextAgentReady() waiter while a message is pending.
+    if (_agentWaiter && _agentPending)
         wakeWaiter(_agentWaiter);
-    }
 
     fireExpiredTimers();
 
@@ -181,6 +187,11 @@ NextInputEventAwaiter TuiRuntime::nextEvent() noexcept
 NextEventForAwaiter TuiRuntime::nextEventFor(std::chrono::milliseconds timeout) noexcept
 {
     return NextEventForAwaiter { *this, std::chrono::steady_clock::now() + timeout };
+}
+
+NextActivityAwaiter TuiRuntime::nextActivity(std::chrono::milliseconds timeout) noexcept
+{
+    return NextActivityAwaiter { *this, std::chrono::steady_clock::now() + timeout };
 }
 
 DelayAwaiter TuiRuntime::delay(std::chrono::milliseconds duration) noexcept

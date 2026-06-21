@@ -48,6 +48,13 @@ Task<int> awaitEventForResult(TuiRuntime* runtime, int timeoutMs)
     co_return event.has_value() ? 1 : 0;
 }
 
+/// Returns the kind of the first activity nextActivity observes (as its enum value).
+Task<int> awaitActivityKind(TuiRuntime* runtime, int timeoutMs)
+{
+    auto const activity = co_await runtime->nextActivity(std::chrono::milliseconds { timeoutMs });
+    co_return static_cast<int>(activity.kind);
+}
+
 /// Returns true once the agent-ready wakeup is observed.
 Task<bool> awaitAgentReady(TuiRuntime* runtime)
 {
@@ -163,6 +170,34 @@ TEST_CASE("nextEventFor returns nullopt when its timeout elapses", "[TuiRuntime]
     auto const result = runtime.blockOn(awaitEventForResult(&runtime, 0));
 
     REQUIRE(result == 0);
+}
+
+TEST_CASE("nextActivity reports an input event, an agent message, or a timeout", "[TuiRuntime]")
+{
+    using tui::runtime::ActivityKind;
+
+    SECTION("input event")
+    {
+        auto source = MockEventSource {};
+        source.pushEvents({ InputEvent { keyOf(U'a') } });
+        auto runtime = TuiRuntime { source };
+        REQUIRE(runtime.blockOn(awaitActivityKind(&runtime, 500)) == static_cast<int>(ActivityKind::Event));
+    }
+    SECTION("agent message")
+    {
+        auto source = MockEventSource {};
+        source.pushAgentReady();
+        auto runtime = TuiRuntime { source };
+        REQUIRE(runtime.blockOn(awaitActivityKind(&runtime, 500))
+                == static_cast<int>(ActivityKind::AgentReady));
+    }
+    SECTION("timeout")
+    {
+        auto source = MockEventSource {};
+        source.pushTimeout();
+        auto runtime = TuiRuntime { source };
+        REQUIRE(runtime.blockOn(awaitActivityKind(&runtime, 0)) == static_cast<int>(ActivityKind::Timeout));
+    }
 }
 
 TEST_CASE("Interrupt cancels a flow parked on input", "[TuiRuntime]")
