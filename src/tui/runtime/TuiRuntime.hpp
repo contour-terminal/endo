@@ -14,6 +14,7 @@
 #include <tui/InputEvent.hpp>
 #include <tui/runtime/EventSource.hpp>
 
+#include <cassert>
 #include <chrono>
 #include <coroutine>
 #include <cstdint>
@@ -65,7 +66,13 @@ class TuiRuntime
     TuiRuntime& operator=(TuiRuntime const&) = delete;
     TuiRuntime(TuiRuntime&&) = delete;
     TuiRuntime& operator=(TuiRuntime&&) = delete;
-    ~TuiRuntime() = default;
+
+    /// Cancels and unwinds any still-parked spawned flows before their frames are
+    /// destroyed: requests stop, wakes every waiter, and drains the ready queue so
+    /// parked awaiters resume, observe cancellation (OperationCancelled), and run
+    /// their RAII cleanup. Members (including the spawned-flow storage) destruct
+    /// afterward. A no-op when nothing is parked (the common case).
+    ~TuiRuntime();
 
     /// Drives the pump until @p task completes, then returns its result.
     /// @param task The root flow to run (its frame is kept alive for the call).
@@ -127,10 +134,15 @@ class TuiRuntime
     /// which it is resumed with no event (a timeout).
     /// @param waiter The coroutine to resume.
     /// @param deadline Resume-by time for a timed wait, or std::nullopt to block.
+    /// @pre No input waiter is currently parked. The runtime drives one
+    ///      input-awaiting flow at a time; two flows parked on input concurrently
+    ///      would clobber this slot and strand the first. (Modal nesting suspends
+    ///      the parent, so its awaiter is not parked while the child awaits.)
     void registerInputWaiter(std::coroutine_handle<> waiter,
                              std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt,
                              bool wantsAgent = false) noexcept
     {
+        assert(!_inputWaiter && "registerInputWaiter: an input waiter is already parked");
         _inputWaiter = waiter;
         _inputDeadline = deadline;
         _inputWaiterWantsAgent = wantsAgent;
@@ -144,11 +156,22 @@ class TuiRuntime
 
     void scheduleTimer(std::chrono::steady_clock::time_point deadline, std::coroutine_handle<> waiter);
 
+    /// @return Whether an agent wakeup is pending. Only meaningful to an
+    ///         agent-interested waiter (nextActivity with wantsAgent, or
+    ///         nextAgentReady); a plain nextEvent waiter never consumes it.
     [[nodiscard]] bool agentPending() const noexcept { return _agentPending; }
 
+    /// Clears the pending agent wakeup. Called only by an agent-interested waiter.
     void consumeAgentPending() noexcept { _agentPending = false; }
 
-    void registerAgentWaiter(std::coroutine_handle<> waiter) noexcept { _agentWaiter = waiter; }
+    /// Parks @p waiter for the next agent wakeup.
+    /// @param waiter The coroutine to resume.
+    /// @pre No agent waiter is currently parked (single-waiter invariant).
+    void registerAgentWaiter(std::coroutine_handle<> waiter) noexcept
+    {
+        assert(!_agentWaiter && "registerAgentWaiter: an agent waiter is already parked");
+        _agentWaiter = waiter;
+    }
 
     /// @}
 
@@ -200,7 +223,7 @@ class TuiRuntime
     std::optional<std::chrono::steady_clock::time_point> _inputDeadline; ///< Timeout for a timed input wait.
     bool _inputWaiterWantsAgent = false;  ///< Input waiter also wakes on an agent message (nextActivity).
     std::coroutine_handle<> _agentWaiter; ///< Flow parked in nextAgentReady(), if any.
-    bool _agentPending = false;           ///< Agent wakeup fired since last consumed.
+    bool _agentPending = false; ///< Agent wakeup fired; consumed only by an agent-interested waiter.
     std::vector<endo::coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
     endo::coro::StopSource _rootStop;           ///< Root cancellation source.
     std::function<void()> _onInterrupt;         ///< Interrupt policy; default cancels the root.

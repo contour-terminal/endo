@@ -46,7 +46,12 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         return finalize(std::move(outcome));
     }
     if (waitResult == WAIT_FAILED)
+    {
+        // A failed wait must not busy-loop; report it as an interrupt so the
+        // runtime unwinds the root flow rather than re-entering wait() tightly.
+        outcome.interrupted = true;
         return finalize(std::move(outcome));
+    }
 
     auto const signalled = [](HANDLE handle) {
         return handle != nullptr && WaitForSingleObject(handle, 0) == WAIT_OBJECT_0;

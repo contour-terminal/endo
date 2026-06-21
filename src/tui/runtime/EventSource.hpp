@@ -20,6 +20,7 @@ struct WaitOutcome
     std::vector<InputEvent> events; ///< Input/resize/report events decoded this wait (may be empty).
     bool agentReady = false;        ///< The agent message wakeup fired; drain the agent channel.
     bool interrupted = false;       ///< An interrupt (SIGINT / Ctrl+C) was observed.
+    bool activity = false; ///< A non-input wake (focus change, finished job) occurred; resume idle waiters.
 };
 
 /// Abstraction over "block until something happens, with a timeout".

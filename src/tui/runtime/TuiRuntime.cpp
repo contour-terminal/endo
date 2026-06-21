@@ -2,33 +2,30 @@
 #include <tui/runtime/TuiRuntime.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <limits>
-#include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace tui::runtime
 {
 
-namespace
-{
-    /// @return True if @p event is an internal protocol report rather than an
-    /// application input event.
-    [[nodiscard]] bool isProtocolReport(InputEvent const& event) noexcept
-    {
-        return std::visit(
-            [](auto const& concrete) {
-                using T = std::decay_t<decltype(concrete)>;
-                return std::is_same_v<T, ColorSchemeReport> || std::is_same_v<T, CellSizeReport>
-                       || std::is_same_v<T, CursorPositionReport> || std::is_same_v<T, DecModeReport>
-                       || std::is_same_v<T, FocusEvent> || std::is_same_v<T, DcsResponse>;
-            },
-            event);
-    }
-} // namespace
-
 TuiRuntime::TuiRuntime(EventSource& source) noexcept: _source(source)
 {
+}
+
+TuiRuntime::~TuiRuntime()
+{
+    // Cancel every spawned flow and let parked awaiters unwind via RAII before
+    // their frames are destroyed. Order matters: request_stop() first so that when
+    // wakeAllWaiters() requeues parked handles, drainReadyQueue() resumes them into
+    // await_resume(), which sees stop_requested() and throws OperationCancelled —
+    // unwinding the frame's locals. The frames then complete (done() == true), so
+    // the spawned-flow Tasks destroy already-finished frames. Cancelled re-awaits
+    // resume synchronously (await_suspend returns false when stop is requested), so
+    // a single drain converges. No-op and effectively free when nothing is parked.
+    _rootStop.request_stop();
+    wakeAllWaiters();
+    drainReadyQueue();
 }
 
 void TuiRuntime::spawn(endo::coro::Task<void> task)
@@ -79,7 +76,9 @@ int TuiRuntime::computeTimeoutMs() const
         return 0;
 
     auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(*soonest - now).count();
-    return static_cast<int>(std::min<long long>(ms, std::numeric_limits<int>::max()));
+    // A positive remainder under 1ms truncates to 0; clamp to 1 so the next wait
+    // actually blocks instead of spinning on wait(0) until the deadline crosses now.
+    return static_cast<int>(std::clamp<long long>(ms, 1, std::numeric_limits<int>::max()));
 }
 
 void TuiRuntime::routeDecodedEvent(InputEvent&& event)
@@ -130,6 +129,14 @@ void TuiRuntime::wakeAllWaiters()
         if (entry.handle && !entry.handle.done())
             _ready.push_back(entry.handle);
     _timers.clear();
+
+    // Clear transient wait state so a reused runtime (the prompt runtime persists
+    // across REPL iterations) cannot carry a stale deadline or pending flag into the
+    // next blockOn. wakeWaiter already resets these when _inputWaiter was set; this
+    // also covers the case where the slot was already empty.
+    _inputDeadline.reset();
+    _inputWaiterWantsAgent = false;
+    _agentPending = false;
 }
 
 void TuiRuntime::pumpOnce()
@@ -159,13 +166,26 @@ void TuiRuntime::pumpOnce()
         routeDecodedEvent(std::move(event));
 
     if (outcome.agentReady)
+    {
+        // Agent wakeups are only meaningful to an agent-interested waiter
+        // (nextActivity with wantsAgent, or nextAgentReady). The invariant is that
+        // exactly one such consumer exists while the agent worker runs; a plain
+        // nextEvent waiter must never coexist with a live agent channel, else this
+        // flag would go unconsumed and a later await_ready() would resume on a stale
+        // wakeup. Assert documents and enforces that in debug builds.
+        assert((!_inputWaiter || _inputWaiterWantsAgent || _agentWaiter)
+               && "agentReady fired with no agent-interested waiter parked");
         _agentPending = true;
+    }
 
     // Wake the input waiter when an event is ready, its timed wait elapsed
-    // (nextEventFor/nextActivity resume so the caller can run idle ticks), or — for
-    // nextActivity, which also services the agent worker — when a message is pending.
+    // (nextEventFor/nextActivity resume so the caller can run idle ticks), a
+    // non-input activity occurred (focus change / finished job — resume so the
+    // caller can redraw or report), or — for nextActivity, which also services the
+    // agent worker — when a message is pending.
     if (_inputWaiter
-        && (hasBufferedInput() || inputDeadlinePassed() || (_inputWaiterWantsAgent && _agentPending)))
+        && (hasBufferedInput() || inputDeadlinePassed() || outcome.activity
+            || (_inputWaiterWantsAgent && _agentPending)))
         wakeWaiter(_inputWaiter);
 
     // Wake a dedicated nextAgentReady() waiter while a message is pending.

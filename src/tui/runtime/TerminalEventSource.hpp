@@ -50,12 +50,16 @@ class TerminalEventSource: public EventSource
   private:
     /// Consumes protocol-response events (via @c Terminal::consumeProtocolReports
     /// so the policy lives in one place) and folds a pending SIGINT into the
-    /// outcome, clearing the flag so the runtime observes each interrupt once.
+    /// outcome, clearing the flag so the runtime observes each interrupt once. A
+    /// dispatched focus change is reported as @c activity so an idle waiter wakes
+    /// and can redraw (e.g. the prompt's focus-dim chrome).
     /// @param outcome The outcome assembled from the wait so far.
-    /// @return @p outcome with reports stripped and @c interrupted set if pending.
+    /// @return @p outcome with reports stripped, @c interrupted set if a SIGINT
+    ///         is pending, and @c activity set if focus changed.
     [[nodiscard]] WaitOutcome finalize(WaitOutcome outcome)
     {
-        _terminal.consumeProtocolReports(outcome.events);
+        if (_terminal.consumeProtocolReports(outcome.events))
+            outcome.activity = true;
         if (endo::platform::SignalHandler::hasPendingSigint())
         {
             endo::platform::SignalHandler::clearPendingSigint();

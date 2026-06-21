@@ -4,6 +4,7 @@
 #if !defined(_WIN32)
 
     #include <array>
+    #include <cerrno>
     #include <cstddef>
     #include <iterator>
 
@@ -60,7 +61,15 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         return finalize(std::move(outcome));
     }
     if (result < 0)
+    {
+        // EINTR is benign: a signal interrupted the wait; re-poll on the next pump
+        // (level-triggered fds re-report any readiness). A persistent error (e.g.
+        // EBADF) must not busy-loop — report it as an interrupt so the runtime
+        // unwinds the root flow, matching the old REPL's `break` on poll failure.
+        if (errno != EINTR)
+            outcome.interrupted = true;
         return finalize(std::move(outcome));
+    }
 
     auto const ready = [&](int index) {
         return index >= 0 && (fds[static_cast<std::size_t>(index)].revents & POLLIN) != 0;
@@ -80,7 +89,10 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         _interruptWakeup->reset();
 
     if (ready(signalIndex))
-        endo::platform::SignalHandler::processSignalFd();
+        // A reaped job (SIGCHLD) is non-input activity: wake the idle waiter so
+        // the owner can report finished jobs promptly instead of at next keypress.
+        if (endo::platform::SignalHandler::processSignalFd())
+            outcome.activity = true;
 
     if ((fds[inputIndex].revents & POLLIN) != 0)
     {
