@@ -21,7 +21,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <future>
 #include <optional>
 #include <string>
@@ -49,6 +48,8 @@ namespace agent
     class AgentHistoryProvider;
     class FilePathCompleter;
     class SlashCommandRegistry;
+    class PermissionManager;
+    class ConversationHistoryStore;
 
     namespace mcp
     {
@@ -112,6 +113,8 @@ class AgentModeSession
     /// @param filePathProvider The @-file completion provider (not owned).
     /// @param contextFuture The pending background agent-context build.
     /// @param cwd The working directory the context was built for.
+    /// @param permissionManager The tool-permission manager.
+    /// @param historyStore The on-disk conversation history store.
     AgentModeSession(Shell& shell,
                      tui::TerminalOutput& out,
                      tui::Terminal& terminal,
@@ -126,7 +129,9 @@ class AgentModeSession
                      agent::AgentHistoryProvider* historyProvider,
                      agent::FilePathCompleter* filePathProvider,
                      std::future<AgentContextResult>& contextFuture,
-                     std::filesystem::path cwd) noexcept:
+                     std::filesystem::path cwd,
+                     agent::PermissionManager& permissionManager,
+                     agent::ConversationHistoryStore const& historyStore) noexcept:
         _shell(shell),
         _out(out),
         _terminal(terminal),
@@ -141,7 +146,9 @@ class AgentModeSession
         _historyProviderPtr(historyProvider),
         _filePathProviderPtr(filePathProvider),
         _contextFuture(contextFuture),
-        _cwd(std::move(cwd))
+        _cwd(std::move(cwd)),
+        _permissionManager(permissionManager),
+        _historyStore(historyStore)
     {
     }
 
@@ -174,10 +181,8 @@ class AgentModeSession
     /// completion, and shutdown — updating streaming state and the inline prompts.
     /// @param messages The messages drained from the worker's outbound queue.
     /// @param modelInfo The active model info (for cost / context-size display).
-    /// @param saveHistory Callback persisting conversation history after relevant events.
     void drainAgentMessages(std::vector<agent::FromAgentMessage>& messages,
-                            agent::ModelInfo const& modelInfo,
-                            std::function<void()> const& saveHistory);
+                            agent::ModelInfo const& modelInfo);
 
     /// Ensures the system prompt and project context are applied, blocking on the
     /// background context build the first time it is needed.
@@ -189,15 +194,24 @@ class AgentModeSession
     /// @param event The input event to handle (never a resize).
     /// @param needsRedraw Set to true if the caller should redraw after handling.
     /// @param slashRegistry The slash-command registry (for `/command` lookup).
-    /// @param switchToModel Callback switching the active provider/model.
-    /// @param saveHistory Callback persisting conversation history.
     /// @return LoopControl::Exit to leave agent mode, otherwise LoopControl::Continue.
-    [[nodiscard]] LoopControl handleInputEvent(
-        tui::InputEvent const& event,
-        bool& needsRedraw,
-        agent::SlashCommandRegistry const& slashRegistry,
-        std::function<bool(std::string_view, std::string_view)> const& switchToModel,
-        std::function<void()> const& saveHistory);
+    [[nodiscard]] LoopControl handleInputEvent(tui::InputEvent const& event,
+                                               bool& needsRedraw,
+                                               agent::SlashCommandRegistry const& slashRegistry);
+
+    /// Switches the active LLM provider/model, restarting the worker.
+    /// @param targetProvider The provider name (claude, openai, openai_compat, gemini).
+    /// @param targetModel The model name to activate.
+    /// @return True on success, false if the provider name is unknown.
+    bool switchToModel(std::string_view targetProvider, std::string_view targetModel);
+
+    /// Persists the conversation history to disk and the active named session.
+    void saveHistory();
+
+    /// Registers the agent-mode slash commands (`/reset`, `/clear`, `/sessions`,
+    /// `/model`, etc.) into @p registry.
+    /// @param registry The slash-command registry to populate.
+    void registerSlashCommands(agent::SlashCommandRegistry& registry);
 
     /// @name Owned per-run loop state (public: accessed by runAgentModeFlow during the migration).
     /// @{
@@ -217,21 +231,23 @@ class AgentModeSession
                                                                  /// @}
 
   private:
-    Shell& _shell;                                    ///< Owning shell (befriended for agent members).
-    tui::TerminalOutput& _out;                        ///< Terminal output.
-    tui::Terminal& _terminal;                         ///< Terminal.
-    tui::Screen& _screen;                             ///< TUI screen.
-    agent::AgentInputComponent& _inputComponent;      ///< Agent input line component.
-    agent::ToolStatusComponent& _toolStatusComponent; ///< Tool-status component.
-    agent::AgentWorker& _worker;                      ///< Agent worker message queues.
-    agent::LlmProvider*& _provider;                   ///< Active provider (ref: model switches visible).
-    agent::SessionManager const& _sessionManager;     ///< Persisted-session manager.
-    agent::ToolRegistry& _toolRegistry;               ///< Tool registry.
-    agent::mcp::ServerManager& _mcpServerManager;     ///< MCP server manager.
-    agent::AgentHistoryProvider* _historyProviderPtr; ///< Input history provider (not owned).
-    agent::FilePathCompleter* _filePathProviderPtr;   ///< @-file completion provider (not owned).
-    std::future<AgentContextResult>& _contextFuture;  ///< Pending background context build.
-    std::filesystem::path _cwd;                       ///< Working directory the context was built for.
+    Shell& _shell;                                        ///< Owning shell (befriended for agent members).
+    tui::TerminalOutput& _out;                            ///< Terminal output.
+    tui::Terminal& _terminal;                             ///< Terminal.
+    tui::Screen& _screen;                                 ///< TUI screen.
+    agent::AgentInputComponent& _inputComponent;          ///< Agent input line component.
+    agent::ToolStatusComponent& _toolStatusComponent;     ///< Tool-status component.
+    agent::AgentWorker& _worker;                          ///< Agent worker message queues.
+    agent::LlmProvider*& _provider;                       ///< Active provider (ref: model switches visible).
+    agent::SessionManager const& _sessionManager;         ///< Persisted-session manager.
+    agent::ToolRegistry& _toolRegistry;                   ///< Tool registry.
+    agent::mcp::ServerManager& _mcpServerManager;         ///< MCP server manager.
+    agent::AgentHistoryProvider* _historyProviderPtr;     ///< Input history provider (not owned).
+    agent::FilePathCompleter* _filePathProviderPtr;       ///< @-file completion provider (not owned).
+    std::future<AgentContextResult>& _contextFuture;      ///< Pending background context build.
+    std::filesystem::path _cwd;                           ///< Working directory the context was built for.
+    agent::PermissionManager& _permissionManager;         ///< Tool-permission manager.
+    agent::ConversationHistoryStore const& _historyStore; ///< On-disk conversation history store.
 };
 
 } // namespace endo

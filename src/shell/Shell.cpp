@@ -2950,31 +2950,6 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     }
     auto* historyProviderPtr = historyProvider.get();
 
-    auto const saveHistory = [&] {
-        (void) historyStore.save( // NOLINT(bugprone-unused-return-value)
-            _agentSession->history().messages());
-        // Also save to named session if active.
-        if (!_activeSessionName.empty())
-        {
-            auto const now = std::chrono::system_clock::now();
-            auto const metadata = agent::SessionMetadata {
-                .name = _activeSessionName,
-                .createdAt =
-                    _sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : _sessionCreatedAt,
-                .updatedAt = now,
-                .provider = _agentProviderFactory->activeProviderName(),
-                .model = provider->modelInfo().modelName,
-                .turnCount = _agentSession->turnCount(),
-                .tokenUsage = _agentSession->sessionUsage(),
-            };
-            (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
-                _activeSessionName,
-                _agentSession->history().messages(),
-                metadata);
-            sessionManager.setLastActiveSession(_activeSessionName);
-        }
-    };
-
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
 
@@ -3200,513 +3175,58 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         initialThinkingMode = agentConfig.gemini.thinkingMode;
     inputComponent.setThinkingMode(initialThinkingMode);
 
+    // The @-file completion provider's raw pointer is needed by the session (its
+    // file paths are populated once the background context build completes); the
+    // unique_ptr is moved into the input component further below.
+    auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
+    auto* filePathProviderPtr = filePathProvider.get();
+
+    // Launch background context loading (system prompt, project files, git info).
+    auto const cwd = std::filesystem::current_path();
+    auto cachedCtx = (_cachedProjectContextCwd == cwd) ? std::move(_cachedProjectContext) : std::nullopt;
+    _cachedProjectContext.reset();
+
+    // Capture cached git info from the prompt's GitModule to avoid redundant subprocess calls.
+    auto cachedGit = std::optional<GitInfo> {};
+    if (auto const* gitMod = prompt.gitModule())
+        cachedGit = gitMod->cachedInfo();
+
+    auto contextFuture = std::async(
+        std::launch::async,
+        [&cfg = agentConfig, cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
+            return buildAgentContext(cfg, cwd, std::move(ctx), std::move(git));
+        });
+
+    // The agent-mode loop's mutable state and helper behavior live in this session
+    // object; the locals/lambdas below alias or delegate to it during the migration.
+    auto session = AgentModeSession(*this,
+                                    out,
+                                    terminal,
+                                    screen,
+                                    inputComponent,
+                                    toolStatusComponent,
+                                    worker,
+                                    provider,
+                                    sessionManager,
+                                    toolRegistry,
+                                    mcpServerManager,
+                                    historyProviderPtr,
+                                    filePathProviderPtr,
+                                    contextFuture,
+                                    cwd,
+                                    permissionManager,
+                                    historyStore);
+
     // Set up slash command registry
     auto slashRegistry = agent::SlashCommandRegistry {};
     agent::registerBuiltinSlashCommands(slashRegistry);
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "reset", "Clear conversation history", [&](std::string_view) -> agent::SlashCommandResult {
-            (*_agentSession).reset();
-            permissionManager.resetApprovals();
-            (void) historyStore.remove(); // NOLINT(bugprone-unused-return-value)
-            historyProviderPtr->setEntries({});
-            _activeSessionName.clear();
-            _sessionCreatedAt = {};
-            sessionManager.clearLastActiveSession();
-            return agent::DirectOutput { .text = "Conversation history cleared.\n" };
-        }));
-
-    // --- Session management slash commands ---
-
-    // /clear and /new: auto-save current session, then start fresh.
-    auto clearHandler = std::function<agent::SlashCommandResult(std::string_view)>(
-        [&](std::string_view) -> agent::SlashCommandResult {
-            auto savedName = std::string {};
-            // Save current conversation if it has content.
-            if (_agentSession->turnCount() > 0)
-            {
-                if (_activeSessionName.empty())
-                {
-                    // Auto-generate a name from the first user message.
-                    for (auto const& msg: _agentSession->history().messages())
-                    {
-                        if (msg.role == agent::Role::User)
-                        {
-                            savedName = sessionManager.generateSessionName(msg.textContent());
-                            break;
-                        }
-                    }
-                    if (savedName.empty())
-                        savedName = sessionManager.generateSessionName("untitled");
-                }
-                else
-                {
-                    savedName = _activeSessionName;
-                }
-
-                auto const now = std::chrono::system_clock::now();
-                auto const metadata = agent::SessionMetadata {
-                    .name = savedName,
-                    .createdAt = _sessionCreatedAt == std::chrono::system_clock::time_point {}
-                                     ? now
-                                     : _sessionCreatedAt,
-                    .updatedAt = now,
-                    .provider = _agentProviderFactory->activeProviderName(),
-                    .model = provider->modelInfo().modelName,
-                    .turnCount = _agentSession->turnCount(),
-                    .tokenUsage = _agentSession->sessionUsage(),
-                };
-                (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
-                    savedName,
-                    _agentSession->history().messages(),
-                    metadata);
-            }
-
-            // Reset everything for a fresh conversation.
-            (*_agentSession).reset();
-            permissionManager.resetApprovals();
-            (void) historyStore.remove(); // NOLINT(bugprone-unused-return-value)
-            historyProviderPtr->setEntries({});
-            _activeSessionName.clear();
-            _sessionCreatedAt = {};
-            sessionManager.clearLastActiveSession();
-
-            if (!savedName.empty())
-                return agent::DirectOutput { .text = "Session saved as '" + savedName
-                                                     + "'. Starting new conversation.\n" };
-            return agent::DirectOutput { .text = "Starting new conversation.\n" };
-        });
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "clear", "Auto-save and start new conversation", clearHandler));
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "new", "Auto-save and start new conversation", clearHandler));
-
-    // /save (alias: /save-session): Save current session with a name.
-    auto saveHandler = std::function<agent::SlashCommandResult(std::string_view)>(
-        [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            // Trim whitespace.
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
-
-            // Auto-generate name from first user message if none given.
-            if (name.empty())
-            {
-                for (auto const& msg: _agentSession->history().messages())
-                {
-                    if (msg.role == agent::Role::User)
-                    {
-                        name = sessionManager.generateSessionName(msg.textContent());
-                        break;
-                    }
-                }
-                if (name.empty())
-                    name = sessionManager.generateSessionName("untitled");
-            }
-
-            auto const now = std::chrono::system_clock::now();
-            auto const metadata = agent::SessionMetadata {
-                .name = name,
-                .createdAt =
-                    _sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : _sessionCreatedAt,
-                .updatedAt = now,
-                .provider = _agentProviderFactory->activeProviderName(),
-                .model = provider->modelInfo().modelName,
-                .turnCount = _agentSession->turnCount(),
-                .tokenUsage = _agentSession->sessionUsage(),
-            };
-
-            auto result = sessionManager.saveSession(name, _agentSession->history().messages(), metadata);
-            if (!result.has_value())
-                return agent::DirectOutput { .text =
-                                                 "Failed to save session: " + result.error().message + "\n" };
-
-            _activeSessionName = name;
-            if (_sessionCreatedAt == std::chrono::system_clock::time_point {})
-                _sessionCreatedAt = now;
-            sessionManager.setLastActiveSession(name);
-            return agent::DirectOutput { .text = "Session saved as '" + name + "'.\n" };
-        });
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "save", "Save current session with a name", saveHandler));
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "save-session", "Save current session with a name", saveHandler));
-
-    // /load (alias: /load-session): Load a saved session.
-    auto loadHandler = std::function<agent::SlashCommandResult(std::string_view)>(
-        [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
-
-            if (name.empty())
-            {
-                // No name given — show interactive session picker.
-                auto sessionsResult = sessionManager.listSessions();
-                if (!sessionsResult.has_value() || sessionsResult->empty())
-                    return agent::DirectOutput { .text = "No saved sessions found.\n" };
-
-                auto options = std::vector<std::string> {};
-                auto names = std::vector<std::string> {};
-                for (auto const& meta: *sessionsResult)
-                {
-                    auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
-                    auto label =
-                        std::format("{} ({} turns, ~{}k tokens)", meta.name, meta.turnCount, total / 1000);
-                    options.push_back(std::move(label));
-                    names.push_back(meta.name);
-                }
-                return agent::SessionPickerRequest {
-                    .questionText = "Select a session to load:",
-                    .options = std::move(options),
-                    .sessionNames = std::move(names),
-                };
-            }
-
-            // Load by name.
-            auto loaded = sessionManager.loadSession(name);
-            if (!loaded.has_value())
-                return agent::DirectOutput { .text =
-                                                 "Failed to load session: " + loaded.error().message + "\n" };
-
-            auto& [meta, messages] = *loaded;
-            (*_agentSession).reset();
-            historyProviderPtr->setEntries({});
-            for (auto const& msg: messages)
-            {
-                if (msg.role == agent::Role::User)
-                {
-                    auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
-                    if (!text.empty())
-                        historyProviderPtr->addEntry(text);
-                }
-            }
-            _agentSession->loadPersistedMessages(std::move(messages));
-            _activeSessionName = name;
-            _sessionCreatedAt = meta.createdAt;
-            sessionManager.setLastActiveSession(name);
-            return agent::DirectOutput { .text = "Session '" + name + "' loaded ("
-                                                 + std::to_string(meta.turnCount) + " turns).\n" };
-        });
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("load", "Load a saved session", loadHandler));
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("load-session", "Load a saved session", loadHandler));
-
-    // /delete (alias: /delete-session): Delete a saved session.
-    auto deleteHandler = std::function<agent::SlashCommandResult(std::string_view)>(
-        [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
-
-            if (name.empty())
-                return agent::DirectOutput { .text = "Usage: /delete <name>\n" };
-
-            if (!sessionManager.sessionExists(name))
-                return agent::DirectOutput { .text = "Session '" + name + "' not found.\n" };
-
-            auto result = sessionManager.removeSession(name);
-            if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to delete session: " + result.error().message
-                                                     + "\n" };
-
-            if (_activeSessionName == name)
-            {
-                _activeSessionName.clear();
-                _sessionCreatedAt = {};
-                sessionManager.clearLastActiveSession();
-            }
-            return agent::DirectOutput { .text = "Session '" + name + "' deleted.\n" };
-        });
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("delete", "Delete a saved session", deleteHandler));
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "delete-session", "Delete a saved session", deleteHandler));
-
-    // /rename: Rename the current session.
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "rename", "Rename the current session", [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto newName = std::string(arguments);
-            while (!newName.empty() && newName.front() == ' ')
-                newName.erase(newName.begin());
-            while (!newName.empty() && newName.back() == ' ')
-                newName.pop_back();
-
-            if (newName.empty())
-                return agent::DirectOutput { .text = "Usage: /rename <new-name>\n" };
-
-            if (sessionManager.sessionExists(newName))
-                return agent::DirectOutput { .text = "Session '" + newName + "' already exists.\n" };
-
-            if (_activeSessionName.empty())
-            {
-                // No session saved yet — just set the name for the next save.
-                _activeSessionName = newName;
-                return agent::DirectOutput { .text = "Session will be saved as '" + newName + "'.\n" };
-            }
-
-            auto result = sessionManager.renameSession(_activeSessionName, newName);
-            if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to rename session: " + result.error().message
-                                                     + "\n" };
-
-            _activeSessionName = newName;
-            return agent::DirectOutput { .text = "Session renamed to '" + newName + "'.\n" };
-        }));
-
-    // /list (alias: /sessions): List saved sessions.
-    auto listHandler = std::function<agent::SlashCommandResult(std::string_view)>(
-        [&](std::string_view) -> agent::SlashCommandResult {
-            auto sessionsResult = sessionManager.listSessions();
-            if (!sessionsResult.has_value())
-                return agent::DirectOutput { .text = "Failed to list sessions: "
-                                                     + sessionsResult.error().message + "\n" };
-
-            if (sessionsResult->empty())
-                return agent::DirectOutput { .text = "No saved sessions.\n" };
-
-            auto md = std::string { "| Name | Turns | Tokens | Updated | Active |\n"
-                                    "|:-----|------:|-------:|:--------|:-------|\n" };
-            for (auto const& meta: *sessionsResult)
-            {
-                auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
-                const auto* const active = (meta.name == _activeSessionName) ? "\xe2\x97\x8f" : "";
-                auto const tt = std::chrono::system_clock::to_time_t(meta.updatedAt);
-                auto tm = std::tm {};
-    #if defined(_WIN32)
-                localtime_s(&tm, &tt);
-    #else
-                localtime_r(&tt, &tm);
-    #endif
-                auto timeBuf = std::array<char, 32> {};
-                std::strftime(timeBuf.data(), timeBuf.size(), "%Y-%m-%d %H:%M", &tm);
-                md += std::format("| {} | {} | ~{}k | {} | {} |\n",
-                                  meta.name,
-                                  meta.turnCount,
-                                  total / 1000,
-                                  timeBuf.data(),
-                                  active);
-            }
-            return agent::MarkdownOutput { .markdown = std::move(md) };
-        });
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("list", "List saved sessions", listHandler));
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("sessions", "List saved sessions", listHandler));
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "tools",
-        "List all active agent tools",
-        [&toolRegistry](std::string_view) -> agent::SlashCommandResult {
-            auto defs = toolRegistry.definitions();
-            std::ranges::sort(defs, {}, &agent::ToolDefinition::name);
-            auto md = std::string { "| Tool | Description |\n|:-----|:------------|\n" };
-            for (auto const& def: defs)
-                md += std::format("| {} | {} |\n", def.name, def.description);
-            md += std::format("\n{} tools registered.\n", toolRegistry.size());
-            return agent::MarkdownOutput { .markdown = std::move(md) };
-        }));
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "status",
-        "Show session status (tokens, cost, provider)",
-        [&](std::string_view) -> agent::SlashCommandResult {
-            auto const& usage = _agentSession->sessionUsage();
-            auto const turns = _agentSession->turnCount();
-            auto const messageCount = _agentSession->history().size();
-            auto const contextTokens = _agentSession->history().estimatedTokenCount();
-            auto const& pName = _agentProviderFactory->activeProviderName();
-            auto const mInfo = provider->modelInfo();
-            auto const cost = agent::estimateCost(usage, pName, mInfo.modelName);
-            auto const contextPct =
-                mInfo.contextSize > 0 ? static_cast<int>((contextTokens * 100) / mInfo.contextSize) : 0;
-
-            auto md = std::string { "| Metric | Value |\n|:-------|:------|\n" };
-            md += std::format("| Provider | {} |\n", pName);
-            md += std::format("| Model | {} |\n", mInfo.modelName);
-            md += std::format("| Turns | {} |\n", turns);
-            md += std::format("| Messages | {} |\n", messageCount);
-            md += std::format("| Input tokens | {} |\n", agent::formatTokenCount(usage.inputTokens));
-            md += std::format("| Output tokens | {} |\n", agent::formatTokenCount(usage.outputTokens));
-            if (usage.cacheReadTokens > 0)
-                md += std::format("| Cache read | {} |\n", agent::formatTokenCount(usage.cacheReadTokens));
-            if (usage.cacheCreationTokens > 0)
-                md +=
-                    std::format("| Cache write | {} |\n", agent::formatTokenCount(usage.cacheCreationTokens));
-            md += std::format("| Context usage | ~{} / {} ({}%) |\n",
-                              agent::formatTokenCount(static_cast<int64_t>(contextTokens)),
-                              agent::formatTokenCount(static_cast<int64_t>(mInfo.contextSize)),
-                              contextPct);
-            if (cost > 0.0)
-                md += std::format("| Est. cost | ${:.4f} |\n", cost);
-            return agent::MarkdownOutput { .markdown = std::move(md) };
-        }));
-
-    // Helper lambda to switch the active model and provider, rebuilding the factory.
-    // Used by CycleModel, CycleThinkingMode, and the /model slash command.
-    auto switchToModel = [&](std::string_view targetProvider, std::string_view targetModel) -> bool {
-        // Update the config for the target provider.
-        auto const pName = std::string(targetProvider);
-        std::string* modelPtr = nullptr;
-        if (pName == "claude")
-            modelPtr = &agentConfig.claude.model;
-        else if (pName == "openai")
-            modelPtr = &agentConfig.openai.model;
-        else if (pName == "openai_compat")
-            modelPtr = &agentConfig.openaiCompat.model;
-        else if (pName == "gemini")
-            modelPtr = &agentConfig.gemini.model;
-        else
-            return false;
-
-        if (modelPtr)
-            *modelPtr = std::string(targetModel);
-        agentConfig.activeProvider = pName;
-
-        // Stop worker before replacing factory to avoid use-after-free:
-        // the worker thread holds a reference to the provider via AgentSession.
-        worker.stop();
-        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
-        if (auto* newProvider = _agentProviderFactory->activeProvider())
-        {
-            _agentSession->setProvider(*newProvider);
-            provider = newProvider;
-        }
-        worker.start();
-
-        inputComponent.setProviderName(pName);
-        inputComponent.setModelName(std::string(targetModel));
-        return true;
-    };
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "model",
-        "Switch model (/model <name> or /model to list)",
-        [&](std::string_view args) -> agent::SlashCommandResult {
-            auto const trimmedArgs = [&]() -> std::string_view {
-                auto sv = args;
-                while (!sv.empty() && sv.front() == ' ')
-                    sv.remove_prefix(1);
-                while (!sv.empty() && sv.back() == ' ')
-                    sv.remove_suffix(1);
-                return sv;
-            }();
-
-            if (trimmedArgs.empty())
-            {
-                // List all models grouped by provider, marking the active one.
-                auto const& activePName = _agentProviderFactory->activeProviderName();
-                auto const activeModelInfo = provider->modelInfo();
-
-                auto text = std::string {};
-                for (auto const prov: agent::KnownProviders)
-                {
-                    auto const models = agent::modelsForProvider(prov);
-                    if (models.empty())
-                        continue;
-                    text += std::format("{}:\n", prov);
-                    for (auto const model: models)
-                    {
-                        auto const isActive = (prov == activePName && model == activeModelInfo.modelName);
-                        text += std::format("  {}{}\n", model, isActive ? "  [active]" : "");
-                    }
-                }
-                text += "\nType /model <name> to switch.\n";
-                return agent::DirectOutput { .text = std::move(text) };
-            }
-
-            // Find the model by name.
-            auto const& activePName = _agentProviderFactory->activeProviderName();
-            auto const match = agent::findModelByName(trimmedArgs, activePName);
-            if (!match)
-            {
-                auto text = std::format("No model matching '{}' found.\n\nAvailable models:\n", trimmedArgs);
-                for (auto const& m: agent::allKnownModels())
-                    text += std::format("  {} ({})\n", m.modelName, m.providerName);
-                return agent::DirectOutput { .text = std::move(text) };
-            }
-
-            // Check if the target provider is authenticated.
-            auto const authenticated = _agentProviderFactory->authenticatedProviders();
-            auto const isAuth =
-                std::ranges::find(authenticated, std::string(match->providerName)) != authenticated.end();
-            if (!isAuth)
-            {
-                return agent::DirectOutput {
-                    .text = std::format("Provider '{}' is not authenticated.\n"
-                                        "Run `endo agent login` to configure it.\n",
-                                        match->providerName),
-                };
-            }
-
-            // Capture old model info, switch, capture new.
-            auto const oldInfo = provider->modelInfo();
-            if (!switchToModel(match->providerName, match->modelName))
-                return agent::DirectOutput { .text = "Failed to switch model.\n" };
-            auto const newInfo = provider->modelInfo();
-
-            return agent::MarkdownOutput { .markdown = agent::formatCapabilityDiff(oldInfo, newInfo) };
-        }));
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "paste-image",
-        "Paste image from system clipboard",
-        [&](std::string_view /*args*/) -> agent::SlashCommandResult {
-            if (inputComponent.imageCount() >= 5)
-                return agent::DirectOutput { .text = "Maximum of 5 images already attached.\n" };
-
-            auto clipboardImage = tui::readClipboardImage();
-            if (!clipboardImage)
-                return agent::DirectOutput {
-                    .text = "No image found in clipboard. Ensure an image is copied and the clipboard tool "
-                            "(wl-paste or xclip) is installed.\n"
-                };
-
-            auto const mediaType = clipboardImage->mediaType;
-            auto const sizeKB = clipboardImage->data.size() / 1024;
-            inputComponent.attachImage(std::move(clipboardImage->data), std::string(mediaType));
-            return agent::DirectOutput {
-                .text = std::format("Attached image from clipboard ({}, {} KB).\n", mediaType, sizeKB),
-            };
-        }));
-
-    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "remove-image", "Remove attached images", [&](std::string_view args) -> agent::SlashCommandResult {
-            if (inputComponent.imageCount() == 0)
-                return agent::DirectOutput { .text = "No images attached.\n" };
-
-            if (args.empty() || args == "all")
-            {
-                auto const count = inputComponent.imageCount();
-                inputComponent.clearImages();
-                return agent::DirectOutput {
-                    .text = std::format("Removed {} attached image{}.\n", count, count == 1 ? "" : "s"),
-                };
-            }
-
-            auto index = size_t { 0 };
-            auto const [ptr, ec] = std::from_chars(args.data(), args.data() + args.size(), index);
-            if (ec != std::errc {} || index >= inputComponent.imageCount())
-                return agent::DirectOutput {
-                    .text = std::format("Invalid image index. Use 0-{} or 'all'.\n",
-                                        inputComponent.imageCount() - 1),
-                };
-            inputComponent.removeImage(index);
-            return agent::DirectOutput { .text = std::format("Removed image {}.\n", index) };
-        }));
+    session.registerSlashCommands(slashRegistry);
 
     auto slashCompleter = std::make_unique<agent::SlashCommandCompleter>(slashRegistry);
     slashCompleter->setSessionNameProvider([&sessionManager] { return sessionManager.sessionNames(); });
     inputComponent.addCompletionProvider(std::move(slashCompleter));
-    auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
-    auto* filePathProviderPtr = filePathProvider.get();
+    // filePathProvider / filePathProviderPtr were declared earlier (the session
+    // needs the raw pointer); move the owning unique_ptr into the input component.
     inputComponent.addCompletionProvider(std::move(filePathProvider));
     inputComponent.addCompletionProvider(std::move(historyProvider));
 
@@ -3770,40 +3290,6 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     screen.invalidate();
     screen.draw();
     out.flush();
-
-    // Launch background context loading.
-    auto const cwd = std::filesystem::current_path();
-    auto cachedCtx = (_cachedProjectContextCwd == cwd) ? std::move(_cachedProjectContext) : std::nullopt;
-    _cachedProjectContext.reset();
-
-    // Capture cached git info from the prompt's GitModule to avoid redundant subprocess calls.
-    auto cachedGit = std::optional<GitInfo> {};
-    if (auto const* gitMod = prompt.gitModule())
-        cachedGit = gitMod->cachedInfo();
-
-    auto contextFuture = std::async(
-        std::launch::async,
-        [&cfg = agentConfig, cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
-            return buildAgentContext(cfg, cwd, std::move(ctx), std::move(git));
-        });
-
-    // The agent-mode loop's mutable state and helper behavior live in this session
-    // object; the locals/lambdas below alias or delegate to it during the migration.
-    auto session = AgentModeSession(*this,
-                                    out,
-                                    terminal,
-                                    screen,
-                                    inputComponent,
-                                    toolStatusComponent,
-                                    worker,
-                                    provider,
-                                    sessionManager,
-                                    toolRegistry,
-                                    mcpServerManager,
-                                    historyProviderPtr,
-                                    filePathProviderPtr,
-                                    contextFuture,
-                                    cwd);
 
     // Track the active renderer for tool-use line re-rendering of spinner.
     auto& activeRenderer = session.activeRenderer;
@@ -3889,7 +3375,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         agentOutbound.drainTo(agentMessages);
 
         // Process the drained batch (streaming, tool status, prompts, completion).
-        session.drainAgentMessages(agentMessages, modelInfo, saveHistory);
+        session.drainAgentMessages(agentMessages, modelInfo);
 
         // 2. Determine poll timeout.
         auto const prePollFocused = terminal.isFocused();
@@ -4028,8 +3514,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
 
             // Dispatch the event only when it is not a resize.
             if (!isResize)
-                if (session.handleInputEvent(event, needsRedraw, slashRegistry, switchToModel, saveHistory)
-                    == LoopControl::Exit)
+                if (session.handleInputEvent(event, needsRedraw, slashRegistry) == LoopControl::Exit)
                     co_return;
         }
 
