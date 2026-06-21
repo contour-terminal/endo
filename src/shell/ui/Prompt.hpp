@@ -63,15 +63,6 @@ class Prompt
     /// @param entry The command to add.
     void addHistory(std::string entry);
 
-    /// @brief Returns the input file descriptor for poll() integration.
-    [[nodiscard]] static int inputFd() noexcept;
-
-    /// @brief Processes pending input events without blocking.
-    ///
-    /// Call this when poll() indicates input is available.
-    /// @return The completed input line if user submitted, nullopt otherwise.
-    [[nodiscard]] std::optional<std::string> processInput();
-
     /// @brief Handles terminal resize events.
     void onResize();
 
