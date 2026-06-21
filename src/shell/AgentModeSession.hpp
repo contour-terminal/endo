@@ -13,13 +13,19 @@
 /// It therefore holds references/pointers (not ownership) to those collaborators;
 /// the function remains their owner.
 
+#include <shell/AgentContext.hpp>
+
+#include <tui/InputEvent.hpp>
 #include <tui/QuestionComponent.hpp>
 #include <tui/Terminal.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
+#include <future>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <agent/Plan.hpp>
@@ -33,6 +39,29 @@ namespace endo
 {
 
 class Shell;
+
+namespace agent
+{
+    class AgentWorker;
+    class LlmProvider;
+    class SessionManager;
+    class ToolRegistry;
+    class AgentHistoryProvider;
+    class FilePathCompleter;
+    class SlashCommandRegistry;
+
+    namespace mcp
+    {
+        class ServerManager;
+    }
+} // namespace agent
+
+/// Result of handling one input event: whether the agent-mode loop continues.
+enum class LoopControl : std::uint8_t
+{
+    Continue, ///< Keep running the loop.
+    Exit,     ///< Leave agent mode (the user aborted).
+};
 
 /// An inline TUI prompt (question / permission / picker / approval) rendered
 /// below the agent input line. Self-contained: its methods take the terminal
@@ -74,18 +103,45 @@ class AgentModeSession
     /// @param screen The TUI screen.
     /// @param inputComponent The agent input line component.
     /// @param toolStatusComponent The tool-status component.
+    /// @param worker The agent worker (inbound/outbound message queues).
+    /// @param provider The active LLM provider (reference, so model switches are visible).
+    /// @param sessionManager The persisted-session manager.
+    /// @param toolRegistry The tool registry.
+    /// @param mcpServerManager The MCP server manager.
+    /// @param historyProvider The input history provider (not owned).
+    /// @param filePathProvider The @-file completion provider (not owned).
+    /// @param contextFuture The pending background agent-context build.
+    /// @param cwd The working directory the context was built for.
     AgentModeSession(Shell& shell,
                      tui::TerminalOutput& out,
                      tui::Terminal& terminal,
                      tui::Screen& screen,
                      agent::AgentInputComponent& inputComponent,
-                     agent::ToolStatusComponent& toolStatusComponent) noexcept:
+                     agent::ToolStatusComponent& toolStatusComponent,
+                     agent::AgentWorker& worker,
+                     agent::LlmProvider*& provider,
+                     agent::SessionManager const& sessionManager,
+                     agent::ToolRegistry& toolRegistry,
+                     agent::mcp::ServerManager& mcpServerManager,
+                     agent::AgentHistoryProvider* historyProvider,
+                     agent::FilePathCompleter* filePathProvider,
+                     std::future<AgentContextResult>& contextFuture,
+                     std::filesystem::path cwd) noexcept:
         _shell(shell),
         _out(out),
         _terminal(terminal),
         _screen(screen),
         _inputComponent(inputComponent),
-        _toolStatusComponent(toolStatusComponent)
+        _toolStatusComponent(toolStatusComponent),
+        _worker(worker),
+        _provider(provider),
+        _sessionManager(sessionManager),
+        _toolRegistry(toolRegistry),
+        _mcpServerManager(mcpServerManager),
+        _historyProviderPtr(historyProvider),
+        _filePathProviderPtr(filePathProvider),
+        _contextFuture(contextFuture),
+        _cwd(std::move(cwd))
     {
     }
 
@@ -123,6 +179,26 @@ class AgentModeSession
                             agent::ModelInfo const& modelInfo,
                             std::function<void()> const& saveHistory);
 
+    /// Ensures the system prompt and project context are applied, blocking on the
+    /// background context build the first time it is needed.
+    void ensureSystemPromptReady();
+
+    /// Processes one terminal input event (section 4 of the loop): routes to the
+    /// active inline prompt, or to the agent input component (submit, abort, mode
+    /// cycling, slash commands, etc.).
+    /// @param event The input event to handle (never a resize).
+    /// @param needsRedraw Set to true if the caller should redraw after handling.
+    /// @param slashRegistry The slash-command registry (for `/command` lookup).
+    /// @param switchToModel Callback switching the active provider/model.
+    /// @param saveHistory Callback persisting conversation history.
+    /// @return LoopControl::Exit to leave agent mode, otherwise LoopControl::Continue.
+    [[nodiscard]] LoopControl handleInputEvent(
+        tui::InputEvent const& event,
+        bool& needsRedraw,
+        agent::SlashCommandRegistry const& slashRegistry,
+        std::function<bool(std::string_view, std::string_view)> const& switchToModel,
+        std::function<void()> const& saveHistory);
+
     /// @name Owned per-run loop state (public: accessed by runAgentModeFlow during the migration).
     /// @{
     bool streaming = false;              ///< A response is currently streaming.
@@ -147,6 +223,15 @@ class AgentModeSession
     tui::Screen& _screen;                             ///< TUI screen.
     agent::AgentInputComponent& _inputComponent;      ///< Agent input line component.
     agent::ToolStatusComponent& _toolStatusComponent; ///< Tool-status component.
+    agent::AgentWorker& _worker;                      ///< Agent worker message queues.
+    agent::LlmProvider*& _provider;                   ///< Active provider (ref: model switches visible).
+    agent::SessionManager const& _sessionManager;     ///< Persisted-session manager.
+    agent::ToolRegistry& _toolRegistry;               ///< Tool registry.
+    agent::mcp::ServerManager& _mcpServerManager;     ///< MCP server manager.
+    agent::AgentHistoryProvider* _historyProviderPtr; ///< Input history provider (not owned).
+    agent::FilePathCompleter* _filePathProviderPtr;   ///< @-file completion provider (not owned).
+    std::future<AgentContextResult>& _contextFuture;  ///< Pending background context build.
+    std::filesystem::path _cwd;                       ///< Working directory the context was built for.
 };
 
 } // namespace endo
