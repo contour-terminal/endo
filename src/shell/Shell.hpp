@@ -651,9 +651,10 @@ class Shell final: public SignalCallback
     bool _lsIcons = true;               ///< Show Nerd Font icons in ls output
     bool _lsDirectorySlash = true;      ///< Append trailing '/' to directory names
     ProcessId _shellPid = 0;
-    ProcessId _shellPgid = 0; ///< Shell's process group ID
-    int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise
-    int _shellLevel = 0;      ///< Shell nesting depth (0 = outermost)
+    ProcessId _shellPgid = 0;          ///< Shell's process group ID
+    int _signalFd = -1;                ///< signalfd for Linux, -1 otherwise
+    platform::Wakeup _interruptWakeup; ///< Signalled by SignalHandler on Ctrl+C to wake a blocked wait.
+    int _shellLevel = 0;               ///< Shell nesting depth (0 = outermost)
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
     bool _interactiveReady =

@@ -165,14 +165,16 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
             timeout = 5000; // Idle when unfocused — just wait for events
         }
 
-        // Await the next event (one at a time); a negative timeout blocks indefinitely.
+        // Await the next event (one at a time). An indefinite wait still has to
+        // resume on non-input activity (focus change, a finished background job),
+        // which arrives as a std::nullopt wake; nextEvent() cannot represent "no
+        // event", so use nextEventFor with a long sentinel for the blocking case.
+        constexpr auto idleSentinel = std::chrono::milliseconds { 60'000 };
+        auto const waitFor = (timeout < 0) ? idleSentinel : std::chrono::milliseconds { timeout };
         auto event = std::optional<tui::InputEvent> {};
         try
         {
-            if (timeout < 0)
-                event = co_await runtime->nextEvent();
-            else
-                event = co_await runtime->nextEventFor(std::chrono::milliseconds { timeout });
+            event = co_await runtime->nextEventFor(waitFor);
         }
         catch (endo::coro::OperationCancelled const&)
         {
@@ -184,9 +186,13 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         auto const nowFocused = _terminal.isFocused();
         auto const focusChanged = (wasFocused != nowFocused);
 
-        // No event (timeout): run idle ticks (focus dimming / hover) and keep waiting.
+        // No event (timeout or non-input activity): run idle work (e.g. report
+        // finished jobs) and idle ticks (focus dimming / hover), then keep waiting.
+        // The partially-typed line is preserved — this path never co_returns.
         if (!event)
         {
+            if (_onIdle)
+                _onIdle();
             if (focusChanged)
             {
                 _promptComponent->flushDeferredUpdates();
@@ -351,6 +357,11 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
     }
 
     co_return {};
+}
+
+void Prompt::setOnIdle(std::function<void()> callback)
+{
+    _onIdle = std::move(callback);
 }
 
 void Prompt::setPrompt(std::string_view promptStr)

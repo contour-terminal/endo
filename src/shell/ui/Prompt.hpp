@@ -10,8 +10,8 @@
 #include <tui/Terminal.hpp>
 #include <tui/runtime/TuiRuntime.hpp>
 
+#include <functional>
 #include <memory>
-#include <optional>
 #include <set>
 #include <string>
 
@@ -55,6 +55,15 @@ class Prompt
     /// @return The input line, or empty string on EOF/abort.
     [[nodiscard]] coro::Task<std::string> read(tui::runtime::TuiRuntime* runtime);
 
+    /// @brief Sets a callback invoked on every idle wake during `read()`.
+    ///
+    /// Runs when the wait resumes without an input event — a timeout, a focus
+    /// change, or non-input activity such as a finished background job — before
+    /// the prompt re-parks (the typed line is preserved). Lets the owner do side
+    /// work (e.g. report completed jobs) without the prompt knowing about it.
+    /// @param callback The idle callback, or an empty function to clear it.
+    void setOnIdle(std::function<void()> callback);
+
     /// @brief Sets the prompt string displayed before user input.
     /// @param promptStr The prompt string.
     void setPrompt(std::string_view promptStr);
@@ -68,8 +77,8 @@ class Prompt
 
     /// @brief Displays the prompt without waiting for input.
     ///
-    /// Call this before blocking on poll() to ensure the prompt is visible.
-    /// After input is available, call read() or processInput() to handle it.
+    /// Call this before awaiting `read()` to ensure the prompt is visible; `read()`
+    /// then drives the input loop through the coroutine runtime.
     void display();
 
     /// @brief Enables or disables multiline editing mode.
@@ -203,6 +212,7 @@ class Prompt
     bool _multilineEnabled = true; ///< Enable multiline editing by default
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
     bool _displayDrewCurrentState = false; ///< True when display() already drew the current state.
+    std::function<void()> _onIdle;         ///< Invoked on each idle wake during read() (see setOnIdle).
 
     /// Dynamic-field resolver cached before `_promptComponent` is created (the Shell
     /// installs it from its constructor, which runs before `initialize()`). It is
