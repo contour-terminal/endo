@@ -37,6 +37,10 @@ class MockEventSource: public EventSource
     /// Appends a bare timeout outcome (nothing happened).
     void pushTimeout() { _scripted.push_back(WaitOutcome {}); }
 
+    /// Appends an outcome signalling a non-input activity wake (focus change /
+    /// finished job) with no input event.
+    void pushActivity() { _scripted.push_back(WaitOutcome { .activity = true }); }
+
     /// @return The timeouts passed to each `wait()` call, in order.
     [[nodiscard]] std::vector<int> const& recordedTimeouts() const noexcept { return _timeouts; }
 

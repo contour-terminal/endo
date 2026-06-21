@@ -102,6 +102,34 @@ KeyEvent keyOf(char32_t codepoint)
     return KeyEvent { .codepoint = codepoint };
 }
 
+/// Sets *destroyed = true when its frame unwinds (RAII), so a test can prove a
+/// parked flow was cancelled-and-unwound rather than raw-destroyed.
+struct UnwindFlag
+{
+    bool* destroyed;
+
+    ~UnwindFlag() { *destroyed = true; }
+};
+
+/// A spawned flow that takes an RAII guard and then parks forever on input. If
+/// the runtime is destroyed while it is parked, the guard must still run.
+Task<void> parkForeverWithGuard(TuiRuntime* runtime, bool* destroyed)
+{
+    *destroyed = false; // explicit write so the pointee is observably non-const
+    auto guard = UnwindFlag { destroyed };
+    try
+    {
+        auto const event = co_await runtime->nextEvent();
+        static_cast<void>(event);
+    }
+    catch (OperationCancelled const&)
+    {
+        // Expected on runtime teardown: the frame unwinds and `guard` destructs,
+        // which is exactly what this flow exists to demonstrate.
+        static_cast<void>(destroyed);
+    }
+}
+
 } // namespace
 
 TEST_CASE("Runtime delivers a scripted input event to a waiting flow", "[TuiRuntime]")
@@ -238,4 +266,36 @@ TEST_CASE("A pending delay bounds the wait timeout", "[TuiRuntime]")
     auto const firstTimeout = source.recordedTimeouts().front();
     REQUIRE(firstTimeout > 0);
     REQUIRE(firstTimeout <= 500);
+}
+
+TEST_CASE("A non-input activity wake resumes a timed input waiter with no event", "[TuiRuntime]")
+{
+    auto source = MockEventSource {};
+    source.pushActivity(); // focus change / finished job — no input event
+    auto runtime = TuiRuntime { source };
+
+    // awaitEventForResult returns 0 when the wait resumes without an event.
+    auto const result = runtime.blockOn(awaitEventForResult(&runtime, 500));
+
+    REQUIRE(result == 0);
+}
+
+TEST_CASE("Destroying the runtime unwinds a parked spawned flow via RAII", "[TuiRuntime]")
+{
+    auto source = MockEventSource {};
+    // One benign timeout for the wait that the root's blockOn issues after the root
+    // completes; without it the mock's empty-script backstop returns an interrupt
+    // that would cancel the spawned flow during blockOn instead of at teardown.
+    source.pushTimeout();
+    auto destroyed = false;
+    {
+        auto runtime = TuiRuntime { source };
+        runtime.spawn(parkForeverWithGuard(&runtime, &destroyed));
+        // Run a trivial root to drive the pump so the spawned flow reaches its first
+        // suspension (parked on input) and stays there.
+        runtime.blockOn(awaitZeroDelay(&runtime));
+        REQUIRE_FALSE(destroyed); // still parked
+    } // ~TuiRuntime: request_stop + wake + drain → the flow unwinds, guard runs
+
+    REQUIRE(destroyed);
 }
