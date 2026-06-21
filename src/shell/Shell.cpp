@@ -2823,7 +2823,6 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     prompt.terminal().output().updateDimensions();
 }
 
-// NOLINTNEXTLINE(readability-function-size)
 void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
     // Own a runtime + event source for the duration of agent mode. The event source
