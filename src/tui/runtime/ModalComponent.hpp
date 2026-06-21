@@ -33,6 +33,13 @@ class ModalComponent: public Component
     /// @param event The event to process.
     /// @return The final result to end the modal, or std::nullopt to continue.
     [[nodiscard]] virtual std::optional<Result> step(InputEvent const& event) = 0;
+
+    /// @return True if the most recent @c step() changed visible state and the
+    ///         screen should be redrawn. Defaults to true (always redraw) to
+    ///         preserve behavior for modals that do not track change state;
+    ///         overrides gate redraws to events that actually changed something,
+    ///         avoiding wasted draws on ignored events (e.g. mouse moves).
+    [[nodiscard]] virtual bool stepChangedState() const noexcept { return true; }
 };
 
 } // namespace tui::runtime

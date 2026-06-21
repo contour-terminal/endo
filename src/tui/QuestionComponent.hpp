@@ -98,6 +98,10 @@ class QuestionComponent: public runtime::ModalComponent<QuestionResult>
     /// @return The QuestionResult on confirm/cancel, or std::nullopt to continue.
     [[nodiscard]] std::optional<QuestionResult> step(InputEvent const& event) override;
 
+    /// @brief Whether the most recent step() changed visible state (drives redraw).
+    /// @return True after a Changed/Confirmed step; false for None/Cancelled.
+    [[nodiscard]] bool stepChangedState() const noexcept override;
+
     /// @brief Returns the user's answer as a string.
     ///
     /// - Free-text: the typed text.
@@ -122,8 +126,9 @@ class QuestionComponent: public runtime::ModalComponent<QuestionResult>
     QuestionConfig _config;
     List _list;
     InputField _inputField;
-    bool _otherActive = false;  ///< Whether the "Other..." free-text input is shown.
-    bool _inputFocused = false; ///< Whether the InputField has focus (vs the List).
+    bool _otherActive = false;                         ///< Whether the "Other..." free-text input is shown.
+    bool _inputFocused = false;                        ///< Whether the InputField has focus (vs the List).
+    QuestionAction _lastAction = QuestionAction::None; ///< Action from the most recent step().
 
     static constexpr int leftBarWidth = 2; ///< Width of left bar chrome (╭─, ╰─, │).
     static constexpr int barPadding = 1;   ///< Padding after the bar.

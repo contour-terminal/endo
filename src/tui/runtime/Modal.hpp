@@ -71,7 +71,9 @@ template <typename Result>
         if (auto result = modal->step(event))
             co_return std::move(result);
 
-        if (screen != nullptr)
+        // Redraw only when the modal actually changed state, so ignored events
+        // (e.g. mouse moves the modal does not act on) do not force a full redraw.
+        if (screen != nullptr && modal->stepChangedState())
             screen->draw();
     }
 }

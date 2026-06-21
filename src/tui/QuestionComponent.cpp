@@ -336,7 +336,8 @@ auto QuestionComponent::processInput(InputEvent const& event) -> QuestionAction
 
 std::optional<QuestionResult> QuestionComponent::step(InputEvent const& event)
 {
-    switch (processInput(event))
+    _lastAction = processInput(event);
+    switch (_lastAction)
     {
         case QuestionAction::Confirmed:
             return QuestionResult { .confirmed = true,
@@ -349,6 +350,13 @@ std::optional<QuestionResult> QuestionComponent::step(InputEvent const& event)
         case QuestionAction::None: return std::nullopt;
     }
     return std::nullopt;
+}
+
+bool QuestionComponent::stepChangedState() const noexcept
+{
+    // Redraw only when the last step changed visible state (Changed) — Confirmed
+    // ends the modal before a redraw is needed; None/Cancelled need no redraw.
+    return _lastAction == QuestionAction::Changed || _lastAction == QuestionAction::Confirmed;
 }
 
 auto QuestionComponent::answer() const -> std::string
