@@ -323,9 +323,9 @@ class NextActivityAwaiter
         if (_runtime.agentPending())
         {
             _runtime.consumeAgentPending();
-            return Activity { .kind = ActivityKind::AgentReady };
+            return Activity { .kind = ActivityKind::AgentReady, .event = std::nullopt };
         }
-        return Activity { .kind = ActivityKind::Timeout };
+        return Activity { .kind = ActivityKind::Timeout, .event = std::nullopt };
     }
 
   private:
