@@ -4439,15 +4439,18 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                 // During ask-user, route input to the question component.
                 if (askUserPrompt.active && askUserPrompt.component)
                 {
-                    auto const action = askUserPrompt.component->processInput(event);
-                    switch (action)
+                    // Drive the question through its modal step(); a returned result
+                    // means confirmed/cancelled, std::nullopt means continue (redraw
+                    // only when the step changed visible state).
+                    auto const stepResult = askUserPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
                     {
-                        case tui::QuestionAction::Confirmed: {
-                            auto const answerText = askUserPrompt.component->answer();
+                        {
+                            auto const& answerText = stepResult->answer;
                             auto const qConfig = askUserPrompt.component->config();
-                            auto const selectedIdx = askUserPrompt.component->selectedIndex();
-                            auto const checkedIdx = askUserPrompt.component->checkedIndices();
-                            auto const otherActive = askUserPrompt.component->isOtherActive();
+                            auto const selectedIdx = stepResult->selectedIndex;
+                            auto const& checkedIdx = stepResult->checkedIndices;
+                            auto const otherActive = stepResult->otherActive;
                             worker.inbound().push(agent::UserAnswerMessage {
                                 .requestId = askUserPrompt.requestId,
                                 .answer = agent::UserAnswer { .answer = answerText } });
@@ -4514,9 +4517,11 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                                 out.flush();
                             }
                             askUserPrompt.reset();
-                            break;
                         }
-                        case tui::QuestionAction::Cancelled: {
+                    }
+                    else if (stepResult)
+                    {
+                        {
                             auto const qConfig = askUserPrompt.component->config();
                             worker.inbound().push(agent::UserAnswerMessage {
                                 .requestId = askUserPrompt.requestId,
@@ -4550,15 +4555,13 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                                 out.flush();
                             }
                             askUserPrompt.reset();
-                            break;
                         }
-                        case tui::QuestionAction::Changed: {
-                            auto guard = out.syncGuard();
-                            askUserPrompt.clear(out);
-                            askUserPrompt.render(out, terminal);
-                            break;
-                        }
-                        case tui::QuestionAction::None: break;
+                    }
+                    else if (askUserPrompt.component->stepChangedState())
+                    {
+                        auto guard = out.syncGuard();
+                        askUserPrompt.clear(out);
+                        askUserPrompt.render(out, terminal);
                     }
                     continue;
                 }
@@ -4566,11 +4569,11 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                 // During permission prompt, route input to the permission component.
                 if (permissionPrompt.active && permissionPrompt.component)
                 {
-                    auto const action = permissionPrompt.component->processInput(event);
-                    switch (action)
+                    auto const stepResult = permissionPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
                     {
-                        case tui::QuestionAction::Confirmed: {
-                            auto const selectedIdx = permissionPrompt.component->selectedIndex();
+                        {
+                            auto const selectedIdx = stepResult->selectedIndex;
                             permissionPrompt.clear(out);
 
                             auto decision = agent::PermissionDecision::Denied;
@@ -4600,32 +4603,30 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                             }
 
                             permissionPrompt.reset();
-                            break;
                         }
-                        case tui::QuestionAction::Cancelled: {
-                            permissionPrompt.clear(out);
-                            worker.inbound().push(agent::PermissionResponseMessage {
-                                .requestId = permissionPrompt.requestId,
-                                .decision = agent::PermissionDecision::Cancelled,
-                            });
+                    }
+                    else if (stepResult)
+                    {
+                        permissionPrompt.clear(out);
+                        worker.inbound().push(agent::PermissionResponseMessage {
+                            .requestId = permissionPrompt.requestId,
+                            .decision = agent::PermissionDecision::Cancelled,
+                        });
 
-                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.writeText("\u2502 ", barStyle);
-                            out.writeText("(cancelled)", dimStyle);
-                            out.linefeed();
-                            out.flush();
+                        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                        out.writeText("\u2502 ", barStyle);
+                        out.writeText("(cancelled)", dimStyle);
+                        out.linefeed();
+                        out.flush();
 
-                            permissionPrompt.reset();
-                            break;
-                        }
-                        case tui::QuestionAction::Changed: {
-                            auto guard = out.syncGuard();
-                            permissionPrompt.clear(out);
-                            permissionPrompt.render(out, terminal);
-                            break;
-                        }
-                        case tui::QuestionAction::None: break;
+                        permissionPrompt.reset();
+                    }
+                    else if (permissionPrompt.component->stepChangedState())
+                    {
+                        auto guard = out.syncGuard();
+                        permissionPrompt.clear(out);
+                        permissionPrompt.render(out, terminal);
                     }
                     continue;
                 }
@@ -4633,11 +4634,11 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                 // During session picker, route input to the session picker component.
                 if (sessionPickerPrompt.active && sessionPickerPrompt.component)
                 {
-                    auto const action = sessionPickerPrompt.component->processInput(event);
-                    switch (action)
+                    auto const stepResult = sessionPickerPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
                     {
-                        case tui::QuestionAction::Confirmed: {
-                            auto const selectedIdx = sessionPickerPrompt.component->selectedIndex();
+                        {
+                            auto const selectedIdx = stepResult->selectedIndex;
                             sessionPickerPrompt.clear(out);
                             if (selectedIdx < sessionPickerNames.size())
                             {
@@ -4674,20 +4675,19 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                             sessionPickerPrompt.reset();
                             sessionPickerNames.clear();
                             out.flush();
-                            break;
                         }
-                        case tui::QuestionAction::Cancelled:
-                            sessionPickerPrompt.clear(out);
-                            sessionPickerPrompt.reset();
-                            sessionPickerNames.clear();
-                            break;
-                        case tui::QuestionAction::Changed: {
-                            auto guard = out.syncGuard();
-                            sessionPickerPrompt.clear(out);
-                            sessionPickerPrompt.render(out, terminal);
-                            break;
-                        }
-                        case tui::QuestionAction::None: break;
+                    }
+                    else if (stepResult)
+                    {
+                        sessionPickerPrompt.clear(out);
+                        sessionPickerPrompt.reset();
+                        sessionPickerNames.clear();
+                    }
+                    else if (sessionPickerPrompt.component->stepChangedState())
+                    {
+                        auto guard = out.syncGuard();
+                        sessionPickerPrompt.clear(out);
+                        sessionPickerPrompt.render(out, terminal);
                     }
                     continue;
                 }
@@ -4695,11 +4695,11 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                 // During plan approval, route input to the approval component.
                 if (planApprovalPrompt.isActive())
                 {
-                    auto const action = planApprovalPrompt.component->processInput(event);
-                    switch (action)
+                    auto const stepResult = planApprovalPrompt.component->step(event);
+                    if (stepResult && stepResult->confirmed)
                     {
-                        case tui::QuestionAction::Confirmed: {
-                            auto const selectedIdx = planApprovalPrompt.component->selectedIndex();
+                        {
+                            auto const selectedIdx = stepResult->selectedIndex;
                             planApprovalPrompt.clear(out);
                             planApprovalPrompt.reset();
                             if (selectedIdx == 0) // "Yes, execute"
@@ -4746,29 +4746,26 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                                                                    .height = newPrefSize.height });
                                 screen.draw();
                             }
-                            break;
                         }
-                        case tui::QuestionAction::Cancelled:
-                            planApprovalPrompt.clear(out);
-                            planApprovalPrompt.reset();
-                            pendingPlan.reset();
-                            {
-                                screen.releaseCursor();
-                                auto const newPrefSize = inputComponent.preferredSize();
-                                inputComponent.setArea(tui::Rect { .x = 0,
-                                                                   .y = 0,
-                                                                   .width = terminal.columns(),
-                                                                   .height = newPrefSize.height });
-                                screen.draw();
-                            }
-                            break;
-                        case tui::QuestionAction::Changed: {
-                            auto guard = out.syncGuard();
-                            planApprovalPrompt.clear(out);
-                            planApprovalPrompt.render(out, terminal);
-                            break;
+                    }
+                    else if (stepResult)
+                    {
+                        planApprovalPrompt.clear(out);
+                        planApprovalPrompt.reset();
+                        pendingPlan.reset();
+                        {
+                            screen.releaseCursor();
+                            auto const newPrefSize = inputComponent.preferredSize();
+                            inputComponent.setArea(tui::Rect {
+                                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+                            screen.draw();
                         }
-                        case tui::QuestionAction::None: break;
+                    }
+                    else if (planApprovalPrompt.component->stepChangedState())
+                    {
+                        auto guard = out.syncGuard();
+                        planApprovalPrompt.clear(out);
+                        planApprovalPrompt.render(out, terminal);
                     }
                     continue;
                 }
