@@ -51,6 +51,8 @@
 #include "Error.hpp"
 #include "TTY.hpp"
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
+    #include <shell/AgentModeSession.hpp>
+
     #include <agent/AgentConfig.hpp>
     #include <agent/HeadlessRunner.hpp>
     #include <agent/PermissionManager.hpp>
@@ -3178,9 +3180,6 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     // unfocused) is re-evaluated immediately on the next loop iteration.
     terminal.onFocusChanged([this](bool) { _agentWakeup.signal(); });
 
-    // Track the active renderer for tool-use line re-rendering of spinner.
-    agent::AgentResponseRenderer* activeRenderer = nullptr;
-
     // Create inline Screen with AgentInputComponent
     auto screenConfig = tui::ScreenConfig {
         .viewport = tui::Viewport::Inline,
@@ -3189,6 +3188,14 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     auto screen = tui::Screen(terminal, screenConfig);
     auto inputComponent = agent::AgentInputComponent {};
     auto toolStatusComponent = agent::ToolStatusComponent {};
+
+    // The agent-mode loop's mutable state and helper behavior live in this session
+    // object; the locals/lambdas below alias or delegate to it during the migration.
+    auto session = AgentModeSession(*this, out, terminal, screen, inputComponent, toolStatusComponent);
+
+    // Track the active renderer for tool-use line re-rendering of spinner.
+    auto& activeRenderer = session.activeRenderer;
+
     inputComponent.setTopPadding(prompt.promptConfig().promptSpacing);
     inputComponent.setPromptIndicator(agentConfig.promptIndicator);
     auto const modelInfo = provider->modelInfo();
@@ -3795,167 +3802,46 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         [&cfg = agentConfig, cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
             return buildAgentContext(cfg, cwd, std::move(ctx), std::move(git));
         });
-    auto systemPromptReady = false;
-    auto planModeActive = false;
+    // Loop-frame state now lives in `session`; these references keep the existing
+    // call sites unchanged during the migration.
+    auto& systemPromptReady = session.systemPromptReady;
+    auto& planModeActive = session.planModeActive;
 
     // --- Streaming state ---
     // When the worker is processing, we track the renderer for the response.
     // Agent output flows naturally into terminal scrollback; no scroll regions needed.
-    auto streaming = false;
-    auto streamCancelled = false;
-    std::optional<agent::AgentResponseRenderer> currentRenderer;
+    auto& streaming = session.streaming;
+    auto& streamCancelled = session.streamCancelled;
+    auto& currentRenderer = session.currentRenderer;
 
     // --- Inline prompt state ---
-    // Shared struct for all QuestionComponent-based inline prompts.
-    struct InlinePrompt
-    {
-        bool active = false;
-        std::optional<tui::QuestionComponent> component;
-        bool visible = false;
-        uint64_t requestId = 0;
+    // The InlinePrompt struct and the four prompt instances now live in `session`;
+    // these references keep the existing call sites unchanged during the migration.
+    auto& askUserPrompt = session.askUserPrompt;
+    auto& permissionPrompt = session.permissionPrompt;
+    auto& sessionPickerPrompt = session.sessionPickerPrompt;
+    auto& planApprovalPrompt = session.planApprovalPrompt;
+    auto& sessionPickerNames = session.sessionPickerNames;
+    auto& streamingPromptVisible = session.streamingPromptVisible;
+    auto& pendingPlan = session.pendingPlan;
 
-        void clear(tui::TerminalOutput& output)
-        {
-            if (!visible)
-                return;
-            output.hideCursor();
-            output.restoreCursor();
-            output.clearToEndOfDisplay();
-            output.flush();
-            visible = false;
-        }
-
-        void render(tui::TerminalOutput& output, tui::Terminal const& terminal)
-        {
-            if (!active || !component)
-                return;
-            auto const& theme = tui::currentTheme();
-            auto const prefSize = component->preferredSize();
-            auto const width = terminal.columns();
-            auto const height = prefSize.height;
-
-            for (auto i = 0; i < height; ++i)
-                output.linefeed();
-            output.moveUp(height);
-            output.saveCursor();
-            output.linefeed();
-
-            auto buffer = tui::Buffer(height, width);
-            auto canvas =
-                tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-            component->setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-            component->setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-            component->render(canvas);
-            buffer.writeTo(output);
-
-            if (component->cursorShape() == tui::CursorShape::SteadyBar)
-                output.showCursor();
-            else
-                output.hideCursor();
-            output.flush();
-            visible = true;
-        }
-
-        void reset()
-        {
-            active = false;
-            component.reset();
-            visible = false;
-            requestId = 0;
-        }
-
-        [[nodiscard]] auto isActive() const -> bool { return active && component.has_value(); }
-    };
-
-    auto askUserPrompt = InlinePrompt {};
-    auto permissionPrompt = InlinePrompt {};
-    auto sessionPickerPrompt = InlinePrompt {};
-    auto planApprovalPrompt = InlinePrompt {};
-    auto sessionPickerNames = std::vector<std::string> {};
-
-    /// Returns true if any inline prompt is active.
+    // The render/teardown helpers are now AgentModeSession methods; these thin
+    // lambdas delegate so existing call sites (foo()) keep working.
     auto anyPromptActive = [&] {
-        return askUserPrompt.active || permissionPrompt.active || sessionPickerPrompt.active
-               || planApprovalPrompt.active;
+        return session.anyPromptActive();
     };
-
-    // Helper: teardown streaming state after response completes.
-    auto streamingPromptVisible = false;
     auto teardownStreaming = [&] {
-        streaming = false;
-        streamCancelled = false;
-        streamingPromptVisible = false;
-        currentRenderer.reset();
-        activeRenderer = nullptr;
-        inputComponent.setThinkingActive(false);
+        session.teardownStreaming();
     };
-
-    // Render inputComponent to an off-screen buffer and write to TerminalOutput.
-    auto renderComponentDirect = [&] {
-        auto const& theme = tui::currentTheme();
-        auto const prefSize = inputComponent.preferredSize();
-        auto const width = terminal.columns();
-        auto const height = prefSize.height;
-
-        auto buffer = tui::Buffer(height, width);
-        auto canvas =
-            tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-        inputComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-        inputComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-        inputComponent.render(canvas);
-        buffer.writeTo(out);
-    };
-
-    // Render toolStatusComponent to an off-screen buffer and write to TerminalOutput.
     auto renderToolStatusDirect = [&] {
-        if (!toolStatusComponent.hasEntries())
-            return;
-        auto const& theme = tui::currentTheme();
-        auto const prefSize = toolStatusComponent.preferredSize();
-        auto const width = terminal.columns();
-        auto const height = prefSize.height;
-        if (height <= 0)
-            return;
-
-        auto buffer = tui::Buffer(height, width);
-        auto canvas =
-            tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-        toolStatusComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-        toolStatusComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-        toolStatusComponent.render(canvas);
-        buffer.writeTo(out);
+        session.renderToolStatusDirect();
     };
-
-    /// Clear the streaming prompt, restoring cursor to content end position.
     auto clearStreamingPrompt = [&] {
-        if (!streamingPromptVisible)
-            return;
-        out.hideCursor();
-        out.restoreCursor();
-        out.clearToEndOfDisplay();
-        out.flush();
-        streamingPromptVisible = false;
+        session.clearStreamingPrompt();
     };
-
-    /// Render the streaming prompt below the current content position.
     auto renderStreamingPrompt = [&] {
-        if (!streaming || anyPromptActive())
-            return;
-        // Pre-scroll: emit linefeeds matching the prompt height.
-        // This forces any terminal scrolling BEFORE saveCursor, keeping the saved position valid.
-        auto const promptHeight = inputComponent.preferredSize().height;
-        for (auto i = 0; i < promptHeight; ++i)
-            out.linefeed();
-        out.moveUp(promptHeight);
-        out.saveCursor();
-        out.linefeed();
-        renderComponentDirect();
-        out.flush();
-        streamingPromptVisible = true;
+        session.renderStreamingPrompt();
     };
-
-    // Pending plan waiting for user approval.
-    std::optional<agent::Plan> pendingPlan;
 
     // Show auto-resume context message if a named session was loaded.
     if (loadedFromNamedSession && agentConfig.session.showResumeContext)

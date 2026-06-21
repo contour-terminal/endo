@@ -78,6 +78,10 @@ struct ReadOptions
 
 class Shell final: public SignalCallback
 {
+    // The agent-mode loop is factored into AgentModeSession, which borrows this
+    // shell's agent collaborators (the _agent* members and project-context cache).
+    friend class AgentModeSession;
+
   public:
     Shell();
     ~Shell() override;
