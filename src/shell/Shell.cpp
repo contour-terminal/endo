@@ -2815,6 +2815,20 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
 // NOLINTNEXTLINE(readability-function-size)
 void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
+    // Own a runtime + event source for the duration of agent mode. The event source
+    // multiplexes terminal input with the agent-message wakeup (fixing the Windows
+    // gap where the input poll never woke on agent messages). SIGINT is ignored here:
+    // Ctrl+C in agent mode is a key the input component turns into an Abort.
+    auto& agentTerminal = prompt.terminal();
+    auto agentEventSource = tui::runtime::TerminalEventSource(agentTerminal, &_agentWakeup);
+    auto runtime = tui::runtime::TuiRuntime(agentEventSource);
+    runtime.setInterruptHandler([] {});
+    runtime.blockOn(runAgentModeFlow(&runtime, std::move(initialMessage)));
+}
+
+coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
+                                         std::optional<std::string> initialMessage)
+{
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
     {
@@ -2843,7 +2857,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         }
         out.flush();
         out.setInlineRoomReserved(0); // Prevent prompt from overwriting error text
-        return;
+        co_return;
     }
 
     // Create or reuse agent session (preserves conversation history).
@@ -4287,13 +4301,15 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 pollTimeout = std::min(toolSpinnerTimeout, pollTimeout);
         }
 
-        // 3. Poll terminal input.
-        auto events = terminal.poll(pollTimeout);
+        // 3. Wait for input, an agent message, or a timeout (whichever happens first).
+        auto const activity = co_await runtime->nextActivity(std::chrono::milliseconds { pollTimeout });
+        if (activity.kind == tui::runtime::ActivityKind::AgentReady)
+            continue; // Loop back to drain the agent messages at the top.
 
-        // Re-read focus state after poll — FocusEvent may have been consumed during poll()
+        // Re-read focus state after the wait — a FocusEvent may have been consumed.
         auto const terminalFocused = terminal.isFocused();
 
-        if (events.empty())
+        if (activity.kind == tui::runtime::ActivityKind::Timeout)
         {
             // Check background context loading.
             if (!systemPromptReady
@@ -4378,10 +4394,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             continue;
         }
 
-        // 4. Process terminal input events.
+        // 4. Process the terminal input event.
         auto needsRedraw = false;
-        for (auto const& event: events)
         {
+            auto const& event = *activity.event;
             if (std::holds_alternative<tui::ResizeEvent>(event))
             {
                 needsRedraw = true;
@@ -4930,7 +4946,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     _agentSession->setTracer(nullptr);
                     terminal.input().setWakeup(nullptr);
                     screen.clearAndRelease();
-                    return;
+                    co_return;
                 }
                 case agent::AgentInputComponent::Action::CycleMode: {
                     planModeActive = !planModeActive;
