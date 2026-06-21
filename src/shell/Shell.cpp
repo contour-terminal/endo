@@ -3290,47 +3290,6 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     screen.draw();
     out.flush();
 
-    // Track the active renderer for tool-use line re-rendering of spinner.
-    auto& activeRenderer = session.activeRenderer;
-
-    // Loop-frame state now lives in `session`; these references keep the existing
-    // call sites unchanged during the migration.
-    auto& systemPromptReady = session.systemPromptReady;
-    auto& planModeActive = session.planModeActive;
-
-    // --- Streaming state ---
-    // When the worker is processing, we track the renderer for the response.
-    // Agent output flows naturally into terminal scrollback; no scroll regions needed.
-    auto& streaming = session.streaming;
-    auto& streamCancelled = session.streamCancelled;
-    auto& currentRenderer = session.currentRenderer;
-
-    // --- Inline prompt state ---
-    // The InlinePrompt struct and the four prompt instances now live in `session`;
-    // these references keep the existing call sites unchanged during the migration.
-    auto& askUserPrompt = session.askUserPrompt;
-    auto& permissionPrompt = session.permissionPrompt;
-    auto& sessionPickerPrompt = session.sessionPickerPrompt;
-    auto& planApprovalPrompt = session.planApprovalPrompt;
-    auto& sessionPickerNames = session.sessionPickerNames;
-    auto& streamingPromptVisible = session.streamingPromptVisible;
-    auto& pendingPlan = session.pendingPlan;
-
-    // The render/teardown helpers are now AgentModeSession methods; these thin
-    // lambdas delegate so existing call sites (foo()) keep working.
-    auto anyPromptActive = [&] {
-        return session.anyPromptActive();
-    };
-    auto renderToolStatusDirect = [&] {
-        session.renderToolStatusDirect();
-    };
-    auto clearStreamingPrompt = [&] {
-        session.clearStreamingPrompt();
-    };
-    auto renderStreamingPrompt = [&] {
-        session.renderStreamingPrompt();
-    };
-
     // Show auto-resume context message if a named session was loaded.
     if (loadedFromNamedSession && agentConfig.session.showResumeContext)
     {
@@ -3362,8 +3321,8 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         screen.releaseCursor();
 
         worker.inbound().push(agent::UserPromptMessage { .text = query });
-        streaming = true;
-        streamCancelled = false;
+        session.streaming = true;
+        session.streamCancelled = false;
     }
 
     // --- Main event loop ---
@@ -3379,7 +3338,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         // 2. Determine poll timeout.
         auto const prePollFocused = terminal.isFocused();
         auto pollTimeout = prePollFocused ? 80 : 2000; // Longer timeout when unfocused.
-        if (streaming)
+        if (session.streaming)
         {
             pollTimeout = 5; // Fast polling during streaming for responsive cancellation.
         }
@@ -3412,22 +3371,13 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
 
         if (activity.kind == tui::runtime::ActivityKind::Timeout)
         {
-            // Check background context loading.
-            if (!systemPromptReady
+            // Check background context loading. ensureSystemPromptReady() applies
+            // the built context (system prompt, git/project info, file paths) and
+            // is shared with the submit path; the guard ensures get() won't block.
+            if (!session.systemPromptReady
                 && contextFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
-                auto result = contextFuture.get();
-                _agentSession->setSystemPrompt(std::move(result.systemPrompt));
-                if (auto* explore = dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
-                    explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
-                if (!result.gitBranch.empty())
-                    inputComponent.setGitBranch(std::move(result.gitBranch));
-                if (!result.projectPath.empty())
-                    inputComponent.setProjectPath(std::move(result.projectPath));
-                filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
-                _cachedProjectContext = std::move(result.projectContext);
-                _cachedProjectContextCwd = cwd;
-                systemPromptReady = true;
+                session.ensureSystemPromptReady();
                 auto const newPrefSize = inputComponent.preferredSize();
                 inputComponent.setArea(
                     tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
@@ -3438,26 +3388,29 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
             if (terminalFocused)
             {
                 // Tick all spinners first, then do a single combined render pass.
+                auto* const activeRenderer = session.activeRenderer;
                 auto const thinkingTicked = activeRenderer && activeRenderer->isThinking()
-                                            && !anyPromptActive() && activeRenderer->tickSpinner();
-                auto const toolTicked = streaming && toolStatusComponent.tickSpinner() && !anyPromptActive();
+                                            && !session.anyPromptActive() && activeRenderer->tickSpinner();
+                auto const toolTicked =
+                    session.streaming && toolStatusComponent.tickSpinner() && !session.anyPromptActive();
                 auto const inputTicked = inputComponent.tickSpinner();
 
-                if (streaming && !anyPromptActive() && (thinkingTicked || toolTicked || inputTicked))
+                if (session.streaming && !session.anyPromptActive()
+                    && (thinkingTicked || toolTicked || inputTicked))
                 {
                     auto guard = out.syncGuard();
-                    clearStreamingPrompt();
+                    session.clearStreamingPrompt();
                     // Always re-render the spinner if thinking — clearStreamingPrompt erases it.
                     if (activeRenderer && activeRenderer->isThinking())
                         activeRenderer->renderSpinner();
                     if (toolStatusComponent.hasEntries())
                     {
-                        renderToolStatusDirect();
+                        session.renderToolStatusDirect();
                         out.flush();
                     }
-                    renderStreamingPrompt();
+                    session.renderStreamingPrompt();
                 }
-                else if (inputTicked && !anyPromptActive())
+                else if (inputTicked && !session.anyPromptActive())
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
                     inputComponent.setArea(tui::Rect {
@@ -3467,17 +3420,17 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
             }
 
             // Re-render inline prompts if they were cleared (e.g., by resize).
-            if (askUserPrompt.active && !askUserPrompt.visible)
-                askUserPrompt.render(out, terminal);
-            if (permissionPrompt.active && !permissionPrompt.visible)
-                permissionPrompt.render(out, terminal);
-            if (planApprovalPrompt.active && !planApprovalPrompt.visible)
-                planApprovalPrompt.render(out, terminal);
-            if (sessionPickerPrompt.active && !sessionPickerPrompt.visible)
-                sessionPickerPrompt.render(out, terminal);
+            if (session.askUserPrompt.active && !session.askUserPrompt.visible)
+                session.askUserPrompt.render(out, terminal);
+            if (session.permissionPrompt.active && !session.permissionPrompt.visible)
+                session.permissionPrompt.render(out, terminal);
+            if (session.planApprovalPrompt.active && !session.planApprovalPrompt.visible)
+                session.planApprovalPrompt.render(out, terminal);
+            if (session.sessionPickerPrompt.active && !session.sessionPickerPrompt.visible)
+                session.sessionPickerPrompt.render(out, terminal);
 
             // Ghost text debounce and escape hint auto-clear.
-            if (!streaming && terminalFocused)
+            if (!session.streaming && terminalFocused)
             {
                 // Capture pre-flush state: flushDeferredUpdates() may clear the escape hint,
                 // and we still need to redraw to show the restored input text.
@@ -3517,7 +3470,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                     co_return;
         }
 
-        if (needsRedraw && !streaming)
+        if (needsRedraw && !session.streaming)
         {
             inputComponent.flushDeferredUpdates();
             auto const newPrefSize = inputComponent.preferredSize();
@@ -3527,10 +3480,13 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         }
 
         // Re-render active inline prompts on resize.
-        if (needsRedraw && anyPromptActive())
+        if (needsRedraw && session.anyPromptActive())
         {
             auto guard = out.syncGuard();
-            for (auto* p: { &askUserPrompt, &permissionPrompt, &planApprovalPrompt, &sessionPickerPrompt })
+            for (auto* p: { &session.askUserPrompt,
+                            &session.permissionPrompt,
+                            &session.planApprovalPrompt,
+                            &session.sessionPickerPrompt })
             {
                 if (p->active)
                 {

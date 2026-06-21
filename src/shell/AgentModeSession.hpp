@@ -50,6 +50,7 @@ namespace agent
     class SlashCommandRegistry;
     class PermissionManager;
     class ConversationHistoryStore;
+    struct SessionMetadata;
 
     namespace mcp
     {
@@ -231,6 +232,13 @@ class AgentModeSession
                                                                  /// @}
 
   private:
+    /// Builds the metadata for the active conversation, used when persisting to a
+    /// named session. The created-at timestamp falls back to "now" only when the
+    /// session has none yet.
+    /// @param name The session name to record in the metadata.
+    /// @return The populated session metadata.
+    [[nodiscard]] agent::SessionMetadata buildSessionMetadata(std::string name) const;
+
     Shell& _shell;                                        ///< Owning shell (befriended for agent members).
     tui::TerminalOutput& _out;                            ///< Terminal output.
     tui::Terminal& _terminal;                             ///< Terminal.

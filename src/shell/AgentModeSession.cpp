@@ -8,6 +8,8 @@
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 
+#include <charconv>
+
 #include <agent/AgentConfig.hpp>
 #include <agent/PermissionManager.hpp>
 #include <agent/commands/AgentHistoryProvider.hpp>
@@ -27,10 +29,43 @@
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tracing/TraceTerminalRenderer.hpp>
 
-#include <charconv>
-
 namespace endo
 {
+
+namespace
+{
+    /// Renders @p component into a fresh off-screen buffer and writes it directly
+    /// to @p out. This bypasses the Screen's managed double-buffer so the content
+    /// lands inline in the terminal scrollback; the component is laid out at full
+    /// @p width and its own preferred height.
+    /// @param out The terminal output to write the rendered buffer to.
+    /// @param component The component to lay out and render.
+    /// @param width The width, in columns, to render the component at.
+    void renderComponentInline(tui::TerminalOutput& out, tui::Component& component, int width)
+    {
+        auto const& theme = tui::currentTheme();
+        auto const height = component.preferredSize().height;
+        auto const rect = tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, rect, theme);
+        component.setArea(rect);
+        component.setScreenBounds(rect);
+        component.render(canvas);
+        buffer.writeTo(out);
+    }
+
+    /// Trims leading and trailing ASCII spaces from @p text.
+    /// @param text The string view to trim.
+    /// @return The trimmed view (spaces only; tabs and newlines are preserved).
+    [[nodiscard]] std::string_view trimSpaces(std::string_view text)
+    {
+        while (!text.empty() && text.front() == ' ')
+            text.remove_prefix(1);
+        while (!text.empty() && text.back() == ' ')
+            text.remove_suffix(1);
+        return text;
+    }
+} // namespace
 
 void InlinePrompt::clear(tui::TerminalOutput& output)
 {
@@ -47,23 +82,17 @@ void InlinePrompt::render(tui::TerminalOutput& output, tui::Terminal const& term
 {
     if (!active || !component)
         return;
-    auto const& theme = tui::currentTheme();
-    auto const prefSize = component->preferredSize();
     auto const width = terminal.columns();
-    auto const height = prefSize.height;
+    auto const height = component->preferredSize().height;
 
+    // Pre-scroll by the prompt height so saveCursor records a valid position.
     for (auto i = 0; i < height; ++i)
         output.linefeed();
     output.moveUp(height);
     output.saveCursor();
     output.linefeed();
 
-    auto buffer = tui::Buffer(height, width);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-    component->setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    component->setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    component->render(canvas);
-    buffer.writeTo(output);
+    renderComponentInline(output, *component, width);
 
     if (component->cursorShape() == tui::CursorShape::SteadyBar)
         output.showCursor();
@@ -104,36 +133,16 @@ void AgentModeSession::teardownStreaming()
 
 void AgentModeSession::renderComponentDirect()
 {
-    auto const& theme = tui::currentTheme();
-    auto const prefSize = _inputComponent.preferredSize();
-    auto const width = _terminal.columns();
-    auto const height = prefSize.height;
-
-    auto buffer = tui::Buffer(height, width);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-    _inputComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    _inputComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    _inputComponent.render(canvas);
-    buffer.writeTo(_out);
+    renderComponentInline(_out, _inputComponent, _terminal.columns());
 }
 
 void AgentModeSession::renderToolStatusDirect()
 {
     if (!_toolStatusComponent.hasEntries())
         return;
-    auto const& theme = tui::currentTheme();
-    auto const prefSize = _toolStatusComponent.preferredSize();
-    auto const width = _terminal.columns();
-    auto const height = prefSize.height;
-    if (height <= 0)
+    if (_toolStatusComponent.preferredSize().height <= 0)
         return;
-
-    auto buffer = tui::Buffer(height, width);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-    _toolStatusComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    _toolStatusComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-    _toolStatusComponent.render(canvas);
-    buffer.writeTo(_out);
+    renderComponentInline(_out, _toolStatusComponent, _terminal.columns());
 }
 
 void AgentModeSession::clearStreamingPrompt()
@@ -1074,32 +1083,35 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
     return LoopControl::Continue;
 }
 
+agent::SessionMetadata AgentModeSession::buildSessionMetadata(std::string name) const
+{
+    auto const now = std::chrono::system_clock::now();
+    return agent::SessionMetadata {
+        .name = std::move(name),
+        .createdAt = _shell._sessionCreatedAt == std::chrono::system_clock::time_point {}
+                         ? now
+                         : _shell._sessionCreatedAt,
+        .updatedAt = now,
+        .provider = _shell._agentProviderFactory->activeProviderName(),
+        .model = _provider->modelInfo().modelName,
+        .turnCount = _shell._agentSession->turnCount(),
+        .tokenUsage = _shell._agentSession->sessionUsage(),
+    };
+}
+
 void AgentModeSession::saveHistory()
 {
     auto const& sessionManager = _sessionManager;
     auto const& historyStore = _historyStore;
-    auto* const provider = _provider;
     (void) historyStore.save( // NOLINT(bugprone-unused-return-value)
         _shell._agentSession->history().messages());
     // Also save to named session if active.
     if (!_shell._activeSessionName.empty())
     {
-        auto const now = std::chrono::system_clock::now();
-        auto const metadata = agent::SessionMetadata {
-            .name = _shell._activeSessionName,
-            .createdAt = _shell._sessionCreatedAt == std::chrono::system_clock::time_point {}
-                             ? now
-                             : _shell._sessionCreatedAt,
-            .updatedAt = now,
-            .provider = _shell._agentProviderFactory->activeProviderName(),
-            .model = provider->modelInfo().modelName,
-            .turnCount = _shell._agentSession->turnCount(),
-            .tokenUsage = _shell._agentSession->sessionUsage(),
-        };
         (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
             _shell._activeSessionName,
             _shell._agentSession->history().messages(),
-            metadata);
+            buildSessionMetadata(_shell._activeSessionName));
         sessionManager.setLastActiveSession(_shell._activeSessionName);
     }
 }
@@ -1197,22 +1209,10 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
                     savedName = _shell._activeSessionName;
                 }
 
-                auto const now = std::chrono::system_clock::now();
-                auto const metadata = agent::SessionMetadata {
-                    .name = savedName,
-                    .createdAt = _shell._sessionCreatedAt == std::chrono::system_clock::time_point {}
-                                     ? now
-                                     : _shell._sessionCreatedAt,
-                    .updatedAt = now,
-                    .provider = _shell._agentProviderFactory->activeProviderName(),
-                    .model = provider->modelInfo().modelName,
-                    .turnCount = _shell._agentSession->turnCount(),
-                    .tokenUsage = _shell._agentSession->sessionUsage(),
-                };
                 (void) sessionManager.saveSession( // NOLINT(bugprone-unused-return-value)
                     savedName,
                     _shell._agentSession->history().messages(),
-                    metadata);
+                    buildSessionMetadata(savedName));
             }
 
             // Reset everything for a fresh conversation.
@@ -1237,12 +1237,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
     // /save (alias: /save-session): Save current session with a name.
     auto saveHandler = std::function<agent::SlashCommandResult(std::string_view)>(
         [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            // Trim whitespace.
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
+            auto name = std::string(trimSpaces(arguments));
 
             // Auto-generate name from first user message if none given.
             if (name.empty())
@@ -1259,18 +1254,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
                     name = sessionManager.generateSessionName("untitled");
             }
 
-            auto const now = std::chrono::system_clock::now();
-            auto const metadata = agent::SessionMetadata {
-                .name = name,
-                .createdAt = _shell._sessionCreatedAt == std::chrono::system_clock::time_point {}
-                                 ? now
-                                 : _shell._sessionCreatedAt,
-                .updatedAt = now,
-                .provider = _shell._agentProviderFactory->activeProviderName(),
-                .model = provider->modelInfo().modelName,
-                .turnCount = _shell._agentSession->turnCount(),
-                .tokenUsage = _shell._agentSession->sessionUsage(),
-            };
+            auto const metadata = buildSessionMetadata(name);
 
             auto result =
                 sessionManager.saveSession(name, _shell._agentSession->history().messages(), metadata);
@@ -1280,7 +1264,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
 
             _shell._activeSessionName = name;
             if (_shell._sessionCreatedAt == std::chrono::system_clock::time_point {})
-                _shell._sessionCreatedAt = now;
+                _shell._sessionCreatedAt = metadata.createdAt;
             sessionManager.setLastActiveSession(name);
             return agent::DirectOutput { .text = "Session saved as '" + name + "'.\n" };
         });
@@ -1292,11 +1276,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
     // /load (alias: /load-session): Load a saved session.
     auto loadHandler = std::function<agent::SlashCommandResult(std::string_view)>(
         [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
+            auto name = std::string(trimSpaces(arguments));
 
             if (name.empty())
             {
@@ -1355,11 +1335,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
     // /delete (alias: /delete-session): Delete a saved session.
     auto deleteHandler = std::function<agent::SlashCommandResult(std::string_view)>(
         [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto name = std::string(arguments);
-            while (!name.empty() && name.front() == ' ')
-                name.erase(name.begin());
-            while (!name.empty() && name.back() == ' ')
-                name.pop_back();
+            auto name = std::string(trimSpaces(arguments));
 
             if (name.empty())
                 return agent::DirectOutput { .text = "Usage: /delete <name>\n" };
@@ -1388,11 +1364,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
     // /rename: Rename the current session.
     registry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "rename", "Rename the current session", [&](std::string_view arguments) -> agent::SlashCommandResult {
-            auto newName = std::string(arguments);
-            while (!newName.empty() && newName.front() == ' ')
-                newName.erase(newName.begin());
-            while (!newName.empty() && newName.back() == ' ')
-                newName.pop_back();
+            auto newName = std::string(trimSpaces(arguments));
 
             if (newName.empty())
                 return agent::DirectOutput { .text = "Usage: /rename <new-name>\n" };
@@ -1508,14 +1480,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
         "model",
         "Switch model (/model <name> or /model to list)",
         [&](std::string_view args) -> agent::SlashCommandResult {
-            auto const trimmedArgs = [&]() -> std::string_view {
-                auto sv = args;
-                while (!sv.empty() && sv.front() == ' ')
-                    sv.remove_prefix(1);
-                while (!sv.empty() && sv.back() == ' ')
-                    sv.remove_suffix(1);
-                return sv;
-            }();
+            auto const trimmedArgs = trimSpaces(args);
 
             if (trimmedArgs.empty())
             {
