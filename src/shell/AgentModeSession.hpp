@@ -17,11 +17,14 @@
 #include <tui/Terminal.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include <agent/Plan.hpp>
+#include <agent/Types.hpp>
+#include <agent/session/AgentMessages.hpp>
 #include <agent/ui/AgentInputComponent.hpp>
 #include <agent/ui/AgentResponseRenderer.hpp>
 #include <agent/ui/ToolStatusComponent.hpp>
@@ -109,6 +112,16 @@ class AgentModeSession
 
     /// Renders the streaming prompt below the current content position.
     void renderStreamingPrompt();
+
+    /// Processes a drained batch of agent worker messages (section 1 of the loop):
+    /// streaming tokens/tool status, plan progress, ask-user / permission requests,
+    /// completion, and shutdown — updating streaming state and the inline prompts.
+    /// @param messages The messages drained from the worker's outbound queue.
+    /// @param modelInfo The active model info (for cost / context-size display).
+    /// @param saveHistory Callback persisting conversation history after relevant events.
+    void drainAgentMessages(std::vector<agent::FromAgentMessage>& messages,
+                            agent::ModelInfo const& modelInfo,
+                            std::function<void()> const& saveHistory);
 
     /// @name Owned per-run loop state (public: accessed by runAgentModeFlow during the migration).
     /// @{
