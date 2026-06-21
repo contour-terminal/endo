@@ -36,6 +36,7 @@ add_library(tui
     completer/Completer.cpp
     completer/FuzzyMatch.cpp
     completer/SmartCaseMatch.cpp
+    platform/TerminalShared.cpp
     runtime/TuiRuntime.cpp
 )
 

@@ -116,17 +116,21 @@ class Terminal
     /// Public so the coroutine runtime's event source can route the report the
     /// same way poll() does (it is otherwise an internal protocol response).
     /// @param focused True if the terminal gained focus, false if it lost focus.
-    void handleFocusEvent(bool focused);
+    /// @return True if the focus state actually changed (handlers were notified).
+    bool handleFocusEvent(bool focused);
 
     /// @brief Removes protocol-response events from @p events, dispatching the
     /// color-scheme and focus reports to their handlers and dropping the rest.
     ///
     /// Shared by poll() and the coroutine runtime's event source so the
     /// "what is an internal report vs. application input" policy lives in one
-    /// place. @c CursorPositionReport / @c CellSizeReport are dropped (their
-    /// values are consumed synchronously by the query methods).
+    /// place (the @c tui::isProtocolReport predicate). @c CursorPositionReport /
+    /// @c CellSizeReport are dropped (their values are consumed synchronously by
+    /// the query methods).
     /// @param events The decoded events to filter in place.
-    void consumeProtocolReports(std::vector<InputEvent>& events);
+    /// @return True if a focus-change report was dispatched (so a caller waiting
+    ///         on activity can redraw); false otherwise.
+    bool consumeProtocolReports(std::vector<InputEvent>& events);
 
     /// @brief Returns whether the terminal window currently has focus.
     [[nodiscard]] auto isFocused() const noexcept -> bool;
