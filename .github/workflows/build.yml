@@ -31,6 +31,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history + tags so the version is derived correctly
 
     # ── Compiler installation (platform-specific) ──
 
@@ -113,6 +115,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history + tags so the version is derived correctly
 
     - name: Install system dependencies
       run: |
@@ -170,6 +174,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history + tags so the MSI version is unique per build
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
