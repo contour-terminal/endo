@@ -2,7 +2,7 @@
 #include <platform/PathUtils.hpp>
 
 #if defined(_WIN32)
-    #include <cctype>
+    #include <cwctype>
     #include <string>
     #include <string_view>
 
@@ -61,11 +61,8 @@ auto canonicalCasePath(std::filesystem::path const& p) -> std::string
         canonical = std::wstring(view);
 
     // The DOS volume name already comes back upper-cased, but normalize it defensively.
-    if (canonical.size() >= 2 && canonical[1] == L':'
-        && std::isalpha(static_cast<unsigned char>(canonical[0])))
-    {
-        canonical[0] = static_cast<wchar_t>(std::toupper(static_cast<unsigned char>(canonical[0])));
-    }
+    if (canonical.size() >= 2 && canonical[1] == L':' && std::iswalpha(static_cast<wint_t>(canonical[0])))
+        canonical[0] = static_cast<wchar_t>(std::towupper(static_cast<wint_t>(canonical[0])));
 
     return normalizePath(std::filesystem::path(canonical));
 #else
