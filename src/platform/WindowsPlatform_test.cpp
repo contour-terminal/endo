@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdlib>
+#include <filesystem>
+#include <string>
 #include <string_view>
+#include <system_error>
 
 #include <platform/PathUtils.hpp>
 #include <platform/Types.hpp>
@@ -83,6 +88,48 @@ TEST_CASE("resolveDevicePath.similar_but_not_null_device", "[platform]")
     CHECK(resolveDevicePath("/dev/zero") == "/dev/zero");
     CHECK(resolveDevicePath("null") == "null");
 }
+
+TEST_CASE("canonicalCasePath.nonexistent_path_falls_back_to_normalize", "[platform]")
+{
+    // A path that does not exist on disk cannot be recased, so the helper must fall
+    // back to a plain separator normalization rather than failing.
+#if defined(_WIN32)
+    CHECK(canonicalCasePath(std::filesystem::path("C:\\does\\not\\exist_endo_xyz"))
+          == "C:/does/not/exist_endo_xyz");
+#else
+    CHECK(canonicalCasePath(std::filesystem::path("/does/not/exist_endo_xyz")) == "/does/not/exist_endo_xyz");
+#endif
+}
+
+#if defined(_WIN32)
+TEST_CASE("canonicalCasePath.corrects_case_and_uppercases_drive", "[platform]")
+{
+    namespace fs = std::filesystem;
+    auto const dirName = std::string("EndoCanonCaseTEST_dir");
+    auto const dir = fs::temp_directory_path() / dirName;
+
+    std::error_code ec;
+    fs::create_directory(dir, ec);
+    REQUIRE_FALSE(ec);
+
+    // Spell the existing directory entirely in lower case (including its drive letter)
+    // to simulate a user-typed path that disagrees with the on-disk capitalization.
+    auto wrongCase = canonicalCasePath(dir);
+    std::ranges::transform(
+        wrongCase, wrongCase.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    auto const result = canonicalCasePath(fs::path(wrongCase));
+    auto const lastComponent = result.substr(result.rfind('/') + 1);
+
+    REQUIRE(result.size() >= 2);
+    CHECK(result[1] == ':');
+    CHECK(std::isupper(static_cast<unsigned char>(result[0])) != 0); // Drive letter upper-cased.
+    CHECK(result.find('\\') == std::string::npos);                   // Forward slashes only.
+    CHECK(lastComponent == dirName);                                 // Real on-disk component case.
+
+    fs::remove(dir, ec);
+}
+#endif
 
 TEST_CASE("homeDirectory.returns_value_when_HOME_set", "[platform]")
 {
