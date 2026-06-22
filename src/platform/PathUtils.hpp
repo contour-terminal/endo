@@ -35,6 +35,24 @@ namespace endo::platform
     return p.generic_string();
 }
 
+/// @brief Returns a path with its real on-disk capitalization and forward slashes.
+///
+/// On Windows the working directory and user-typed paths preserve whatever case was
+/// entered (e.g. `GetCurrentDirectoryW` echoes the case passed to `SetCurrentDirectory`),
+/// which differs from how the path is actually stored on disk. This helper resolves the
+/// path to its canonical, correctly-cased form (via `GetFinalPathNameByHandleW`) and
+/// upper-cases a leading drive letter, then normalizes separators to forward slashes.
+/// Unlike normalizePath() this is a filesystem-touching operation — the path must exist
+/// to be recased; if it does not exist or the lookup fails, it falls back to a plain
+/// normalizePath().
+///
+/// On POSIX this is equivalent to normalizePath(): the filesystem is case-sensitive, so a
+/// path's spelling is already its canonical case.
+///
+/// @param p The path to canonicalize.
+/// @return The path with on-disk capitalization and forward slashes.
+[[nodiscard]] auto canonicalCasePath(std::filesystem::path const& p) -> std::string;
+
 /// @brief Resolves POSIX-style device paths to their platform-native equivalent.
 ///
 /// Endo accepts POSIX device paths (`/dev/null`) across all platforms for portability.

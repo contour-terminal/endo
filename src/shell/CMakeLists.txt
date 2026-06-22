@@ -272,6 +272,7 @@ if(ENDO_TESTING)
         commands/PkillCommand_test.cpp
         ui/PromptComponent_test.cpp
         ui/modules/GitModule_test.cpp
+        ui/modules/PathModule_test.cpp
         ui/Gradient_test.cpp
         completion/Completer_test.cpp
         completion/FSharpCompleter_test.cpp

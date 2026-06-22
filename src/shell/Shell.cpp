@@ -1283,6 +1283,43 @@ namespace
     }
 } // namespace
 
+void Shell::updatePromptContext()
+{
+    auto ctx = PromptContext {};
+    // Canonicalize on-disk capitalization so the prompt shows the real path case
+    // (e.g. "D:/Lastrada" after `cd d:/lastrada`) rather than the typed case.
+    ctx.cwd = platform::canonicalCasePath(_fs.currentPath());
+    emitWindowTitle(ctx.cwd);
+    // Resolve home via the environment abstraction (HOME, then USERPROFILE on Windows)
+    // and canonicalize it the same way as cwd, so the tilde-contraction prefix match in
+    // PathModule compares matching separators and case.
+    if (auto const home = _env.homeDirectory())
+        ctx.homePath = platform::canonicalCasePath(*home);
+    ctx.lastExitCode = _exitCode;
+    ctx.lastDuration = _lastCommandDuration;
+    ctx.terminalWidth = prompt.terminal().columns();
+    ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
+    if (ctx.isSSH)
+    {
+        auto buf = std::array<char, 256> {};
+#if defined(_WIN32)
+        DWORD bufLen = static_cast<DWORD>(buf.size());
+        if (GetComputerNameA(buf.data(), &bufLen))
+            ctx.hostname = buf.data();
+#else
+        if (gethostname(buf.data(), buf.size()) == 0)
+            ctx.hostname = buf.data();
+#endif
+    }
+    ctx.theme = &tui::currentTheme();
+    ctx.fsharpState = &_fsharpState;
+    ctx.outputDefs = &_outputDefinitions;
+    ctx.shellLevel = _shellLevel;
+    ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
+    ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
+    prompt.setPromptContext(std::move(ctx));
+}
+
 int Shell::run()
 {
     if (_interactive && !_tty.isTerminal())
@@ -1376,40 +1413,7 @@ int Shell::run()
         emitPromptStart();
 
         // Populate prompt context for module evaluation
-        {
-            auto ctx = PromptContext {};
-            ctx.cwd = platform::normalizePath(_fs.currentPath());
-            emitWindowTitle(ctx.cwd);
-            if (auto const* home = std::getenv("HOME"))
-                ctx.homePath = home;
-    #if defined(_WIN32)
-            else if (auto const* userProfile = std::getenv("USERPROFILE"))
-                ctx.homePath = userProfile;
-    #endif
-            ctx.lastExitCode = _exitCode;
-            ctx.lastDuration = _lastCommandDuration;
-            ctx.terminalWidth = prompt.terminal().columns();
-            ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
-            if (ctx.isSSH)
-            {
-                auto buf = std::array<char, 256> {};
-    #if defined(_WIN32)
-                DWORD bufLen = static_cast<DWORD>(buf.size());
-                if (GetComputerNameA(buf.data(), &bufLen))
-                    ctx.hostname = buf.data();
-    #else
-                if (gethostname(buf.data(), buf.size()) == 0)
-                    ctx.hostname = buf.data();
-    #endif
-            }
-            ctx.theme = &tui::currentTheme();
-            ctx.fsharpState = &_fsharpState;
-            ctx.outputDefs = &_outputDefinitions;
-            ctx.shellLevel = _shellLevel;
-            ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
-            ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
-            prompt.setPromptContext(std::move(ctx));
-        }
+        updatePromptContext();
 
         // Display the prompt before waiting for input
         prompt.display();
@@ -1510,33 +1514,7 @@ int Shell::run()
         emitPromptStart();
 
         // Populate prompt context for module evaluation
-        {
-            auto ctx = PromptContext {};
-            ctx.cwd = platform::normalizePath(_fs.currentPath());
-            emitWindowTitle(ctx.cwd);
-            if (auto const* home = std::getenv("HOME"))
-                ctx.homePath = home;
-            else if (auto const* userProfile = std::getenv("USERPROFILE"))
-                ctx.homePath = userProfile;
-            ctx.lastExitCode = _exitCode;
-            ctx.lastDuration = _lastCommandDuration;
-            ctx.terminalWidth = prompt.terminal().columns();
-            ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
-            if (ctx.isSSH)
-            {
-                auto buf = std::array<char, 256> {};
-                DWORD bufLen = static_cast<DWORD>(buf.size());
-                if (GetComputerNameA(buf.data(), &bufLen))
-                    ctx.hostname = buf.data();
-            }
-            ctx.theme = &tui::currentTheme();
-            ctx.fsharpState = &_fsharpState;
-            ctx.outputDefs = &_outputDefinitions;
-            ctx.shellLevel = _shellLevel;
-            ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
-            ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
-            prompt.setPromptContext(std::move(ctx));
-        }
+        updatePromptContext();
 
         // Display the prompt before waiting for input
         prompt.display();

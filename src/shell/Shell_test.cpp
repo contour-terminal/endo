@@ -101,6 +101,35 @@ TEST_CASE("shell.cd.home")
     CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
 }
 
+TEST_CASE("shell.cd.home_falls_back_to_USERPROFILE")
+{
+    // Regression: on Windows HOME is unset and USERPROFILE names the home directory.
+    // Bare `cd` must resolve through homeDirectory() (HOME, then USERPROFILE) rather
+    // than falling back to the drive root.
+    TestShell shell;
+    // TestShell seeds HOME from the real environment so external commands resolve;
+    // clear it here so USERPROFILE is the only home source under test.
+    shell.env.unset("HOME");
+    shell.env.set("USERPROFILE", "/home/winuser");
+    shell.env.addValidPath("/home/winuser");
+    shell("cd");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/home/winuser");
+}
+
+TEST_CASE("shell.cd.home_errors_when_no_home_set")
+{
+    // Neither HOME nor USERPROFILE set: bare `cd` reports an error instead of
+    // silently changing to the filesystem root.
+    TestShell shell;
+    // TestShell seeds HOME from the real environment; clear both home sources so
+    // bare `cd` has nothing to resolve and must report an error.
+    shell.env.unset("HOME");
+    shell.env.unset("USERPROFILE");
+    shell("cd");
+    CHECK(shell.exitCode == 1);
+}
+
 TEST_CASE("shell.cd.minus")
 {
     TestShell shell;
@@ -3041,7 +3070,8 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     auto originalDir = std::filesystem::current_path();
     std::filesystem::current_path(tempDir);
 
-    endo::FileCompleter completer;
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
 
     // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
     endo::CompletionContext context {
@@ -3073,6 +3103,38 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
 
     // Fuzzy match should have matchPositions for 's' and 'r'
     CHECK_FALSE(results[1].matchPositions.empty());
+}
+
+TEST_CASE("FileCompleter.relative_prefix_stays_relative")
+{
+    // Regression: a relative nested prefix (e.g. "sub/it") must keep its relative
+    // form in the completion. On Windows, canonicalizing the parent directory would
+    // resolve it to an absolute path and rewrite the user's typed relative prefix.
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_rel_completion";
+    std::filesystem::create_directories(tempDir / "sub");
+    {
+        std::ofstream(tempDir / "sub" / "item.txt");
+    }
+
+    auto const originalDir = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
+
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::FilePath,
+        .prefix = "sub/it",
+        .cursorPosition = 6,
+        .fullInput = "cd sub/it",
+    };
+    auto const results = completer.complete(context);
+
+    std::filesystem::current_path(originalDir);
+    std::filesystem::remove_all(tempDir);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].text == "sub/item.txt"); // Relative, not an absolute path.
 }
 
 // ========================================================================

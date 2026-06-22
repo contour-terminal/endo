@@ -57,7 +57,19 @@ void Shell::builtinChDir(CoreVM::Params& context)
 
 void Shell::builtinChDirHome(CoreVM::Params& context)
 {
-    applyDirectoryChange(_env.get("HOME").value_or("/"), context);
+    // Resolve the home directory through the environment abstraction, which tries HOME
+    // first (Unix) and then USERPROFILE (Windows). Falling back to "/" here would send
+    // Windows users to the drive root instead of their home directory.
+    auto const home = _env.homeDirectory();
+    if (!home.has_value())
+    {
+        error("cd: HOME not set");
+        _exitCode = 1;
+        context.setResult(false);
+        return;
+    }
+
+    applyDirectoryChange(*home, context);
 }
 
 void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Params& context)
