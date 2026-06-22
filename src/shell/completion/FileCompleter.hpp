@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <platform/EnvironmentProvider.hpp>
+
 namespace endo
 {
 
@@ -14,6 +16,11 @@ namespace endo
 class FileCompleter: public CompletionProvider
 {
   public:
+    /// @brief Constructs a file completer.
+    /// @param env Environment abstraction used to resolve the user's home directory
+    ///            for tilde (`~`) expansion.
+    explicit FileCompleter(EnvironmentProvider const& env);
+
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
 
@@ -23,8 +30,10 @@ class FileCompleter: public CompletionProvider
     [[nodiscard]] static std::string escapeForShell(std::string_view path);
 
   private:
+    EnvironmentProvider const& _env;
+
     /// @brief Expands tilde to home directory.
-    [[nodiscard]] static std::filesystem::path expandTilde(std::string_view path);
+    [[nodiscard]] std::filesystem::path expandTilde(std::string_view path) const;
 
     /// @brief Checks if a filename is hidden (starts with dot).
     [[nodiscard]] static bool isHidden(std::string_view name);

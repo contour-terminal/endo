@@ -7,17 +7,19 @@
 #include <tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
-#include <cstdlib>
 
 #include <platform/PathUtils.hpp>
 
 #if !defined(_WIN32)
     #include <pwd.h>
-    #include <unistd.h>
 #endif
 
 namespace endo
 {
+
+FileCompleter::FileCompleter(EnvironmentProvider const& env): _env(env)
+{
+}
 
 std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& context)
 {
@@ -108,7 +110,9 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
             }
             else
             {
-                pathPrefix = platform::normalizePath(dir);
+                // Use the on-disk capitalization (and upper-case drive letter on Windows)
+                // so the completed prefix matches the real path, not the user's typed case.
+                pathPrefix = platform::canonicalCasePath(dir);
                 if (!pathPrefix.empty() && pathPrefix.back() != '/')
                     pathPrefix += '/';
             }
@@ -128,7 +132,7 @@ bool FileCompleter::canHandle(CompletionContextType type) const
            || type == CompletionContextType::Redirect;
 }
 
-std::filesystem::path FileCompleter::expandTilde(std::string_view path)
+std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
 {
     if (path.empty() || path[0] != '~')
         return std::filesystem::path(path);
@@ -137,27 +141,14 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path)
 
     if (path.size() == 1 || path[1] == '/')
     {
-        // ~ or ~/... - current user's home
-#if defined(_WIN32)
-        if (char const* home = std::getenv("HOME"))
-        {
-            result = home;
-        }
-        else if (char const* userProfile = std::getenv("USERPROFILE"))
-        {
-            result = userProfile;
-        }
-#else
-        if (char const* home = std::getenv("HOME"))
-        {
-            result = home;
-        }
-        else if (struct passwd* pw = getpwuid(getuid()))
-        {
-            result = pw->pw_dir;
-        }
-#endif
+        // ~ or ~/... - current user's home, resolved through the environment
+        // abstraction (HOME, then USERPROFILE on Windows) so home resolution is
+        // centralized and matches the rest of the shell.
+        auto const home = _env.homeDirectory();
+        if (!home.has_value())
+            return std::filesystem::path(path); // No home set: leave the path unchanged.
 
+        result = home->string();
         if (path.size() > 1)
             result += std::string(path.substr(1));
     }

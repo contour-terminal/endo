@@ -3,13 +3,13 @@
 
 #if defined(_WIN32)
 
-    #include <platform/PathUtils.hpp>
-
     #include <algorithm>
     #include <cctype>
     #include <filesystem>
 
     #include <windows.h>
+
+    #include <platform/PathUtils.hpp>
 
 namespace endo::platform
 {
@@ -117,7 +117,10 @@ std::expected<void, PlatformError> WindowsEnvironmentProvider::changeDirectory(
 
 std::string WindowsEnvironmentProvider::currentDirectory() const
 {
-    return normalizePath(std::filesystem::current_path());
+    // Report the real on-disk capitalization (and an upper-case drive letter) so that
+    // PWD and the prompt agree with how the directory is actually stored, rather than
+    // echoing whatever case was passed to SetCurrentDirectory.
+    return canonicalCasePath(std::filesystem::current_path());
 }
 
 } // namespace endo::platform

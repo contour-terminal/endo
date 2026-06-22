@@ -101,6 +101,35 @@ TEST_CASE("shell.cd.home")
     CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
 }
 
+TEST_CASE("shell.cd.home_falls_back_to_USERPROFILE")
+{
+    // Regression: on Windows HOME is unset and USERPROFILE names the home directory.
+    // Bare `cd` must resolve through homeDirectory() (HOME, then USERPROFILE) rather
+    // than falling back to the drive root.
+    TestShell shell;
+    // TestShell seeds HOME from the real environment so external commands resolve;
+    // clear it here so USERPROFILE is the only home source under test.
+    shell.env.unset("HOME");
+    shell.env.set("USERPROFILE", "/home/winuser");
+    shell.env.addValidPath("/home/winuser");
+    shell("cd");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/home/winuser");
+}
+
+TEST_CASE("shell.cd.home_errors_when_no_home_set")
+{
+    // Neither HOME nor USERPROFILE set: bare `cd` reports an error instead of
+    // silently changing to the filesystem root.
+    TestShell shell;
+    // TestShell seeds HOME from the real environment; clear both home sources so
+    // bare `cd` has nothing to resolve and must report an error.
+    shell.env.unset("HOME");
+    shell.env.unset("USERPROFILE");
+    shell("cd");
+    CHECK(shell.exitCode == 1);
+}
+
 TEST_CASE("shell.cd.minus")
 {
     TestShell shell;
@@ -3041,7 +3070,8 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     auto originalDir = std::filesystem::current_path();
     std::filesystem::current_path(tempDir);
 
-    endo::FileCompleter completer;
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
 
     // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
     endo::CompletionContext context {

@@ -548,6 +548,14 @@ class Shell final: public SignalCallback
     /// Control characters (C0, DEL, C1) are stripped to prevent escape injection.
     void emitWindowTitle(std::string_view title);
 
+    /// @brief Builds the prompt rendering context and hands it to the prompt component.
+    ///
+    /// Populates a PromptContext with the canonical-cased working directory, the
+    /// tilde-contraction home path, exit/timing state, terminal geometry and theme,
+    /// then calls prompt.setPromptContext(). Shared by the POSIX and Windows REPL
+    /// loops so both render identical context.
+    void updatePromptContext();
+
     template <typename... Args>
     void error(std::format_string<Args...> const& message, Args&&... args)
     {
