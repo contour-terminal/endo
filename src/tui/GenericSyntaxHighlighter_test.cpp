@@ -60,6 +60,21 @@ TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromExtension", "[tui][highlig
     CHECK(detectLanguageFromExtension(".lua") == LanguageId::Python);
     // TOML maps to YAML
     CHECK(detectLanguageFromExtension(".toml") == LanguageId::Yaml);
+    // PowerShell
+    CHECK(detectLanguageFromExtension(".ps1") == LanguageId::PowerShell);
+    CHECK(detectLanguageFromExtension(".psm1") == LanguageId::PowerShell);
+    CHECK(detectLanguageFromExtension(".psd1") == LanguageId::PowerShell);
+    // Windows CMD / batch
+    CHECK(detectLanguageFromExtension(".cmd") == LanguageId::Cmd);
+    CHECK(detectLanguageFromExtension(".bat") == LanguageId::Cmd);
+    // XML and XML-based dialects
+    CHECK(detectLanguageFromExtension(".xml") == LanguageId::Xml);
+    CHECK(detectLanguageFromExtension(".props") == LanguageId::Xml);
+    CHECK(detectLanguageFromExtension(".csproj") == LanguageId::Xml);
+    CHECK(detectLanguageFromExtension(".xaml") == LanguageId::Xml);
+    CHECK(detectLanguageFromExtension(".svg") == LanguageId::Xml);
+    // INI
+    CHECK(detectLanguageFromExtension(".ini") == LanguageId::Ini);
 }
 
 TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromFenceTag", "[tui][highlight]")
@@ -104,6 +119,20 @@ TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromFenceTag", "[tui][highligh
     CHECK(detectLanguageFromFenceTag("docker") == LanguageId::Bash);
     // TOML maps to YAML
     CHECK(detectLanguageFromFenceTag("toml") == LanguageId::Yaml);
+    // PowerShell
+    CHECK(detectLanguageFromFenceTag("powershell") == LanguageId::PowerShell);
+    CHECK(detectLanguageFromFenceTag("pwsh") == LanguageId::PowerShell);
+    CHECK(detectLanguageFromFenceTag("ps1") == LanguageId::PowerShell);
+    // Windows CMD / batch
+    CHECK(detectLanguageFromFenceTag("bat") == LanguageId::Cmd);
+    CHECK(detectLanguageFromFenceTag("batch") == LanguageId::Cmd);
+    CHECK(detectLanguageFromFenceTag("cmd") == LanguageId::Cmd);
+    // XML
+    CHECK(detectLanguageFromFenceTag("xml") == LanguageId::Xml);
+    CHECK(detectLanguageFromFenceTag("xaml") == LanguageId::Xml);
+    // INI
+    CHECK(detectLanguageFromFenceTag("ini") == LanguageId::Ini);
+    CHECK(detectLanguageFromFenceTag("editorconfig") == LanguageId::Ini);
 }
 
 TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromPath", "[tui][highlight]")
@@ -116,6 +145,22 @@ TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromPath", "[tui][highlight]")
     CHECK(detectLanguageFromPath("config.yml") == LanguageId::Yaml);
     CHECK(detectLanguageFromPath("README.md") == LanguageId::Markdown);
     CHECK(detectLanguageFromPath("noext") == LanguageId::None);
+
+    // Well-known config file names are detected by name (not extension).
+    CHECK(detectLanguageFromPath(".clang-format") == LanguageId::Yaml);
+    CHECK(detectLanguageFromPath(".clang-tidy") == LanguageId::Yaml);
+    CHECK(detectLanguageFromPath(".endo-format") == LanguageId::Yaml);
+    CHECK(detectLanguageFromPath(".editorconfig") == LanguageId::Ini);
+    // Filename detection works with leading directories too.
+    CHECK(detectLanguageFromPath("/home/user/project/.clang-format") == LanguageId::Yaml);
+    CHECK(detectLanguageFromPath(R"(C:\proj\.editorconfig)") == LanguageId::Ini);
+    // .endo-format must not be mistaken for the .endo extension.
+    CHECK(detectLanguageFromPath("main.endo") == LanguageId::Endo);
+    // New extensions resolve through the path entry point as well.
+    CHECK(detectLanguageFromPath("Build.props") == LanguageId::Xml);
+    CHECK(detectLanguageFromPath("deploy.ps1") == LanguageId::PowerShell);
+    CHECK(detectLanguageFromPath("setup.bat") == LanguageId::Cmd);
+    CHECK(detectLanguageFromPath("settings.ini") == LanguageId::Ini);
 }
 
 // =============================================================================
@@ -544,6 +589,166 @@ TEST_CASE("GenericSyntaxHighlighter.asm_block_comment", "[tui][highlight]")
     auto const [map2, state2] = highlightLine("end */", LanguageId::Assembly, state1);
     CHECK(hasCategory(map2, 0, 5, Cat::Comment));
     CHECK(state2 == HighlightState::Normal);
+}
+
+// =============================================================================
+// PowerShell highlighting
+// =============================================================================
+
+TEST_CASE("GenericSyntaxHighlighter.powershell_variable_and_cmdlet", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("$result = Get-ChildItem", LanguageId::PowerShell);
+    CHECK(hasCategory(map, 0, 7, Cat::Variable));   // $result
+    CHECK(hasCategory(map, 10, 13, Cat::Function)); // Get-ChildItem (Verb-Noun)
+    CHECK(state == HighlightState::Normal);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.powershell_keyword_operator_comment", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("if ($x -eq 1) { } # done", LanguageId::PowerShell);
+    CHECK(hasCategory(map, 0, 2, Cat::Keyword));  // if
+    CHECK(hasCategory(map, 4, 2, Cat::Variable)); // $x
+    CHECK(hasCategory(map, 7, 3, Cat::Operator)); // -eq
+    CHECK(categoryAt(map, 11, Cat::Number));      // 1
+    CHECK(hasCategory(map, 18, 6, Cat::Comment)); // # done
+}
+
+TEST_CASE("GenericSyntaxHighlighter.powershell_string_interpolation", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine(R"("Hello $name")", LanguageId::PowerShell);
+    CHECK(hasCategory(map, 0, 7, Cat::String));   // "Hello
+    CHECK(hasCategory(map, 7, 5, Cat::Variable)); // $name
+    CHECK(categoryAt(map, 12, Cat::String));      // closing quote
+}
+
+TEST_CASE("GenericSyntaxHighlighter.powershell_block_comment_multi_line", "[tui][highlight]")
+{
+    auto const [map1, state1] = highlightLine("<# start", LanguageId::PowerShell);
+    CHECK(hasCategory(map1, 0, 8, Cat::Comment));
+    CHECK(state1 == HighlightState::PsBlockComment);
+
+    auto const [map2, state2] = highlightLine("middle", LanguageId::PowerShell, state1);
+    CHECK(hasCategory(map2, 0, 6, Cat::Comment));
+    CHECK(state2 == HighlightState::PsBlockComment);
+
+    auto const [map3, state3] = highlightLine("end #> code", LanguageId::PowerShell, state2);
+    CHECK(hasCategory(map3, 0, 6, Cat::Comment));
+    CHECK(state3 == HighlightState::Normal);
+}
+
+// =============================================================================
+// Windows CMD / batch highlighting
+// =============================================================================
+
+TEST_CASE("GenericSyntaxHighlighter.batch_keyword_and_variable", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine(R"(set PATH=%PATH%;C:\bin)", LanguageId::Cmd);
+    CHECK(hasCategory(map, 0, 3, Cat::Keyword));  // set
+    CHECK(hasCategory(map, 9, 6, Cat::Variable)); // %PATH%
+    CHECK(state == HighlightState::Normal);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.batch_rem_comment", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("REM this is a comment", LanguageId::Cmd);
+    CHECK(hasCategory(map, 0, 21, Cat::Comment));
+}
+
+TEST_CASE("GenericSyntaxHighlighter.batch_label", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine(":start", LanguageId::Cmd);
+    CHECK(hasCategory(map, 0, 6, Cat::Function));
+}
+
+TEST_CASE("GenericSyntaxHighlighter.batch_loop_variable", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("echo %%i", LanguageId::Cmd);
+    CHECK(hasCategory(map, 0, 4, Cat::Keyword));  // echo
+    CHECK(hasCategory(map, 5, 3, Cat::Variable)); // %%i
+}
+
+// =============================================================================
+// XML highlighting
+// =============================================================================
+
+TEST_CASE("GenericSyntaxHighlighter.xml_tag_attribute_value", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine(R"(<tag attr="val">)", LanguageId::Xml);
+    CHECK(categoryAt(map, 0, Cat::Punctuation));  // <
+    CHECK(hasCategory(map, 1, 3, Cat::Keyword));  // tag
+    CHECK(hasCategory(map, 5, 4, Cat::Variable)); // attr
+    CHECK(categoryAt(map, 9, Cat::Operator));     // =
+    CHECK(hasCategory(map, 10, 5, Cat::String));  // "val"
+    CHECK(categoryAt(map, 15, Cat::Punctuation)); // >
+    CHECK(state == HighlightState::Normal);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.xml_comment_multi_line", "[tui][highlight]")
+{
+    auto const [map1, state1] = highlightLine("<!-- start", LanguageId::Xml);
+    CHECK(hasCategory(map1, 0, 10, Cat::Comment));
+    CHECK(state1 == HighlightState::XmlComment);
+
+    auto const [map2, state2] = highlightLine("still comment", LanguageId::Xml, state1);
+    CHECK(hasCategory(map2, 0, 13, Cat::Comment));
+    CHECK(state2 == HighlightState::XmlComment);
+
+    auto const [map3, state3] = highlightLine("end -->", LanguageId::Xml, state2);
+    CHECK(hasCategory(map3, 0, 7, Cat::Comment));
+    CHECK(state3 == HighlightState::Normal);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.xml_processing_instruction", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine(R"(<?xml version="1.0"?>)", LanguageId::Xml);
+    CHECK(hasCategory(map, 0, 21, Cat::Preprocessor));
+}
+
+TEST_CASE("GenericSyntaxHighlighter.xml_entity", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("<p>&amp;</p>", LanguageId::Xml);
+    CHECK(categoryAt(map, 1, Cat::Keyword));         // p
+    CHECK(hasCategory(map, 3, 5, Cat::Constructor)); // &amp;
+    CHECK(categoryAt(map, 10, Cat::Keyword));        // p (closing tag)
+}
+
+// =============================================================================
+// INI / .editorconfig highlighting
+// =============================================================================
+
+TEST_CASE("GenericSyntaxHighlighter.ini_section", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("[section]", LanguageId::Ini);
+    CHECK(hasCategory(map, 0, 9, Cat::Keyword));
+    CHECK(state == HighlightState::Normal);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.ini_key_value", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("key = value", LanguageId::Ini);
+    CHECK(hasCategory(map, 0, 3, Cat::Variable)); // key
+    CHECK(categoryAt(map, 4, Cat::Operator));     // =
+    CHECK(hasCategory(map, 6, 5, Cat::String));   // value
+}
+
+TEST_CASE("GenericSyntaxHighlighter.ini_comment", "[tui][highlight]")
+{
+    {
+        auto const [map, state] = highlightLine("; comment", LanguageId::Ini);
+        CHECK(hasCategory(map, 0, 9, Cat::Comment));
+    }
+    {
+        auto const [map, state] = highlightLine("# comment", LanguageId::Ini);
+        CHECK(hasCategory(map, 0, 9, Cat::Comment));
+    }
+}
+
+TEST_CASE("GenericSyntaxHighlighter.ini_editorconfig_glob", "[tui][highlight]")
+{
+    auto const [map, state] = highlightLine("indent_size = 4", LanguageId::Ini);
+    CHECK(hasCategory(map, 0, 11, Cat::Variable)); // indent_size
+    CHECK(categoryAt(map, 12, Cat::Operator));     // =
+    CHECK(categoryAt(map, 14, Cat::String));       // 4
 }
 
 // =============================================================================
