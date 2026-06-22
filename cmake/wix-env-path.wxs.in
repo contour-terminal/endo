@@ -4,13 +4,18 @@
   WIX source fragment: adds endo's bin directory to the system PATH on install
   and removes it on uninstall (Permanent="no").
 
+  Configured by CMake (configure_file, @ONLY) into the build tree so that the
+  component GUID is unique per version. Each installed version owns its own
+  PATH component, so an upgrade cleanly adds the new version's bin directory and
+  removes the previous one — leaving the newest version first/only on PATH.
+
   Compiled as an extra source via CPACK_WIX_EXTRA_SOURCES.
   The ComponentRef is injected into the product feature via wix-path-env.xml.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
     <Fragment>
         <DirectoryRef Id="INSTALL_ROOT">
-            <Component Id="Env_PATH" Guid="F3A7B1C9-2D8E-4F5A-9C6B-1E4D7A3F8B2C" Win64="yes" KeyPath="yes">
+            <Component Id="Env_PATH" Guid="@ENDO_PATH_COMPONENT_GUID@" Win64="yes" KeyPath="yes">
                 <Environment Id="ENV_PATH" Name="PATH" Value="[INSTALL_ROOT]bin"
                              Permanent="no" Part="last" Action="set" System="yes" />
             </Component>

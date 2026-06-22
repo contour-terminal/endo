@@ -71,6 +71,20 @@ sudo cmake --install build/clang-release
 See the [Getting Started](getting-started.md) guide for detailed prerequisites and build
 instructions.
 
+### Windows Installer (.msi)
+
+Windows releases ship as an `.msi` installer. It installs Endo into a version-specific
+directory under `C:\Program Files\Endo\` (for example `C:\Program Files\Endo\1.2.3\`) and
+adds that version's `bin` directory to the system `PATH`.
+
+Because each version installs side by side in its own directory, **you can upgrade or
+reinstall while Endo is still running** -- the installer never replaces the locked,
+in-use binary, so it does not ask you to close running `endo.exe` processes or force a
+reboot. Running sessions keep working; you decide when to restart them. After an upgrade,
+`PATH` resolves `endo` to the newest version, and the previous version's files are removed
+automatically (on the next reboot if it was still in use). See
+[Platform Differences](shell/platform-differences.md#windows) for setup details.
+
 ### GitHub Repository
 
 The source code, issue tracker, and development activity are hosted on GitHub:

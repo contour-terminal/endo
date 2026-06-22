@@ -324,6 +324,26 @@ different location (e.g. `/usr/bin/endo`).
 Windows does not have a single "default shell" concept like POSIX. Instead, different
 contexts use different configuration mechanisms.
 
+#### Installation and upgrades
+
+The Windows `.msi` installs Endo into a version-specific directory under
+`C:\Program Files\Endo\`, for example `C:\Program Files\Endo\1.2.3\bin\endo.exe`, and
+puts that version's `bin` directory on the system `PATH`.
+
+Because each version lives in its own directory, you can **upgrade or reinstall while
+Endo is still running** -- the installer never has to replace the locked, in-use
+`endo.exe`. Already-running Endo sessions keep working unchanged; you choose when to
+restart them. After an upgrade, `PATH` points at the new version, so a bare `endo` (or a
+freshly launched shell) always resolves to the latest installed version. Files from a
+previous version that was still running during the upgrade are cleaned up automatically
+on the next reboot.
+
+!!! tip
+    Prefer referring to Endo as just `endo` (resolved via `PATH`) rather than hard-coding
+    a versioned path like `C:\Program Files\Endo\1.2.3\bin\endo.exe`. A hard-coded
+    versioned path stops working after the next upgrade, whereas the `PATH`-resolved name
+    always points at the newest install.
+
 #### Windows Terminal Default Profile
 
 To launch Endo when you open a new tab in Windows Terminal:
@@ -331,7 +351,7 @@ To launch Endo when you open a new tab in Windows Terminal:
 1. Open **Windows Terminal** and go to **Settings** (Ctrl+,).
 2. Select **Add a new profile** and configure it:
     - **Name**: Endo
-    - **Command line**: `C:\path\to\endo.exe`
+    - **Command line**: `endo.exe` (resolved via `PATH`, so it survives upgrades)
     - **Starting directory**: `%USERPROFILE%`
 3. Optionally set the new profile as the **Default profile** under **Startup**.
 
@@ -364,3 +384,8 @@ Remove-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell
     Replace `C:\path\to\endo.exe` with the actual installation path of the Endo
     executable. If you built from source without installing, this may be inside your
     build directory (e.g. `D:\endo\build\clang-release\src\shell\endo.exe`).
+
+    `DefaultShell` requires an absolute path. Since the `.msi` installs into a
+    version-specific directory (e.g. `C:\Program Files\Endo\1.2.3\bin\endo.exe`), you will
+    need to update this value after a major upgrade, or point it at a stable copy of
+    `endo.exe` outside the versioned install tree.
