@@ -355,7 +355,14 @@ cat [OPTIONS] [FILE...]
 
 **Description:** Reads files sequentially and writes their contents to standard output. If
 no files are given (or when FILE is `-`), reads from standard input. When output goes to a
-terminal, syntax highlighting is applied automatically based on the file extension.
+terminal, syntax highlighting is applied automatically based on the file name.
+
+Highlighting is supported for C/C++ (and C-family languages such as JavaScript, TypeScript,
+Rust, Go), Python, Bash, CMake, Markdown, JSON, YAML, x86 assembly, Git diffs, PowerShell
+(`.ps1`, `.psm1`, `.psd1`), Windows CMD/batch (`.cmd`, `.bat`), XML and XML-based dialects
+(`.xml`, `.props`, `.csproj`, `.targets`, `.vcxproj`, `.xaml`, `.svg`, …), INI (`.ini`), and
+Endo (`.endo`). A few well-known files are recognized by name rather than extension: `.clang-format`,
+`.clang-tidy`, and `.endo-format` are highlighted as YAML, and `.editorconfig` as INI.
 
 **Options:**
 

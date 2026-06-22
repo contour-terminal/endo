@@ -3,6 +3,8 @@
 
 #include <tui/TerminalOutput.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string_view>
@@ -34,17 +36,21 @@ enum class HighlightCategory : std::uint8_t
 /// @brief Supported languages for syntax highlighting.
 enum class LanguageId : std::uint8_t
 {
-    None,     ///< No language — no highlighting applied.
-    Cpp,      ///< C and C++.
-    CMake,    ///< CMake build scripts.
-    Python,   ///< Python.
-    Bash,     ///< Bash/sh shell scripts.
-    Markdown, ///< Markdown.
-    Json,     ///< JSON.
-    Yaml,     ///< YAML.
-    GitDiff,  ///< Git diff output.
-    Assembly, ///< x86 assembly (Intel and AT&T syntax).
-    Endo,     ///< Endo shell language (via registered callback).
+    None,       ///< No language — no highlighting applied.
+    Cpp,        ///< C and C++.
+    CMake,      ///< CMake build scripts.
+    Python,     ///< Python.
+    Bash,       ///< Bash/sh shell scripts.
+    Markdown,   ///< Markdown.
+    Json,       ///< JSON.
+    Yaml,       ///< YAML.
+    GitDiff,    ///< Git diff output.
+    Assembly,   ///< x86 assembly (Intel and AT&T syntax).
+    PowerShell, ///< PowerShell scripts.
+    Cmd,        ///< Windows CMD / batch scripts.
+    Xml,        ///< XML and XML-based dialects (.props, .csproj, .xaml, .svg, …).
+    Ini,        ///< INI / .editorconfig configuration files.
+    Endo,       ///< Endo shell language (via registered callback).
 };
 
 /// @brief State carried across lines for multi-line constructs.
@@ -54,6 +60,8 @@ enum class HighlightState : std::uint8_t
     BlockComment,      ///< Inside a /* ... */ block comment.
     RawString,         ///< Inside a C++ R"(...)" raw string.
     TripleQuoteString, ///< Inside a Python """ or ''' triple-quoted string.
+    XmlComment,        ///< Inside an XML <!-- ... --> comment.
+    PsBlockComment,    ///< Inside a PowerShell <# ... #> block comment.
 };
 
 /// @brief Per-character highlight category for a line.
@@ -137,74 +145,188 @@ using HighlightFunction =
 /// @param fn The highlighting function to call for LanguageId::Endo.
 void registerEndoHighlighter(HighlightFunction fn);
 
+// --- Data-driven language detection tables ---
+
+/// @brief Associates a textual token (file extension or fence tag) with a language.
+struct LanguageToken
+{
+    std::string_view token; ///< The extension (with leading dot) or fence tag to match.
+    LanguageId language;    ///< The language this token maps to.
+};
+
+/// @brief File extension → language table (extensions include the leading dot).
+///
+/// Each row maps one extension to one language; add a row to teach the highlighter a
+/// new extension. Several distinct languages are intentionally folded onto a shared
+/// highlighter (e.g. JS/TS/Rust/Go reuse the C-family highlighter, TOML reuses YAML).
+inline constexpr auto ExtensionLanguageTable = std::to_array<LanguageToken>({
+    // C / C++ and C-family languages sharing the C++ highlighter.
+    { .token = ".cpp", .language = LanguageId::Cpp },
+    { .token = ".cxx", .language = LanguageId::Cpp },
+    { .token = ".cc", .language = LanguageId::Cpp },
+    { .token = ".c", .language = LanguageId::Cpp },
+    { .token = ".hpp", .language = LanguageId::Cpp },
+    { .token = ".hxx", .language = LanguageId::Cpp },
+    { .token = ".hh", .language = LanguageId::Cpp },
+    { .token = ".h", .language = LanguageId::Cpp },
+    { .token = ".ipp", .language = LanguageId::Cpp },
+    { .token = ".js", .language = LanguageId::Cpp },
+    { .token = ".jsx", .language = LanguageId::Cpp },
+    { .token = ".ts", .language = LanguageId::Cpp },
+    { .token = ".tsx", .language = LanguageId::Cpp },
+    { .token = ".rs", .language = LanguageId::Cpp },
+    { .token = ".go", .language = LanguageId::Cpp },
+    { .token = ".java", .language = LanguageId::Cpp },
+    { .token = ".kt", .language = LanguageId::Cpp },
+    { .token = ".cs", .language = LanguageId::Cpp },
+    // Python and Python-like languages.
+    { .token = ".py", .language = LanguageId::Python },
+    { .token = ".pyw", .language = LanguageId::Python },
+    { .token = ".pyi", .language = LanguageId::Python },
+    { .token = ".rb", .language = LanguageId::Python },
+    { .token = ".lua", .language = LanguageId::Python },
+    // Shell.
+    { .token = ".sh", .language = LanguageId::Bash },
+    { .token = ".bash", .language = LanguageId::Bash },
+    { .token = ".zsh", .language = LanguageId::Bash },
+    // Data / config.
+    { .token = ".json", .language = LanguageId::Json },
+    { .token = ".jsonl", .language = LanguageId::Json },
+    { .token = ".yml", .language = LanguageId::Yaml },
+    { .token = ".yaml", .language = LanguageId::Yaml },
+    { .token = ".toml", .language = LanguageId::Yaml },
+    { .token = ".ini", .language = LanguageId::Ini },
+    // Markup / build / diff.
+    { .token = ".md", .language = LanguageId::Markdown },
+    { .token = ".markdown", .language = LanguageId::Markdown },
+    { .token = ".cmake", .language = LanguageId::CMake },
+    { .token = ".diff", .language = LanguageId::GitDiff },
+    { .token = ".patch", .language = LanguageId::GitDiff },
+    { .token = ".asm", .language = LanguageId::Assembly },
+    { .token = ".s", .language = LanguageId::Assembly },
+    { .token = ".S", .language = LanguageId::Assembly },
+    { .token = ".nasm", .language = LanguageId::Assembly },
+    // PowerShell.
+    { .token = ".ps1", .language = LanguageId::PowerShell },
+    { .token = ".psm1", .language = LanguageId::PowerShell },
+    { .token = ".psd1", .language = LanguageId::PowerShell },
+    { .token = ".ps1xml", .language = LanguageId::PowerShell },
+    // Windows CMD / batch.
+    { .token = ".cmd", .language = LanguageId::Cmd },
+    { .token = ".bat", .language = LanguageId::Cmd },
+    // XML and XML-based dialects.
+    { .token = ".xml", .language = LanguageId::Xml },
+    { .token = ".props", .language = LanguageId::Xml },
+    { .token = ".csproj", .language = LanguageId::Xml },
+    { .token = ".targets", .language = LanguageId::Xml },
+    { .token = ".vcxproj", .language = LanguageId::Xml },
+    { .token = ".nuspec", .language = LanguageId::Xml },
+    { .token = ".resx", .language = LanguageId::Xml },
+    { .token = ".xaml", .language = LanguageId::Xml },
+    { .token = ".svg", .language = LanguageId::Xml },
+    { .token = ".plist", .language = LanguageId::Xml },
+    { .token = ".xsd", .language = LanguageId::Xml },
+    { .token = ".wxs", .language = LanguageId::Xml },
+    // Endo.
+    { .token = ".endo", .language = LanguageId::Endo },
+});
+
+/// @brief Markdown fence tag → language table (lowercase tags, without backticks).
+inline constexpr auto FenceTagLanguageTable = std::to_array<LanguageToken>({
+    { .token = "cpp", .language = LanguageId::Cpp },
+    { .token = "c++", .language = LanguageId::Cpp },
+    { .token = "cxx", .language = LanguageId::Cpp },
+    { .token = "c", .language = LanguageId::Cpp },
+    { .token = "h", .language = LanguageId::Cpp },
+    { .token = "hpp", .language = LanguageId::Cpp },
+    { .token = "javascript", .language = LanguageId::Cpp },
+    { .token = "js", .language = LanguageId::Cpp },
+    { .token = "jsx", .language = LanguageId::Cpp },
+    { .token = "typescript", .language = LanguageId::Cpp },
+    { .token = "ts", .language = LanguageId::Cpp },
+    { .token = "tsx", .language = LanguageId::Cpp },
+    { .token = "rust", .language = LanguageId::Cpp },
+    { .token = "rs", .language = LanguageId::Cpp },
+    { .token = "go", .language = LanguageId::Cpp },
+    { .token = "golang", .language = LanguageId::Cpp },
+    { .token = "java", .language = LanguageId::Cpp },
+    { .token = "kotlin", .language = LanguageId::Cpp },
+    { .token = "kt", .language = LanguageId::Cpp },
+    { .token = "csharp", .language = LanguageId::Cpp },
+    { .token = "cs", .language = LanguageId::Cpp },
+    { .token = "c#", .language = LanguageId::Cpp },
+    { .token = "python", .language = LanguageId::Python },
+    { .token = "py", .language = LanguageId::Python },
+    { .token = "ruby", .language = LanguageId::Python },
+    { .token = "rb", .language = LanguageId::Python },
+    { .token = "lua", .language = LanguageId::Python },
+    { .token = "bash", .language = LanguageId::Bash },
+    { .token = "sh", .language = LanguageId::Bash },
+    { .token = "shell", .language = LanguageId::Bash },
+    { .token = "zsh", .language = LanguageId::Bash },
+    { .token = "dockerfile", .language = LanguageId::Bash },
+    { .token = "docker", .language = LanguageId::Bash },
+    { .token = "json", .language = LanguageId::Json },
+    { .token = "jsonl", .language = LanguageId::Json },
+    { .token = "yaml", .language = LanguageId::Yaml },
+    { .token = "yml", .language = LanguageId::Yaml },
+    { .token = "toml", .language = LanguageId::Yaml },
+    { .token = "markdown", .language = LanguageId::Markdown },
+    { .token = "md", .language = LanguageId::Markdown },
+    { .token = "cmake", .language = LanguageId::CMake },
+    { .token = "diff", .language = LanguageId::GitDiff },
+    { .token = "patch", .language = LanguageId::GitDiff },
+    { .token = "asm", .language = LanguageId::Assembly },
+    { .token = "assembly", .language = LanguageId::Assembly },
+    { .token = "nasm", .language = LanguageId::Assembly },
+    { .token = "x86", .language = LanguageId::Assembly },
+    { .token = "x86asm", .language = LanguageId::Assembly },
+    { .token = "intel", .language = LanguageId::Assembly },
+    { .token = "att", .language = LanguageId::Assembly },
+    { .token = "gas", .language = LanguageId::Assembly },
+    { .token = "powershell", .language = LanguageId::PowerShell },
+    { .token = "pwsh", .language = LanguageId::PowerShell },
+    { .token = "ps", .language = LanguageId::PowerShell },
+    { .token = "ps1", .language = LanguageId::PowerShell },
+    { .token = "posh", .language = LanguageId::PowerShell },
+    { .token = "bat", .language = LanguageId::Cmd },
+    { .token = "batch", .language = LanguageId::Cmd },
+    { .token = "cmd", .language = LanguageId::Cmd },
+    { .token = "dosbatch", .language = LanguageId::Cmd },
+    { .token = "dos", .language = LanguageId::Cmd },
+    { .token = "xml", .language = LanguageId::Xml },
+    { .token = "xaml", .language = LanguageId::Xml },
+    { .token = "svg", .language = LanguageId::Xml },
+    { .token = "html", .language = LanguageId::Xml },
+    { .token = "xhtml", .language = LanguageId::Xml },
+    { .token = "ini", .language = LanguageId::Ini },
+    { .token = "editorconfig", .language = LanguageId::Ini },
+    { .token = "dosini", .language = LanguageId::Ini },
+    { .token = "endo", .language = LanguageId::Endo },
+});
+
+/// @brief Looks up a token in a language table, returning the mapped language or None.
+/// @param table The token→language table to search.
+/// @param token The token to look up (exact match).
+/// @return The mapped language, or LanguageId::None if the token is not present.
+template <std::size_t N>
+[[nodiscard]] constexpr auto lookupLanguage(std::array<LanguageToken, N> const& table, std::string_view token)
+    -> LanguageId
+{
+    auto const it = std::ranges::find(table, token, &LanguageToken::token);
+    return it != table.end() ? it->language : LanguageId::None;
+}
+
 // --- Inline constexpr implementations ---
 
 constexpr auto detectLanguageFromExtension(std::string_view ext) -> LanguageId
 {
-    if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c" || ext == ".hpp" || ext == ".hxx"
-        || ext == ".hh" || ext == ".h" || ext == ".ipp")
-        return LanguageId::Cpp;
-    if (ext == ".js" || ext == ".jsx" || ext == ".ts" || ext == ".tsx" || ext == ".rs" || ext == ".go"
-        || ext == ".java" || ext == ".kt" || ext == ".cs")
-        return LanguageId::Cpp;
-    if (ext == ".py" || ext == ".pyw" || ext == ".pyi" || ext == ".rb" || ext == ".lua")
-        return LanguageId::Python;
-    if (ext == ".sh" || ext == ".bash" || ext == ".zsh")
-        return LanguageId::Bash;
-    if (ext == ".json" || ext == ".jsonl")
-        return LanguageId::Json;
-    if (ext == ".yml" || ext == ".yaml" || ext == ".toml")
-        return LanguageId::Yaml;
-    if (ext == ".md" || ext == ".markdown")
-        return LanguageId::Markdown;
-    if (ext == ".cmake")
-        return LanguageId::CMake;
-    if (ext == ".diff" || ext == ".patch")
-        return LanguageId::GitDiff;
-    if (ext == ".asm" || ext == ".s" || ext == ".S" || ext == ".nasm")
-        return LanguageId::Assembly;
-    if (ext == ".endo")
-        return LanguageId::Endo;
-    return LanguageId::None;
+    return lookupLanguage(ExtensionLanguageTable, ext);
 }
 
 constexpr auto detectLanguageFromFenceTag(std::string_view tag) -> LanguageId
 {
-    if (tag == "cpp" || tag == "c++" || tag == "cxx" || tag == "c" || tag == "h" || tag == "hpp")
-        return LanguageId::Cpp;
-    if (tag == "javascript" || tag == "js" || tag == "jsx" || tag == "typescript" || tag == "ts"
-        || tag == "tsx")
-        return LanguageId::Cpp;
-    if (tag == "rust" || tag == "rs" || tag == "go" || tag == "golang")
-        return LanguageId::Cpp;
-    if (tag == "java" || tag == "kotlin" || tag == "kt" || tag == "csharp" || tag == "cs" || tag == "c#")
-        return LanguageId::Cpp;
-    if (tag == "python" || tag == "py")
-        return LanguageId::Python;
-    if (tag == "ruby" || tag == "rb" || tag == "lua")
-        return LanguageId::Python;
-    if (tag == "bash" || tag == "sh" || tag == "shell" || tag == "zsh")
-        return LanguageId::Bash;
-    if (tag == "dockerfile" || tag == "docker")
-        return LanguageId::Bash;
-    if (tag == "json" || tag == "jsonl")
-        return LanguageId::Json;
-    if (tag == "yaml" || tag == "yml")
-        return LanguageId::Yaml;
-    if (tag == "toml")
-        return LanguageId::Yaml;
-    if (tag == "markdown" || tag == "md")
-        return LanguageId::Markdown;
-    if (tag == "cmake")
-        return LanguageId::CMake;
-    if (tag == "diff" || tag == "patch")
-        return LanguageId::GitDiff;
-    if (tag == "asm" || tag == "assembly" || tag == "nasm" || tag == "x86" || tag == "x86asm"
-        || tag == "intel" || tag == "att" || tag == "gas")
-        return LanguageId::Assembly;
-    if (tag == "endo")
-        return LanguageId::Endo;
-    return LanguageId::None;
+    return lookupLanguage(FenceTagLanguageTable, tag);
 }
 
 } // namespace tui

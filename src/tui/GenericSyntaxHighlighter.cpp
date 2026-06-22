@@ -370,6 +370,35 @@ namespace
         "size",   "skip",  "space",        "string", "text",  "type",    "weak", "word",    "zero",
     });
 
+    // PowerShell keywords (sorted, lowercase — matched case-insensitively)
+    constexpr auto powershellKeywords = std::to_array<std::string_view>({
+        "begin",        "break",   "catch",   "class",    "continue", "data",   "define",   "do",
+        "dynamicparam", "else",    "elseif",  "end",      "enum",     "exit",   "filter",   "finally",
+        "for",          "foreach", "from",    "function", "hidden",   "if",     "in",       "inlinescript",
+        "parallel",     "param",   "process", "return",   "sequence", "static", "switch",   "throw",
+        "trap",         "try",     "until",   "using",    "var",      "while",  "workflow",
+    });
+
+    // PowerShell word operators (sorted, lowercase, stored without the leading dash)
+    constexpr auto powershellOperators = std::to_array<std::string_view>({
+        "and",      "as",        "band",     "bnot",        "bor",    "bxor",    "ccontains", "ceq",
+        "cge",      "cgt",       "cle",      "clike",       "clt",    "cmatch",  "cne",       "cnotcontains",
+        "cnotlike", "cnotmatch", "contains", "creplace",    "csplit", "eq",      "f",         "ge",
+        "gt",       "in",        "is",       "isnot",       "join",   "le",      "like",      "lt",
+        "match",    "ne",        "not",      "notcontains", "notin",  "notlike", "notmatch",  "or",
+        "replace",  "shl",       "shr",      "split",       "xor",
+    });
+
+    // Windows CMD / batch keywords (sorted, lowercase — matched case-insensitively)
+    constexpr auto cmdKeywords = std::to_array<std::string_view>({
+        "assoc",    "break",  "call",  "cd",    "chdir",  "cls",      "color",  "copy",   "date",
+        "defined",  "del",    "dir",   "echo",  "else",   "endlocal", "equ",    "erase",  "errorlevel",
+        "exist",    "exit",   "for",   "ftype", "geq",    "goto",     "gtr",    "if",     "in",
+        "leq",      "lss",    "md",    "mkdir", "mklink", "move",     "neq",    "not",    "pause",
+        "popd",     "prompt", "pushd", "rd",    "rem",    "ren",      "rename", "rmdir",  "set",
+        "setlocal", "shift",  "start", "time",  "title",  "type",     "ver",    "verify", "vol",
+    });
+
     /// @brief Converts an identifier to lowercase into a stack buffer and returns a string_view.
     /// @param src The source identifier.
     /// @param buf Buffer of at least src.size() characters.
@@ -1654,32 +1683,649 @@ namespace
         return { std::move(map), state };
     }
 
+    // -------------------------------------------------------------------------
+    // PowerShell highlighter
+    // -------------------------------------------------------------------------
+
+    /// @brief Highlights a line of PowerShell, tracking <# … #> block comments via state.
+    auto highlightPowerShell(std::string_view line, HighlightState state)
+        -> std::pair<HighlightMap, HighlightState>
+    {
+        auto const len = line.size();
+        auto map = HighlightMap(len, HighlightCategory::Default);
+        auto pos = std::size_t { 0 };
+
+        // Continue a <# … #> block comment carried over from the previous line.
+        if (state == HighlightState::PsBlockComment)
+        {
+            while (pos < len)
+            {
+                if (pos + 1 < len && line[pos] == '#' && line[pos + 1] == '>')
+                {
+                    map[pos] = HighlightCategory::Comment;
+                    map[pos + 1] = HighlightCategory::Comment;
+                    pos += 2;
+                    state = HighlightState::Normal;
+                    break;
+                }
+                map[pos] = HighlightCategory::Comment;
+                ++pos;
+            }
+            if (state == HighlightState::PsBlockComment)
+                return { std::move(map), state };
+        }
+
+        while (pos < len)
+        {
+            auto const ch = line[pos];
+
+            // Block comment: <# … #>
+            if (ch == '<' && pos + 1 < len && line[pos + 1] == '#')
+            {
+                auto const start = pos;
+                pos += 2;
+                state = HighlightState::PsBlockComment;
+                while (pos < len)
+                {
+                    if (pos + 1 < len && line[pos] == '#' && line[pos + 1] == '>')
+                    {
+                        pos += 2;
+                        state = HighlightState::Normal;
+                        break;
+                    }
+                    ++pos;
+                }
+                fillRange(map, start, pos - start, HighlightCategory::Comment);
+                continue;
+            }
+
+            // Line comment: #
+            if (ch == '#')
+            {
+                fillRange(map, pos, len - pos, HighlightCategory::Comment);
+                return { std::move(map), HighlightState::Normal };
+            }
+
+            // Variable: $var, ${var}, $env:NAME, $script:var, …
+            if (ch == '$')
+            {
+                auto const start = pos;
+                ++pos;
+                if (pos < len && line[pos] == '{')
+                {
+                    ++pos;
+                    while (pos < len && line[pos] != '}')
+                        ++pos;
+                    if (pos < len)
+                        ++pos; // skip '}'
+                }
+                else
+                {
+                    // identifier chars plus ':' for scope qualifiers (env:, script:, global:)
+                    while (pos < len && (isIdentChar(line[pos]) || line[pos] == ':'))
+                        ++pos;
+                }
+                fillRange(map, start, pos - start, HighlightCategory::Variable);
+                continue;
+            }
+
+            // Word operator: -eq, -match, -not, … (a dash immediately followed by letters)
+            if (ch == '-' && pos + 1 < len
+                && ((line[pos + 1] >= 'a' && line[pos + 1] <= 'z')
+                    || (line[pos + 1] >= 'A' && line[pos + 1] <= 'Z')))
+            {
+                auto const start = pos;
+                auto const wordStart = pos + 1;
+                pos = wordStart;
+                while (pos < len && isIdentChar(line[pos]))
+                    ++pos;
+                auto const word = line.substr(wordStart, pos - wordStart);
+                std::array<char, 64> buf {};
+                auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
+                if (isInSortedArray(powershellOperators, lower))
+                    fillRange(map, start, pos - start, HighlightCategory::Operator);
+                // Otherwise a parameter name like -Path — left as default text.
+                continue;
+            }
+
+            // Strings (single- and double-quoted; backtick escapes inside double quotes)
+            if (ch == '"' || ch == '\'')
+            {
+                auto const quote = ch;
+                map[pos] = HighlightCategory::String;
+                ++pos;
+                while (pos < len)
+                {
+                    if (quote == '"' && line[pos] == '`' && pos + 1 < len)
+                    {
+                        map[pos] = HighlightCategory::String;
+                        map[pos + 1] = HighlightCategory::String;
+                        pos += 2;
+                        continue;
+                    }
+                    if (line[pos] == quote)
+                    {
+                        map[pos] = HighlightCategory::String;
+                        ++pos;
+                        break;
+                    }
+                    if (quote == '"' && line[pos] == '$')
+                    {
+                        auto const varStart = pos;
+                        ++pos;
+                        if (pos < len && line[pos] == '{')
+                        {
+                            ++pos;
+                            while (pos < len && line[pos] != '}')
+                                ++pos;
+                            if (pos < len)
+                                ++pos;
+                        }
+                        else
+                        {
+                            while (pos < len && (isIdentChar(line[pos]) || line[pos] == ':'))
+                                ++pos;
+                        }
+                        fillRange(map, varStart, pos - varStart, HighlightCategory::Variable);
+                        continue;
+                    }
+                    map[pos] = HighlightCategory::String;
+                    ++pos;
+                }
+                continue;
+            }
+
+            // Numbers
+            if (isDigit(ch))
+            {
+                auto const numLen = scanNumber(line, pos);
+                fillRange(map, pos, numLen, HighlightCategory::Number);
+                pos += numLen;
+                continue;
+            }
+
+            // Identifiers / keywords / Verb-Noun cmdlets
+            if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_')
+            {
+                auto const start = pos;
+                while (pos < len && (isIdentChar(line[pos]) || line[pos] == '-'))
+                    ++pos;
+                auto const word = line.substr(start, pos - start);
+                std::array<char, 64> buf {};
+                auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
+                if (isInSortedArray(powershellKeywords, lower))
+                    fillRange(map, start, pos - start, HighlightCategory::Keyword);
+                else if (word.find('-') != std::string_view::npos)
+                    fillRange(map, start, pos - start, HighlightCategory::Function);
+                continue;
+            }
+
+            // Operators
+            if (isOperatorChar(ch) || ch == '@')
+            {
+                map[pos] = HighlightCategory::Operator;
+                ++pos;
+                continue;
+            }
+
+            // Punctuation
+            if (isPunctuationChar(ch))
+            {
+                map[pos] = HighlightCategory::Punctuation;
+                ++pos;
+                continue;
+            }
+
+            ++pos;
+        }
+
+        return { std::move(map), state };
+    }
+
+    // -------------------------------------------------------------------------
+    // Windows CMD / batch highlighter
+    // -------------------------------------------------------------------------
+
+    /// @brief Highlights a line of Windows CMD / batch script.
+    auto highlightBatch(std::string_view line, HighlightState /*state*/)
+        -> std::pair<HighlightMap, HighlightState>
+    {
+        auto const len = line.size();
+        auto map = HighlightMap(len, HighlightCategory::Default);
+        auto pos = std::size_t { 0 };
+
+        // Inspect the first non-blank token for line-level constructs.
+        while (pos < len && (line[pos] == ' ' || line[pos] == '\t'))
+            ++pos;
+
+        // :: comment (a label that is conventionally used as a comment)
+        if (pos + 1 < len && line[pos] == ':' && line[pos + 1] == ':')
+        {
+            fillRange(map, pos, len - pos, HighlightCategory::Comment);
+            return { std::move(map), HighlightState::Normal };
+        }
+
+        // Label definition: :label
+        if (pos < len && line[pos] == ':')
+        {
+            fillRange(map, pos, len - pos, HighlightCategory::Function);
+            return { std::move(map), HighlightState::Normal };
+        }
+
+        // REM comment line (case-insensitive, must be its own token)
+        {
+            auto wordEnd = pos;
+            while (wordEnd < len && isIdentChar(line[wordEnd]))
+                ++wordEnd;
+            auto const first = line.substr(pos, wordEnd - pos);
+            std::array<char, 4> rbuf {};
+            auto const lowerFirst = first.size() <= rbuf.size() ? toLowerInto(first, rbuf.data()) : first;
+            if (lowerFirst == "rem" && (wordEnd == len || line[wordEnd] == ' ' || line[wordEnd] == '\t'))
+            {
+                fillRange(map, pos, len - pos, HighlightCategory::Comment);
+                return { std::move(map), HighlightState::Normal };
+            }
+        }
+
+        while (pos < len)
+        {
+            auto const ch = line[pos];
+
+            // Environment / parameter variable: %VAR%, %1, %%i
+            if (ch == '%')
+            {
+                auto const start = pos;
+                ++pos;
+                if (pos < len && line[pos] == '%') // %%i loop variable
+                {
+                    ++pos;
+                    if (pos < len && isIdentChar(line[pos]))
+                        ++pos;
+                }
+                else if (pos < len && isDigit(line[pos])) // %0 … %9 positional parameter
+                {
+                    ++pos;
+                }
+                else // %VAR%
+                {
+                    while (pos < len && line[pos] != '%')
+                        ++pos;
+                    if (pos < len)
+                        ++pos; // closing '%'
+                }
+                fillRange(map, start, pos - start, HighlightCategory::Variable);
+                continue;
+            }
+
+            // Delayed-expansion variable: !VAR!
+            if (ch == '!' && pos + 1 < len && isIdentChar(line[pos + 1]))
+            {
+                auto const start = pos;
+                ++pos;
+                while (pos < len && line[pos] != '!')
+                    ++pos;
+                if (pos < len)
+                    ++pos; // closing '!'
+                fillRange(map, start, pos - start, HighlightCategory::Variable);
+                continue;
+            }
+
+            // Strings
+            if (ch == '"')
+            {
+                map[pos] = HighlightCategory::String;
+                ++pos;
+                while (pos < len)
+                {
+                    map[pos] = HighlightCategory::String;
+                    if (line[pos] == '"')
+                    {
+                        ++pos;
+                        break;
+                    }
+                    ++pos;
+                }
+                continue;
+            }
+
+            // Numbers
+            if (isDigit(ch))
+            {
+                auto const numLen = scanNumber(line, pos);
+                fillRange(map, pos, numLen, HighlightCategory::Number);
+                pos += numLen;
+                continue;
+            }
+
+            // Identifiers / keywords (case-insensitive)
+            if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_')
+            {
+                auto const start = pos;
+                while (pos < len && isIdentChar(line[pos]))
+                    ++pos;
+                auto const word = line.substr(start, pos - start);
+                std::array<char, 32> buf {};
+                auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
+                if (isInSortedArray(cmdKeywords, lower))
+                    fillRange(map, start, pos - start, HighlightCategory::Keyword);
+                continue;
+            }
+
+            // Operators / redirection: | & > < ^ = etc.
+            if (isOperatorChar(ch))
+            {
+                map[pos] = HighlightCategory::Operator;
+                ++pos;
+                continue;
+            }
+
+            // Punctuation
+            if (isPunctuationChar(ch))
+            {
+                map[pos] = HighlightCategory::Punctuation;
+                ++pos;
+                continue;
+            }
+
+            ++pos;
+        }
+
+        return { std::move(map), HighlightState::Normal };
+    }
+
+    // -------------------------------------------------------------------------
+    // XML highlighter
+    // -------------------------------------------------------------------------
+
+    /// @brief Highlights a line of XML, tracking <!-- … --> comments via state.
+    auto highlightXml(std::string_view line, HighlightState state) -> std::pair<HighlightMap, HighlightState>
+    {
+        auto const len = line.size();
+        auto map = HighlightMap(len, HighlightCategory::Default);
+        auto pos = std::size_t { 0 };
+
+        // Continue a <!-- … --> comment carried over from the previous line.
+        if (state == HighlightState::XmlComment)
+        {
+            while (pos < len)
+            {
+                if (pos + 2 < len && line[pos] == '-' && line[pos + 1] == '-' && line[pos + 2] == '>')
+                {
+                    fillRange(map, pos, 3, HighlightCategory::Comment);
+                    pos += 3;
+                    state = HighlightState::Normal;
+                    break;
+                }
+                map[pos] = HighlightCategory::Comment;
+                ++pos;
+            }
+            if (state == HighlightState::XmlComment)
+                return { std::move(map), state };
+        }
+
+        while (pos < len)
+        {
+            auto const ch = line[pos];
+
+            // Comment: <!-- … -->
+            if (ch == '<' && line.substr(pos).starts_with("<!--"))
+            {
+                auto const start = pos;
+                pos += 4;
+                state = HighlightState::XmlComment;
+                while (pos < len)
+                {
+                    if (pos + 2 < len && line[pos] == '-' && line[pos + 1] == '-' && line[pos + 2] == '>')
+                    {
+                        pos += 3;
+                        state = HighlightState::Normal;
+                        break;
+                    }
+                    ++pos;
+                }
+                fillRange(map, start, pos - start, HighlightCategory::Comment);
+                continue;
+            }
+
+            // CDATA section: <![CDATA[ … ]]>
+            if (ch == '<' && line.substr(pos).starts_with("<![CDATA["))
+            {
+                auto const start = pos;
+                pos += 9;
+                while (
+                    pos < len
+                    && !(pos + 2 < len && line[pos] == ']' && line[pos + 1] == ']' && line[pos + 2] == '>'))
+                    ++pos;
+                if (pos + 2 < len)
+                    pos += 3; // closing ]]>
+                else
+                    pos = len;
+                fillRange(map, start, pos - start, HighlightCategory::String);
+                continue;
+            }
+
+            // Processing instruction: <?xml … ?>
+            if (ch == '<' && pos + 1 < len && line[pos + 1] == '?')
+            {
+                auto const start = pos;
+                pos += 2;
+                while (pos < len && !(pos + 1 < len && line[pos] == '?' && line[pos + 1] == '>'))
+                    ++pos;
+                if (pos + 1 < len)
+                    pos += 2; // closing ?>
+                else
+                    pos = len;
+                fillRange(map, start, pos - start, HighlightCategory::Preprocessor);
+                continue;
+            }
+
+            // Declaration: <!DOCTYPE …>
+            if (ch == '<' && pos + 1 < len && line[pos + 1] == '!')
+            {
+                auto const start = pos;
+                while (pos < len && line[pos] != '>')
+                    ++pos;
+                if (pos < len)
+                    ++pos;
+                fillRange(map, start, pos - start, HighlightCategory::Preprocessor);
+                continue;
+            }
+
+            // Element tag: <tag …>, </tag>, <tag/>
+            if (ch == '<')
+            {
+                map[pos] = HighlightCategory::Punctuation;
+                ++pos;
+                if (pos < len && line[pos] == '/')
+                {
+                    map[pos] = HighlightCategory::Punctuation;
+                    ++pos;
+                }
+                // Tag name
+                auto const nameStart = pos;
+                while (
+                    pos < len
+                    && (isIdentChar(line[pos]) || line[pos] == '-' || line[pos] == ':' || line[pos] == '.'))
+                    ++pos;
+                fillRange(map, nameStart, pos - nameStart, HighlightCategory::Keyword);
+                // Attributes until the closing '>'
+                while (pos < len && line[pos] != '>')
+                {
+                    auto const c = line[pos];
+                    if (c == '"' || c == '\'')
+                    {
+                        auto const quote = c;
+                        map[pos] = HighlightCategory::String;
+                        ++pos;
+                        while (pos < len)
+                        {
+                            map[pos] = HighlightCategory::String;
+                            if (line[pos] == quote)
+                            {
+                                ++pos;
+                                break;
+                            }
+                            ++pos;
+                        }
+                        continue;
+                    }
+                    if (c == '=' || c == '/')
+                    {
+                        map[pos] = c == '=' ? HighlightCategory::Operator : HighlightCategory::Punctuation;
+                        ++pos;
+                        continue;
+                    }
+                    if (isIdentChar(c) || c == '-' || c == ':')
+                    {
+                        auto const attrStart = pos;
+                        while (pos < len
+                               && (isIdentChar(line[pos]) || line[pos] == '-' || line[pos] == ':'
+                                   || line[pos] == '.'))
+                            ++pos;
+                        fillRange(map, attrStart, pos - attrStart, HighlightCategory::Variable);
+                        continue;
+                    }
+                    ++pos;
+                }
+                if (pos < len && line[pos] == '>')
+                {
+                    map[pos] = HighlightCategory::Punctuation;
+                    ++pos;
+                }
+                continue;
+            }
+
+            // Entity reference: &amp; &#10; …
+            if (ch == '&')
+            {
+                auto const start = pos;
+                ++pos;
+                while (pos < len && line[pos] != ';' && (isIdentChar(line[pos]) || line[pos] == '#'))
+                    ++pos;
+                if (pos < len && line[pos] == ';')
+                    ++pos;
+                fillRange(map, start, pos - start, HighlightCategory::Constructor);
+                continue;
+            }
+
+            ++pos;
+        }
+
+        return { std::move(map), state };
+    }
+
+    // -------------------------------------------------------------------------
+    // INI / .editorconfig highlighter
+    // -------------------------------------------------------------------------
+
+    /// @brief Highlights a line of INI / .editorconfig configuration.
+    auto highlightIni(std::string_view line, HighlightState /*state*/)
+        -> std::pair<HighlightMap, HighlightState>
+    {
+        auto const len = line.size();
+        auto map = HighlightMap(len, HighlightCategory::Default);
+        auto pos = std::size_t { 0 };
+
+        while (pos < len && (line[pos] == ' ' || line[pos] == '\t'))
+            ++pos;
+        if (pos >= len)
+            return { std::move(map), HighlightState::Normal };
+
+        // Comment: ; or #
+        if (line[pos] == ';' || line[pos] == '#')
+        {
+            fillRange(map, pos, len - pos, HighlightCategory::Comment);
+            return { std::move(map), HighlightState::Normal };
+        }
+
+        // Section header: [section] (also .editorconfig glob sections)
+        if (line[pos] == '[')
+        {
+            auto const start = pos;
+            while (pos < len && line[pos] != ']')
+                ++pos;
+            if (pos < len)
+                ++pos; // include ']'
+            fillRange(map, start, pos - start, HighlightCategory::Keyword);
+            return { std::move(map), HighlightState::Normal };
+        }
+
+        // key = value  /  key : value
+        auto sepPos = std::string_view::npos;
+        for (auto p = pos; p < len; ++p)
+        {
+            if (line[p] == '=' || line[p] == ':')
+            {
+                sepPos = p;
+                break;
+            }
+        }
+        if (sepPos == std::string_view::npos)
+        {
+            // Bare token — treat as a key.
+            fillRange(map, pos, len - pos, HighlightCategory::Variable);
+            return { std::move(map), HighlightState::Normal };
+        }
+
+        // Key (trim trailing whitespace before the separator).
+        auto keyEnd = sepPos;
+        while (keyEnd > pos && (line[keyEnd - 1] == ' ' || line[keyEnd - 1] == '\t'))
+            --keyEnd;
+        fillRange(map, pos, keyEnd - pos, HighlightCategory::Variable);
+        map[sepPos] = HighlightCategory::Operator;
+
+        // Value (skip leading whitespace) — coloured as a string for visibility.
+        auto valStart = sepPos + 1;
+        while (valStart < len && (line[valStart] == ' ' || line[valStart] == '\t'))
+            ++valStart;
+        fillRange(map, valStart, len - valStart, HighlightCategory::String);
+
+        return { std::move(map), HighlightState::Normal };
+    }
+
 } // namespace
 
 // -------------------------------------------------------------------------
 // Public API
 // -------------------------------------------------------------------------
 
+namespace
+{
+    /// @brief Well-known file names (matched against the full basename) → language.
+    ///
+    /// These files carry no conventional extension yet have a well-defined format:
+    /// the *.clang-format / *.clang-tidy / .endo-format tool configs are YAML, and
+    /// .editorconfig is INI. Build files (Makefile, Dockerfile, …) are folded onto
+    /// their closest existing highlighter. Add a row to recognize a new file name.
+    constexpr auto FilenameLanguageTable = std::to_array<LanguageToken>({
+        { .token = "CMakeLists.txt", .language = LanguageId::CMake },
+        { .token = "Makefile", .language = LanguageId::Bash },
+        { .token = "makefile", .language = LanguageId::Bash },
+        { .token = "GNUmakefile", .language = LanguageId::Bash },
+        { .token = "Dockerfile", .language = LanguageId::Bash },
+        { .token = ".clang-format", .language = LanguageId::Yaml },
+        { .token = ".clang-tidy", .language = LanguageId::Yaml },
+        { .token = ".endo-format", .language = LanguageId::Yaml },
+        { .token = ".editorconfig", .language = LanguageId::Ini },
+    });
+} // namespace
+
 auto detectLanguageFromPath(std::string_view filePath) -> LanguageId
 {
-    // Handle CMakeLists.txt specially
-    if (filePath.ends_with("CMakeLists.txt"))
-        return LanguageId::CMake;
+    // Reduce to the basename so directory components can't fool the match.
+    auto const slash = filePath.find_last_of("/\\");
+    auto const fileName = slash == std::string_view::npos ? filePath : filePath.substr(slash + 1);
 
-    // Handle Makefile
-    if (filePath.ends_with("Makefile") || filePath.ends_with("makefile"))
-        return LanguageId::Bash;
+    // Well-known file names take precedence over extension detection.
+    if (auto const byName = lookupLanguage(FilenameLanguageTable, fileName); byName != LanguageId::None)
+        return byName;
 
-    // Handle Dockerfile
-    if (filePath.ends_with("Dockerfile"))
-        return LanguageId::Bash;
-
-    // Extract extension
-    auto const dotPos = filePath.rfind('.');
+    // Fall back to extension detection.
+    auto const dotPos = fileName.rfind('.');
     if (dotPos == std::string_view::npos)
         return LanguageId::None;
 
-    return detectLanguageFromExtension(filePath.substr(dotPos));
+    return detectLanguageFromExtension(fileName.substr(dotPos));
 }
 
 void registerEndoHighlighter(HighlightFunction fn)
@@ -1704,6 +2350,10 @@ auto highlightLine(std::string_view line, LanguageId language, HighlightState st
         case LanguageId::Yaml: return highlightYaml(line, state);
         case LanguageId::GitDiff: return highlightGitDiff(line, state);
         case LanguageId::Assembly: return highlightAssembly(line, state);
+        case LanguageId::PowerShell: return highlightPowerShell(line, state);
+        case LanguageId::Cmd: return highlightBatch(line, state);
+        case LanguageId::Xml: return highlightXml(line, state);
+        case LanguageId::Ini: return highlightIni(line, state);
         case LanguageId::Endo:
             if (endoHighlighter())
                 return endoHighlighter()(line, state);
