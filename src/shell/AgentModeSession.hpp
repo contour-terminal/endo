@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <future>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -171,6 +172,11 @@ class AgentModeSession
     /// Renders the tool-status component to an off-screen buffer and writes it out.
     void renderToolStatusDirect();
 
+    /// Re-lays out and redraws the agent input line to the screen, sizing it to
+    /// the terminal width and the component's current preferred height. Used after
+    /// a prompt closes or a response completes, to return to the input line.
+    void redrawInputComponent();
+
     /// Clears the streaming prompt, restoring the cursor to the content end.
     void clearStreamingPrompt();
 
@@ -238,6 +244,18 @@ class AgentModeSession
     /// @param name The session name to record in the metadata.
     /// @return The populated session metadata.
     [[nodiscard]] agent::SessionMetadata buildSessionMetadata(std::string name) const;
+
+    /// Echoes an answered/cancelled ask-user question to the scrollback as a
+    /// bordered question + option list. Shared by the confirmed and cancelled
+    /// input paths so the rendering lives in one place.
+    /// @param config The question configuration (text and options).
+    /// @param highlighted Indices of options to draw selected (▶, bold); empty for none.
+    /// @param otherAnswer A custom "Other..." answer to append as a selected row, if any.
+    /// @param notice A trailing dim notice (e.g. "(cancelled)") to append, if any.
+    void echoQuestionToScrollback(tui::QuestionConfig const& config,
+                                  std::set<std::size_t> const& highlighted,
+                                  std::optional<std::string_view> otherAnswer,
+                                  std::optional<std::string_view> notice);
 
     Shell& _shell;                                        ///< Owning shell (befriended for agent members).
     tui::TerminalOutput& _out;                            ///< Terminal output.

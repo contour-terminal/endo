@@ -65,16 +65,25 @@ namespace
             text.remove_suffix(1);
         return text;
     }
+
+    /// Emits the terminal sequence that clears an inline prompt region, restoring
+    /// the cursor to the saved content position. Shared by every inline prompt and
+    /// the streaming prompt so the clear protocol lives in one place.
+    /// @param output The terminal output to write the clear sequence to.
+    void clearInlineRegion(tui::TerminalOutput& output)
+    {
+        output.hideCursor();
+        output.restoreCursor();
+        output.clearToEndOfDisplay();
+        output.flush();
+    }
 } // namespace
 
 void InlinePrompt::clear(tui::TerminalOutput& output)
 {
     if (!visible)
         return;
-    output.hideCursor();
-    output.restoreCursor();
-    output.clearToEndOfDisplay();
-    output.flush();
+    clearInlineRegion(output);
     visible = false;
 }
 
@@ -145,14 +154,19 @@ void AgentModeSession::renderToolStatusDirect()
     renderComponentInline(_out, _toolStatusComponent, _terminal.columns());
 }
 
+void AgentModeSession::redrawInputComponent()
+{
+    _screen.releaseCursor();
+    _inputComponent.setArea(tui::Rect {
+        .x = 0, .y = 0, .width = _terminal.columns(), .height = _inputComponent.preferredSize().height });
+    _screen.draw();
+}
+
 void AgentModeSession::clearStreamingPrompt()
 {
     if (!streamingPromptVisible)
         return;
-    _out.hideCursor();
-    _out.restoreCursor();
-    _out.clearToEndOfDisplay();
-    _out.flush();
+    clearInlineRegion(_out);
     streamingPromptVisible = false;
 }
 
@@ -212,7 +226,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                 else if constexpr (std::is_same_v<T, agent::ToolStatusMessage>)
                 {
                     clearStreamingPrompt();
-                    inputComponent.setActivityLabel("Running " + m.call.name + "...");
+                    inputComponent.setActivityLabel(std::format("Running {}...", m.call.name));
                     // Skip ask_user — the QuestionComponent renders the question text.
                     if (_shell.agentConfig.logToolUses && m.call.name != "ask_user")
                     {
@@ -269,7 +283,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                     else if (!m.success)
                     {
                         auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                        out.writeText("\nError: " + m.errorMessage + "\n", errorStyle);
+                        out.writeText(std::format("\nError: {}\n", m.errorMessage), errorStyle);
                         out.flush();
                     }
 
@@ -335,11 +349,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                     else
                     {
                         // Re-render input component for next query.
-                        screen.releaseCursor();
-                        auto const newPrefSize = inputComponent.preferredSize();
-                        inputComponent.setArea(tui::Rect {
-                            .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                        screen.draw();
+                        redrawInputComponent();
                     }
                 }
                 else if constexpr (std::is_same_v<T, agent::AskUserRequest>)
@@ -417,7 +427,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         out.writeText(std::format("[\xe2\x9c\x97] Step {} failed", m.stepIndex + 1),
                                       errStyle);
                         if (!m.errorMessage.empty())
-                            out.writeText(": " + m.errorMessage, errStyle);
+                            out.writeText(std::format(": {}", m.errorMessage), errStyle);
                         out.linefeed();
                     }
                     out.flush();
@@ -438,11 +448,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                     inputComponent.setThinkingActive(false);
                     saveHistory();
 
-                    screen.releaseCursor();
-                    auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect {
-                        .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                    screen.draw();
+                    redrawInputComponent();
                 }
                 else if constexpr (std::is_same_v<T, agent::TraceEventMessage>)
                 {
@@ -486,6 +492,50 @@ void AgentModeSession::ensureSystemPromptReady()
     systemPromptReady = true;
 }
 
+void AgentModeSession::echoQuestionToScrollback(tui::QuestionConfig const& config,
+                                                std::set<std::size_t> const& highlighted,
+                                                std::optional<std::string_view> otherAnswer,
+                                                std::optional<std::string_view> notice)
+{
+    auto const& theme = tui::currentTheme();
+    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+    auto const questionStyle = tui::Style { .fg = theme.colors.text };
+    auto const normalStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+    auto const selectedStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+
+    // Question text.
+    _out.writeText("│ ", barStyle);
+    _out.writeText(config.questionText, questionStyle);
+    _out.linefeed();
+    // Options: highlighted ones get the selected marker, the rest are dim.
+    for (auto i = std::size_t { 0 }; i < config.options.size(); ++i)
+    {
+        _out.writeText("│ ", barStyle);
+        if (highlighted.contains(i))
+            _out.writeText(std::format(" \xe2\x96\xb6 {}", config.options[i]), selectedStyle);
+        else
+            _out.writeText(std::format("   {}", config.options[i]), normalStyle);
+        _out.linefeed();
+    }
+    // Custom "Other..." answer, rendered as a selected row.
+    if (otherAnswer)
+    {
+        _out.writeText("│ ", barStyle);
+        _out.writeText(std::format(" \xe2\x96\xb6 {}", *otherAnswer), selectedStyle);
+        _out.linefeed();
+    }
+    // Optional trailing notice (e.g. cancellation).
+    if (notice)
+    {
+        _out.writeText("│ ", barStyle);
+        _out.writeText(*notice, normalStyle);
+        _out.linefeed();
+    }
+    _out.writeText("│", barStyle);
+    _out.linefeed();
+    _out.flush();
+}
+
 LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                                                bool& needsRedraw,
                                                agent::SlashCommandRegistry const& slashRegistry)
@@ -512,110 +562,37 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
         auto const stepResult = askUserPrompt.component->step(event);
         if (stepResult && stepResult->confirmed)
         {
-            {
-                auto const& answerText = stepResult->answer;
-                auto const qConfig = askUserPrompt.component->config();
-                auto const selectedIdx = stepResult->selectedIndex;
-                auto const& checkedIdx = stepResult->checkedIndices;
-                auto const otherActive = stepResult->otherActive;
-                worker.inbound().push(
-                    agent::UserAnswerMessage { .requestId = askUserPrompt.requestId,
-                                               .answer = agent::UserAnswer { .answer = answerText } });
-                askUserPrompt.clear(out);
-                // Echo question + options with selection to scrollback
-                {
-                    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                    auto const questionStyle = tui::Style { .fg = theme.colors.text };
-                    auto const normalStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                    auto const selectedStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
-                    // Question text
-                    out.writeText("\u2502 ", barStyle);
-                    out.writeText(qConfig.questionText, questionStyle);
-                    out.linefeed();
-                    // Options
-                    if (qConfig.multiSelect)
-                    {
-                        auto const checkedSet = std::set<std::size_t>(checkedIdx.begin(), checkedIdx.end());
-                        for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
-                        {
-                            auto const checked = checkedSet.contains(i);
-                            out.writeText("\u2502 ", barStyle);
-                            if (checked)
-                            {
-                                out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
-                            }
-                            else
-                            {
-                                out.writeText("   " + qConfig.options[i], normalStyle);
-                            }
-                            out.linefeed();
-                        }
-                    }
-                    else
-                    {
-                        for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
-                        {
-                            out.writeText("\u2502 ", barStyle);
-                            if (!otherActive && i == selectedIdx)
-                            {
-                                out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
-                            }
-                            else
-                            {
-                                out.writeText("   " + qConfig.options[i], normalStyle);
-                            }
-                            out.linefeed();
-                        }
-                    }
-                    // Custom "Other..." text
-                    if (otherActive)
-                    {
-                        out.writeText("\u2502 ", barStyle);
-                        out.writeText(" \xe2\x96\xb6 " + answerText, selectedStyle);
-                        out.linefeed();
-                    }
-                    out.writeText("\u2502", barStyle);
-                    out.linefeed();
-                    out.flush();
-                }
-                askUserPrompt.reset();
-            }
+            auto const& answerText = stepResult->answer;
+            auto const qConfig = askUserPrompt.component->config();
+            auto const otherActive = stepResult->otherActive;
+            worker.inbound().push(agent::UserAnswerMessage {
+                .requestId = askUserPrompt.requestId, .answer = agent::UserAnswer { .answer = answerText } });
+            askUserPrompt.clear(out);
+
+            // Determine which option rows render as selected: every checked row in
+            // multi-select, the single chosen row otherwise (none when "Other" won).
+            auto highlighted = std::set<std::size_t> {};
+            if (qConfig.multiSelect)
+                highlighted = std::set<std::size_t>(stepResult->checkedIndices.begin(),
+                                                    stepResult->checkedIndices.end());
+            else if (!otherActive)
+                highlighted.insert(static_cast<std::size_t>(stepResult->selectedIndex));
+
+            echoQuestionToScrollback(qConfig,
+                                     highlighted,
+                                     otherActive ? std::optional<std::string_view>(answerText) : std::nullopt,
+                                     std::nullopt);
+            askUserPrompt.reset();
         }
         else if (stepResult)
         {
-            {
-                auto const qConfig = askUserPrompt.component->config();
-                worker.inbound().push(
-                    agent::UserAnswerMessage { .requestId = askUserPrompt.requestId,
-                                               .answer = agent::UserAnswer { .cancelled = true } });
-                askUserPrompt.clear(out);
-                // Echo question + options with cancellation to scrollback
-                {
-                    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                    auto const questionStyle = tui::Style { .fg = theme.colors.text };
-                    auto const normalStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                    auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-                    // Question text
-                    out.writeText("\u2502 ", barStyle);
-                    out.writeText(qConfig.questionText, questionStyle);
-                    out.linefeed();
-                    // Options (all unselected)
-                    for (auto const& opt: qConfig.options)
-                    {
-                        out.writeText("\u2502 ", barStyle);
-                        out.writeText("   " + opt, normalStyle);
-                        out.linefeed();
-                    }
-                    // Cancellation notice
-                    out.writeText("\u2502 ", barStyle);
-                    out.writeText(" (cancelled)", dimStyle);
-                    out.linefeed();
-                    out.writeText("\u2502", barStyle);
-                    out.linefeed();
-                    out.flush();
-                }
-                askUserPrompt.reset();
-            }
+            auto const qConfig = askUserPrompt.component->config();
+            worker.inbound().push(agent::UserAnswerMessage {
+                .requestId = askUserPrompt.requestId, .answer = agent::UserAnswer { .cancelled = true } });
+            askUserPrompt.clear(out);
+            echoQuestionToScrollback(
+                qConfig, {}, std::nullopt, std::optional<std::string_view> { " (cancelled)" });
+            askUserPrompt.reset();
         }
         else if (askUserPrompt.component->stepChangedState())
         {
@@ -723,12 +700,13 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                         _shell._activeSessionName = name;
                         _shell._sessionCreatedAt = meta.createdAt;
                         sessionManager.setLastActiveSession(name);
-                        out.writeText("Session '" + name + "' loaded.\n");
+                        out.writeText(std::format("Session '{}' loaded.\n", name));
                     }
                     else
                     {
                         auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                        out.writeText("Failed to load session: " + loaded.error().message + "\n", errorStyle);
+                        out.writeText(std::format("Failed to load session: {}\n", loaded.error().message),
+                                      errorStyle);
                     }
                 }
                 sessionPickerPrompt.reset();
@@ -784,21 +762,13 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                     auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
                     out.writeText("Plan discarded.\n", dimStyle);
                     out.flush();
-                    screen.releaseCursor();
-                    auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect {
-                        .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                    screen.draw();
+                    redrawInputComponent();
                 }
                 else // "Revise"
                 {
                     pendingPlan.reset();
                     // Stay in plan mode for revision.
-                    screen.releaseCursor();
-                    auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect {
-                        .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                    screen.draw();
+                    redrawInputComponent();
                 }
             }
         }
@@ -807,13 +777,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
             planApprovalPrompt.clear(out);
             planApprovalPrompt.reset();
             pendingPlan.reset();
-            {
-                screen.releaseCursor();
-                auto const newPrefSize = inputComponent.preferredSize();
-                inputComponent.setArea(
-                    tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
-                screen.draw();
-            }
+            redrawInputComponent();
         }
         else if (planApprovalPrompt.component->stepChangedState())
         {
@@ -972,7 +936,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                 else
                 {
                     auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                    out.writeText("Unknown command: /" + cmdName + "\n", errorStyle);
+                    out.writeText(std::format("Unknown command: /{}\n", cmdName), errorStyle);
                     out.flush();
                 }
             }
@@ -1225,8 +1189,9 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
             sessionManager.clearLastActiveSession();
 
             if (!savedName.empty())
-                return agent::DirectOutput { .text = "Session saved as '" + savedName
-                                                     + "'. Starting new conversation.\n" };
+                return agent::DirectOutput {
+                    .text = std::format("Session saved as '{}'. Starting new conversation.\n", savedName)
+                };
             return agent::DirectOutput { .text = "Starting new conversation.\n" };
         });
     registry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
@@ -1259,14 +1224,14 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
             auto result =
                 sessionManager.saveSession(name, _shell._agentSession->history().messages(), metadata);
             if (!result.has_value())
-                return agent::DirectOutput { .text =
-                                                 "Failed to save session: " + result.error().message + "\n" };
+                return agent::DirectOutput { .text = std::format("Failed to save session: {}\n",
+                                                                 result.error().message) };
 
             _shell._activeSessionName = name;
             if (_shell._sessionCreatedAt == std::chrono::system_clock::time_point {})
                 _shell._sessionCreatedAt = metadata.createdAt;
             sessionManager.setLastActiveSession(name);
-            return agent::DirectOutput { .text = "Session saved as '" + name + "'.\n" };
+            return agent::DirectOutput { .text = std::format("Session saved as '{}'.\n", name) };
         });
     registry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "save", "Save current session with a name", saveHandler));
@@ -1305,8 +1270,8 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
             // Load by name.
             auto loaded = sessionManager.loadSession(name);
             if (!loaded.has_value())
-                return agent::DirectOutput { .text =
-                                                 "Failed to load session: " + loaded.error().message + "\n" };
+                return agent::DirectOutput { .text = std::format("Failed to load session: {}\n",
+                                                                 loaded.error().message) };
 
             auto& [meta, messages] = *loaded;
             (*_shell._agentSession).reset();
@@ -1324,8 +1289,8 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
             _shell._activeSessionName = name;
             _shell._sessionCreatedAt = meta.createdAt;
             sessionManager.setLastActiveSession(name);
-            return agent::DirectOutput { .text = "Session '" + name + "' loaded ("
-                                                 + std::to_string(meta.turnCount) + " turns).\n" };
+            return agent::DirectOutput { .text = std::format(
+                                             "Session '{}' loaded ({} turns).\n", name, meta.turnCount) };
         });
     registry.registerCommand(
         std::make_unique<agent::CallbackSlashCommand>("load", "Load a saved session", loadHandler));
@@ -1341,12 +1306,12 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
                 return agent::DirectOutput { .text = "Usage: /delete <name>\n" };
 
             if (!sessionManager.sessionExists(name))
-                return agent::DirectOutput { .text = "Session '" + name + "' not found.\n" };
+                return agent::DirectOutput { .text = std::format("Session '{}' not found.\n", name) };
 
             auto result = sessionManager.removeSession(name);
             if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to delete session: " + result.error().message
-                                                     + "\n" };
+                return agent::DirectOutput { .text = std::format("Failed to delete session: {}\n",
+                                                                 result.error().message) };
 
             if (_shell._activeSessionName == name)
             {
@@ -1354,7 +1319,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
                 _shell._sessionCreatedAt = {};
                 sessionManager.clearLastActiveSession();
             }
-            return agent::DirectOutput { .text = "Session '" + name + "' deleted.\n" };
+            return agent::DirectOutput { .text = std::format("Session '{}' deleted.\n", name) };
         });
     registry.registerCommand(
         std::make_unique<agent::CallbackSlashCommand>("delete", "Delete a saved session", deleteHandler));
@@ -1370,22 +1335,23 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
                 return agent::DirectOutput { .text = "Usage: /rename <new-name>\n" };
 
             if (sessionManager.sessionExists(newName))
-                return agent::DirectOutput { .text = "Session '" + newName + "' already exists.\n" };
+                return agent::DirectOutput { .text = std::format("Session '{}' already exists.\n", newName) };
 
             if (_shell._activeSessionName.empty())
             {
                 // No session saved yet — just set the name for the next save.
                 _shell._activeSessionName = newName;
-                return agent::DirectOutput { .text = "Session will be saved as '" + newName + "'.\n" };
+                return agent::DirectOutput { .text =
+                                                 std::format("Session will be saved as '{}'.\n", newName) };
             }
 
             auto result = sessionManager.renameSession(_shell._activeSessionName, newName);
             if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to rename session: " + result.error().message
-                                                     + "\n" };
+                return agent::DirectOutput { .text = std::format("Failed to rename session: {}\n",
+                                                                 result.error().message) };
 
             _shell._activeSessionName = newName;
-            return agent::DirectOutput { .text = "Session renamed to '" + newName + "'.\n" };
+            return agent::DirectOutput { .text = std::format("Session renamed to '{}'.\n", newName) };
         }));
 
     // /list (alias: /sessions): List saved sessions.
@@ -1393,8 +1359,8 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
         [&](std::string_view) -> agent::SlashCommandResult {
             auto sessionsResult = sessionManager.listSessions();
             if (!sessionsResult.has_value())
-                return agent::DirectOutput { .text = "Failed to list sessions: "
-                                                     + sessionsResult.error().message + "\n" };
+                return agent::DirectOutput { .text = std::format("Failed to list sessions: {}\n",
+                                                                 sessionsResult.error().message) };
 
             if (sessionsResult->empty())
                 return agent::DirectOutput { .text = "No saved sessions.\n" };
