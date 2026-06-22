@@ -112,7 +112,11 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
             {
                 // Use the on-disk capitalization (and upper-case drive letter on Windows)
                 // so the completed prefix matches the real path, not the user's typed case.
-                pathPrefix = platform::canonicalCasePath(dir);
+                // Only canonicalize absolute paths: canonicalCasePath() resolves to an
+                // absolute path, which would otherwise rewrite a relative prefix the user
+                // typed (e.g. "foo/") into an absolute one.
+                pathPrefix =
+                    dir.is_absolute() ? platform::canonicalCasePath(dir) : platform::normalizePath(dir);
                 if (!pathPrefix.empty() && pathPrefix.back() != '/')
                     pathPrefix += '/';
             }
@@ -148,7 +152,7 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
         if (!home.has_value())
             return std::filesystem::path(path); // No home set: leave the path unchanged.
 
-        result = home->string();
+        result = platform::normalizePath(*home); // Forward slashes, matching the rest.
         if (path.size() > 1)
             result += std::string(path.substr(1));
     }

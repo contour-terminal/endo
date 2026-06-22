@@ -3,8 +3,10 @@
 
 #if defined(_WIN32)
     #include <cwctype>
+    #include <memory>
     #include <string>
     #include <string_view>
+    #include <type_traits>
 
     #include <windows.h>
 #endif
@@ -23,27 +25,27 @@ auto canonicalCasePath(std::filesystem::path const& p) -> std::string
     // GetLongPathNameW only expands 8.3 short names — it leaves already-long components
     // in whatever case they were passed — so it cannot fix the casing the shell needs.
     // FILE_FLAG_BACKUP_SEMANTICS is required to obtain a handle to a directory.
-    auto* const handle = CreateFileW(native.c_str(),
-                                     0,
-                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                     nullptr,
-                                     OPEN_EXISTING,
-                                     FILE_FLAG_BACKUP_SEMANTICS,
-                                     nullptr);
-    if (handle == INVALID_HANDLE_VALUE)
+    auto* const rawHandle = CreateFileW(native.c_str(),
+                                        0,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr);
+    if (rawHandle == INVALID_HANDLE_VALUE)
         return normalizePath(p); // Non-existent path or access failure: fall back.
 
+    // Own the handle via RAII so it is closed on every return path (including exceptions).
+    auto const handle =
+        std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&CloseHandle)>(rawHandle, &CloseHandle);
+
     auto const flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
-    auto const needed = GetFinalPathNameByHandleW(handle, nullptr, 0, flags);
+    auto const needed = GetFinalPathNameByHandleW(handle.get(), nullptr, 0, flags);
     if (needed == 0)
-    {
-        CloseHandle(handle);
         return normalizePath(p);
-    }
 
     auto buffer = std::wstring(needed, L'\0');
-    auto const written = GetFinalPathNameByHandleW(handle, buffer.data(), needed, flags);
-    CloseHandle(handle);
+    auto const written = GetFinalPathNameByHandleW(handle.get(), buffer.data(), needed, flags);
     if (written == 0 || written >= needed)
         return normalizePath(p);
     buffer.resize(written);

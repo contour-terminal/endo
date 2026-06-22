@@ -3105,6 +3105,38 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     CHECK_FALSE(results[1].matchPositions.empty());
 }
 
+TEST_CASE("FileCompleter.relative_prefix_stays_relative")
+{
+    // Regression: a relative nested prefix (e.g. "sub/it") must keep its relative
+    // form in the completion. On Windows, canonicalizing the parent directory would
+    // resolve it to an absolute path and rewrite the user's typed relative prefix.
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_rel_completion";
+    std::filesystem::create_directories(tempDir / "sub");
+    {
+        std::ofstream(tempDir / "sub" / "item.txt");
+    }
+
+    auto const originalDir = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
+
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::FilePath,
+        .prefix = "sub/it",
+        .cursorPosition = 6,
+        .fullInput = "cd sub/it",
+    };
+    auto const results = completer.complete(context);
+
+    std::filesystem::current_path(originalDir);
+    std::filesystem::remove_all(tempDir);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].text == "sub/item.txt"); // Relative, not an absolute path.
+}
+
 // ========================================================================
 // String Interpolation Tests
 // ========================================================================
