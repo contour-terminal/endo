@@ -23,9 +23,17 @@ namespace
 
         entry.name = dirEntry.path().filename().string();
 
-        auto const status = dirEntry.status(ec);
+        // status() follows symlinks, so a dangling symlink (its target was removed) fails to
+        // resolve. Fall back to the non-following symlink_status() so broken links are still
+        // listed rather than silently dropped — matching `ls`.
+        auto status = dirEntry.status(ec);
         if (ec)
-            return false;
+        {
+            ec.clear();
+            status = dirEntry.symlink_status(ec);
+            if (ec)
+                return false;
+        }
 
         entry.isDir = fs::is_directory(status);
         entry.mode = static_cast<int64_t>(status.permissions()) & 0777;
@@ -45,8 +53,7 @@ namespace
         {
 #if defined(__APPLE__)
             // macOS libc++ lacks std::chrono::clock_cast; file_clock uses the POSIX epoch.
-            entry.mtime =
-                std::chrono::duration_cast<std::chrono::seconds>(lwt.time_since_epoch()).count();
+            entry.mtime = std::chrono::duration_cast<std::chrono::seconds>(lwt.time_since_epoch()).count();
 #else
             auto const sysTime = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
             entry.mtime =
