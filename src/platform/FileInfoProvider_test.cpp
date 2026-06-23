@@ -198,6 +198,24 @@ TEST_CASE("LinuxFileInfoProvider.listDirectory_glob_no_match", "[platform][linux
     CHECK(entries.empty());
 }
 
+TEST_CASE("LinuxFileInfoProvider.listDirectory_lists_dangling_symlink", "[platform][linux]")
+{
+    // A dangling symlink fails to resolve via status() (which follows). It must still be
+    // listed via the symlink_status() fallback — mirroring how the Windows provider keeps
+    // App Execution Aliases (winget) visible despite their reparse points being unfollowable.
+    TempDir tmp;
+    tmp.createFile("real.txt", "data");
+    fs::create_symlink(tmp.path / "missing_target", tmp.path / "broken.lnk");
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].name == "broken.lnk");
+    CHECK(entries[0].isDir == false);
+    CHECK(entries[1].name == "real.txt");
+}
+
 TEST_CASE("LinuxFileInfoProvider.listDirectory_nonexistent", "[platform][linux]")
 {
     LinuxFileInfoProvider provider;

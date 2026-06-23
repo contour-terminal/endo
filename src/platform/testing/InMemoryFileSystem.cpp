@@ -180,6 +180,21 @@ bool InMemoryFileSystem::isSymlink(std::filesystem::path const& path) const
     return _symlinks.contains(normalize(path));
 }
 
+bool InMemoryFileSystem::isExecutableFile(std::filesystem::path const& path) const
+{
+    auto const key = normalize(path);
+    if (!_files.contains(key) && !_symlinks.contains(key))
+        return false;
+
+    auto const it = _permissions.find(key);
+    auto const perms = it != _permissions.end()
+                           ? it->second
+                           : std::filesystem::perms::owner_read | std::filesystem::perms::owner_write;
+    return (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none
+           || (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none
+           || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
+}
+
 std::filesystem::path InMemoryFileSystem::weaklyCanonical(std::filesystem::path const& path) const
 {
     return std::filesystem::path(normalize(path));

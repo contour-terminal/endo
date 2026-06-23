@@ -27,9 +27,18 @@ namespace
 
         fileEntry.name = dirEntry.path().filename().string();
 
-        auto const status = dirEntry.status(ec);
+        // status() follows reparse points. App Execution Aliases (winget, Microsoft Store
+        // python, …) are reparse points that cannot be opened or followed through normal
+        // filesystem APIs, so the follow fails. Fall back to the non-following
+        // symlink_status() so such entries are still listed — matching `cmd.exe` / `dir`.
+        auto status = dirEntry.status(ec);
         if (ec)
-            return false;
+        {
+            ec.clear();
+            status = dirEntry.symlink_status(ec);
+            if (ec)
+                return false;
+        }
 
         fileEntry.isDir = fs::is_directory(status);
         fileEntry.size = 0;

@@ -48,6 +48,7 @@ class InMemoryFileSystem final: public FileSystem
     [[nodiscard]] bool isDirectory(std::filesystem::path const& path) const override;
     [[nodiscard]] bool isRegularFile(std::filesystem::path const& path) const override;
     [[nodiscard]] bool isSymlink(std::filesystem::path const& path) const override;
+    [[nodiscard]] bool isExecutableFile(std::filesystem::path const& path) const override;
     [[nodiscard]] std::filesystem::path weaklyCanonical(std::filesystem::path const& path) const override;
     [[nodiscard]] std::filesystem::path currentPath() const override;
 

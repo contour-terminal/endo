@@ -31,6 +31,20 @@ class FileSystem
     [[nodiscard]] virtual bool isDirectory(std::filesystem::path const& path) const = 0;
     [[nodiscard]] virtual bool isRegularFile(std::filesystem::path const& path) const = 0;
     [[nodiscard]] virtual bool isSymlink(std::filesystem::path const& path) const = 0;
+
+    /// Tests whether @p path names a file the shell can execute.
+    ///
+    /// Returns true for regular files and symlinks to them, and — on Windows — also for
+    /// App Execution Alias reparse points (e.g. `winget`, Microsoft Store `python`). These
+    /// are zero-byte `IO_REPARSE_TAG_APPEXECLINK` reparse points that are neither regular
+    /// files nor symlinks and cannot be opened or followed through normal filesystem APIs,
+    /// yet they must stay discoverable on `PATH` so that `CreateProcessW` can launch them —
+    /// matching how `cmd.exe` and PowerShell resolve such commands. On POSIX the file must
+    /// additionally carry an execute permission bit. Directories always return false.
+    ///
+    /// @param path The path to test.
+    /// @return True if @p path is a runnable executable file, false otherwise.
+    [[nodiscard]] virtual bool isExecutableFile(std::filesystem::path const& path) const = 0;
     [[nodiscard]] virtual std::filesystem::path weaklyCanonical(std::filesystem::path const& path) const = 0;
     [[nodiscard]] virtual std::filesystem::path currentPath() const = 0;
 
