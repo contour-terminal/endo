@@ -2,6 +2,13 @@
 # This library contains the shell execution runtime, builtins, job control, etc.
 # It depends on the endo language library for parsing and IR generation.
 
+# Generate the build-derived version header (build/src/shell/EndoVersion.hpp),
+# includable as <shell/EndoVersion.hpp>. ENDO_VERSION_STRING / ENDO_VERSION are
+# set at top scope by GetVersionInformation() and are visible here via the
+# add_subdirectory() scope. (Re-runs at configure time, not on every commit.)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/EndoVersion.hpp.in
+               ${CMAKE_CURRENT_BINARY_DIR}/EndoVersion.hpp @ONLY)
+
 add_library(endo-shell STATIC
     # Core
     Shell.hpp
@@ -240,6 +247,12 @@ if(NOT ENDO_STACKTRACE_NATIVE AND NOT MSVC)
         target_link_libraries(endo-shell PRIVATE stdc++exp)
     endif()
 endif()
+
+# Expose the generated EndoVersion.hpp (build/src/shell/EndoVersion.hpp) as
+# <shell/EndoVersion.hpp> to this target and its dependents (e.g. endo-bin). The
+# binary-tree src dir is already inherited transitively from CoreVM; this makes
+# the dependency explicit rather than relying on that.
+target_include_directories(endo-shell PUBLIC $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/src>)
 
 target_compile_definitions(endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"

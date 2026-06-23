@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HelpPrinter.hpp"
+#include <shell/EndoVersion.hpp>
 #include <shell/output/FileTypeStyle.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 
@@ -19,7 +20,6 @@ using namespace std::string_view_literals;
 namespace
 {
 
-constexpr std::string_view Version = "0.1.0";
 constexpr std::string_view DocsUrl = "https://endo-lang.org/";
 constexpr std::string_view GitHubUrl = "https://github.com/contour-terminal/endo";
 
@@ -364,12 +364,16 @@ void printVersion()
         auto const nameStyle =
             tui::Style { .fg = tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF }, .bold = true };
         auto const versionStyle = tui::Style { .fg = theme.colors.success };
-        std::print(
-            "{}endo{} {}{}{}", sgrSequence(nameStyle), Reset, sgrSequence(versionStyle), Version, Reset);
+        std::print("{}endo{} {}{}{}",
+                   sgrSequence(nameStyle),
+                   Reset,
+                   sgrSequence(versionStyle),
+                   endo::EndoVersionString,
+                   Reset);
     }
     else
     {
-        std::print("endo version {}", Version);
+        std::print("endo version {}", endo::EndoVersionString);
     }
     std::print("\n");
 }
