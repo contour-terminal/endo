@@ -128,6 +128,9 @@ endif()
 
 if(ENDO_TESTING)
     enable_testing()
+    # Unit test for the git-describe version parser (pure CMake, no git needed).
+    add_test(NAME version-parse
+             COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/TestVersionParse.cmake")
 endif()
 
 include(EnableCcache)

@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   SPDX-License-Identifier: Apache-2.0
-  WIX patch fragment: includes the PATH environment component (defined in
-  wix-env-path.wxs.in, configured per-version into the build tree) in the main
-  product feature so it gets installed.
+  WIX patch fragment: includes in the main product feature so they get installed:
+    1. Env_PATH — the per-version PATH component (wix-env-path.wxs.in, configured
+       per-version into the build tree).
+    2. Env_PATH_LegacyCleanup — the static component that removes the legacy
+       unversioned NSIS PATH entry (wix-legacy-path-cleanup.wxs).
 -->
 <CPackWiXPatch>
     <CPackWiXFragment Id="#PRODUCTFEATURE">
         <ComponentRef Id="Env_PATH" />
+        <ComponentRef Id="Env_PATH_LegacyCleanup" />
     </CPackWiXFragment>
 </CPackWiXPatch>

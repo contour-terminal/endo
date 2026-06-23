@@ -67,17 +67,22 @@ if(WIN32)
     # The PATH component GUID is derived deterministically from the version so
     # that each installed version owns a distinct PATH component. This lets an
     # upgrade cleanly add the new version's bin directory and remove the previous
-    # one (Environment edits are registry-only and never locked), leaving the
-    # newest version's bin first/only on PATH — so "endo" always resolves to the
-    # latest install. Reusing one GUID across versions would violate MSI's
-    # component rules (same GUID, differing keypath value) and break migration.
+    # one (Environment edits are registry-only and never locked). The new entry is
+    # prepended (Part="first" in wix-env-path.wxs.in), so "endo" resolves to the
+    # latest install first even if a stray earlier endo entry survives on PATH.
+    # Reusing one GUID across versions would violate MSI's component rules (same
+    # GUID, differing keypath value) and break migration.
     string(UUID ENDO_PATH_COMPONENT_GUID
         NAMESPACE "${CPACK_WIX_UPGRADE_GUID}"
         NAME "endo-path-${PROJECT_VERSION}"
         TYPE SHA1 UPPER)
     configure_file("${CMAKE_SOURCE_DIR}/cmake/wix-env-path.wxs.in"
                    "${CMAKE_BINARY_DIR}/wix-env-path.wxs" @ONLY)
-    set(CPACK_WIX_EXTRA_SOURCES "${CMAKE_BINARY_DIR}/wix-env-path.wxs")
+    # wix-legacy-path-cleanup.wxs is static (frozen GUID, version-independent) and
+    # is used verbatim — it must not go through configure_file.
+    set(CPACK_WIX_EXTRA_SOURCES
+        "${CMAKE_BINARY_DIR}/wix-env-path.wxs"
+        "${CMAKE_SOURCE_DIR}/cmake/wix-legacy-path-cleanup.wxs")
     set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/wix-path-env.xml")
 
 elseif(APPLE)

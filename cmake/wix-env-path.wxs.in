@@ -7,7 +7,8 @@
   Configured by CMake (configure_file, @ONLY) into the build tree so that the
   component GUID is unique per version. Each installed version owns its own
   PATH component, so an upgrade cleanly adds the new version's bin directory and
-  removes the previous one — leaving the newest version first/only on PATH.
+  removes the previous one. The entry is prepended (Part="first") so the newest
+  version's bin resolves first even if a stray earlier endo entry survives.
 
   Compiled as an extra source via CPACK_WIX_EXTRA_SOURCES.
   The ComponentRef is injected into the product feature via wix-path-env.xml.
@@ -17,7 +18,7 @@
         <DirectoryRef Id="INSTALL_ROOT">
             <Component Id="Env_PATH" Guid="@ENDO_PATH_COMPONENT_GUID@" Win64="yes" KeyPath="yes">
                 <Environment Id="ENV_PATH" Name="PATH" Value="[INSTALL_ROOT]bin"
-                             Permanent="no" Part="last" Action="set" System="yes" />
+                             Permanent="no" Part="first" Action="set" System="yes" />
             </Component>
         </DirectoryRef>
     </Fragment>

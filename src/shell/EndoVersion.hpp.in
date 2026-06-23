@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <string_view>
+
+namespace endo
+{
+
+/// Human-readable build version string (e.g. "0.1.128-gabc1234").
+/// Derived at configure time from a git tag / describe / version.txt by
+/// GetVersionInformation() in cmake/Version.cmake (ENDO_VERSION_STRING).
+inline constexpr std::string_view EndoVersionString = "@ENDO_VERSION_STRING@";
+
+/// Numeric version triple (major.minor.patch), e.g. "0.1.128".
+/// Matches the CMake project() version and the Windows MSI ProductVersion
+/// (ENDO_VERSION).
+inline constexpr std::string_view EndoVersionNumber = "@ENDO_VERSION@";
+
+} // namespace endo

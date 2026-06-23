@@ -24,8 +24,10 @@
 #endif
 
 #if defined(ENDO_BUILTIN_CRARHDUMP)
-#include "CrashHandler.hpp"
+    #include "CrashHandler.hpp"
 #endif
+#include <shell/EndoVersion.hpp>
+
 #include "FormatCommand.hpp"
 #include "HelpPrinter.hpp"
 #include "Shell.hpp"
@@ -40,8 +42,6 @@ using namespace std::string_view_literals;
 
 namespace
 {
-
-constexpr std::string_view Version = "0.1.0";
 
 void printLogCategories()
 {
@@ -279,7 +279,7 @@ int main(int argc, char const* argv[])
 #endif
 
 #if defined(ENDO_BUILTIN_CRARHDUMP)
-    endo::CrashHandler::initialize(std::string(Version).c_str());
+    endo::CrashHandler::initialize(std::string(endo::EndoVersionString).c_str());
 #endif
 
     auto const args = std::span(argv, static_cast<size_t>(argc));

@@ -333,10 +333,17 @@ puts that version's `bin` directory on the system `PATH`.
 Because each version lives in its own directory, you can **upgrade or reinstall while
 Endo is still running** -- the installer never has to replace the locked, in-use
 `endo.exe`. Already-running Endo sessions keep working unchanged; you choose when to
-restart them. After an upgrade, `PATH` points at the new version, so a bare `endo` (or a
-freshly launched shell) always resolves to the latest installed version. Files from a
-previous version that was still running during the upgrade are cleaned up automatically
-on the next reboot.
+restart them. After an upgrade, the new version's `bin` is placed first on `PATH`, so a
+bare `endo` (or a freshly launched shell) always resolves to the latest installed version.
+Files from a previous version that was still running during the upgrade are cleaned up
+automatically on the next reboot.
+
+!!! note "Upgrading from the old `.exe` installer"
+    Older Endo builds were distributed with an NSIS `.exe` installer that put an
+    unversioned `C:\Program Files\Endo\bin` on `PATH`. The `.msi` removes that stale
+    entry on install so it can no longer shadow the new versioned `bin`. The old
+    installer's *files* (directly under `C:\Program Files\Endo\`) are left untouched --
+    remove them with its uninstaller or manually if you no longer need them.
 
 !!! tip
     Prefer referring to Endo as just `endo` (resolved via `PATH`) rather than hard-coding
