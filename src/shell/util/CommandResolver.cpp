@@ -13,7 +13,7 @@
 namespace endo
 {
 
-CommandResolver::CommandResolver(EnvironmentProvider const& env): _env(env)
+CommandResolver::CommandResolver(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
 {
 }
 
@@ -99,16 +99,15 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
         if (pathStr.empty())
             continue;
 
-        std::error_code ec;
         std::filesystem::path dir(pathStr);
 
-        if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+        if (!_fs.exists(dir) || !_fs.isDirectory(dir))
             continue;
 
         auto const candidate = dir / std::string(command);
 
 #if defined(_WIN32)
-        // On Windows, check the exact name first, then try each PATHEXT extension
+        // On Windows, check the exact name first, then try each PATHEXT extension.
         auto const candidates = [&]() {
             auto result = std::vector<std::filesystem::path> {};
             result.push_back(candidate);
@@ -119,31 +118,13 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
 
         for (auto const& cand: candidates)
         {
-            if (!std::filesystem::exists(cand, ec))
-                continue;
-            if (!std::filesystem::is_regular_file(cand, ec) && !std::filesystem::is_symlink(cand, ec))
+            if (!_fs.isExecutableFile(cand))
                 continue;
             results.push_back(platform::normalizePath(cand));
             break; // At most one match per PATH directory
         }
 #else
-        if (!std::filesystem::exists(candidate, ec))
-            continue;
-
-        if (!std::filesystem::is_regular_file(candidate, ec) && !std::filesystem::is_symlink(candidate, ec))
-            continue;
-
-        // Check if executable
-        auto status = std::filesystem::status(candidate, ec);
-        if (ec)
-            continue;
-
-        auto perms = status.permissions();
-        bool isExecutable = (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none
-                            || (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none
-                            || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
-
-        if (isExecutable)
+        if (_fs.isExecutableFile(candidate))
             results.push_back(candidate.string());
 #endif
     }

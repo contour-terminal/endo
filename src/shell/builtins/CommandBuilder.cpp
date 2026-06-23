@@ -491,7 +491,15 @@ std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::stri
 #endif
     )
     {
-        if (_fs.exists(programPath) && (_fs.isRegularFile(programPath) || _fs.isSymlink(programPath)))
+        // Native programs must be executable. Endo scripts are run in-process
+        // (see ProcessExecution.cpp) and therefore carry no execute bit, so accept
+        // an existing .endo regular file or symlink even when it is not executable.
+        if (_fs.isExecutableFile(programPath))
+        {
+            return programPath;
+        }
+        if (programPath.extension() == ".endo" && _fs.exists(programPath)
+            && (_fs.isRegularFile(programPath) || _fs.isSymlink(programPath)))
         {
             return programPath;
         }
@@ -502,7 +510,7 @@ std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::stri
     if (!_env.get("PATH").has_value())
         return std::unexpected(ShellError::VariableNotFound);
 
-    auto const resolver = CommandResolver(_env);
+    auto const resolver = CommandResolver(_env, _fs);
     auto const found = resolver.findInPath(program);
     if (found.empty())
         return std::unexpected(ShellError::ProgramNotFound);

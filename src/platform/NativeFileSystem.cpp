@@ -51,6 +51,31 @@ bool NativeFileSystem::isSymlink(fs::path const& path) const
     return fs::is_symlink(path, ec);
 }
 
+bool NativeFileSystem::isExecutableFile(fs::path const& path) const
+{
+#if defined(_WIN32)
+    // GetFileAttributesW does not follow reparse points, so it succeeds for App Execution
+    // Alias entries (winget, Store python, …) that CreateFileW/std::filesystem cannot open.
+    // Any existing non-directory entry is a runnable candidate; PATHEXT already restricts
+    // bare-name search to executable extensions, matching cmd.exe / PowerShell semantics.
+    auto const attrs = GetFileAttributesW(path.wstring().c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+#else
+    std::error_code ec;
+    if (!fs::is_regular_file(path, ec) && !fs::is_symlink(path, ec))
+        return false;
+
+    auto const status = fs::status(path, ec);
+    if (ec)
+        return false;
+
+    auto const perms = status.permissions();
+    return (perms & fs::perms::owner_exec) != fs::perms::none
+           || (perms & fs::perms::group_exec) != fs::perms::none
+           || (perms & fs::perms::others_exec) != fs::perms::none;
+#endif
+}
+
 fs::path NativeFileSystem::weaklyCanonical(fs::path const& path) const
 {
     std::error_code ec;

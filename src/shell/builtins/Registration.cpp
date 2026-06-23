@@ -478,7 +478,7 @@ void Shell::registerUserCommandBuiltins()
         .returnType(CoreVM::LiteralType::Number)
         .bind([this](CoreVM::Params& args) {
             auto const& program = args.getString(1);
-            CommandResolver resolver(_env);
+            CommandResolver resolver(_env, _fs);
             auto const info = resolver.resolve(program);
             if (info.type == CommandType::External)
             {

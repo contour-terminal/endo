@@ -8,6 +8,8 @@
 #include <fstream>
 #include <string>
 
+#include <platform/NativeFileSystem.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace endo;
@@ -67,7 +69,7 @@ TEST_CASE("CommandResolver.findInPath.bare_name_found")
     env.set("PATHEXT", ".exe;.cmd;.bat");
 #endif
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("testcmd");
     REQUIRE(!result.empty());
     CHECK(std::filesystem::path(result).filename().string().starts_with("testcmd"));
@@ -83,7 +85,7 @@ TEST_CASE("CommandResolver.findInPath.not_found")
     env.set("PATHEXT", ".exe");
 #endif
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("nonexistent");
     CHECK(result.empty());
 }
@@ -93,7 +95,7 @@ TEST_CASE("CommandResolver.findInPath.missing_PATH")
     platform::TestEnvironmentProvider env;
     // No PATH set at all.
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("anything");
     CHECK(result.empty());
 }
@@ -114,7 +116,7 @@ TEST_CASE("CommandResolver.findInPath.skips_nonexistent_directory")
     env.set("PATH", pathValue);
 #endif
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("mycmd");
     REQUIRE(!result.empty());
     CHECK(std::filesystem::path(result).filename().string().starts_with("mycmd"));
@@ -131,7 +133,7 @@ TEST_CASE("CommandResolver.findInPath.PATHEXT_resolution")
     env.set("PATH", dir.path.string());
     env.set("PATHEXT", ".exe;.cmd;.bat");
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("testapp");
     REQUIRE(!result.empty());
     CHECK(result.ends_with(".cmd"));
@@ -148,8 +150,30 @@ TEST_CASE("CommandResolver.findInPath.skips_non_executable")
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());
 
-    auto const resolver = CommandResolver(env);
+    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
     auto const result = resolver.findInPath("noexec");
     CHECK(result.empty());
 }
 #endif
+
+TEST_CASE("CommandResolver.findInPath.resolves_through_injected_filesystem")
+{
+    // Drives PATH search entirely through an injected InMemoryFileSystem — no disk access —
+    // proving the resolver now relies on the FileSystem abstraction rather than std::filesystem.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    platform::TestEnvironmentProvider env;
+#if defined(_WIN32)
+    fs.addExecutable("/bin/tool.exe");
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd");
+#else
+    fs.addExecutable("/bin/tool");
+    env.set("PATH", "/bin");
+#endif
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("tool");
+    REQUIRE(!result.empty());
+    CHECK(std::filesystem::path(result).filename().string().starts_with("tool"));
+}

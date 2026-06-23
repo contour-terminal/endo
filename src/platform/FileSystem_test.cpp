@@ -95,3 +95,41 @@ TEST_CASE("walkDirectoryRecursive yields nothing for a non-directory and reports
     // "could not enumerate", so they don't act on a partial/empty walk.
     REQUIRE(ec);
 }
+
+TEST_CASE("isExecutableFile accepts a file carrying an execute bit", "[FileSystem]")
+{
+    auto fs = InMemoryFileSystem {};
+    fs.addExecutable("/usr/bin/tool");
+
+    CHECK(fs.isExecutableFile("/usr/bin/tool"));
+}
+
+TEST_CASE("isExecutableFile rejects a regular file without an execute bit", "[FileSystem]")
+{
+    // Mirrors the POSIX rule the shell relies on: a readable/writable but non-executable
+    // file on PATH must not be treated as a runnable command.
+    auto fs = InMemoryFileSystem {};
+    fs.addFile("/usr/bin/data", "contents");
+
+    CHECK_FALSE(fs.isExecutableFile("/usr/bin/data"));
+}
+
+TEST_CASE("isExecutableFile rejects directories and missing paths", "[FileSystem]")
+{
+    auto fs = InMemoryFileSystem {};
+    fs.addDirectory("/usr/bin");
+
+    CHECK_FALSE(fs.isExecutableFile("/usr/bin"));
+    CHECK_FALSE(fs.isExecutableFile("/usr/bin/nope"));
+}
+
+TEST_CASE("isExecutableFile follows the execute bit of a symlink entry", "[FileSystem]")
+{
+    auto fs = InMemoryFileSystem {};
+    fs.addSymlink("/usr/bin/link", "/opt/real");
+    REQUIRE(fs.setPermissions("/usr/bin/link",
+                              std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec)
+                .has_value());
+
+    CHECK(fs.isExecutableFile("/usr/bin/link"));
+}

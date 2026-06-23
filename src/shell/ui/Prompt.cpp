@@ -20,6 +20,7 @@
 #include <shell/util/CommandResolver.hpp>
 
 #include "PromptComponent.hpp"
+#include <platform/NativeFileSystem.hpp>
 #if defined(_WIN32)
     #include <platform/windows/WindowsEnvironmentProvider.hpp>
 #else
@@ -69,11 +70,13 @@ void Prompt::initialize()
     // Ensure any protocol enable sequences are flushed
     _terminal.output().flush();
 
-    // Create CommandResolver for tooltip support
+    // Create CommandResolver for tooltip support. It shares the filesystem the Shell
+    // injected via setFileSystem(); fall back to the native filesystem if none was set.
+    auto const& fs = _historyFs ? *_historyFs : NativeFileSystem::instance();
 #if defined(_WIN32)
-    _commandResolver = std::make_unique<CommandResolver>(WindowsEnvironmentProvider::instance());
+    _commandResolver = std::make_unique<CommandResolver>(WindowsEnvironmentProvider::instance(), fs);
 #else
-    _commandResolver = std::make_unique<CommandResolver>(PosixEnvironmentProvider::instance());
+    _commandResolver = std::make_unique<CommandResolver>(PosixEnvironmentProvider::instance(), fs);
 #endif
 
     // Create PromptComponent

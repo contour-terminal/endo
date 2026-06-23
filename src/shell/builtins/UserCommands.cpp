@@ -292,7 +292,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
     }
 
     // Use CommandResolver for PATH search (handles PATH separator and PATHEXT correctly)
-    auto const resolver = CommandResolver(_env);
+    auto const resolver = CommandResolver(_env, _fs);
     bool allFound = true;
 
     // Search for each program

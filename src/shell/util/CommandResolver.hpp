@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -40,8 +41,10 @@ struct CommandInfo
 class CommandResolver
 {
   public:
-    /// @brief Constructs a resolver with access to the environment.
-    explicit CommandResolver(EnvironmentProvider const& env);
+    /// @brief Constructs a resolver with access to the environment and filesystem.
+    /// @param env Environment provider, used to read PATH and PATHEXT.
+    /// @param fs  Filesystem abstraction, used to test candidate executables.
+    CommandResolver(EnvironmentProvider const& env, FileSystem const& fs);
 
     /// @brief Resolves a command and returns its info.
     /// @param command The command name to resolve.
@@ -75,6 +78,7 @@ class CommandResolver
 
   private:
     EnvironmentProvider const& _env;
+    FileSystem const& _fs;
 
     // Cache for efficiency
     mutable std::string _cachedPath;
