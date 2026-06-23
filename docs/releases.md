@@ -81,9 +81,16 @@ Because each version installs side by side in its own directory, **you can upgra
 reinstall while Endo is still running** -- the installer never replaces the locked,
 in-use binary, so it does not ask you to close running `endo.exe` processes or force a
 reboot. Running sessions keep working; you decide when to restart them. After an upgrade,
-`PATH` resolves `endo` to the newest version, and the previous version's files are removed
-automatically (on the next reboot if it was still in use). See
+the new version's `bin` is placed first on `PATH`, so `endo` resolves to the newest
+version, and the previous version's files are removed automatically (on the next reboot if
+it was still in use). See
 [Platform Differences](shell/platform-differences.md#windows) for setup details.
+
+If you are upgrading from a pre-`.msi` Endo that was installed with the old `.exe`
+(NSIS) installer, the `.msi` automatically removes that installer's leftover
+`C:\Program Files\Endo\bin` entry from `PATH`. Its files (directly under
+`C:\Program Files\Endo\`) are not touched by the `.msi`; remove them with the old
+uninstaller or by hand if you no longer need them.
 
 ### GitHub Repository
 

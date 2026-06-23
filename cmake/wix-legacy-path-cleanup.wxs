@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+
+  WIX source fragment: one-time cleanup of the legacy *unversioned* system PATH
+  entry "C:\Program Files\Endo\bin" left behind by the old (now-removed) NSIS
+  installer. An MSI MajorUpgrade is keyed on the UpgradeCode and cannot detect or
+  uninstall the NSIS product, so that segment can persist and shadow the new
+  versioned bin directory on PATH.
+
+  This removes ONLY that single PATH segment (Action="remove"). It does NOT delete
+  any legacy files — an MSI must not remove files it does not own; leftover NSIS
+  files are handled by a documentation note instead.
+
+  Version-INDEPENDENT: the Name, Value and keypath are identical in every release,
+  so this uses ONE STABLE, frozen GUID (NOT the per-version derived GUID used by
+  Env_PATH in wix-env-path.wxs.in). Permanent="yes" so uninstalling Endo never
+  re-adds the legacy entry. The remove is idempotent — a no-op on machines that
+  never had the NSIS installer.
+
+  Static source (never run through configure_file). Compiled via
+  CPACK_WIX_EXTRA_SOURCES; its ComponentRef is injected into the product feature
+  via wix-path-env.xml.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Fragment>
+        <DirectoryRef Id="INSTALL_ROOT">
+            <Component Id="Env_PATH_LegacyCleanup"
+                       Guid="8F7E33BD-5B6D-4222-A924-283D857C1200" Win64="yes" KeyPath="yes">
+                <Environment Id="ENV_PATH_LEGACY_REMOVE" Name="PATH"
+                             Value="[ProgramFiles64Folder]Endo\bin"
+                             Action="remove" Part="all" System="yes" Permanent="yes" />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+</Wix>
