@@ -41,7 +41,16 @@ namespace
         }
 
         fileEntry.isDir = fs::is_directory(status);
+        fileEntry.isSymlink = fs::is_symlink(dirEntry.symlink_status(ec));
+        ec.clear();
         fileEntry.size = 0;
+
+        // Windows std::filesystem does not expose st_blocks/st_dev/st_ino. Leave the
+        // documented sentinels (blocks = -1, dev = ino = 0); disk-usage callers fall
+        // back to apparent size and disable hardlink dedup / cross-device detection.
+        fileEntry.blocks = -1;
+        fileEntry.dev = 0;
+        fileEntry.ino = 0;
 
         if (!fileEntry.isDir)
         {

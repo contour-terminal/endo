@@ -14,6 +14,7 @@
 /// does not, add a minimal fallback here mirroring `Generator.hpp` rather than
 /// changing call sites.
 
+#include <coroutine>
 #include <version>
 
 #if defined(__cpp_lib_jthread) && __cpp_lib_jthread >= 201911L
@@ -51,5 +52,39 @@ namespace endo::coro
 struct OperationCancelled
 {
 };
+
+/// Awaitable that yields the @c StopToken of the awaiting coroutine without
+/// suspending it. Lets a coroutine body observe its own cancellation token (e.g. to
+/// poll @c stop_requested() inside a loop) when the promise carries one; coroutines
+/// whose promise has no @c stopToken() accessor receive a default (never-stopped)
+/// token. Usage: `auto token = co_await endo::coro::thisCoroStopToken();`.
+struct ThisCoroStopToken
+{
+    StopToken token {}; ///< Filled from the awaiting promise in await_suspend.
+
+    /// Never ready: await_suspend runs to capture the token, then resumes immediately.
+    [[nodiscard]] bool await_ready() const noexcept { return false; }
+
+    /// Captures the awaiting coroutine's stop token (if its promise exposes one) and
+    /// resumes without actually suspending.
+    /// @param awaiting The coroutine performing the co_await.
+    /// @return false — do not suspend; resume @p awaiting immediately.
+    template <typename Promise>
+    bool await_suspend(std::coroutine_handle<Promise> awaiting) noexcept
+    {
+        if constexpr (requires { awaiting.promise().stopToken(); })
+            token = awaiting.promise().stopToken();
+        return false;
+    }
+
+    /// @return The captured stop token.
+    [[nodiscard]] StopToken await_resume() const noexcept { return token; }
+};
+
+/// @return An awaitable yielding the awaiting coroutine's @c StopToken.
+[[nodiscard]] inline ThisCoroStopToken thisCoroStopToken() noexcept
+{
+    return ThisCoroStopToken {};
+}
 
 } // namespace endo::coro

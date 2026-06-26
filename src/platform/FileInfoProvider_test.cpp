@@ -216,6 +216,63 @@ TEST_CASE("LinuxFileInfoProvider.listDirectory_lists_dangling_symlink", "[platfo
     CHECK(entries[1].name == "real.txt");
 }
 
+TEST_CASE("LinuxFileInfoProvider.populates_stat_metadata", "[platform][linux]")
+{
+    // The lstat-based provider must fill the disk-usage / identity fields
+    // (blocks, dev, ino) for real files, not just apparent size.
+    TempDir tmp;
+    tmp.createFile("data.bin", std::string(8192, 'x')); // 8 KiB => several 512B blocks
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory((tmp.path / "data.bin").string());
+
+    REQUIRE(entries.size() == 1);
+    auto const& e = entries[0];
+    CHECK(e.size == 8192);
+    CHECK(e.blocks > 0);     // allocated blocks reported (st_blocks)
+    CHECK(e.dev != 0);       // device id reported (st_dev)
+    CHECK(e.ino != 0);       // inode reported (st_ino)
+    CHECK(e.isSymlink == false);
+    CHECK(e.isDir == false);
+}
+
+TEST_CASE("LinuxFileInfoProvider.marks_symlink", "[platform][linux]")
+{
+    // A symlink must be flagged isSymlink and never reported as a directory,
+    // even when it points at one (it is not followed).
+    TempDir tmp;
+    tmp.createSubdir("realdir");
+    fs::create_symlink(tmp.path / "realdir", tmp.path / "link_to_dir");
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 2);
+    // Sorted by name: "link_to_dir" < "realdir"
+    CHECK(entries[0].name == "link_to_dir");
+    CHECK(entries[0].isSymlink == true);
+    CHECK(entries[0].isDir == false); // not followed -> not a directory
+    CHECK(entries[1].name == "realdir");
+    CHECK(entries[1].isSymlink == false);
+    CHECK(entries[1].isDir == true);
+}
+
+TEST_CASE("LinuxFileInfoProvider.siblings_share_device", "[platform][linux]")
+{
+    // Two entries in the same directory live on the same filesystem, so their
+    // st_dev must match — the invariant cross-device detection relies on.
+    TempDir tmp;
+    tmp.createFile("a.txt", "a");
+    tmp.createFile("b.txt", "b");
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].dev == entries[1].dev);
+    CHECK(entries[0].ino != entries[1].ino); // distinct files -> distinct inodes
+}
+
 TEST_CASE("LinuxFileInfoProvider.listDirectory_nonexistent", "[platform][linux]")
 {
     LinuxFileInfoProvider provider;

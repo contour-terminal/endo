@@ -19,10 +19,15 @@ namespace endo::platform
 
 namespace
 {
-    auto inline pipeTag = logstore::category("platform.pipe", "Platform pipe operations");
-
+    /// Lazily-initialized log category for platform pipe operations.
+    ///
+    /// A function-local static (initialized on first use) is used instead of a
+    /// namespace-scope static so the potentially-throwing @c logstore::category
+    /// construction does not run during static initialization
+    /// (bugprone-throwing-static-initialization).
     auto& pipeLog()
     {
+        static auto pipeTag = logstore::category("platform.pipe", "Platform pipe operations");
         return pipeTag;
     }
 } // namespace
