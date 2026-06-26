@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/Canvas.hpp>
 #include <tui/KeyCode.hpp>
+#include <tui/Modifier.hpp>
 #include <tui/Theme.hpp>
 #include <tui/TreeTableView.hpp>
 
@@ -70,6 +71,13 @@ void TreeTableView::pageBy(int direction)
     auto const headerLines = _config.showHeader ? 1 : 0;
     auto const viewport = std::max(1, area().height - headerLines);
     moveCursor(direction * viewport);
+}
+
+void TreeTableView::halfPageBy(int direction)
+{
+    auto const headerLines = _config.showHeader ? 1 : 0;
+    auto const viewport = std::max(1, area().height - headerLines);
+    moveCursor(direction * std::max(1, viewport / 2));
 }
 
 void TreeTableView::descendCursor()
@@ -152,6 +160,17 @@ EventResult TreeTableView::onEvent(InputEvent const& event)
     // accept a few intrinsic keys so the component is usable standalone.
     if (auto const* key = std::get_if<KeyEvent>(&event))
     {
+        // Ctrl-D / Ctrl-U: half-page down / up (vim).
+        if (hasModifier(key->modifiers, Modifier::Ctrl))
+        {
+            switch (key->codepoint)
+            {
+                case U'd': halfPageBy(1); return EventResult::Handled;
+                case U'u': halfPageBy(-1); return EventResult::Handled;
+                default: break;
+            }
+        }
+
         switch (key->key)
         {
             case KeyCode::Up: moveCursor(-1); return EventResult::Handled;
@@ -168,6 +187,8 @@ EventResult TreeTableView::onEvent(InputEvent const& event)
             case U'k': moveCursor(-1); return EventResult::Handled;
             case U'l': descendCursor(); return EventResult::Handled;
             case U'h': ascendCursor(); return EventResult::Handled;
+            case U'g': moveToTop(); return EventResult::Handled;
+            case U'G': moveToBottom(); return EventResult::Handled;
             default: break;
         }
     }

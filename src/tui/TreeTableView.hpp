@@ -133,6 +133,10 @@ class TreeTableView: public Component
     /// Scrolls by a page (viewport height) in @p direction (-1 up, +1 down).
     void pageBy(int direction);
 
+    /// Scrolls by half a page (viewport height / 2) in @p direction (-1 up, +1 down),
+    /// like vim's Ctrl+U / Ctrl+D.
+    void halfPageBy(int direction);
+
     /// Descends into the cursor row (if descendable), resetting the cursor.
     void descendCursor();
 

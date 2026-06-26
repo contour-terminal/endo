@@ -204,3 +204,94 @@ TEST_CASE("TreeTableView: handles j/k/l/h key events", "[treetable]")
     CHECK(view.cursorIndex() == 0);
     CHECK(view.onEvent(keyChar(U'z')) == EventResult::Ignored);
 }
+
+namespace
+{
+/// A flat model with @p n rows and no children, to exercise paging motions.
+class FlatModel: public TreeTableModel
+{
+  public:
+    explicit FlatModel(int n): _n(n) {}
+    [[nodiscard]] std::vector<TableColumn> columns() const override
+    {
+        return { TableColumn { .header = "N", .width = ColumnWidth::Flex, .size = 4, .align = ColumnAlign::Left } };
+    }
+    [[nodiscard]] std::vector<RowId> rows() const override
+    {
+        std::vector<RowId> out;
+        out.reserve(static_cast<std::size_t>(_n));
+        for (int i = 0; i < _n; ++i)
+            out.push_back(static_cast<RowId>(i));
+        return out;
+    }
+    [[nodiscard]] std::string cellText(RowId row, std::size_t) const override { return std::to_string(row); }
+    [[nodiscard]] RowStyle rowStyle(RowId, bool sel) const override { return RowStyle { .style = {}, .selected = sel }; }
+    [[nodiscard]] bool canDescend(RowId) const override { return false; }
+    bool descend(RowId) override { return false; }
+    bool ascend() override { return false; }
+    [[nodiscard]] std::string currentTitle() const override { return "/"; }
+    void sortBy(int) override {}
+
+  private:
+    int _n;
+};
+} // namespace
+
+TEST_CASE("TreeTableView: halfPageBy moves half the viewport", "[treetable]")
+{
+    FlatModel model(100);
+    TreeTableView view(model);
+    // Header takes 1 line; viewport = height - 1 = 20; half = 10.
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 21 });
+
+    view.halfPageBy(1);
+    CHECK(view.cursorIndex() == 10);
+    view.halfPageBy(1);
+    CHECK(view.cursorIndex() == 20);
+    view.halfPageBy(-1);
+    CHECK(view.cursorIndex() == 10);
+}
+
+TEST_CASE("TreeTableView: pageBy moves a full viewport", "[treetable]")
+{
+    FlatModel model(100);
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 21 }); // viewport 20
+
+    view.pageBy(1);
+    CHECK(view.cursorIndex() == 20);
+    view.pageBy(-1);
+    CHECK(view.cursorIndex() == 0);
+}
+
+TEST_CASE("TreeTableView: Ctrl-D / Ctrl-U handled in onEvent", "[treetable]")
+{
+    FlatModel model(100);
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 21 }); // half-page = 10
+
+    auto ctrlKey = [](char32_t c) {
+        return InputEvent { KeyEvent { .key = {}, .modifiers = Modifier::Ctrl, .codepoint = c } };
+    };
+
+    CHECK(view.onEvent(ctrlKey(U'd')) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 10);
+    CHECK(view.onEvent(ctrlKey(U'u')) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 0);
+}
+
+TEST_CASE("TreeTableView: g / G jump to top / bottom in onEvent", "[treetable]")
+{
+    FlatModel model(50);
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 21 });
+
+    auto key = [](char32_t c, Modifier m = Modifier::None) {
+        return InputEvent { KeyEvent { .key = {}, .modifiers = m, .codepoint = c } };
+    };
+
+    CHECK(view.onEvent(key(U'G')) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 49);
+    CHECK(view.onEvent(key(U'g')) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 0);
+}
