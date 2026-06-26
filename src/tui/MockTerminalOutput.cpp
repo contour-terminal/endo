@@ -238,9 +238,14 @@ void MockTerminalOutput::writeSixel([[maybe_unused]] std::string_view sixelData)
     // No-op.
 }
 
-void MockTerminalOutput::copyToClipboard([[maybe_unused]] std::string_view text)
+void MockTerminalOutput::copyToClipboard(std::string_view text)
 {
-    // No-op.
+    _clipboard.assign(text);
+}
+
+std::string const& MockTerminalOutput::clipboardText() const noexcept
+{
+    return _clipboard;
 }
 
 void MockTerminalOutput::unscroll([[maybe_unused]] int n)
