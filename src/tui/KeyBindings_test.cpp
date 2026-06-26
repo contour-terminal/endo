@@ -56,6 +56,38 @@ TEST_CASE("KeyChord.matches_combined_modifiers")
     CHECK_FALSE(chord.matches(charEvent('z', Modifier::Shift))); // Missing Ctrl
 }
 
+TEST_CASE("KeyChord.matches_shifted_symbol_ignores_shift")
+{
+    // A shifted symbol such as '?' (Shift+'/') already encodes Shift in its glyph. Terminals
+    // differ on whether they additionally report the Shift modifier (e.g. Windows win32-input
+    // mode does, most POSIX terminals do not). The binding must match either way.
+    auto chord = *KeyChord::parse("?");
+    REQUIRE(chord.codepoint == U'?');
+    REQUIRE(chord.modifiers == Modifier::None);
+
+    CHECK(chord.matches(charEvent('?')));                  // POSIX: no Shift reported
+    CHECK(chord.matches(charEvent('?', Modifier::Shift))); // Windows: redundant Shift reported
+    // Lock keys are still ignored alongside the redundant Shift.
+    CHECK(chord.matches(charEvent('?', Modifier::Shift | Modifier::CapsLock)));
+    // A genuine extra modifier (Ctrl) must still differentiate.
+    CHECK_FALSE(chord.matches(charEvent('?', Modifier::Ctrl)));
+}
+
+TEST_CASE("KeyChord.matches_letter_keeps_shift_significant")
+{
+    // Letters are the exception: "g" and "shift+g" are distinct bindings, so Shift must remain
+    // significant for alphabetic codepoints (regression guard for the shifted-symbol relaxation).
+    auto plain = *KeyChord::parse("g");
+    CHECK(plain.matches(charEvent('g')));
+    CHECK_FALSE(plain.matches(charEvent('g', Modifier::Shift)));
+
+    auto shifted = *KeyChord::parse("shift+g");
+    REQUIRE(shifted.codepoint == U'g');
+    REQUIRE(shifted.modifiers == Modifier::Shift);
+    CHECK(shifted.matches(charEvent('g', Modifier::Shift)));
+    CHECK_FALSE(shifted.matches(charEvent('g')));
+}
+
 // ============================================================================
 // withoutLockKeys tests
 // ============================================================================

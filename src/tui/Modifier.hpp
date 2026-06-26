@@ -44,6 +44,19 @@ constexpr auto operator|=(Modifier& lhs, Modifier rhs) noexcept -> Modifier&
     return lhs;
 }
 
+/// @brief Bitwise NOT for clearing modifier flags (e.g. @c mods & ~Modifier::Shift).
+[[nodiscard]] constexpr auto operator~(Modifier value) noexcept -> Modifier
+{
+    return static_cast<Modifier>(~static_cast<std::uint8_t>(value));
+}
+
+/// @brief Bitwise AND assignment for masking modifiers.
+constexpr auto operator&=(Modifier& lhs, Modifier rhs) noexcept -> Modifier&
+{
+    lhs = lhs & rhs;
+    return lhs;
+}
+
 /// @brief Tests whether a modifier flag is set.
 /// @param mods The modifier bitmask to test.
 /// @param flag The flag to check for.

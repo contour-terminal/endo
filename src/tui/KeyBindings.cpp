@@ -319,8 +319,21 @@ std::string KeyChord::toString() const
 
 bool KeyChord::matches(KeyEvent const& event) const noexcept
 {
+    auto chordMods = modifiers;
+    auto eventMods = withoutLockKeys(event.modifiers);
+
+    // A shifted printable symbol ('?', ':', '_', '(' …) already encodes Shift in its glyph,
+    // so a binding written as that glyph must match regardless of the redundant Shift modifier
+    // (terminals differ: some report Shift, some don't). Letters are excluded so that "g" and
+    // "shift+g" stay distinguishable — there Shift carries information the glyph does not.
+    if (codepoint != 0 && !(codepoint >= U'a' && codepoint <= U'z'))
+    {
+        chordMods &= ~Modifier::Shift;
+        eventMods &= ~Modifier::Shift;
+    }
+
     // Check modifiers match
-    if (modifiers != withoutLockKeys(event.modifiers))
+    if (chordMods != eventMods)
         return false;
 
     // If we have a codepoint, match against event's codepoint

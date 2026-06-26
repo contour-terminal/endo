@@ -19,15 +19,18 @@ class MockFileInfoProvider final: public FileInfoProvider
 {
   public:
     /// Sets the entries to return for a given directory path.
-    void setEntries(std::string const& path, std::vector<FileEntry> entries)
+    void setEntries(std::string const& path, std::vector<endo::platform::FileEntry> entries)
     {
         _directories[path] = std::move(entries);
     }
 
     /// Sets a single file entry to return for a given file path.
-    void setFileEntry(std::string const& path, FileEntry entry) { _files[path] = std::move(entry); }
+    void setFileEntry(std::string const& path, endo::platform::FileEntry entry)
+    {
+        _files[path] = std::move(entry);
+    }
 
-    [[nodiscard]] std::vector<FileEntry> listDirectory(std::string const& path) const override
+    [[nodiscard]] std::vector<endo::platform::FileEntry> listDirectory(std::string const& path) const override
     {
         // Case 1: Exact directory match.
         if (auto const it = _directories.find(path); it != _directories.end())
@@ -48,7 +51,7 @@ class MockFileInfoProvider final: public FileInfoProvider
 
             if (auto const dirIt = _directories.find(parentDir); dirIt != _directories.end())
             {
-                std::vector<FileEntry> result;
+                std::vector<endo::platform::FileEntry> result;
                 for (auto const& entry: dirIt->second)
                 {
                     if (endo::globMatchFilename(entry.name, pattern))
@@ -62,8 +65,8 @@ class MockFileInfoProvider final: public FileInfoProvider
     }
 
   private:
-    std::map<std::string, std::vector<FileEntry>> _directories;
-    std::map<std::string, FileEntry> _files;
+    std::map<std::string, std::vector<endo::platform::FileEntry>> _directories;
+    std::map<std::string, endo::platform::FileEntry> _files;
 };
 
 } // namespace endo::platform::testing
