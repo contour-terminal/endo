@@ -71,6 +71,17 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         return finalize(std::move(outcome));
     }
 
+    // The input terminal closed (EOF / not a TTY / detached): poll reports POLLHUP or
+    // POLLERR with no POLLIN, and none of the readers below would consume it — leaving the
+    // pump to re-poll instantly and busy-loop. Treat it as an interrupt so the runtime
+    // unwinds the root flow cleanly instead of spinning at 100% CPU.
+    if ((fds[inputIndex].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0
+        && (fds[inputIndex].revents & POLLIN) == 0)
+    {
+        outcome.interrupted = true;
+        return finalize(std::move(outcome));
+    }
+
     auto const ready = [&](int index) {
         return index >= 0 && (fds[static_cast<std::size_t>(index)].revents & POLLIN) != 0;
     };
