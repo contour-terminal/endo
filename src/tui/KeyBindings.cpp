@@ -269,8 +269,10 @@ std::optional<KeyChord> KeyChord::parse(std::string_view str)
         result.key = *specialKey;
         result.codepoint = 0;
     }
-    // Check for single letter key
-    else if (lastPart.size() == 1 && std::isalpha(static_cast<unsigned char>(lastPart[0])))
+    // Check for a single printable character key. Letters are lowercased so "g" and
+    // "G" (the latter typically written "shift+g") share one codepoint; other
+    // printable characters (digits, punctuation such as '/', '.', '?') map directly.
+    else if (lastPart.size() == 1 && std::isgraph(static_cast<unsigned char>(lastPart[0])))
     {
         result.codepoint = static_cast<char32_t>(std::tolower(static_cast<unsigned char>(lastPart[0])));
         result.key = {};

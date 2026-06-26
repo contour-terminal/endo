@@ -18,6 +18,9 @@ struct RgbColor
     std::uint8_t r = 0;
     std::uint8_t g = 0;
     std::uint8_t b = 0;
+
+    /// Componentwise equality.
+    [[nodiscard]] constexpr bool operator==(RgbColor const&) const noexcept = default;
 };
 
 /// @brief User-defined literal for creating RgbColor from a hex value.

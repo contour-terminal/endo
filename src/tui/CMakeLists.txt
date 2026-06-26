@@ -31,6 +31,7 @@ add_library(tui
     Text.cpp
     Theme.cpp
     Tooltip.cpp
+    TreeTableView.cpp
     Unicode.cpp
     VtParser.cpp
     completer/Completer.cpp
@@ -99,6 +100,7 @@ if(ENDO_TESTING)
         MarkdownRenderer_test.cpp
         QuestionComponent_test.cpp
         StyledText_test.cpp
+        TreeTableView_test.cpp
         Unicode_test.cpp
         VtParser_test.cpp
         ImageLoader_test.cpp

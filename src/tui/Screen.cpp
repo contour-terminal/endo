@@ -77,9 +77,27 @@ Screen::Screen(Terminal& terminal, ScreenConfig config):
     });
 
     _hoverState.setOnHoverLeave([this]() { hideTooltip(); });
+
+    // Switch to the alternate screen buffer (DEC private mode 1049) so the app paints on a
+    // fresh screen and the user's scrollback is preserved; restored in the destructor.
+    if (_config.alternateScreen)
+    {
+        _terminal.output().writeRaw("\033[?1049h");
+        _terminal.output().flush();
+        _enteredAlternateScreen = true;
+    }
 }
 
-Screen::~Screen() = default;
+Screen::~Screen()
+{
+    if (_enteredAlternateScreen)
+    {
+        auto& out = _terminal.output();
+        out.showCursor();
+        out.writeRaw("\033[?1049l"); // leave the alternate screen, restoring the primary buffer
+        out.flush();
+    }
+}
 
 Component& Screen::root() noexcept
 {

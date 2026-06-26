@@ -52,6 +52,11 @@ struct ScreenConfig
     int inlineMaxHeight = 0;                        ///< For Viewport::Inline (0 = no limit).
     UnscrollMode unscrollMode = UnscrollMode::Auto; ///< Unscroll behavior for inline mode.
     bool inhibitReflow = false;                     ///< Disable text reflow (DEC 2028) on rendered lines.
+
+    /// Switch to the terminal's alternate screen buffer (DEC private mode 1049) for the
+    /// lifetime of the Screen, restoring the primary buffer (and the user's scrollback) on
+    /// destruction. Intended for full-screen apps with @c Viewport::Fullscreen.
+    bool alternateScreen = false;
 };
 
 /// Cursor movement calculations for inline rendering.
@@ -297,6 +302,7 @@ class Screen // NOLINT(clang-analyzer-optin.performance.Padding)
     Buffer _previous;
 
     bool _needsFullRedraw = true;
+    bool _enteredAlternateScreen = false; ///< Whether we switched to the alternate screen buffer.
     std::unordered_set<Component*> _dirtyComponents;
     int _previousContentHeight = 0;
     int _previousCursorRow = 0;         ///< Cursor row at end of last inline render (for positioning)
