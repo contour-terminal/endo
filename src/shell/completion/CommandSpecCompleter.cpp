@@ -31,10 +31,10 @@ void CommandSpecCompleter::registerCommand(CommandSpec spec,
                 if (entry.text != alias)
                     continue;
                 // Description format: "alias: <command> [args...]"
-                static constexpr std::string_view prefix = "alias: ";
-                if (!entry.description.starts_with(prefix))
+                static constexpr std::string_view Prefix = "alias: ";
+                if (!entry.description.starts_with(Prefix))
                     return std::nullopt;
-                auto const rest = std::string_view(entry.description).substr(prefix.size());
+                auto const rest = std::string_view(entry.description).substr(Prefix.size());
                 // Shell aliases (starting with '!') are not subcommand mappings
                 if (rest.starts_with('!'))
                     return std::nullopt;

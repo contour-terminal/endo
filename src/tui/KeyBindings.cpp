@@ -34,7 +34,7 @@ namespace
         KeyCode code;
     };
 
-    constexpr std::array<KeyNameMapping, 26> keyNameMappings = { {
+    constexpr std::array<KeyNameMapping, 26> KeyNameMappings = { {
         { .name = "enter", .code = KeyCode::Enter },   { .name = "return", .code = KeyCode::Enter },
         { .name = "tab", .code = KeyCode::Tab },       { .name = "backspace", .code = KeyCode::Backspace },
         { .name = "delete", .code = KeyCode::Delete }, { .name = "del", .code = KeyCode::Delete },
@@ -51,7 +51,7 @@ namespace
     } };
 
     // More function keys
-    constexpr std::array<KeyNameMapping, 3> moreKeyNameMappings = { {
+    constexpr std::array<KeyNameMapping, 3> MoreKeyNameMappings = { {
         { .name = "f10", .code = KeyCode::F10 },
         { .name = "f11", .code = KeyCode::F11 },
         { .name = "f12", .code = KeyCode::F12 },
@@ -59,12 +59,12 @@ namespace
 
     std::optional<KeyCode> parseSpecialKey(std::string_view name)
     {
-        for (auto const& mapping: keyNameMappings)
+        for (auto const& mapping: KeyNameMappings)
         {
             if (equalsIgnoreCase(name, mapping.name))
                 return mapping.code;
         }
-        for (auto const& mapping: moreKeyNameMappings)
+        for (auto const& mapping: MoreKeyNameMappings)
         {
             if (equalsIgnoreCase(name, mapping.name))
                 return mapping.code;
@@ -74,12 +74,12 @@ namespace
 
     std::string_view keyCodeToString(KeyCode code)
     {
-        for (auto const& mapping: keyNameMappings)
+        for (auto const& mapping: KeyNameMappings)
         {
             if (mapping.code == code)
                 return mapping.name;
         }
-        for (auto const& mapping: moreKeyNameMappings)
+        for (auto const& mapping: MoreKeyNameMappings)
         {
             if (mapping.code == code)
                 return mapping.name;
@@ -95,7 +95,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 41> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 41> ActionNameMappings = { {
         // Movement
         { .name = "move-forward-char",
           .description = "Move cursor forward one character",
@@ -346,7 +346,7 @@ bool KeyChord::matches(KeyEvent const& event) const noexcept
 
 std::optional<EditAction> parseEditAction(std::string_view str)
 {
-    for (auto const& mapping: actionNameMappings)
+    for (auto const& mapping: ActionNameMappings)
     {
         if (equalsIgnoreCase(str, mapping.name))
             return mapping.action;
@@ -356,7 +356,7 @@ std::optional<EditAction> parseEditAction(std::string_view str)
 
 std::string_view editActionToString(EditAction action) noexcept
 {
-    for (auto const& mapping: actionNameMappings)
+    for (auto const& mapping: ActionNameMappings)
     {
         if (mapping.action == action)
             return mapping.name;
@@ -367,8 +367,8 @@ std::string_view editActionToString(EditAction action) noexcept
 std::vector<EditActionInfo> allEditActionNames()
 {
     std::vector<EditActionInfo> infos;
-    infos.reserve(actionNameMappings.size());
-    for (auto const& mapping: actionNameMappings)
+    infos.reserve(ActionNameMappings.size());
+    for (auto const& mapping: ActionNameMappings)
         infos.push_back({ .name = mapping.name, .description = mapping.description });
     return infos;
 }
@@ -376,10 +376,10 @@ std::vector<EditActionInfo> allEditActionNames()
 std::vector<std::string_view> allKeyNames()
 {
     std::vector<std::string_view> names;
-    names.reserve(keyNameMappings.size() + moreKeyNameMappings.size());
-    for (auto const& mapping: keyNameMappings)
+    names.reserve(KeyNameMappings.size() + MoreKeyNameMappings.size());
+    for (auto const& mapping: KeyNameMappings)
         names.push_back(mapping.name);
-    for (auto const& mapping: moreKeyNameMappings)
+    for (auto const& mapping: MoreKeyNameMappings)
         names.push_back(mapping.name);
     return names;
 }

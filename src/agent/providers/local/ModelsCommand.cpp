@@ -80,7 +80,7 @@ namespace
     }
 
     /// Status column index in the models table.
-    constexpr std::size_t statusColumnIndex = 3;
+    constexpr std::size_t StatusColumnIndex = 3;
 
     /// Runs `endo agent models list`.
     auto runList() -> int
@@ -149,7 +149,7 @@ namespace
 
         renderer.setCellStyleCallback(
             [&](size_t /*row*/, size_t col, std::string_view text) -> std::optional<tui::Style> {
-                if (col == statusColumnIndex)
+                if (col == StatusColumnIndex)
                 {
                     if (text == "downloaded")
                         return greenStyle;
@@ -168,13 +168,13 @@ namespace
     /// Renders a terminal progress bar.
     void renderProgress(Colors const& c, std::string_view label, size_t totalBytes, size_t downloadedBytes)
     {
-        constexpr int barWidth = 30;
+        constexpr int BarWidth = 30;
         auto const fraction =
             (totalBytes > 0) ? static_cast<double>(downloadedBytes) / static_cast<double>(totalBytes) : 0.0;
-        auto const filled = static_cast<int>(fraction * barWidth);
+        auto const filled = static_cast<int>(fraction * BarWidth);
 
         std::print("\r  {}[", c.cyan);
-        for (int i = 0; i < barWidth; ++i)
+        for (int i = 0; i < BarWidth; ++i)
             std::print("{}", (i < filled) ? "█" : "░");
         std::print("]{} {:3.0f}%  {} / {}   ",
                    c.reset,

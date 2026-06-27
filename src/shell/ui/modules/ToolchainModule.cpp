@@ -34,7 +34,7 @@ namespace
         };
 
         // clang-format off
-        static constexpr auto detections = std::array<Detection, 8> {{
+        static constexpr auto Detections = std::array<Detection, 8> {{
             { .file="Cargo.toml",      .icon="\xf0\x9f\xa6\x80", .name="rust" },      // U+1F980 crab
             { .file="package.json",    .icon="\xf0\x9f\x9f\xa9", .name="node" },      // U+1F7E9 green square
             { .file="go.mod",          .icon="\xf0\x9f\x90\xbf", .name="go" },        // U+1F43F chipmunk
@@ -46,7 +46,7 @@ namespace
         }};
         // clang-format on
 
-        for (auto const& [file, icon, name]: detections)
+        for (auto const& [file, icon, name]: Detections)
         {
             if (std::filesystem::exists(dir / file))
                 return { .icon = std::string(icon), .name = std::string(name), .valid = true };

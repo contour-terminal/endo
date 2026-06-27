@@ -25,7 +25,7 @@ namespace endo
 ///
 /// Caps cost of per-entry existence checks during completion and keeps
 /// storage compact for commands that expand into many path-like args.
-inline constexpr size_t maxRequiredPaths = 8;
+inline constexpr size_t MaxRequiredPaths = 8;
 
 /// Canonicalizes an absolute path into a home-relative form for portable storage.
 ///

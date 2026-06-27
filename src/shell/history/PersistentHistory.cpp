@@ -315,9 +315,9 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
 
     // CWD ranking bonuses — exact must outrank maxRecencyBonus so same-CWD entries
     // beat fresh unrelated ones; ancestor is a gentler tiebreaker.
-    constexpr auto maxRecencyBonus = 200;
-    constexpr auto exactCwdBonus = 300;
-    constexpr auto ancestorCwdBonus = 150;
+    constexpr auto MaxRecencyBonus = 200;
+    constexpr auto ExactCwdBonus = 300;
+    constexpr auto AncestorCwdBonus = 150;
 
     // Canonicalize the current CWD once; comparison against stored cwd stays a cheap string op.
     auto const currentCwdCanonical = options.currentCwd.empty()
@@ -365,7 +365,7 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
         }
 
         // Recency bonus: scaled to fixed range [0, maxRecencyBonus], newest gets highest
-        auto const recencyBonus = total > 0 ? maxRecencyBonus * (total - position) / total : 0;
+        auto const recencyBonus = total > 0 ? MaxRecencyBonus * (total - position) / total : 0;
 
         // Frequency bonus: small tiebreaker, recency dominates
         auto const frequencyBonus =
@@ -376,9 +376,9 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
         if (!currentCwdCanonical.empty() && !it->cwd.empty())
         {
             if (it->cwd == currentCwdCanonical)
-                cwdBonus = exactCwdBonus;
+                cwdBonus = ExactCwdBonus;
             else if (pathIsAncestor(it->cwd, currentCwdCanonical))
-                cwdBonus = ancestorCwdBonus;
+                cwdBonus = AncestorCwdBonus;
         }
 
         auto score = 0;

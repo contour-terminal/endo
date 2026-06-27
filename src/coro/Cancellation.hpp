@@ -60,7 +60,7 @@ struct OperationCancelled
 /// token. Usage: `auto token = co_await endo::coro::thisCoroStopToken();`.
 struct ThisCoroStopToken
 {
-    StopToken token {}; ///< Filled from the awaiting promise in await_suspend.
+    StopToken token; ///< Filled from the awaiting promise in await_suspend.
 
     /// Never ready: await_suspend runs to capture the token, then resumes immediately.
     [[nodiscard]] bool await_ready() const noexcept { return false; }

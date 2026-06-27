@@ -6,8 +6,6 @@
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <crispy/utils.h>
 
 #include <algorithm>
@@ -16,6 +14,8 @@
 #include <map>
 #include <set>
 #include <unordered_map>
+
+#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -77,7 +77,7 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
     auto const total = static_cast<int>(historyEntries.size());
     if (total > 0)
     {
-        constexpr auto maxBonus = 200;
+        constexpr auto MaxBonus = 200;
         auto recencyMap = std::unordered_map<std::string, int> {};
         for (auto i = total - 1; i >= 0; --i)
         {
@@ -86,7 +86,7 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
             auto const spacePos = entry.find(' ');
             auto const cmd = entry.substr(0, spacePos);
             if (!cmd.empty())
-                recencyMap.try_emplace(cmd, maxBonus * (i + 1) / total);
+                recencyMap.try_emplace(cmd, MaxBonus * (i + 1) / total);
         }
         for (auto& item: results)
         {

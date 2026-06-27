@@ -72,8 +72,8 @@ class ScriptedCompleter: public CompletionProvider
         std::chrono::steady_clock::time_point timestamp;
     };
 
-    static constexpr auto cacheTTL = std::chrono::milliseconds { 2000 };
-    static constexpr size_t maxCacheEntries = 32;
+    static constexpr auto CacheTtl = std::chrono::milliseconds { 2000 };
+    static constexpr size_t MaxCacheEntries = 32;
     mutable std::unordered_map<std::string, CacheEntry> _cache;
 
     /// @brief Builds a cache key from function name and args.

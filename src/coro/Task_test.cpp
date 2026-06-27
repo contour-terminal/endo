@@ -140,13 +140,13 @@ TEST_CASE("Deep co_await chains keep the stack bounded (symmetric transfer)", "[
 {
     // Without symmetric transfer this recursion would overflow the stack; with it
     // both the descent and the unwind are tail calls.
-    constexpr auto depth = 100000;
-    auto task = sumDown(depth);
+    constexpr auto Depth = 100000;
+    auto task = sumDown(Depth);
 
     task.handle().resume();
 
     REQUIRE(task.done());
-    REQUIRE(task.result() == depth);
+    REQUIRE(task.result() == Depth);
 }
 
 TEST_CASE("whenAll completes synchronously when every child does", "[Task][whenAll]")

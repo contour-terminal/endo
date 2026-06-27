@@ -10661,10 +10661,10 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         }
         if (modIdent->name == "File")
         {
-            static constexpr std::string_view fileMethods[] = {
+            static constexpr std::string_view FileMethods[] = {
                 "open", "close", "readLine", "readAll", "writeAll", "appendAll", "size", "exists", "delete",
             };
-            for (auto const& m: fileMethods)
+            for (auto const& m: FileMethods)
             {
                 if (node.fieldName == m)
                 {
@@ -10678,8 +10678,8 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         }
         if (modIdent->name == "Process")
         {
-            static constexpr std::string_view processMethods[] = { "kill", "signal" };
-            for (auto const& m: processMethods)
+            static constexpr std::string_view ProcessMethods[] = { "kill", "signal" };
+            for (auto const& m: ProcessMethods)
             {
                 if (node.fieldName == m)
                 {
@@ -10692,10 +10692,10 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         }
         if (modIdent->name == "Completion")
         {
-            static constexpr std::string_view completionMethods[] = {
+            static constexpr std::string_view CompletionMethods[] = {
                 "register", "entry", "described", "detailed", "text"
             };
-            for (auto const& m: completionMethods)
+            for (auto const& m: CompletionMethods)
             {
                 if (node.fieldName == m)
                 {

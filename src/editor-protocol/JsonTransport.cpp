@@ -24,10 +24,10 @@ std::expected<nlohmann::json, std::string> readMessage(std::istream& input)
             break;
 
         // Parse Content-Length header
-        constexpr std::string_view prefix = "Content-Length: ";
-        if (line.starts_with(prefix))
+        constexpr std::string_view Prefix = "Content-Length: ";
+        if (line.starts_with(Prefix))
         {
-            auto const valueStr = std::string_view(line).substr(prefix.size());
+            auto const valueStr = std::string_view(line).substr(Prefix.size());
             auto const [ptr, ec] =
                 std::from_chars(valueStr.data(), valueStr.data() + valueStr.size(), contentLength);
             if (ec != std::errc {})

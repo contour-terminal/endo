@@ -226,8 +226,8 @@ std::string_view WindowsTestPTY::output() const noexcept
 
 void WindowsTestPTY::outputCaptureLoop()
 {
-    constexpr DWORD bufferSize = 1024;
-    char buffer[bufferSize];
+    constexpr DWORD BufferSize = 1024;
+    char buffer[BufferSize];
 
     while (!_closed)
     {
@@ -248,7 +248,7 @@ void WindowsTestPTY::outputCaptureLoop()
 
         DWORD bytesRead = 0;
         BOOL const success =
-            ReadFile(_readOutputHandle, buffer, std::min(bufferSize, bytesAvailable), &bytesRead, nullptr);
+            ReadFile(_readOutputHandle, buffer, std::min(BufferSize, bytesAvailable), &bytesRead, nullptr);
 
         if (!success || bytesRead == 0)
             break; // EOF or error

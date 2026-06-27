@@ -173,11 +173,11 @@ namespace
     [[nodiscard]] std::optional<std::string> evaluateExpectExpr(std::string_view expr,
                                                                 std::string_view actualOutput)
     {
-        constexpr std::string_view outputVar = "__endoTestActual";
+        constexpr std::string_view OutputVar = "__endoTestActual";
         auto const trimmedOutput = rtrimNewlines(actualOutput);
         auto const escaped = escapeForEndoString(trimmedOutput);
-        auto const rewritten = rewriteUnderscoreTokens(expr, outputVar);
-        auto const program = std::format("let {} = \"{}\"\nprint ({})", outputVar, escaped, rewritten);
+        auto const rewritten = rewriteUnderscoreTokens(expr, OutputVar);
+        auto const program = std::format("let {} = \"{}\"\nprint ({})", OutputVar, escaped, rewritten);
 
         TestExecutionSuccess evalExec;
         try

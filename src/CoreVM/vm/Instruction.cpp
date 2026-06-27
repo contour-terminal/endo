@@ -44,7 +44,7 @@ struct InstructionInfo
 // LiteralType:: stackOutput }
 
 // OPCODE, operandSignature, stackChange
-static constexpr InstructionInfo instructionInfos[] = {
+static constexpr InstructionInfo InstructionInfos[] = {
     // misc
     IIDEF(NOP, V, 0, Void),
     IIDEF(ALLOCA, I, 0, Void),
@@ -225,7 +225,7 @@ int getStackChange(Instruction instr)
         case Opcode::IUTCALL:
             // Indirect tail call: handled dynamically (reuses frame). For static analysis treat as 0.
             return 0;
-        default: return instructionInfos[opc].stackChange;
+        default: return InstructionInfos[opc].stackChange;
     }
 }
 
@@ -249,17 +249,17 @@ size_t computeStackSize(const Instruction* program, size_t programSize)
 
 OperandSig operandSignature(Opcode opc)
 {
-    return instructionInfos[static_cast<size_t>(opc)].operandSig;
+    return InstructionInfos[static_cast<size_t>(opc)].operandSig;
 }
 
 const char* mnemonic(Opcode opc)
 {
-    return instructionInfos[static_cast<size_t>(opc)].mnemonic;
+    return InstructionInfos[static_cast<size_t>(opc)].mnemonic;
 }
 
 LiteralType resultType(Opcode opc)
 {
-    return instructionInfos[static_cast<size_t>(opc)].stackOutput;
+    return InstructionInfos[static_cast<size_t>(opc)].stackOutput;
 }
 
 // ---------------------------------------------------------------------------

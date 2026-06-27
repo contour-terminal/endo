@@ -292,7 +292,7 @@ std::string colorizePermissions(std::string_view perms)
     static auto const sgrWrite = sgrSequence({ .fg = PermWriteColor });
     static auto const sgrExec = sgrSequence({ .fg = PermExecColor });
     static auto const sgrNone = sgrSequence({ .fg = PermNoneColor });
-    static constexpr auto sgrReset = "\033[m";
+    static constexpr auto SgrReset = "\033[m";
 
     std::string result;
     result.reserve(perms.size() * 20); // pre-allocate for SGR overhead
@@ -307,7 +307,7 @@ std::string colorizePermissions(std::string_view perms)
             default: break;
         }
         result += c;
-        result += sgrReset;
+        result += SgrReset;
     }
     return result;
 }

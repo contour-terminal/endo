@@ -758,14 +758,14 @@ void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
             std::string_view desc;
         };
 
-        static constexpr std::array hints = {
+        static constexpr std::array Hints = {
             Hint { .key = "Esc", .desc = "exit" },
             Hint { .key = "S-Tab", .desc = "mode" },
             Hint { .key = "C-/", .desc = "thinking" },
             Hint { .key = "C-.", .desc = "model" },
         };
 
-        for (auto const& [key, desc]: hints)
+        for (auto const& [key, desc]: Hints)
         {
             if (col > 1)
                 col += canvas.putString(row, col, "  ", {}); // gap between hints

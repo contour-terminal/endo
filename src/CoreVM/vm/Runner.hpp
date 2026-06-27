@@ -297,7 +297,7 @@ class Runner
 
     std::vector<CallFrame> _callStack;
 
-    static constexpr size_t maxCallDepth = 10000;
+    static constexpr size_t MaxCallDepth = 10000;
 };
 
 } // namespace CoreVM

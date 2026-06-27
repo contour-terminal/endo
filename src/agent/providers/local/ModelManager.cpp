@@ -50,12 +50,12 @@ namespace
     [[nodiscard]] auto detectToolUseSupport(std::string_view arch) -> bool
     {
         // Models known to support tool calling well.
-        static constexpr auto toolUseArchitectures = std::array {
+        static constexpr auto ToolUseArchitectures = std::array {
             std::string_view { "llama" },     std::string_view { "qwen2" },
             std::string_view { "qwen2_moe" }, std::string_view { "mistral" },
             std::string_view { "command-r" },
         };
-        return std::ranges::any_of(toolUseArchitectures, [&](auto const& a) { return a == arch; });
+        return std::ranges::any_of(ToolUseArchitectures, [&](auto const& a) { return a == arch; });
     }
 
     /// Reads a string metadata value from the model.

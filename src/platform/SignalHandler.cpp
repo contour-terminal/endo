@@ -332,9 +332,9 @@ bool SignalHandler::isInterruptCtrlEvent(unsigned long ctrlType) noexcept
 #else
     // Mirror the Win32 CTRL_C_EVENT (0) and CTRL_BREAK_EVENT (1) values so the
     // interrupt policy can be unit-tested on any platform.
-    constexpr unsigned long kCtrlCEvent = 0;
-    constexpr unsigned long kCtrlBreakEvent = 1;
-    return ctrlType == kCtrlCEvent || ctrlType == kCtrlBreakEvent;
+    constexpr unsigned long CtrlCEvent = 0;
+    constexpr unsigned long CtrlBreakEvent = 1;
+    return ctrlType == CtrlCEvent || ctrlType == CtrlBreakEvent;
 #endif
 }
 

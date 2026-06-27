@@ -14,12 +14,12 @@ namespace endo
 
 // clang-format off
 
-static constexpr InlineOptionDef kEchoOptions[] = {
+static constexpr InlineOptionDef EchoOptions[] = {
     { .shortFlag = "-n", .longFlag = {},    .description = "Do not output the trailing newline" },
     { .shortFlag = "-e", .longFlag = {},    .description = "Enable interpretation of backslash escapes" },
 };
 
-static constexpr InlineOptionDef kRmOptions[] = {
+static constexpr InlineOptionDef RmOptions[] = {
     { .shortFlag = "-r", .longFlag = "--recursive", .description = "Remove directories and their contents recursively" },
     { .shortFlag = "-f", .longFlag = "--force",     .description = "Ignore nonexistent files, never prompt" },
     { .shortFlag = "-i", .longFlag = {},            .description = "Prompt before every removal" },
@@ -27,26 +27,26 @@ static constexpr InlineOptionDef kRmOptions[] = {
     { .shortFlag = "-v", .longFlag = "--verbose",   .description = "Explain what is being done" },
 };
 
-static constexpr InlineOptionDef kMkdirOptions[] = {
+static constexpr InlineOptionDef MkdirOptions[] = {
     { .shortFlag = "-p", .longFlag = "--parents", .description = "Create parent directories as needed" },
     { .shortFlag = "-v", .longFlag = "--verbose", .description = "Print a message for each created directory" },
 };
 
-static constexpr InlineOptionDef kCpOptions[] = {
+static constexpr InlineOptionDef CpOptions[] = {
     { .shortFlag = "-r", .longFlag = "--recursive",  .description = "Copy directories recursively" },
     { .shortFlag = "-f", .longFlag = "--force",      .description = "Force overwrite" },
     { .shortFlag = "-n", .longFlag = "--no-clobber", .description = "Do not overwrite existing files" },
     { .shortFlag = "-v", .longFlag = "--verbose",    .description = "Explain what is being done" },
 };
 
-static constexpr InlineOptionDef kMvOptions[] = {
+static constexpr InlineOptionDef MvOptions[] = {
     { .shortFlag = "-f", .longFlag = "--force",       .description = "Do not prompt before overwriting" },
     { .shortFlag = "-n", .longFlag = "--no-clobber",  .description = "Do not overwrite existing files" },
     { .shortFlag = "-v", .longFlag = "--verbose",     .description = "Explain what is being done" },
     { .shortFlag = "-i", .longFlag = "--interactive", .description = "Prompt before overwrite" },
 };
 
-static constexpr InlineOptionDef calOptions[] = {
+static constexpr InlineOptionDef CalOptions[] = {
     { .shortFlag = "-3", .longFlag = "--three",    .description = "Show previous, current, and next month" },
     { .shortFlag = "-y", .longFlag = "--year",     .description = "Show the entire year" },
     { .shortFlag = "-m", .longFlag = "--monday",   .description = "Start the week on Monday (ISO 8601)" },
@@ -54,7 +54,7 @@ static constexpr InlineOptionDef calOptions[] = {
     { .shortFlag = "-n", .longFlag = "--no-color", .description = "Disable colorized output even on a terminal" },
 };
 
-static constexpr InlineOptionDef kDateOptions[] = {
+static constexpr InlineOptionDef DateOptions[] = {
     { .shortFlag = "-u", .longFlag = "--utc",    .description = "Use UTC instead of local time" },
     { .shortFlag = {},   .longFlag = "--epoch",  .description = "Print seconds since Unix epoch" },
     { .shortFlag = {},   .longFlag = "--iso",    .description = "Print in ISO 8601 format" },
@@ -62,7 +62,7 @@ static constexpr InlineOptionDef kDateOptions[] = {
     { .shortFlag = "-d", .longFlag = "--date",   .description = "Display given date instead of now", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kUnameOptions[] = {
+static constexpr InlineOptionDef UnameOptions[] = {
     { .shortFlag = "-s", .longFlag = {}, .description = "Print kernel name" },
     { .shortFlag = "-n", .longFlag = {}, .description = "Print network node hostname" },
     { .shortFlag = "-r", .longFlag = {}, .description = "Print kernel release" },
@@ -70,70 +70,70 @@ static constexpr InlineOptionDef kUnameOptions[] = {
     { .shortFlag = "-a", .longFlag = {}, .description = "Print all information" },
 };
 
-static constexpr InlineOptionDef kNprocOptions[] = {
+static constexpr InlineOptionDef NprocOptions[] = {
     { .shortFlag = {}, .longFlag = "--all",    .description = "Print the number of installed processors" },
     { .shortFlag = {}, .longFlag = "--ignore", .description = "Exclude N processing units", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kTouchOptions[] = {
+static constexpr InlineOptionDef TouchOptions[] = {
     { .shortFlag = "-c", .longFlag = "--no-create", .description = "Do not create files" },
 };
 
-static constexpr InlineOptionDef kLnOptions[] = {
+static constexpr InlineOptionDef LnOptions[] = {
     { .shortFlag = "-s", .longFlag = {}, .description = "Create symbolic link" },
     { .shortFlag = "-f", .longFlag = {}, .description = "Remove existing destination files" },
     { .shortFlag = "-v", .longFlag = {}, .description = "Explain what is being done" },
 };
 
-static constexpr InlineOptionDef kMktempOptions[] = {
+static constexpr InlineOptionDef MktempOptions[] = {
     { .shortFlag = "-d", .longFlag = {}, .description = "Create a directory instead of a file" },
     { .shortFlag = "-p", .longFlag = {}, .description = "Use DIR as the base directory", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kHeadOptions[] = {
+static constexpr InlineOptionDef HeadOptions[] = {
     { .shortFlag = "-n", .longFlag = {}, .description = "Number of lines (default: 10)", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kTailOptions[] = {
+static constexpr InlineOptionDef TailOptions[] = {
     { .shortFlag = "-n", .longFlag = {}, .description = "Number of lines (default: 10)", .takesValue = true },
     { .shortFlag = "-f", .longFlag = {}, .description = "Follow: output appended data as file grows" },
 };
 
-static constexpr InlineOptionDef kWcOptions[] = {
+static constexpr InlineOptionDef WcOptions[] = {
     { .shortFlag = "-l", .longFlag = {}, .description = "Print line count" },
     { .shortFlag = "-w", .longFlag = {}, .description = "Print word count" },
     { .shortFlag = "-c", .longFlag = {}, .description = "Print character count" },
 };
 
-static constexpr InlineOptionDef kSortOptions[] = {
+static constexpr InlineOptionDef SortOptions[] = {
     { .shortFlag = "-r", .longFlag = {}, .description = "Reverse sort order" },
     { .shortFlag = "-n", .longFlag = {}, .description = "Compare according to numerical value" },
     { .shortFlag = "-u", .longFlag = {}, .description = "Output only unique lines" },
     { .shortFlag = "-k", .longFlag = {}, .description = "Sort by key field number", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kUniqOptions[] = {
+static constexpr InlineOptionDef UniqOptions[] = {
     { .shortFlag = "-c", .longFlag = {}, .description = "Prefix lines with occurrence count" },
     { .shortFlag = "-d", .longFlag = {}, .description = "Only print duplicate lines" },
     { .shortFlag = "-i", .longFlag = {}, .description = "Ignore case when comparing" },
 };
 
-static constexpr InlineOptionDef kCutOptions[] = {
+static constexpr InlineOptionDef CutOptions[] = {
     { .shortFlag = "-d", .longFlag = {}, .description = "Field delimiter (default: tab)", .takesValue = true },
     { .shortFlag = "-f", .longFlag = {}, .description = "Select fields (e.g., 1, 1-3, 1,3)", .takesValue = true },
     { .shortFlag = "-c", .longFlag = {}, .description = "Select characters (e.g., 1-5, 3)", .takesValue = true },
 };
 
-static constexpr InlineOptionDef kTrOptions[] = {
+static constexpr InlineOptionDef TrOptions[] = {
     { .shortFlag = "-d", .longFlag = {}, .description = "Delete characters in SET1" },
     { .shortFlag = "-s", .longFlag = {}, .description = "Squeeze repeated output characters" },
 };
 
-static constexpr InlineOptionDef kTeeOptions[] = {
+static constexpr InlineOptionDef TeeOptions[] = {
     { .shortFlag = "-a", .longFlag = "--append", .description = "Append to files instead of overwriting" },
 };
 
-static constexpr InlineOptionDef kPkillOptions[] = {
+static constexpr InlineOptionDef PkillOptions[] = {
     { .shortFlag = "-s", .longFlag = {}, .description = "Signal to send (name or number)", .takesValue = true },
     { .shortFlag = "-f", .longFlag = {}, .description = "Match against the full command line" },
     { .shortFlag = "-x", .longFlag = {}, .description = "Require exact (anchored) match" },
@@ -169,7 +169,7 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineBasename },
         { .name = "cal",       .briefDescription = "Display a colorful calendar for a month or year.",
           .usageLine = "cal [OPTIONS] [[MONTH] YEAR]",
-          .options = calOptions,
+          .options = CalOptions,
           .noStdinFn = &Shell::executeInlineCal },
         { .name = "cat",       .briefDescription = "Concatenate and display files.",
           .usageLine = "cat [OPTIONS] [FILE...]",
@@ -177,15 +177,15 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .withStdinFn = &Shell::executeInlineCat },
         { .name = "cp",        .briefDescription = "Copy files and directories.",
           .usageLine = "cp [OPTIONS] SOURCE... DEST",
-          .options = kCpOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = CpOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineCp },
         { .name = "cut",       .briefDescription = "Extract fields or characters from lines.",
           .usageLine = "cut [OPTIONS] [FILE...]",
-          .options = kCutOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = CutOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineCut },
         { .name = "date",      .briefDescription = "Print or format the current date and time.",
           .usageLine = "date [OPTIONS]",
-          .options = kDateOptions,
+          .options = DateOptions,
           .noStdinFn = &Shell::executeInlineDate },
         { .name = "dirconfig", .briefDescription = "Manage per-directory configuration.",
           .usageLine = "dirconfig SUBCOMMAND [PATH]",
@@ -196,7 +196,7 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineDirname },
         { .name = "echo",      .briefDescription = "Write arguments to standard output.",
           .usageLine = "echo [OPTIONS] [STRING...]",
-          .options = kEchoOptions,
+          .options = EchoOptions,
           .noStdinFn = &Shell::executeInlineEcho },
         { .name = "find",      .briefDescription = "Search for files in directory hierarchies.",
           .usageLine = "find [PATH...] [EXPRESSION]",
@@ -208,7 +208,7 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .withStdinFn = &Shell::executeInlineGrep },
         { .name = "head",      .briefDescription = "Output the first lines of files.",
           .usageLine = "head [OPTIONS] [FILE...]",
-          .options = kHeadOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = HeadOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineHead },
         { .name = "history",   .briefDescription = "Display or manage command history.",
           .usageLine = "history [N | search PATTERN | clear]",
@@ -221,27 +221,27 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineKill },
         { .name = "ln",        .briefDescription = "Create hard or symbolic links.",
           .usageLine = "ln [OPTIONS] TARGET LINK_NAME",
-          .options = kLnOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = LnOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineLn },
         { .name = "mkdir",     .briefDescription = "Create directories.",
           .usageLine = "mkdir [OPTIONS] DIRECTORY...",
-          .options = kMkdirOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = MkdirOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineMkdir },
         { .name = "mktemp",    .briefDescription = "Create a temporary file or directory.",
           .usageLine = "mktemp [OPTIONS]",
-          .options = kMktempOptions,
+          .options = MktempOptions,
           .noStdinFn = &Shell::executeInlineMktemp },
         { .name = "mv",        .briefDescription = "Move or rename files and directories.",
           .usageLine = "mv [OPTIONS] SOURCE... DEST",
-          .options = kMvOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = MvOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineMv },
         { .name = "nproc",    .briefDescription = "Print the number of available processing units.",
           .usageLine = "nproc [OPTIONS]",
-          .options = kNprocOptions,
+          .options = NprocOptions,
           .noStdinFn = &Shell::executeInlineNproc },
         { .name = "pkill",     .briefDescription = "Send signals to processes matched by name or command-line pattern.",
           .usageLine = "pkill [OPTIONS] [-SIGNAL] PATTERN",
-          .options = kPkillOptions,
+          .options = PkillOptions,
           .noStdinFn = &Shell::executeInlinePkill },
         { .name = "pwd",      .briefDescription = "Print the current working directory.",
           .usageLine = "pwd",
@@ -253,14 +253,14 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineRealpath },
         { .name = "rm",        .briefDescription = "Remove files and directories.",
           .usageLine = "rm [OPTIONS] FILE...",
-          .options = kRmOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = RmOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineRm },
         { .name = "sleep",     .briefDescription = "Pause execution for a specified duration.",
           .usageLine = "sleep DURATION",
           .noStdinFn = &Shell::executeInlineSleep },
         { .name = "sort",      .briefDescription = "Sort lines of text.",
           .usageLine = "sort [OPTIONS] [FILE...]",
-          .options = kSortOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = SortOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineSort },
         { .name = "source",    .briefDescription = "Execute a script in the current shell context.",
           .usageLine = "source FILE [ARGS...]",
@@ -272,34 +272,34 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineSourceEnv },
         { .name = "tail",      .briefDescription = "Output the last lines of files.",
           .usageLine = "tail [OPTIONS] [FILE...]",
-          .options = kTailOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = TailOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineTail },
         { .name = "tee",       .briefDescription = "Read stdin, write to stdout and files.",
           .usageLine = "tee [OPTIONS] [FILE...]",
-          .options = kTeeOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = TeeOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineTee },
         { .name = "timeout",   .briefDescription = "Run a command with a time limit.",
           .usageLine = "timeout [OPTIONS] DURATION COMMAND [ARG...]",
           .noStdinFn = &Shell::executeInlineTimeout },
         { .name = "touch",     .briefDescription = "Create files or update timestamps.",
           .usageLine = "touch [OPTIONS] FILE...",
-          .options = kTouchOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = TouchOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineTouch },
         { .name = "tr",        .briefDescription = "Translate or delete characters.",
           .usageLine = "tr [OPTIONS] SET1 [SET2]",
-          .options = kTrOptions,
+          .options = TrOptions,
           .withStdinFn = &Shell::executeInlineTr },
         { .name = "uname",     .briefDescription = "Print system information.",
           .usageLine = "uname [OPTIONS]",
-          .options = kUnameOptions,
+          .options = UnameOptions,
           .noStdinFn = &Shell::executeInlineUname },
         { .name = "uniq",      .briefDescription = "Filter adjacent duplicate lines.",
           .usageLine = "uniq [OPTIONS] [FILE]",
-          .options = kUniqOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = UniqOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineUniq },
         { .name = "wc",        .briefDescription = "Count lines, words, and characters.",
           .usageLine = "wc [OPTIONS] [FILE...]",
-          .options = kWcOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = WcOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineWc },
         { .name = "whoami",    .briefDescription = "Print the current username.",
           .usageLine = "whoami",

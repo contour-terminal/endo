@@ -1636,11 +1636,11 @@ void processKill(CoreVM::Params& args)
 {
     auto const pid = static_cast<int>(args.getInt(1));
 #if defined(_WIN32)
-    constexpr auto defaultSignal = 0; // Windows uses TerminateProcess(), signal number is ignored
+    constexpr auto DefaultSignal = 0; // Windows uses TerminateProcess(), signal number is ignored
 #else
-    constexpr auto defaultSignal = SIGTERM;
+    constexpr auto DefaultSignal = SIGTERM;
 #endif
-    auto const err = platformSendSignal(pid, defaultSignal);
+    auto const err = platformSendSignal(pid, DefaultSignal);
     if (!err.empty())
     {
         auto* errStr = args.caller()->newString(err);

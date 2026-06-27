@@ -13,7 +13,7 @@ namespace endo
 // ---------------------------------------------------------------------------
 
 // clang-format off
-static constexpr std::array presetValues = {
+static constexpr std::array PresetValues = {
     EnumValueEntry { .value="minimal-arrow", .description="Clean arrow-based prompt" },
     EnumValueEntry { .value="lambda-clean", .description="Lambda symbol prompt" },
     EnumValueEntry { .value="opencode-bar", .description="OpenCode-style bar prompt" },
@@ -26,14 +26,14 @@ static constexpr std::array presetValues = {
     EnumValueEntry { .value="endo-signature", .description="Endo signature prompt" },
 };
 
-static constexpr std::array layoutValues = {
+static constexpr std::array LayoutValues = {
     EnumValueEntry { .value="single-line", .description="Single line prompt" },
     EnumValueEntry { .value="two-line", .description="Two line prompt" },
     EnumValueEntry { .value="boxed", .description="Boxed prompt layout" },
     EnumValueEntry { .value="powerline", .description="Powerline prompt layout" },
 };
 
-static constexpr std::array separatorValues = {
+static constexpr std::array SeparatorValues = {
     EnumValueEntry { .value="none", .description="No separator" },
     EnumValueEntry { .value="bar", .description="Bar separator (|)" },
     EnumValueEntry { .value="powerline", .description="Powerline separator" },
@@ -41,13 +41,13 @@ static constexpr std::array separatorValues = {
     EnumValueEntry { .value="boxed", .description="Boxed separator" },
 };
 
-static constexpr std::array transientValues = {
+static constexpr std::array TransientValues = {
     EnumValueEntry { .value="off", .description="Disable transient prompt" },
     EnumValueEntry { .value="minimal", .description="Minimal transient prompt" },
     EnumValueEntry { .value="arrow", .description="Arrow transient prompt" },
 };
 
-static constexpr std::array providerValues = {
+static constexpr std::array ProviderValues = {
     EnumValueEntry { .value="claude", .description="Anthropic Claude" },
     EnumValueEntry { .value="openai", .description="OpenAI" },
     EnumValueEntry { .value="gemini", .description="Google Gemini" },
@@ -55,12 +55,12 @@ static constexpr std::array providerValues = {
     EnumValueEntry { .value="local", .description="Local model (llama.cpp)" },
 };
 
-static constexpr std::array boolValues = {
+static constexpr std::array BoolValues = {
     EnumValueEntry { .value="true", .description="Enable" },
     EnumValueEntry { .value="false", .description="Disable" },
 };
 
-static constexpr std::array colorValues = {
+static constexpr std::array ColorValues = {
     EnumValueEntry { .value="transparent", .description="Use terminal default background" },
     EnumValueEntry { .value="theme", .description="Use theme default color" },
 };
@@ -68,18 +68,18 @@ static constexpr std::array colorValues = {
 /// Setter-argument types for properties that additionally accept a zero-argument
 /// function returning a string (`shell_prompt_indicator`, `shell_prompt_color_*`).
 /// Referenced from PropertyDescriptor::extraSetterTypes.
-static constexpr std::array stringOrFunctionExtraTypes = {
+static constexpr std::array StringOrFunctionExtraTypes = {
     CoreVM::LiteralType::Function,
 };
 // clang-format on
 
-static constexpr std::array webSearchEngineValues = {
+static constexpr std::array WebSearchEngineValues = {
     EnumValueEntry { .value = "duckduckgo", .description = "DuckDuckGo (no API key required)" },
     EnumValueEntry { .value = "brave", .description = "Brave Search" },
     EnumValueEntry { .value = "google", .description = "Google Custom Search" },
 };
 
-static constexpr std::array claudeModelValues = {
+static constexpr std::array ClaudeModelValues = {
     EnumValueEntry { .value = "claude-opus-4-6", .description = "Claude Opus 4.6" },
     EnumValueEntry { .value = "claude-sonnet-4-6", .description = "Claude Sonnet 4.6" },
     EnumValueEntry { .value = "claude-haiku-4-5-20251001", .description = "Claude Haiku 4.5" },
@@ -87,39 +87,39 @@ static constexpr std::array claudeModelValues = {
     EnumValueEntry { .value = "claude-opus-4-20250514", .description = "Claude Opus 4" },
 };
 
-static constexpr std::array openaiModelValues = {
+static constexpr std::array OpenaiModelValues = {
     EnumValueEntry { .value = "gpt-4o", .description = "GPT-4o" },
     EnumValueEntry { .value = "gpt-4o-mini", .description = "GPT-4o Mini" },
     EnumValueEntry { .value = "o3-mini", .description = "O3 Mini" },
     EnumValueEntry { .value = "o1", .description = "O1" },
 };
 
-static constexpr std::array geminiModelValues = {
+static constexpr std::array GeminiModelValues = {
     EnumValueEntry { .value = "gemini-2.5-flash", .description = "Gemini 2.5 Flash" },
     EnumValueEntry { .value = "gemini-2.5-pro", .description = "Gemini 2.5 Pro" },
     EnumValueEntry { .value = "gemini-2.0-flash", .description = "Gemini 2.0 Flash" },
 };
 
-static constexpr std::array thinkingModeValues = {
+static constexpr std::array ThinkingModeValues = {
     EnumValueEntry { .value = "off", .description = "No thinking (provider default)" },
     EnumValueEntry { .value = "normal", .description = "Moderate thinking budget" },
     EnumValueEntry { .value = "extended", .description = "Maximum thinking budget" },
 };
 
-static constexpr std::array authTypeValues = {
+static constexpr std::array AuthTypeValues = {
     EnumValueEntry { .value = "auto", .description = "Auto-detect (OAuth preferred)" },
     EnumValueEntry { .value = "oauth", .description = "OAuth authentication" },
     EnumValueEntry { .value = "api_key", .description = "API key authentication" },
 };
 
-static constexpr std::array errorRecoveryActionValues = {
+static constexpr std::array ErrorRecoveryActionValues = {
     EnumValueEntry { .value = "ask", .description = "Ask user before analyzing (default)" },
     EnumValueEntry { .value = "analyze", .description = "Automatically analyze failed commands" },
     EnumValueEntry { .value = "ignore", .description = "Do nothing on command failure" },
 };
 
 /// Combined model values for agent_error_recovery_model (all providers).
-static constexpr std::array errorRecoveryModelValues = {
+static constexpr std::array ErrorRecoveryModelValues = {
     // Claude models
     EnumValueEntry { .value = "claude-opus-4-6", .description = "Claude Opus 4.6" },
     EnumValueEntry { .value = "claude-sonnet-4-6", .description = "Claude Sonnet 4.6" },
@@ -141,7 +141,7 @@ static constexpr std::array errorRecoveryModelValues = {
 // Prompt/Shell property descriptors
 // ---------------------------------------------------------------------------
 
-static constexpr std::array promptProperties = {
+static constexpr std::array PromptProperties = {
     PropertyDescriptor {
         .name = "shell_prompt_preset",
         .type = CoreVM::LiteralType::String,
@@ -149,7 +149,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_preset** -- property\n\nSets the prompt theme "
                   "preset.\n\n```\nshell_prompt_preset powerline\n```",
         .readOnly = false,
-        .enumValues = presetValues,
+        .enumValues = PresetValues,
     },
     PropertyDescriptor {
         .name = "shell_prompt_indicator",
@@ -158,7 +158,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_indicator** -- property\n\nSets the prompt indicator character(s). "
                   "Accepts either a string or a zero-argument function returning a string "
                   "(invoked at each prompt render).",
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_layout",
@@ -167,7 +167,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_layout** -- property\n\nSets the prompt layout style (single-line, "
                   "two-line, boxed, powerline).",
         .readOnly = false,
-        .enumValues = layoutValues,
+        .enumValues = LayoutValues,
     },
     PropertyDescriptor {
         .name = "shell_prompt_separator",
@@ -176,7 +176,7 @@ static constexpr std::array promptProperties = {
         .detail =
             "**shell_prompt_separator** -- property\n\nSets the separator style between prompt modules.",
         .readOnly = false,
-        .enumValues = separatorValues,
+        .enumValues = SeparatorValues,
     },
     PropertyDescriptor {
         .name = "shell_prompt_transient",
@@ -185,7 +185,7 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_transient** -- property\n\nControls transient prompt behavior (off, "
                   "minimal, arrow).",
         .readOnly = false,
-        .enumValues = transientValues,
+        .enumValues = TransientValues,
     },
     PropertyDescriptor {
         .name = "shell_prompt_duration_threshold",
@@ -240,7 +240,7 @@ static constexpr std::array promptProperties = {
                   "transparent\nshell_prompt_color_background \"#2D3237\"\nshell_prompt_color_background "
                   "theme\n```",
         .readOnly = false,
-        .enumValues = colorValues,
+        .enumValues = ColorValues,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_path",
@@ -251,8 +251,8 @@ static constexpr std::array promptProperties = {
             "colors and gradients.\n\n```\nshell_prompt_color_path \"#FF6600\"\nshell_prompt_color_path "
             "\"#5078FF:#00DCC8\"\nshell_prompt_color_path theme\n```",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_clean",
@@ -261,8 +261,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_git_clean** -- property\n\nSets the git branch text color when the "
                   "repository is clean.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_dirty",
@@ -271,8 +271,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_git_dirty** -- property\n\nSets the git branch text color when there "
                   "are unstaged changes.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_git_staged",
@@ -281,8 +281,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_git_staged** -- property\n\nSets the git indicator color when staged "
                   "changes exist.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_indicator",
@@ -291,8 +291,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_indicator** -- property\n\nSets the input line indicator color "
                   "(e.g., `|> `).",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_indicator_error",
@@ -301,8 +301,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_indicator_error** -- property\n\nSets the indicator color when the "
                   "last command failed (non-zero exit).",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_exit_code",
@@ -310,8 +310,8 @@ static constexpr std::array promptProperties = {
         .description = "Exit code badge color (#RRGGBB, gradient, or theme)",
         .detail = "**shell_prompt_color_exit_code** -- property\n\nSets the exit code badge color.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_duration",
@@ -319,8 +319,8 @@ static constexpr std::array promptProperties = {
         .description = "Duration badge color (#RRGGBB, gradient, or theme)",
         .detail = "**shell_prompt_color_duration** -- property\n\nSets the command duration badge color.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_hostname",
@@ -329,8 +329,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_hostname** -- property\n\nSets the hostname module text color (shown "
                   "in SSH sessions).",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_separator",
@@ -338,8 +338,8 @@ static constexpr std::array promptProperties = {
         .description = "Separator/bar color (#RRGGBB, gradient, or theme)",
         .detail = "**shell_prompt_color_separator** -- property\n\nSets the left bar / separator color.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_badge",
@@ -348,8 +348,8 @@ static constexpr std::array promptProperties = {
         .detail = "**shell_prompt_color_badge** -- property\n\nSets the badge background color (used by F# "
                   "mode, structured output).",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_badge_text",
@@ -357,8 +357,8 @@ static constexpr std::array promptProperties = {
         .description = "Badge text color (#RRGGBB or theme)",
         .detail = "**shell_prompt_color_badge_text** -- property\n\nSets the badge text color.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
     PropertyDescriptor {
         .name = "shell_prompt_color_clock",
@@ -366,8 +366,8 @@ static constexpr std::array promptProperties = {
         .description = "Clock text color (#RRGGBB or theme)",
         .detail = "**shell_prompt_color_clock** -- property\n\nSets the clock module text color.",
         .readOnly = false,
-        .enumValues = colorValues,
-        .extraSetterTypes = stringOrFunctionExtraTypes,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
     },
 };
 
@@ -375,7 +375,7 @@ static constexpr std::array promptProperties = {
 // Agent configuration property descriptors
 // ---------------------------------------------------------------------------
 
-static constexpr std::array agentProperties = {
+static constexpr std::array AgentProperties = {
     // --- Top-level agent settings ---
     PropertyDescriptor {
         .name = "agent_provider",
@@ -384,7 +384,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_provider** -- property\n\nSets the active AI provider (claude, openai, gemini, "
                   "openai_compat).",
         .readOnly = false,
-        .enumValues = providerValues,
+        .enumValues = ProviderValues,
     },
     PropertyDescriptor {
         .name = "agent_prompt_indicator",
@@ -404,7 +404,7 @@ static constexpr std::array agentProperties = {
         .description = "Enable/disable tool invocation logging",
         .detail = "**agent_log_tool_uses** -- property\n\nEnables or disables logging of tool invocations.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     // --- Claude provider ---
     PropertyDescriptor {
@@ -426,7 +426,7 @@ static constexpr std::array agentProperties = {
         .description = "Claude model identifier",
         .detail = "**agent_claude_model** -- property\n\nSets the Claude model identifier.",
         .readOnly = false,
-        .enumValues = claudeModelValues,
+        .enumValues = ClaudeModelValues,
     },
     PropertyDescriptor {
         .name = "agent_claude_max_tokens",
@@ -441,7 +441,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_claude_thinking_mode** -- property\n\nSets Claude thinking/reasoning mode (off, "
                   "normal, extended).",
         .readOnly = false,
-        .enumValues = thinkingModeValues,
+        .enumValues = ThinkingModeValues,
     },
     PropertyDescriptor {
         .name = "agent_claude_prompt_caching",
@@ -456,7 +456,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_claude_auth_type** -- property\n\nSets the Claude authentication method (auto, "
                   "oauth, api_key).",
         .readOnly = false,
-        .enumValues = authTypeValues,
+        .enumValues = AuthTypeValues,
     },
     // --- OpenAI provider ---
     PropertyDescriptor {
@@ -478,7 +478,7 @@ static constexpr std::array agentProperties = {
         .description = "OpenAI model identifier",
         .detail = "**agent_openai_model** -- property\n\nSets the OpenAI model identifier.",
         .readOnly = false,
-        .enumValues = openaiModelValues,
+        .enumValues = OpenaiModelValues,
     },
     PropertyDescriptor {
         .name = "agent_openai_base_url",
@@ -498,7 +498,7 @@ static constexpr std::array agentProperties = {
         .description = "OpenAI thinking/reasoning mode",
         .detail = "**agent_openai_thinking_mode** -- property\n\nSets OpenAI thinking/reasoning mode.",
         .readOnly = false,
-        .enumValues = thinkingModeValues,
+        .enumValues = ThinkingModeValues,
     },
     // --- OpenAI-compatible provider ---
     PropertyDescriptor {
@@ -520,7 +520,7 @@ static constexpr std::array agentProperties = {
         .description = "OpenAI-compatible model identifier",
         .detail = "**agent_openai_compat_model** -- property\n\nSets the OpenAI-compatible model identifier.",
         .readOnly = false,
-        .enumValues = openaiModelValues,
+        .enumValues = OpenaiModelValues,
     },
     PropertyDescriptor {
         .name = "agent_openai_compat_base_url",
@@ -540,7 +540,7 @@ static constexpr std::array agentProperties = {
         .description = "OpenAI-compatible thinking mode",
         .detail = "**agent_openai_compat_thinking_mode** -- property\n\nSets the thinking mode.",
         .readOnly = false,
-        .enumValues = thinkingModeValues,
+        .enumValues = ThinkingModeValues,
     },
     // --- Gemini provider ---
     PropertyDescriptor {
@@ -562,7 +562,7 @@ static constexpr std::array agentProperties = {
         .description = "Gemini model identifier",
         .detail = "**agent_gemini_model** -- property\n\nSets the Gemini model identifier.",
         .readOnly = false,
-        .enumValues = geminiModelValues,
+        .enumValues = GeminiModelValues,
     },
     PropertyDescriptor {
         .name = "agent_gemini_max_tokens",
@@ -576,7 +576,7 @@ static constexpr std::array agentProperties = {
         .description = "Gemini thinking/reasoning mode",
         .detail = "**agent_gemini_thinking_mode** -- property\n\nSets Gemini thinking/reasoning mode.",
         .readOnly = false,
-        .enumValues = thinkingModeValues,
+        .enumValues = ThinkingModeValues,
     },
     // --- Plan mode ---
     PropertyDescriptor {
@@ -585,7 +585,7 @@ static constexpr std::array agentProperties = {
         .description = "Enable/disable plan mode",
         .detail = "**agent_plan_mode_enabled** -- property\n\nEnables or disables plan mode.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     PropertyDescriptor {
         .name = "agent_plan_mode_pause_between_steps",
@@ -594,7 +594,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_plan_mode_pause_between_steps** -- property\n\nPause for confirmation between "
                   "plan steps.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     PropertyDescriptor {
         .name = "agent_plan_mode_max_exploration_turns",
@@ -631,7 +631,7 @@ static constexpr std::array agentProperties = {
         .description = "Enable/disable trace logging",
         .detail = "**agent_trace_enabled** -- property\n\nEnables or disables trace logging.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     PropertyDescriptor {
         .name = "agent_trace_default_path",
@@ -653,7 +653,7 @@ static constexpr std::array agentProperties = {
             "**agent_trace_terminal** -- property\n\nEnables real-time display of agent trace events on the "
             "terminal.\nShows LLM requests/responses, tool calls, compaction events, and errors.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     // --- Permissions ---
     PropertyDescriptor {
@@ -684,7 +684,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_web_search_engine** -- property\n\nSets the web search engine (duckduckgo, brave, "
                   "google).",
         .readOnly = false,
-        .enumValues = webSearchEngineValues,
+        .enumValues = WebSearchEngineValues,
     },
     PropertyDescriptor {
         .name = "agent_web_search_api_key",
@@ -762,7 +762,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_local_flash_attention** -- property\n\nEnables or disables Flash Attention for "
                   "local inference.",
         .readOnly = false,
-        .enumValues = boolValues,
+        .enumValues = BoolValues,
     },
     PropertyDescriptor {
         .name = "agent_local_max_tokens",
@@ -786,7 +786,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_error_recovery_action** -- property\n\nAction on command failure (ask, analyze, "
                   "ignore).",
         .readOnly = false,
-        .enumValues = errorRecoveryActionValues,
+        .enumValues = ErrorRecoveryActionValues,
     },
     PropertyDescriptor {
         .name = "agent_error_recovery_model",
@@ -795,7 +795,7 @@ static constexpr std::array agentProperties = {
         .detail = "**agent_error_recovery_model** -- property\n\nModel to use for error analysis. Empty uses "
                   "the active model.",
         .readOnly = false,
-        .enumValues = errorRecoveryModelValues,
+        .enumValues = ErrorRecoveryModelValues,
     },
 };
 // clang-format on
@@ -810,9 +810,9 @@ static std::vector<PropertyDescriptor> const& allProperties()
 {
     static auto const combined = [] {
         std::vector<PropertyDescriptor> result;
-        result.reserve(promptProperties.size() + agentProperties.size());
-        result.insert(result.end(), promptProperties.begin(), promptProperties.end());
-        result.insert(result.end(), agentProperties.begin(), agentProperties.end());
+        result.reserve(PromptProperties.size() + AgentProperties.size());
+        result.insert(result.end(), PromptProperties.begin(), PromptProperties.end());
+        result.insert(result.end(), AgentProperties.begin(), AgentProperties.end());
         return result;
     }();
     return combined;
@@ -824,12 +824,12 @@ static std::vector<PropertyDescriptor> const& allProperties()
 
 std::span<PropertyDescriptor const> promptPropertyDescriptors()
 {
-    return promptProperties;
+    return PromptProperties;
 }
 
 std::span<PropertyDescriptor const> agentPropertyDescriptors()
 {
-    return agentProperties;
+    return AgentProperties;
 }
 
 std::span<PropertyDescriptor const> allPropertyDescriptors()

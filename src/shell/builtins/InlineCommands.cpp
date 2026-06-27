@@ -2681,14 +2681,14 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
     if (opts.listSignals)
     {
         // clang-format off
-        static constexpr std::pair<int, std::string_view> signals[] = {
+        static constexpr std::pair<int, std::string_view> Signals[] = {
             {  1, "HUP" }, {  2, "INT"  }, {  3, "QUIT" }, {  4, "ILL"  }, {  5, "TRAP" },
             {  6, "ABRT"}, {  7, "BUS"  }, {  8, "FPE"  }, {  9, "KILL" }, { 10, "USR1" },
             { 11, "SEGV"}, { 12, "USR2" }, { 13, "PIPE" }, { 14, "ALRM" }, { 15, "TERM" },
         };
         // clang-format on
         std::string output;
-        for (auto const& [num, name]: signals)
+        for (auto const& [num, name]: Signals)
             output += std::format("{:2}) {:<8}", num, name);
 
         output += '\n';
@@ -3286,7 +3286,7 @@ namespace
         std::string_view today;      ///< Highlight for the current day
     };
 
-    constexpr CalSgr calStyled = {
+    constexpr CalSgr CalStyled = {
         .reset = "\x1b[0m",
         .title = "\x1b[1;38;5;220m", // bold gold
         .weekdayRow = "\x1b[1;2m",
@@ -3294,7 +3294,7 @@ namespace
         .today = "\x1b[1;7;38;5;226m", // bold + reverse + yellow
     };
 
-    constexpr CalSgr calPlain = {
+    constexpr CalSgr CalPlain = {
         .reset = "",
         .title = "",
         .weekdayRow = "",
@@ -3304,13 +3304,13 @@ namespace
 
     /// English fallback month names. `std::chrono::format` is locale-aware, but
     /// for wide portability we build the header from a static table.
-    constexpr std::array<std::string_view, 12> calMonthNames = {
+    constexpr std::array<std::string_view, 12> CalMonthNames = {
         "January", "February", "March",     "April",   "May",      "June",
         "July",    "August",   "September", "October", "November", "December",
     };
 
     /// Short weekday labels starting with Monday (index 0). Locale-independent.
-    constexpr std::array<std::string_view, 7> calWeekdayShort = {
+    constexpr std::array<std::string_view, 7> CalWeekdayShort = {
         "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su",
     };
 
@@ -3338,7 +3338,7 @@ namespace
         bool startMonday = true;
     };
 
-    constexpr size_t calBlockWidth = 20; ///< 7 columns * 2 chars + 6 gutters = 20.
+    constexpr size_t CalBlockWidth = 20; ///< 7 columns * 2 chars + 6 gutters = 20.
 
     /// Centers @p text within @p width, padding with spaces.
     std::string centerText(std::string_view text, size_t width)
@@ -3357,7 +3357,7 @@ namespace
                                                  std::chrono::year_month_day today,
                                                  CalStyle const& style)
     {
-        auto const& sgr = style.useColor ? calStyled : calPlain;
+        auto const& sgr = style.useColor ? CalStyled : CalPlain;
         auto const firstDay = style.startMonday ? std::chrono::Monday : std::chrono::Sunday;
 
         std::vector<std::string> lines;
@@ -3365,12 +3365,12 @@ namespace
 
         // Title: "April 2026"
         auto const monthIdx = static_cast<unsigned>(ym.month()) - 1u;
-        auto const titleText = std::format("{} {}", calMonthNames.at(monthIdx), static_cast<int>(ym.year()));
-        lines.push_back(std::format("{}{}{}", sgr.title, centerText(titleText, calBlockWidth), sgr.reset));
+        auto const titleText = std::format("{} {}", CalMonthNames.at(monthIdx), static_cast<int>(ym.year()));
+        lines.push_back(std::format("{}{}{}", sgr.title, centerText(titleText, CalBlockWidth), sgr.reset));
 
         // Weekday header row (e.g., "Mo Tu We Th Fr Sa Su").
         std::string header;
-        header.reserve(calBlockWidth + 16);
+        header.reserve(CalBlockWidth + 16);
         header += sgr.weekdayRow;
         for (auto const col: std::views::iota(0uz, 7uz))
         {
@@ -3383,13 +3383,13 @@ namespace
             {
                 header += sgr.reset;
                 header += sgr.weekend;
-                header += calWeekdayShort.at(static_cast<size_t>(labelIdx));
+                header += CalWeekdayShort.at(static_cast<size_t>(labelIdx));
                 header += sgr.reset;
                 header += sgr.weekdayRow;
             }
             else
             {
-                header += calWeekdayShort.at(static_cast<size_t>(labelIdx));
+                header += CalWeekdayShort.at(static_cast<size_t>(labelIdx));
             }
         }
         header += sgr.reset;
@@ -3407,7 +3407,7 @@ namespace
         for (auto const week: std::views::iota(0, 6))
         {
             std::string row;
-            row.reserve(calBlockWidth + 64);
+            row.reserve(CalBlockWidth + 64);
             for (auto const col: std::views::iota(0uz, 7uz))
             {
                 if (col > 0)
@@ -3451,7 +3451,7 @@ namespace
         }
         // Ensure we always have 8 lines so horizontal composition aligns cleanly.
         while (lines.size() < 8)
-            lines.emplace_back(calBlockWidth, ' ');
+            lines.emplace_back(CalBlockWidth, ' ');
         return lines;
     }
 
@@ -3460,7 +3460,7 @@ namespace
     {
         if (blocks.empty())
             return {};
-        constexpr std::string_view gutter = "  ";
+        constexpr std::string_view Gutter = "  ";
         std::string out;
         size_t const rows = blocks.front().size();
         for (auto const row: std::views::iota(0uz, rows))
@@ -3468,7 +3468,7 @@ namespace
             for (auto const bi: std::views::iota(0uz, blocks.size()))
             {
                 if (bi > 0)
-                    out += gutter;
+                    out += Gutter;
                 out += blocks[bi].at(row);
             }
             out += '\n';
@@ -3630,9 +3630,9 @@ int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle ou
 
     if (showYear)
     {
-        auto const& headerSgr = useColor ? calStyled.title : calPlain.title;
-        auto const& resetSgr = useColor ? calStyled.reset : calPlain.reset;
-        auto const yearTitle = std::format("{:^{}}", static_cast<int>(targetYear), (calBlockWidth * 3) + 4);
+        auto const& headerSgr = useColor ? CalStyled.title : CalPlain.title;
+        auto const& resetSgr = useColor ? CalStyled.reset : CalPlain.reset;
+        auto const yearTitle = std::format("{:^{}}", static_cast<int>(targetYear), (CalBlockWidth * 3) + 4);
         output += std::format("{}{}{}\n\n", headerSgr, yearTitle, resetSgr);
 
         for (auto const bandIdx: std::views::iota(0, 4))
@@ -4145,15 +4145,15 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         basedir.empty() ? std::filesystem::temp_directory_path() : std::filesystem::path(basedir);
 
     // Generate random suffix
-    static constexpr std::string_view chars =
+    static constexpr std::string_view Chars =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     std::string suffix = "tmp.";
     std::mt19937 rng(static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count()));
-    std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
+    std::uniform_int_distribution<size_t> dist(0, Chars.size() - 1);
     for (auto const _: std::views::iota(0, 10))
     {
         (void) _;
-        suffix += chars[dist(rng)];
+        suffix += Chars[dist(rng)];
     }
 
     auto const path = tmpdir / suffix;

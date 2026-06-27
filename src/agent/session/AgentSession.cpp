@@ -325,11 +325,11 @@ auto AgentSession::processMessageForPlan(
         _traceEventCallback(TraceUserMessageEvent { .mode = "plan", .content = std::string(userMessage) });
 
     // Build filtered tool definitions: only read-only tools + submit_plan
-    static constexpr auto allowedTools = std::array<std::string_view, 5> {
+    static constexpr auto AllowedTools = std::array<std::string_view, 5> {
         "read_file", "glob", "grep", "git", "submit_plan",
     };
     auto const filteredDefs = _toolRegistry->definitions([](std::string_view toolName) {
-        for (auto const& allowed: allowedTools)
+        for (auto const& allowed: AllowedTools)
             if (toolName == allowed)
                 return true;
         return false;

@@ -193,7 +193,7 @@ auto readClipboardImage() -> std::optional<ClipboardImage>
         char const* mediaType;
     };
 
-    static constexpr auto queries = std::array<ClipboardQuery, 3> { {
+    static constexpr auto Queries = std::array<ClipboardQuery, 3> { {
         { .waylandCommand = "wl-paste --no-newline --type image/png 2>/dev/null",
           .x11Command = "xclip -selection clipboard -target image/png -o 2>/dev/null",
           .mediaType = "image/png" },
@@ -207,7 +207,7 @@ auto readClipboardImage() -> std::optional<ClipboardImage>
 
     auto const isWayland = std::getenv("WAYLAND_DISPLAY") != nullptr;
 
-    for (auto const& query: queries)
+    for (auto const& query: Queries)
     {
         auto const* command = isWayland ? query.waylandCommand : query.x11Command;
         auto data = runCommandAndCapture(command);

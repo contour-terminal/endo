@@ -82,9 +82,9 @@ class HelpBuilder
         }
 
         // Pad to alignment column (26 chars from left margin)
-        constexpr int alignCol = 26;
+        constexpr int AlignCol = 26;
         auto const flagsLen = static_cast<int>(flags.size());
-        auto const padding = (flagsLen < alignCol) ? (alignCol - flagsLen) : 2;
+        auto const padding = (flagsLen < AlignCol) ? (AlignCol - flagsLen) : 2;
         _out.append(static_cast<size_t>(padding), ' ');
 
         _out += desc;
@@ -107,9 +107,9 @@ class HelpBuilder
             _out += name;
         }
 
-        constexpr int alignCol = 26;
+        constexpr int AlignCol = 26;
         auto const nameLen = static_cast<int>(name.size());
-        auto const padding = (nameLen < alignCol) ? (alignCol - nameLen) : 2;
+        auto const padding = (nameLen < AlignCol) ? (AlignCol - nameLen) : 2;
         _out.append(static_cast<size_t>(padding), ' ');
 
         _out += desc;

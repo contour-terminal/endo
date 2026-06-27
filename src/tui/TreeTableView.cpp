@@ -220,7 +220,7 @@ EventResult TreeTableView::onEvent(InputEvent const& event)
 
             auto const now = std::chrono::steady_clock::now();
             auto const isDoubleClick =
-                _hadClick && _lastClickRow == *index && (now - _lastClickTime) <= kDoubleClickInterval;
+                _hadClick && _lastClickRow == *index && (now - _lastClickTime) <= DoubleClickInterval;
 
             selectIndex(*index);
 

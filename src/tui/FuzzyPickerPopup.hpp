@@ -98,14 +98,14 @@ class FuzzyPickerPopup: public Component
     InputField _filterField;                            ///< Text input for filtering.
     std::vector<std::string> _allItems;                 ///< All available items (owned).
     std::vector<FilteredItem> _filteredItems;           ///< Filtered and sorted items.
-    ScrollableSelection _selection { maxVisibleItems }; ///< Selection and scroll state.
+    ScrollableSelection _selection { MaxVisibleItems }; ///< Selection and scroll state.
     int _renderedHeight = 0;                            ///< Last rendered height.
     int _renderedWidth = 0;                             ///< Last rendered width.
     std::string _title;                                 ///< Optional title for the filter prompt.
 
-    static constexpr size_t maxVisibleItems = 15; ///< Maximum number of visible items.
-    static constexpr int minPickerWidth = 50;     ///< Minimum picker width.
-    static constexpr int maxPickerWidth = 100;    ///< Maximum picker width.
+    static constexpr size_t MaxVisibleItems = 15; ///< Maximum number of visible items.
+    static constexpr int MinPickerWidth = 50;     ///< Minimum picker width.
+    static constexpr int MaxPickerWidth = 100;    ///< Maximum picker width.
 
     /// @brief Recomputes _filteredItems from _allItems and current filter text.
     void refilter();

@@ -222,7 +222,7 @@ void constrainColumnWidths(std::vector<int>& widths, int maxTableWidth)
 
     // Waterfall algorithm: only shrink the widest columns, preserving narrow ones.
     // Reduced columns merge into the next tier so all equally-wide columns shrink together.
-    auto constexpr minWidth = 3;
+    auto constexpr MinWidth = 3;
     auto excess = totalContent - availableContent;
 
     // Build sorted indices by width descending.
@@ -243,8 +243,8 @@ void constrainColumnWidths(std::vector<int>& widths, int maxTableWidth)
         auto const tierCount = static_cast<int>(j - i);
 
         // Target: next tier's width, or minWidth if this is the last tier.
-        auto const nextTierWidth = (j < indices.size()) ? widths[indices[j]] : minWidth;
-        auto const target = std::max(nextTierWidth, minWidth);
+        auto const nextTierWidth = (j < indices.size()) ? widths[indices[j]] : MinWidth;
+        auto const target = std::max(nextTierWidth, MinWidth);
         auto const reductionPerCol = tierWidth - target;
         auto const maxTierReduction = reductionPerCol * tierCount;
 
@@ -269,7 +269,7 @@ void constrainColumnWidths(std::vector<int>& widths, int maxTableWidth)
                 widths[indices[k]] = target;
             excess -= maxTierReduction;
 
-            if (target <= minWidth)
+            if (target <= MinWidth)
                 break; // Cannot reduce further.
 
             // Don't advance i — reduced columns merge with the next tier.

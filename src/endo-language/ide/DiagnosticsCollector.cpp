@@ -45,16 +45,16 @@ namespace
             return false;
 
 #if defined(_WIN32)
-        constexpr char pathSeparator = ';';
+        constexpr char PathSeparator = ';';
 #else
-        constexpr char pathSeparator = ':';
+        constexpr char PathSeparator = ':';
 #endif
 
         auto const pathStr = std::string_view(pathEnv);
         size_t start = 0;
         while (start < pathStr.size())
         {
-            auto const end = pathStr.find(pathSeparator, start);
+            auto const end = pathStr.find(PathSeparator, start);
             auto const dir = pathStr.substr(start, end == std::string_view::npos ? end : end - start);
 
             if (!dir.empty())
@@ -63,8 +63,8 @@ namespace
                 // On Windows, check the bare name and common executable extensions.
                 // Windows does not have Unix-style execute permission bits, so
                 // file existence with a known extension is sufficient.
-                static constexpr std::string_view extensions[] = { "", ".exe", ".cmd", ".bat" };
-                for (auto const ext: extensions)
+                static constexpr std::string_view Extensions[] = { "", ".exe", ".cmd", ".bat" };
+                for (auto const ext: Extensions)
                 {
                     auto const candidate = std::filesystem::path(dir) / std::string(program).append(ext);
                     std::error_code ec;
@@ -249,9 +249,9 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
                 continue;
 
             // Suppress "Undefined variable" false positives for names persisted from prior REPL prompts
-            if (auto constexpr prefix = std::string_view("Undefined variable: ");
-                msg.text.starts_with(prefix)
-                && knownNames.contains(std::string(msg.text.substr(prefix.size()))))
+            if (auto constexpr Prefix = std::string_view("Undefined variable: ");
+                msg.text.starts_with(Prefix)
+                && knownNames.contains(std::string(msg.text.substr(Prefix.size()))))
                 continue;
 
             auto severity = DiagnosticSeverity::Error;

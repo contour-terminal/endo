@@ -191,7 +191,7 @@ class TreeTableView: public Component
     std::size_t _lastClickRow = 0;                        ///< Row index of the prior left-press.
     std::chrono::steady_clock::time_point _lastClickTime; ///< When the prior left-press happened.
 
-    static constexpr auto kDoubleClickInterval = std::chrono::milliseconds { 400 };
+    static constexpr auto DoubleClickInterval = std::chrono::milliseconds { 400 };
 };
 
 } // namespace tui

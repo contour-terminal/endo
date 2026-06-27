@@ -655,7 +655,7 @@ namespace
     /// here serve as the baseline for test binaries that don't call registration.
     /// New inline builtins only need an InlineCommandDescriptor entry — they will
     /// be auto-registered at startup.
-    constexpr std::array shellBuiltinDescriptors = {
+    constexpr std::array ShellBuiltinDescriptors = {
         // VM-level builtins (not in InlineCommandDescriptors)
         ShellBuiltinDescriptor { .name="cd", .description="builtin", .detail="**cd** -- builtin\n\nChanges the current working directory.\n\n```\ncd /tmp\ncd ~\n```" },
         ShellBuiltinDescriptor { .name="exit", .description="builtin", .detail="**exit** -- builtin\n\nExits the shell with an optional exit code.\n\n```\nexit\nexit 1\n```" },
@@ -764,7 +764,7 @@ namespace
         ShellBuiltinDescriptor { .name="until", .description="builtin", .detail="**until** -- builtin\n\nLoop until a condition is true." },
     };
 
-    constexpr std::array keywordDescriptors = {
+    constexpr std::array KeywordDescriptors = {
         ShellBuiltinDescriptor { .name="if", .description="builtin", .detail="**if** -- shell keyword\n\n```\nif condition then\n  body\nfi\n```" },
         ShellBuiltinDescriptor { .name="then", .description="builtin", .detail="**then** -- shell keyword\n\nFollows the condition in a shell `if` statement." },
         ShellBuiltinDescriptor { .name="else", .description="builtin", .detail="**else** -- shell keyword\n\nAlternative branch in a shell `if` statement." },
@@ -786,11 +786,11 @@ std::vector<BuiltinInfo> userFacingBuiltins()
     auto const stdlibDescs = stdlibDescriptors();
 
     std::vector<BuiltinInfo> result;
-    result.reserve(shellBuiltinDescriptors.size() + inlineBuiltins.size() + stdlibDescs.size()
-                   + keywordDescriptors.size() + allPropertyDescriptors().size());
+    result.reserve(ShellBuiltinDescriptors.size() + inlineBuiltins.size() + stdlibDescs.size()
+                   + KeywordDescriptors.size() + allPropertyDescriptors().size());
 
     // Shell builtins (non-inline)
-    for (auto const& desc: shellBuiltinDescriptors)
+    for (auto const& desc: ShellBuiltinDescriptors)
         result.push_back({ .name = std::string(desc.name),
                            .description = std::string(desc.description),
                            .isProperty = false,
@@ -809,7 +809,7 @@ std::vector<BuiltinInfo> userFacingBuiltins()
                                .detail = std::string(desc.detail) });
 
     // Keywords
-    for (auto const& desc: keywordDescriptors)
+    for (auto const& desc: KeywordDescriptors)
         result.push_back({ .name = std::string(desc.name),
                            .description = std::string(desc.description),
                            .isProperty = false,
