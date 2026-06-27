@@ -1108,8 +1108,8 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
     static constexpr auto LocalCmd = "git branch --format=\"%(refname:short)\" 2>NUL";
     static constexpr auto RemoteCmd = "git branch -r --format=\"%(refname:short)\" 2>NUL";
 #else
-    static constexpr auto localCmd = "git branch --format='%(refname:short)' 2>/dev/null";
-    static constexpr auto remoteCmd = "git branch -r --format='%(refname:short)' 2>/dev/null";
+    static constexpr auto LocalCmd = "git branch --format='%(refname:short)' 2>/dev/null";
+    static constexpr auto RemoteCmd = "git branch -r --format='%(refname:short)' 2>/dev/null";
 #endif
 
     if (!remoteOnly)
