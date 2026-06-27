@@ -26,7 +26,7 @@ void FuzzyPickerPopup::render(Canvas& canvas)
 
     // Clamp visible items to what fits in the canvas (4 rows for borders, filter, separator).
     auto const maxByCanvas = canvas.height() >= 5 ? static_cast<size_t>(canvas.height() - 4) : size_t { 1 };
-    auto const visibleCount = std::min({ maxVisibleItems, _filteredItems.size(), maxByCanvas });
+    auto const visibleCount = std::min({ MaxVisibleItems, _filteredItems.size(), maxByCanvas });
     _selection.setMaxVisible(visibleCount);
     _selection.ensureSelectedVisible(_filteredItems.size());
     auto const pickerWidth = calculateWidth(canvas.width());
@@ -113,9 +113,9 @@ Size FuzzyPickerPopup::preferredSize() const
     if (!visible())
         return { .width = 0, .height = 0 };
 
-    auto const visibleCount = std::min(maxVisibleItems, _filteredItems.size());
+    auto const visibleCount = std::min(MaxVisibleItems, _filteredItems.size());
     auto const height = static_cast<int>(visibleCount) + 4; // borders + filter + separator
-    return { .width = maxPickerWidth, .height = height };
+    return { .width = MaxPickerWidth, .height = height };
 }
 
 // ============================================================================
@@ -284,8 +284,8 @@ void FuzzyPickerPopup::refilter()
 
 int FuzzyPickerPopup::calculateWidth(int maxWidth) const
 {
-    auto const clampedMax = std::min(maxPickerWidth, maxWidth);
-    auto width = minPickerWidth;
+    auto const clampedMax = std::min(MaxPickerWidth, maxWidth);
+    auto width = MinPickerWidth;
 
     for (auto const& item: _filteredItems)
     {

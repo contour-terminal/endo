@@ -1638,7 +1638,7 @@ void processKill(CoreVM::Params& args)
 #if defined(_WIN32)
     constexpr auto DefaultSignal = 0; // Windows uses TerminateProcess(), signal number is ignored
 #else
-    constexpr auto defaultSignal = SIGTERM;
+    constexpr auto DefaultSignal = SIGTERM;
 #endif
     auto const err = platformSendSignal(pid, DefaultSignal);
     if (!err.empty())

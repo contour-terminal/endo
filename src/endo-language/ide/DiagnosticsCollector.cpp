@@ -47,7 +47,7 @@ namespace
 #if defined(_WIN32)
         constexpr char PathSeparator = ';';
 #else
-        constexpr char pathSeparator = ':';
+        constexpr char PathSeparator = ':';
 #endif
 
         auto const pathStr = std::string_view(pathEnv);

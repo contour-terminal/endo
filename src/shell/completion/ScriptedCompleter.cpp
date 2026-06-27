@@ -45,7 +45,7 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
     auto const now = std::chrono::steady_clock::now();
     if (auto it = _cache.find(cacheKey); it != _cache.end())
     {
-        if (now - it->second.timestamp < cacheTTL)
+        if (now - it->second.timestamp < CacheTtl)
         {
             // Reuse cached results with current prefix for fuzzy scoring
             std::vector<CompletionCandidate> candidates;
@@ -60,8 +60,8 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
     }
 
     // Evict expired entries when cache exceeds size threshold
-    if (_cache.size() > maxCacheEntries)
-        std::erase_if(_cache, [now](auto const& entry) { return now - entry.second.timestamp >= cacheTTL; });
+    if (_cache.size() > MaxCacheEntries)
+        std::erase_if(_cache, [now](auto const& entry) { return now - entry.second.timestamp >= CacheTtl; });
 
     // Execute the completer function
     auto result = _callback(*funcName, args, context.prefix);

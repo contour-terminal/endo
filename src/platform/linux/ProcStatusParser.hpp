@@ -14,10 +14,10 @@ namespace endo::platform
 /// Returns the first (real) UID, or std::nullopt on parse failure.
 inline std::optional<int> parseUidFromStatusLine(std::string_view line)
 {
-    constexpr auto prefix = std::string_view("Uid:");
-    if (!line.starts_with(prefix))
+    constexpr auto Prefix = std::string_view("Uid:");
+    if (!line.starts_with(Prefix))
         return std::nullopt;
-    line.remove_prefix(prefix.size());
+    line.remove_prefix(Prefix.size());
     while (!line.empty() && (line.front() == '\t' || line.front() == ' '))
         line.remove_prefix(1);
     if (line.empty())
@@ -32,10 +32,10 @@ inline std::optional<int> parseUidFromStatusLine(std::string_view line)
 /// Returns the memory value in kilobytes, or std::nullopt on parse failure.
 inline std::optional<int64_t> parseVmRssFromStatusLine(std::string_view line)
 {
-    constexpr auto prefix = std::string_view("VmRSS:");
-    if (!line.starts_with(prefix))
+    constexpr auto Prefix = std::string_view("VmRSS:");
+    if (!line.starts_with(Prefix))
         return std::nullopt;
-    line.remove_prefix(prefix.size());
+    line.remove_prefix(Prefix.size());
     while (!line.empty() && (line.front() == '\t' || line.front() == ' '))
         line.remove_prefix(1);
     if (line.empty())

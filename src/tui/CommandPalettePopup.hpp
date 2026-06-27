@@ -98,15 +98,15 @@ class CommandPalettePopup: public Component
     InputField _filterField;                            ///< Text input for filtering.
     std::vector<CommandEntry> _allItems;                ///< All available commands (snapshot).
     std::vector<FilteredItem> _filteredItems;           ///< Filtered and sorted commands.
-    ScrollableSelection _selection { maxVisibleItems }; ///< Selection and scroll state.
+    ScrollableSelection _selection { MaxVisibleItems }; ///< Selection and scroll state.
     bool _visible = false;                              ///< Whether the palette is shown.
     int _renderedHeight = 0;                            ///< Last rendered height.
     int _renderedWidth = 0;                             ///< Last rendered width.
     std::string _title;                                 ///< Optional title for sub-menus.
 
-    static constexpr size_t maxVisibleItems = 12; ///< Maximum number of visible items.
-    static constexpr int minPaletteWidth = 50;    ///< Minimum palette width.
-    static constexpr int maxPaletteWidth = 80;    ///< Maximum palette width.
+    static constexpr size_t MaxVisibleItems = 12; ///< Maximum number of visible items.
+    static constexpr int MinPaletteWidth = 50;    ///< Minimum palette width.
+    static constexpr int MaxPaletteWidth = 80;    ///< Maximum palette width.
 
     /// @brief Recomputes _filteredItems from _allItems and current filter text.
     void refilter();

@@ -22,7 +22,7 @@ void CommandPalettePopup::render(Canvas& canvas)
 
     auto const& theme = canvas.theme();
 
-    auto const visibleCount = std::min(maxVisibleItems, _filteredItems.size());
+    auto const visibleCount = std::min(MaxVisibleItems, _filteredItems.size());
     auto const paletteWidth = calculateWidth(canvas.width());
     auto const paletteHeight = static_cast<int>(visibleCount) + 4;
 
@@ -129,9 +129,9 @@ Size CommandPalettePopup::preferredSize() const
     if (!visible())
         return { .width = 0, .height = 0 };
 
-    auto const visibleCount = std::min(maxVisibleItems, _filteredItems.size());
+    auto const visibleCount = std::min(MaxVisibleItems, _filteredItems.size());
     auto const height = static_cast<int>(visibleCount) + 4;
-    return { .width = maxPaletteWidth, .height = height };
+    return { .width = MaxPaletteWidth, .height = height };
 }
 
 // ============================================================================
@@ -323,7 +323,7 @@ void CommandPalettePopup::refilter()
 
 int CommandPalettePopup::calculateWidth(int maxWidth) const
 {
-    auto width = minPaletteWidth;
+    auto width = MinPaletteWidth;
 
     for (auto const& item: _filteredItems)
     {
@@ -340,7 +340,7 @@ int CommandPalettePopup::calculateWidth(int maxWidth) const
         width = std::max(width, itemWidth);
     }
 
-    return std::min({ width, maxPaletteWidth, maxWidth });
+    return std::min({ width, MaxPaletteWidth, maxWidth });
 }
 
 void CommandPalettePopup::executeSelected()

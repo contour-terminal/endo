@@ -93,8 +93,8 @@ auto Terminal::initialize() -> VoidResult
     {
         _output->writeRaw("\033[?996n"); // CSI ? 996 n — query color scheme
         _output->flush();
-        auto constexpr totalTimeout = std::chrono::milliseconds(100);
-        auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+        auto constexpr TotalTimeout = std::chrono::milliseconds(100);
+        auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
         while (_colorScheme == ColorScheme::Unknown)
         {
             auto const now = std::chrono::steady_clock::now();
@@ -199,8 +199,8 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
     // Poll with a deadline loop. The ColorSchemeReport from enableProtocols() may arrive
     // before the CursorPositionReport, so we keep polling until we find a CPR or time out.
-    auto constexpr totalTimeout = std::chrono::milliseconds(100);
-    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+    auto constexpr TotalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
 
     while (true)
     {
@@ -242,8 +242,8 @@ auto Terminal::queryCellSize() -> std::pair<int, int>
     _output->requestCellSize();
     _output->flush();
 
-    auto constexpr totalTimeout = std::chrono::milliseconds(100);
-    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+    auto constexpr TotalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
 
     while (true)
     {
@@ -285,8 +285,8 @@ auto Terminal::queryDecMode(int mode) -> bool
     _output->requestDecMode(mode);
     _output->flush();
 
-    auto constexpr totalTimeout = std::chrono::milliseconds(100);
-    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+    auto constexpr TotalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
 
     while (true)
     {

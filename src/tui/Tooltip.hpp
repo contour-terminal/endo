@@ -102,8 +102,8 @@ class Tooltip: public Component
     int _scrollOffset = 0;
 
     // Border and padding
-    static constexpr int borderWidth = 1;
-    static constexpr int padding = 1;
+    static constexpr int BorderWidth = 1;
+    static constexpr int Padding = 1;
 
     /// @brief Reparses the content after settings change.
     void parseContent();

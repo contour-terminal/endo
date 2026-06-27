@@ -134,7 +134,7 @@ TEST_CASE("collectRequiredPaths.caps_at_max", "[history][required-paths]")
         argv.push_back("/tmp/f" + std::to_string(i));
 
     auto const paths = collectRequiredPaths(argv, "/home/u", "/home/u");
-    CHECK(paths.size() == maxRequiredPaths);
+    CHECK(paths.size() == MaxRequiredPaths);
 }
 
 TEST_CASE("collectRequiredPaths.skips_urls", "[history][required-paths]")

@@ -1620,7 +1620,7 @@ Runner::RunResult Runner::loopWithResult()
             auto functionId = A;
             auto argc = B;
 
-            if (_callStack.size() >= maxCallDepth)
+            if (_callStack.size() >= MaxCallDepth)
             {
                 _ip = get_pc();
                 return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
@@ -1798,7 +1798,7 @@ Runner::RunResult Runner::loopWithResult()
 
             auto const totalArgc = captureCount + argc;
 
-            if (_callStack.size() >= maxCallDepth)
+            if (_callStack.size() >= MaxCallDepth)
             {
                 _ip = get_pc();
                 return handleRuntimeError(makeError("call stack overflow (exceeded maximum call depth)"));
@@ -1965,7 +1965,7 @@ Runner::RunResult Runner::loopWithResult()
 
             auto argc = captureCount;
 
-            if (_callStack.size() >= maxCallDepth)
+            if (_callStack.size() >= MaxCallDepth)
             {
                 if (releaseObject(lazy))
                     releaseAndFree(lazy);

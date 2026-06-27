@@ -37,10 +37,10 @@ class HoverState
     using LeaveCallback = std::function<void()>;
 
     /// @brief Default hover delay (500ms).
-    static constexpr auto defaultHoverDelay = std::chrono::milliseconds(500);
+    static constexpr auto DefaultHoverDelay = std::chrono::milliseconds(500);
 
     /// @brief Constructs HoverState with the specified delay.
-    explicit HoverState(std::chrono::milliseconds delay = defaultHoverDelay);
+    explicit HoverState(std::chrono::milliseconds delay = DefaultHoverDelay);
 
     /// @brief Called when the mouse moves.
     /// @param x Mouse X position (1-based).

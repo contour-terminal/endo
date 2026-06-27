@@ -136,7 +136,7 @@ std::vector<std::string> collectRequiredPaths(std::span<std::string const> argv,
 
     for (auto const& arg: argv.subspan(1))
     {
-        if (result.size() >= maxRequiredPaths)
+        if (result.size() >= MaxRequiredPaths)
             break;
         if (!looksLikePath(arg))
             continue;
