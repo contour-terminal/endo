@@ -37,6 +37,12 @@ auto TerminalInput::initialize() -> VoidResult
     if (!GetConsoleMode(_hStdout, &_originalOutputMode))
         return makeError(ErrorCode::IoError, "Failed to get console output mode");
 
+    // Save the original console code pages so raw mode can switch them to UTF-8 and shutdown
+    // can restore them. We emit UTF-8 throughout, so the console must interpret our output as
+    // UTF-8 (otherwise multibyte sequences render as mojibake under the default OEM code page).
+    _originalOutputCp = GetConsoleOutputCP();
+    _originalInputCp = GetConsoleCP();
+
     // Create a manual-reset event for resize notification
     _resizeEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
     if (_resizeEvent == nullptr)
@@ -230,6 +236,11 @@ void TerminalInput::enableRawMode()
         ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
     SetConsoleMode(_hStdout, outputMode);
 
+    // Drive the console in UTF-8 so the UTF-8 bytes we write render correctly and typed
+    // Unicode is delivered as UTF-8.
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
     _rawMode = true;
 }
 
@@ -239,6 +250,10 @@ void TerminalInput::disableRawMode()
     {
         SetConsoleMode(_hStdin, _originalInputMode);
         SetConsoleMode(_hStdout, _originalOutputMode);
+        if (_originalOutputCp != 0)
+            SetConsoleOutputCP(_originalOutputCp);
+        if (_originalInputCp != 0)
+            SetConsoleCP(_originalInputCp);
         _rawMode = false;
     }
 }

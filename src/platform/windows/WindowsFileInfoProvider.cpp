@@ -19,13 +19,27 @@ namespace
 
     namespace fs = std::filesystem;
 
+    /// Losslessly renders a path as a UTF-8 std::string.
+    ///
+    /// path::string() converts to the process's narrow (ANSI) code page and throws
+    /// std::system_error on any character the code page cannot represent — fatal when
+    /// listing a directory that holds such a name. path::u8string() encodes the full
+    /// Unicode path as UTF-8 and never throws, so we use it and reinterpret the bytes.
+    /// @param p The path to convert.
+    /// @return The path encoded as UTF-8.
+    [[nodiscard]] std::string toUtf8(fs::path const& p)
+    {
+        auto const u8 = p.u8string();
+        return std::string { reinterpret_cast<char const*>(u8.data()), u8.size() };
+    }
+
     /// Populates a FileEntry from a filesystem directory_entry.
     /// @return true on success, false if the entry could not be stat'd.
     [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry, FileEntry& fileEntry)
     {
         std::error_code ec;
 
-        fileEntry.name = dirEntry.path().filename().string();
+        fileEntry.name = toUtf8(dirEntry.path().filename());
 
         // status() follows reparse points. App Execution Aliases (winget, Microsoft Store
         // python, …) are reparse points that cannot be opened or followed through normal
