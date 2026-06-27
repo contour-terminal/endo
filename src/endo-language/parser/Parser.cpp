@@ -2727,7 +2727,7 @@ namespace
     /// Single source of truth for directive builtin overloads. One row per
     /// runtime-registered (name, signature) pair. Resolution: see
     /// Parser::tryConvertToDirectiveBuiltin.
-    inline constexpr std::array<DirectiveOverload, 20> kDirectiveOverloads { {
+    inline constexpr std::array<DirectiveOverload, 20> DirectiveOverloads { {
         { .name = "cd", .arity = 0, .variadic = false, .signature = "cd()B", .build = &buildCd },
         { .name = "cd", .arity = 1, .variadic = false, .signature = "cd(S)B", .build = &buildCd },
         { .name = "exit", .arity = 0, .variadic = false, .signature = "exit(I)V", .build = &buildExit },
@@ -2753,7 +2753,7 @@ namespace
     /// Returns the subrange of overloads matching the given builtin name.
     [[nodiscard]] auto overloadsFor(std::string_view name)
     {
-        return kDirectiveOverloads
+        return DirectiveOverloads
                | std::views::filter([name](DirectiveOverload const& o) { return o.name == name; });
     }
 

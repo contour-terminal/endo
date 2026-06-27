@@ -22,12 +22,12 @@ namespace
     }
 
     // ANSI color codes
-    constexpr auto kReset = "\033[0m";
-    constexpr auto kGreen = "\033[32m";
-    constexpr auto kRed = "\033[31m";
-    constexpr auto kYellow = "\033[33m";
-    constexpr auto kBold = "\033[1m";
-    constexpr auto kDim = "\033[2m";
+    constexpr auto Reset = "\033[0m";
+    constexpr auto Green = "\033[32m";
+    constexpr auto Red = "\033[31m";
+    constexpr auto Yellow = "\033[33m";
+    constexpr auto Bold = "\033[1m";
+    constexpr auto Dim = "\033[2m";
 
 } // namespace
 
@@ -69,24 +69,24 @@ void TestReporter::reportPrettyResult(TestResult const& result) const
     {
         case TestOutcome::Pass:
             std::cout << std::format(
-                "  {}PASS{}  {} {}{}{}\n", kGreen, kReset, relPath, kDim, "(" + durationStr + ")", kReset);
+                "  {}PASS{}  {} {}{}{}\n", Green, Reset, relPath, Dim, "(" + durationStr + ")", Reset);
             if (_verbose && !result.actualOutput.empty())
                 std::cout << std::format("        Output: \"{}\"\n", result.actualOutput);
             break;
 
         case TestOutcome::Fail:
             std::cout << std::format(
-                "  {}FAIL{}  {} {}{}{}\n", kRed, kReset, relPath, kDim, "(" + durationStr + ")", kReset);
+                "  {}FAIL{}  {} {}{}{}\n", Red, Reset, relPath, Dim, "(" + durationStr + ")", Reset);
             if (!result.failureMessage.empty())
                 std::cout << std::format("        {}\n", result.failureMessage);
             break;
 
         case TestOutcome::Skip:
-            std::cout << std::format("  {}SKIP{}  {}", kYellow, kReset, relPath);
+            std::cout << std::format("  {}SKIP{}  {}", Yellow, Reset, relPath);
             if (result.testFile->skipReason.has_value())
-                std::cout << std::format(" {}{}{}", kDim, "(", kReset)
+                std::cout << std::format(" {}{}{}", Dim, "(", Reset)
                           << std::format("{}", *result.testFile->skipReason)
-                          << std::format("{}{}{}", kDim, ")", kReset);
+                          << std::format("{}{}{}", Dim, ")", Reset);
             std::cout << '\n';
             break;
     }
@@ -133,21 +133,21 @@ void TestReporter::reportPrettySummary(std::vector<TestResult> const& results,
 
     if (failed > 0)
         std::cout << std::format("{}Results:{} {}{} passed{}, {}{} failed{}",
-                                 kBold,
-                                 kReset,
-                                 kGreen,
+                                 Bold,
+                                 Reset,
+                                 Green,
                                  passed,
-                                 kReset,
-                                 kRed,
+                                 Reset,
+                                 Red,
                                  failed,
-                                 kReset);
+                                 Reset);
     else
-        std::cout << std::format("{}Results:{} {}{} passed{}", kBold, kReset, kGreen, passed, kReset);
+        std::cout << std::format("{}Results:{} {}{} passed{}", Bold, Reset, Green, passed, Reset);
 
     if (skipped > 0)
-        std::cout << std::format(", {}{} skipped{}", kYellow, skipped, kReset);
+        std::cout << std::format(", {}{} skipped{}", Yellow, skipped, Reset);
 
-    std::cout << std::format(" {}{}{}\n", kDim, "(" + formatDuration(totalDuration) + ")", kReset);
+    std::cout << std::format(" {}{}{}\n", Dim, "(" + formatDuration(totalDuration) + ")", Reset);
 }
 
 void TestReporter::reportTAPSummary(std::vector<TestResult> const& results,

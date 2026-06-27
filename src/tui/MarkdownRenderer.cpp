@@ -810,14 +810,14 @@ void MarkdownRenderer::renderTableCompact(ParsedTable const& table, bool showHea
             widths[static_cast<std::size_t>(lastCol)] = available;
     }
 
-    constexpr auto indent = "  ";
-    constexpr auto gap = "  ";
+    constexpr auto Indent = "  ";
+    constexpr auto Gap = "  ";
 
     // Helper: render a single physical line of a (possibly wrapped) row.
     auto renderPhysicalLine = [&](std::vector<std::string> const& cellTexts,
                                   Style const& cellStyle,
                                   std::size_t rowIdx) {
-        _output.writeRaw(indent);
+        _output.writeRaw(Indent);
         for (std::size_t col = 0; col < table.columnCount; ++col)
         {
             auto const& rawText = (col < cellTexts.size()) ? cellTexts[col] : std::string {};
@@ -852,7 +852,7 @@ void MarkdownRenderer::renderTableCompact(ParsedTable const& table, bool showHea
             renderInline(text, &effectiveStyle);
             _output.writeRaw(std::string(static_cast<std::size_t>(rightPad), ' '));
             if (col + 1 < table.columnCount)
-                _output.writeRaw(gap);
+                _output.writeRaw(Gap);
         }
         _output.writeRaw("\n");
     };
@@ -900,13 +900,13 @@ void MarkdownRenderer::renderTableCompact(ParsedTable const& table, bool showHea
     // Underline separator.
     if (showHeader)
     {
-        _output.writeRaw(indent);
+        _output.writeRaw(Indent);
         for (std::size_t col = 0; col < table.columnCount; ++col)
         {
             auto const underline = std::string(static_cast<std::size_t>(widths[col]), '-');
             _output.writeText(underline, _theme.tableBorder);
             if (col + 1 < table.columnCount)
-                _output.writeRaw(gap);
+                _output.writeRaw(Gap);
         }
         _output.writeRaw("\n");
     }

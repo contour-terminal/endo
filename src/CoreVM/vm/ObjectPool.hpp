@@ -57,8 +57,8 @@ class ObjectPool
 
   private:
     /// Size classes in bytes, covering objects from 0 slots (16 bytes) to ~30 slots (256 bytes).
-    static constexpr size_t kSizeClasses[] = { 16, 24, 32, 48, 64, 96, 128, 256 };
-    static constexpr size_t kNumSizeClasses = sizeof(kSizeClasses) / sizeof(kSizeClasses[0]);
+    static constexpr size_t SizeClasses[] = { 16, 24, 32, 48, 64, 96, 128, 256 };
+    static constexpr size_t NumSizeClasses = sizeof(SizeClasses) / sizeof(SizeClasses[0]);
 
     /// A contiguous memory region divided into fixed-size cells.
     struct Slab
@@ -83,7 +83,7 @@ class ObjectPool
     /// Adds a new slab to the size class at the given index.
     void addSlab(size_t sizeClassIdx);
 
-    SizeClass _sizeClasses[kNumSizeClasses];
+    SizeClass _sizeClasses[NumSizeClasses];
     size_t _liveCount = 0;
     size_t _totalAllocations = 0;
     size_t _slabCapacity;

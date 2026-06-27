@@ -68,7 +68,7 @@ Checks: >-
 WarningsAsErrors: >-
   *
 UseColor: true
-HeaderFilterRegex: 'src/(CoreVM|endo-language|shell|tui|agent|dap|editor-protocol|lsp|platform|http)/[^.]'
+HeaderFilterRegex: 'src/(CoreVM|agent|coro|dap|editor-protocol|endo-language|endo-test|http|lsp|platform|shell|testing|tui|vtparser)/[^.]'
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength
@@ -126,4 +126,8 @@ CheckOptions:
   - key:             readability-identifier-naming.ParameterPrefix
     value:           ''
   - key:             readability-identifier-naming.ScopedEnumConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ConstexprVariableCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ClassConstantCase
     value:           CamelCase

@@ -234,10 +234,10 @@ TEST_CASE("Interrupt cancels a flow parked on input", "[TuiRuntime]")
     source.pushInterrupt();
     auto runtime = TuiRuntime { source };
 
-    constexpr auto sentinel = -99;
-    auto const result = runtime.blockOn(awaitKeyOrCancel(&runtime, sentinel));
+    constexpr auto Sentinel = -99;
+    auto const result = runtime.blockOn(awaitKeyOrCancel(&runtime, Sentinel));
 
-    REQUIRE(result == sentinel);
+    REQUIRE(result == Sentinel);
 }
 
 TEST_CASE("delay(0) resumes without waiting", "[TuiRuntime]")
@@ -257,10 +257,10 @@ TEST_CASE("A pending delay bounds the wait timeout", "[TuiRuntime]")
     source.pushInterrupt(); // end the test before the 500ms elapses
     auto runtime = TuiRuntime { source };
 
-    constexpr auto sentinel = -7;
-    auto const result = runtime.blockOn(awaitDelayOrCancel(&runtime, sentinel));
+    constexpr auto Sentinel = -7;
+    auto const result = runtime.blockOn(awaitDelayOrCancel(&runtime, Sentinel));
 
-    REQUIRE(result == sentinel);
+    REQUIRE(result == Sentinel);
     REQUIRE(source.waitCount() >= 1);
     // The first wait is bounded by the pending timer, not an indefinite (-1) block.
     auto const firstTimeout = source.recordedTimeouts().front();

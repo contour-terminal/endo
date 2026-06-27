@@ -44,7 +44,7 @@ namespace
             char const* command;
         };
 
-        constexpr MockProc procs[] = {
+        constexpr MockProc Procs[] = {
             { .pid = 1, .ppid = 0, .user = "root", .cpu = 0.1, .mem = 1024, .command = "/sbin/init" },
             { .pid = 42, .ppid = 1, .user = "alice", .cpu = 15.5, .mem = 4096, .command = "firefox" },
             { .pid = 100, .ppid = 1, .user = "bob", .cpu = 2.3, .mem = 2048, .command = "vim" },
@@ -52,7 +52,7 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& p = procs[i];
+            auto const& p = Procs[i];
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::ProcessInfo);
             record->setSlot(0, static_cast<uint64_t>(p.pid));
             record->setSlot(1, static_cast<uint64_t>(p.ppid));
@@ -81,7 +81,7 @@ namespace
             bool isDir;
         };
 
-        constexpr MockFile allFiles[] = {
+        constexpr MockFile AllFiles[] = {
             { .name = "docs", .size = 4096, .mode = 0755, .mtime = 1700000000, .isDir = true },
             { .name = "hello.txt", .size = 42, .mode = 0644, .mtime = 1700001000, .isDir = false },
             { .name = "script.sh", .size = 256, .mode = 0755, .mtime = 1700002000, .isDir = false },
@@ -93,7 +93,7 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& f = allFiles[i];
+            auto const& f = AllFiles[i];
 
             // Filter: directory path returns all, glob filters by pattern, else exact name match.
             if (!path.empty() && path != "." && path != "/tmp" && !path.starts_with("/home/testuser"))
@@ -138,7 +138,7 @@ namespace
             int64_t pid;
         };
 
-        constexpr MockJob jobs[] = {
+        constexpr MockJob Jobs[] = {
             { .id = 1, .state = "Running", .command = "sleep 100", .pid = 1234 },
             { .id = 2, .state = "Stopped", .command = "vim", .pid = 5678 },
             { .id = 3, .state = "Done", .command = "make build", .pid = 9012 },
@@ -146,7 +146,7 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& j = jobs[i];
+            auto const& j = Jobs[i];
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::JobInfo);
             record->setSlot(0, static_cast<uint64_t>(j.id));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(j.state)));
@@ -168,7 +168,7 @@ namespace
             char const* action;
         };
 
-        constexpr MockBinding bindings[] = {
+        constexpr MockBinding Bindings[] = {
             { .key = "ctrl+z", .action = "undo" },
             { .key = "ctrl+y", .action = "redo" },
             { .key = "ctrl+a", .action = "select-all" },
@@ -176,7 +176,7 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& b = bindings[i];
+            auto const& b = Bindings[i];
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::KeyBindingInfo);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(b.key)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(b.action)));
@@ -201,7 +201,7 @@ namespace
             char const* names;
         };
 
-        constexpr MockContainer containers[] = {
+        constexpr MockContainer Containers[] = {
             { .id = "abc123def",
               .image = "nginx:latest",
               .command = "/docker-entrypoint…",
@@ -227,7 +227,7 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& c = containers[i];
+            auto const& c = Containers[i];
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::OutputDefBase);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(c.id)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(c.image)));
@@ -255,7 +255,7 @@ namespace
             char const* size;
         };
 
-        constexpr MockImage images[] = {
+        constexpr MockImage Images[] = {
             { .id = "sha256:abc",
               .repository = "nginx",
               .tag = "latest",
@@ -275,9 +275,9 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& img = images[i];
-            constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
-            auto* record = runner->allocObject(typeId);
+            auto const& img = Images[i];
+            constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
+            auto* record = runner->allocObject(TypeId);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(img.id)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(img.repository)));
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(img.tag)));
@@ -302,7 +302,7 @@ namespace
             char const* message;
         };
 
-        constexpr MockCommit commits[] = {
+        constexpr MockCommit Commits[] = {
             { .sha = "abc123",
               .author = "Alice",
               .email = "alice@example.com",
@@ -322,9 +322,9 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& c = commits[i];
-            constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
-            auto* record = runner->allocObject(typeId);
+            auto const& c = Commits[i];
+            constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
+            auto* record = runner->allocObject(TypeId);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(c.sha)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(c.author)));
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(c.email)));
@@ -346,7 +346,7 @@ namespace
             char const* path;
         };
 
-        constexpr MockStatusEntry entries[] = {
+        constexpr MockStatusEntry Entries[] = {
             { .status = "M", .path = "src/main.cpp" },
             { .status = "??", .path = "README.md" },
             { .status = "A", .path = ".gitignore" },
@@ -354,9 +354,9 @@ namespace
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
         {
-            auto const& e = entries[i];
-            constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
-            auto* record = runner->allocObject(typeId);
+            auto const& e = Entries[i];
+            constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
+            auto* record = runner->allocObject(TypeId);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(e.status)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(e.path)));
             list =
@@ -1207,9 +1207,9 @@ FSharpPersistentState createMockStructuredState()
 
     // DockerPsRecord (typeId = OutputDefBase = 100)
     {
-        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase;
+        constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase;
         state.outputDefinitionTypes["DockerPsRecord"] = {
-            .typeId = typeId,
+            .typeId = TypeId,
             .fields = {
                 { .name="id", .offset=0, .type=LiteralType::String },
                 { .name="image", .offset=1, .type=LiteralType::String },
@@ -1222,7 +1222,7 @@ FSharpPersistentState createMockStructuredState()
         };
         state.structuredCommands[std::string("docker\0ps", 9)] = {
             .builtinCallbackName = "structured_docker_ps",
-            .recordTypeId = typeId,
+            .recordTypeId = TypeId,
             .recordTypeName = "DockerPsRecord",
         };
         state.recordTypeFields["DockerPsRecord"] = {
@@ -1235,9 +1235,9 @@ FSharpPersistentState createMockStructuredState()
 
     // DockerImagesRecord (typeId = OutputDefBase + 1 = 101)
     {
-        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
+        constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
         state.outputDefinitionTypes["DockerImagesRecord"] = {
-            .typeId = typeId,
+            .typeId = TypeId,
             .fields = {
                 { .name="id", .offset=0, .type=LiteralType::String },
                 { .name="repository", .offset=1, .type=LiteralType::String },
@@ -1248,7 +1248,7 @@ FSharpPersistentState createMockStructuredState()
         };
         state.structuredCommands[std::string("docker\0images", 13)] = {
             .builtinCallbackName = "structured_docker_images",
-            .recordTypeId = typeId,
+            .recordTypeId = TypeId,
             .recordTypeName = "DockerImagesRecord",
         };
         state.recordTypeFields["DockerImagesRecord"] = {
@@ -1260,9 +1260,9 @@ FSharpPersistentState createMockStructuredState()
 
     // GitLogRecord (typeId = OutputDefBase + 2 = 102)
     {
-        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
+        constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
         state.outputDefinitionTypes["GitLogRecord"] = {
-            .typeId = typeId,
+            .typeId = TypeId,
             .fields = {
                 { .name="sha", .offset=0, .type=LiteralType::String },
                 { .name="author", .offset=1, .type=LiteralType::String },
@@ -1273,7 +1273,7 @@ FSharpPersistentState createMockStructuredState()
         };
         state.structuredCommands[std::string("git\0log", 7)] = {
             .builtinCallbackName = "structured_git_log",
-            .recordTypeId = typeId,
+            .recordTypeId = TypeId,
             .recordTypeName = "GitLogRecord",
         };
         state.recordTypeFields["GitLogRecord"] = {
@@ -1285,9 +1285,9 @@ FSharpPersistentState createMockStructuredState()
 
     // GitStatusRecord (typeId = OutputDefBase + 3 = 103)
     {
-        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
+        constexpr uint16_t TypeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
         state.outputDefinitionTypes["GitStatusRecord"] = {
-            .typeId = typeId,
+            .typeId = TypeId,
             .fields = {
                 { .name="status", .offset=0, .type=LiteralType::String },
                 { .name="path", .offset=1, .type=LiteralType::String },
@@ -1295,7 +1295,7 @@ FSharpPersistentState createMockStructuredState()
         };
         state.structuredCommands[std::string("git\0status", 10)] = {
             .builtinCallbackName = "structured_git_status",
-            .recordTypeId = typeId,
+            .recordTypeId = TypeId,
             .recordTypeName = "GitStatusRecord",
         };
         state.recordTypeFields["GitStatusRecord"] = {

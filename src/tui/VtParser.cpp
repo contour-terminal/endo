@@ -1000,9 +1000,9 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         // VK_SPACE: always emit U+0020 (UC may be 0 with Ctrl held)
         if (vkCode == vk::Space)
         {
-            constexpr auto cp = U' ';
+            constexpr auto Cp = U' ';
             events.emplace_back(
-                KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = mods, .codepoint = cp });
+                KeyEvent { .key = keyCodeFromCodepoint(Cp), .modifiers = mods, .codepoint = Cp });
             return;
         }
 

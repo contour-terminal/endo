@@ -14,13 +14,13 @@ namespace endo::agent
 namespace
 {
     /// Dim style for trace labels.
-    constexpr auto dimStyle = tui::Style { .dim = true };
+    constexpr auto DimStyle = tui::Style { .dim = true };
 
     /// Style for error trace lines.
-    constexpr auto errorStyle = tui::Style { .fg = uint8_t { 196 }, .bold = true }; // bright red
+    constexpr auto ErrorStyle = tui::Style { .fg = uint8_t { 196 }, .bold = true }; // bright red
 
     /// Style for the trace prefix label.
-    constexpr auto prefixStyle = tui::Style { .fg = uint8_t { 243 }, .dim = true }; // gray
+    constexpr auto PrefixStyle = tui::Style { .fg = uint8_t { 243 }, .dim = true }; // gray
 
     /// Formats a duration in milliseconds as a human-readable string.
     auto formatDuration(std::chrono::milliseconds ms) -> std::string
@@ -98,24 +98,24 @@ namespace
 
         void operator()(TraceUserMessageEvent const& e) const
         {
-            out.writeText("[trace \xe2\x86\x92] ", prefixStyle);
+            out.writeText("[trace \xe2\x86\x92] ", PrefixStyle);
             auto const preview = truncateContent(e.content, 80);
-            out.writeText(std::format("User ({}): \"{}\"\n", e.mode, preview), dimStyle);
+            out.writeText(std::format("User ({}): \"{}\"\n", e.mode, preview), DimStyle);
         }
 
         void operator()(TraceLlmRequestEvent const& e) const
         {
-            out.writeText("[trace \xe2\x86\x92] ", prefixStyle);
+            out.writeText("[trace \xe2\x86\x92] ", PrefixStyle);
             out.writeText(std::format("LLM request #{}: {} msgs, ~{} tokens\n",
                                       e.iteration,
                                       e.messageCount,
                                       formatCount(e.tokenEstimate)),
-                          dimStyle);
+                          DimStyle);
         }
 
         void operator()(TraceLlmResponseEvent const& e) const
         {
-            out.writeText("[trace \xe2\x86\x90] ", prefixStyle);
+            out.writeText("[trace \xe2\x86\x90] ", PrefixStyle);
             auto line = std::format("LLM response #{}: ", e.iteration);
             if (e.hasToolCalls)
                 line += std::format("{} tool call{}", e.toolCount, e.toolCount == 1 ? "" : "s");
@@ -127,12 +127,12 @@ namespace
                                     formatCount(static_cast<size_t>(e.usage->inputTokens)),
                                     formatCount(static_cast<size_t>(e.usage->outputTokens)));
             line += "\n";
-            out.writeText(line, dimStyle);
+            out.writeText(line, DimStyle);
         }
 
         void operator()(TraceToolCallEvent const& e) const
         {
-            out.writeText("[trace \xe2\x86\x94] ", prefixStyle);
+            out.writeText("[trace \xe2\x86\x94] ", PrefixStyle);
             auto const argSummary = summarizeArguments(e.arguments);
             auto const resultSummary = formatResultSummary(e.resultContent, e.resultIsError);
             out.writeText(std::format("{} {} \xe2\x86\x92 {} ({})\n",
@@ -140,24 +140,24 @@ namespace
                                       argSummary,
                                       resultSummary,
                                       formatDuration(e.duration)),
-                          e.resultIsError ? errorStyle : dimStyle);
+                          e.resultIsError ? ErrorStyle : DimStyle);
         }
 
         void operator()(TraceCompactionEvent const& e) const
         {
-            out.writeText("[trace \xe2\x88\xbc] ", prefixStyle);
+            out.writeText("[trace \xe2\x88\xbc] ", PrefixStyle);
             out.writeText(std::format("Compaction: {}\xe2\x86\x92{} msgs, {}\xe2\x86\x92{} tokens\n",
                                       e.beforeMessages,
                                       e.afterMessages,
                                       formatCount(e.beforeTokens),
                                       formatCount(e.afterTokens)),
-                          dimStyle);
+                          DimStyle);
         }
 
         void operator()(TraceErrorEvent const& e) const
         {
-            out.writeText("[trace !] ", prefixStyle);
-            out.writeText(std::format("Error ({}): {}\n", e.code, e.message), errorStyle);
+            out.writeText("[trace !] ", PrefixStyle);
+            out.writeText(std::format("Error ({}): {}\n", e.code, e.message), ErrorStyle);
         }
     };
 
@@ -165,9 +165,9 @@ namespace
     auto formatForStderr(TraceEvent const& event) -> std::string
     {
         // dim = ESC[2m, reset = ESC[0m, bold red = ESC[1;31m
-        constexpr auto dim = "\033[2m";
-        constexpr auto red = "\033[1;31m";
-        constexpr auto reset = "\033[0m";
+        constexpr auto Dim = "\033[2m";
+        constexpr auto Red = "\033[1;31m";
+        constexpr auto Reset = "\033[0m";
 
         return std::visit(
             [&](auto const& e) -> std::string {
@@ -176,20 +176,20 @@ namespace
                 {
                     auto const preview = truncateContent(e.content, 80);
                     return std::format(
-                        "{}[trace \xe2\x86\x92] User ({}): \"{}\"{}\n", dim, e.mode, preview, reset);
+                        "{}[trace \xe2\x86\x92] User ({}): \"{}\"{}\n", Dim, e.mode, preview, Reset);
                 }
                 else if constexpr (std::is_same_v<T, TraceLlmRequestEvent>)
                 {
                     return std::format("{}[trace \xe2\x86\x92] LLM request #{}: {} msgs, ~{} tokens{}\n",
-                                       dim,
+                                       Dim,
                                        e.iteration,
                                        e.messageCount,
                                        formatCount(e.tokenEstimate),
-                                       reset);
+                                       Reset);
                 }
                 else if constexpr (std::is_same_v<T, TraceLlmResponseEvent>)
                 {
-                    auto line = std::format("{}[trace \xe2\x86\x90] LLM response #{}: ", dim, e.iteration);
+                    auto line = std::format("{}[trace \xe2\x86\x90] LLM response #{}: ", Dim, e.iteration);
                     if (e.hasToolCalls)
                         line += std::format("{} tool call{}", e.toolCount, e.toolCount == 1 ? "" : "s");
                     else
@@ -199,36 +199,36 @@ namespace
                         line += std::format(", in:{} out:{}",
                                             formatCount(static_cast<size_t>(e.usage->inputTokens)),
                                             formatCount(static_cast<size_t>(e.usage->outputTokens)));
-                    line += std::format("{}\n", reset);
+                    line += std::format("{}\n", Reset);
                     return line;
                 }
                 else if constexpr (std::is_same_v<T, TraceToolCallEvent>)
                 {
                     auto const argSummary = summarizeArguments(e.arguments);
                     auto const resultSummary = formatResultSummary(e.resultContent, e.resultIsError);
-                    auto const style = e.resultIsError ? red : dim;
+                    auto const style = e.resultIsError ? Red : Dim;
                     return std::format("{}[trace \xe2\x86\x94] {} {} \xe2\x86\x92 {} ({}){}\n",
                                        style,
                                        e.name,
                                        argSummary,
                                        resultSummary,
                                        formatDuration(e.duration),
-                                       reset);
+                                       Reset);
                 }
                 else if constexpr (std::is_same_v<T, TraceCompactionEvent>)
                 {
                     return std::format("{}[trace \xe2\x88\xbc] Compaction: {}\xe2\x86\x92{} msgs, "
                                        "{}\xe2\x86\x92{} tokens{}\n",
-                                       dim,
+                                       Dim,
                                        e.beforeMessages,
                                        e.afterMessages,
                                        formatCount(e.beforeTokens),
                                        formatCount(e.afterTokens),
-                                       reset);
+                                       Reset);
                 }
                 else if constexpr (std::is_same_v<T, TraceErrorEvent>)
                 {
-                    return std::format("{}[trace !] Error ({}): {}{}\n", red, e.code, e.message, reset);
+                    return std::format("{}[trace !] Error ({}): {}{}\n", Red, e.code, e.message, Reset);
                 }
                 else
                 {

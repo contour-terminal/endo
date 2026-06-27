@@ -264,12 +264,12 @@ TEST_CASE("ImageLoader.loadImage_invalid_data")
 TEST_CASE("ImageLoader.resizeImage_downscale")
 {
     // Create a 100x100 test image
-    auto constexpr srcWidth = 100;
-    auto constexpr srcHeight = 100;
+    auto constexpr SrcWidth = 100;
+    auto constexpr SrcHeight = 100;
     auto image = OwnedImage {
-        .pixels = std::vector<std::uint8_t>(srcWidth * srcHeight * 4, 128),
-        .width = srcWidth,
-        .height = srcHeight,
+        .pixels = std::vector<std::uint8_t>(SrcWidth * SrcHeight * 4, 128),
+        .width = SrcWidth,
+        .height = SrcHeight,
     };
 
     auto const result = resizeImage(image, 50, 50);

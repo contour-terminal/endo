@@ -10,20 +10,20 @@ namespace CoreVM
 
 ObjectPool::ObjectPool(size_t slabCapacity): _slabCapacity(slabCapacity)
 {
-    for (size_t i = 0; i < kNumSizeClasses; ++i)
-        _sizeClasses[i].cellSize = kSizeClasses[i];
+    for (size_t i = 0; i < NumSizeClasses; ++i)
+        _sizeClasses[i].cellSize = SizeClasses[i];
 }
 
 size_t ObjectPool::sizeClassIndex(size_t allocSize) noexcept
 {
-    for (size_t i = 0; i < kNumSizeClasses; ++i)
+    for (size_t i = 0; i < NumSizeClasses; ++i)
     {
-        if (allocSize <= kSizeClasses[i])
+        if (allocSize <= SizeClasses[i])
             return i;
     }
     // Should never happen for supported object sizes.
     COREVM_ASSERT(false, "allocation size exceeds maximum size class (256 bytes)");
-    return kNumSizeClasses - 1;
+    return NumSizeClasses - 1;
 }
 
 void ObjectPool::addSlab(size_t sizeClassIdx)

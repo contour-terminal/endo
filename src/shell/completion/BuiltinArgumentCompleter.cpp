@@ -117,7 +117,7 @@ namespace
     std::vector<CompletionCandidate> bindFlagCandidates(std::string_view prefix)
     {
         using Flag = std::pair<std::string_view, std::string_view>;
-        static constexpr std::array<Flag, 7> flags = { {
+        static constexpr std::array<Flag, 7> Flags = { {
             { "-r", "Remove a keybinding" },
             { "--remove", "Remove a keybinding" },
             { "-l", "List all keybindings" },
@@ -128,7 +128,7 @@ namespace
         } };
 
         std::vector<CompletionCandidate> results;
-        for (auto const& [flag, desc]: flags)
+        for (auto const& [flag, desc]: Flags)
         {
             if (flag.starts_with(prefix))
                 results.push_back(CompletionCandidate {

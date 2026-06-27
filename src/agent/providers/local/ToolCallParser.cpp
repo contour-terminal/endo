@@ -57,8 +57,8 @@ namespace
                                 std::span<ToolDefinition const> tools,
                                 ToolCallParseResult& result) -> bool
     {
-        constexpr auto openTag = std::string_view { "<tool_call>" };
-        constexpr auto closeTag = std::string_view { "</tool_call>" };
+        constexpr auto OpenTag = std::string_view { "<tool_call>" };
+        constexpr auto CloseTag = std::string_view { "</tool_call>" };
 
         auto foundAnyTag = false;
         auto pos = size_t { 0 };
@@ -67,7 +67,7 @@ namespace
 
         while (pos < text.size())
         {
-            auto const tagStart = text.find(openTag, pos);
+            auto const tagStart = text.find(OpenTag, pos);
             if (tagStart == std::string::npos)
                 break;
 
@@ -87,8 +87,8 @@ namespace
                 }
             }
 
-            auto const contentStart = tagStart + openTag.size();
-            auto const tagEnd = text.find(closeTag, contentStart);
+            auto const contentStart = tagStart + OpenTag.size();
+            auto const tagEnd = text.find(CloseTag, contentStart);
             if (tagEnd == std::string::npos)
             {
                 result.hadParsingErrors = true;
@@ -98,7 +98,7 @@ namespace
             }
 
             auto const content = text.substr(contentStart, tagEnd - contentStart);
-            lastEnd = tagEnd + closeTag.size();
+            lastEnd = tagEnd + CloseTag.size();
             pos = lastEnd;
 
             try
@@ -148,8 +148,8 @@ namespace
                                       std::span<ToolDefinition const> tools,
                                       ToolCallParseResult& result) -> bool
     {
-        constexpr auto openFence = std::string_view { "```json" };
-        constexpr auto closeFence = std::string_view { "```" };
+        constexpr auto OpenFence = std::string_view { "```json" };
+        constexpr auto CloseFence = std::string_view { "```" };
 
         auto foundAnyBlock = false;
         auto pos = size_t { 0 };
@@ -158,7 +158,7 @@ namespace
 
         while (pos < text.size())
         {
-            auto const blockStart = text.find(openFence, pos);
+            auto const blockStart = text.find(OpenFence, pos);
             if (blockStart == std::string::npos)
                 break;
 
@@ -178,8 +178,8 @@ namespace
                 }
             }
 
-            auto const contentStart = blockStart + openFence.size();
-            auto const blockEnd = text.find(closeFence, contentStart);
+            auto const contentStart = blockStart + OpenFence.size();
+            auto const blockEnd = text.find(CloseFence, contentStart);
             if (blockEnd == std::string::npos)
             {
                 result.hadParsingErrors = true;
@@ -189,7 +189,7 @@ namespace
             }
 
             auto const content = text.substr(contentStart, blockEnd - contentStart);
-            lastEnd = blockEnd + closeFence.size();
+            lastEnd = blockEnd + CloseFence.size();
             pos = lastEnd;
 
             try

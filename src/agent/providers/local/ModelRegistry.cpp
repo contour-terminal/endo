@@ -250,12 +250,12 @@ namespace
     [[nodiscard]] auto splitGroupKey(std::string_view filename) -> std::string
     {
         // Must end with ".gguf"
-        constexpr auto suffix = std::string_view { ".gguf" };
-        if (filename.size() < suffix.size() || filename.substr(filename.size() - suffix.size()) != suffix)
+        constexpr auto Suffix = std::string_view { ".gguf" };
+        if (filename.size() < Suffix.size() || filename.substr(filename.size() - Suffix.size()) != Suffix)
             return {};
 
         // Strip ".gguf" to get stem
-        auto const stem = filename.substr(0, filename.size() - suffix.size());
+        auto const stem = filename.substr(0, filename.size() - Suffix.size());
 
         // Look for "-NNNNN-of-NNNNN" at the end of stem
         // Minimum: "-N-of-N" = 7 chars, but we expect 5-digit parts: "-00001-of-00004" = 15 chars

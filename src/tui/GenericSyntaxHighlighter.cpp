@@ -57,7 +57,7 @@ namespace
     // -------------------------------------------------------------------------
 
     // C++ keywords (sorted)
-    constexpr auto cppKeywords = std::to_array<std::string_view>({
+    constexpr auto CppKeywords = std::to_array<std::string_view>({
         "alignas",
         "alignof",
         "and",
@@ -155,7 +155,7 @@ namespace
     });
 
     // C++ standard library types (sorted)
-    constexpr auto cppTypes = std::to_array<std::string_view>({
+    constexpr auto CppTypes = std::to_array<std::string_view>({
         "array",      "atomic",   "basic_string", "deque",      "expected",      "function",      "future",
         "int16_t",    "int32_t",  "int64_t",      "int8_t",     "list",          "map",           "monostate",
         "multimap",   "multiset", "optional",     "pair",       "promise",       "ptrdiff_t",     "set",
@@ -165,7 +165,7 @@ namespace
     });
 
     // Python keywords (sorted)
-    constexpr auto pythonKeywords = std::to_array<std::string_view>({
+    constexpr auto PythonKeywords = std::to_array<std::string_view>({
         "False", "None",     "True",  "and",    "as",   "assert", "async",  "await",    "break",
         "class", "continue", "def",   "del",    "elif", "else",   "except", "finally",  "for",
         "from",  "global",   "if",    "import", "in",   "is",     "lambda", "nonlocal", "not",
@@ -173,7 +173,7 @@ namespace
     });
 
     // Python builtin functions (sorted)
-    constexpr auto pythonBuiltins = std::to_array<std::string_view>({
+    constexpr auto PythonBuiltins = std::to_array<std::string_view>({
         "abs",     "all",       "any",        "bin",          "bool",    "bytes",    "callable", "chr",
         "dict",    "dir",       "divmod",     "enumerate",    "eval",    "exec",     "filter",   "float",
         "format",  "frozenset", "getattr",    "globals",      "hasattr", "hash",     "hex",      "id",
@@ -185,7 +185,7 @@ namespace
     });
 
     // Bash keywords (sorted)
-    constexpr auto bashKeywords = std::to_array<std::string_view>({
+    constexpr auto BashKeywords = std::to_array<std::string_view>({
         "case",
         "do",
         "done",
@@ -204,7 +204,7 @@ namespace
     });
 
     // Bash builtin commands (sorted)
-    constexpr auto bashBuiltins = std::to_array<std::string_view>({
+    constexpr auto BashBuiltins = std::to_array<std::string_view>({
         "alias", "bg",       "bind",   "break",  "cd",      "command", "continue", "declare", "echo",
         "eval",  "exec",     "exit",   "export", "fg",      "getopts", "hash",     "help",    "history",
         "jobs",  "kill",     "let",    "local",  "logout",  "printf",  "pushd",    "popd",    "pwd",
@@ -213,7 +213,7 @@ namespace
     });
 
     // CMake commands (sorted)
-    constexpr auto cmakeKeywords = std::to_array<std::string_view>({
+    constexpr auto CmakeKeywords = std::to_array<std::string_view>({
         "add_compile_definitions",
         "add_compile_options",
         "add_custom_command",
@@ -280,7 +280,7 @@ namespace
     });
 
     // CMake variables/properties keywords (sorted)
-    constexpr auto cmakeTypes = std::to_array<std::string_view>({
+    constexpr auto CmakeTypes = std::to_array<std::string_view>({
         "AND",          "BOOL",     "CACHE",  "COMMAND",  "DEFINED",      "EXISTS",   "FATAL_ERROR",
         "FALSE",        "FILEPATH", "FORCE",  "IMPORTED", "INTERFACE",    "INTERNAL", "MATCHES",
         "NOT",          "OFF",      "ON",     "OR",       "PARENT_SCOPE", "PATH",     "PRIVATE",
@@ -289,14 +289,14 @@ namespace
     });
 
     // JSON keywords (sorted)
-    constexpr auto jsonKeywords = std::to_array<std::string_view>({
+    constexpr auto JsonKeywords = std::to_array<std::string_view>({
         "false",
         "null",
         "true",
     });
 
     // YAML keywords (sorted)
-    constexpr auto yamlKeywords = std::to_array<std::string_view>({
+    constexpr auto YamlKeywords = std::to_array<std::string_view>({
         "False",
         "No",
         "Null",
@@ -315,7 +315,7 @@ namespace
     });
 
     // x86 assembly instructions (sorted, lowercase)
-    constexpr auto asmInstructions = std::to_array<std::string_view>({
+    constexpr auto AsmInstructions = std::to_array<std::string_view>({
         "adc",    "add",    "and",    "bsf",     "bsr",    "bt",      "call",     "cbw",     "cdq",
         "cdqe",   "clc",    "cld",    "cli",     "cmova",  "cmovae",  "cmovb",    "cmovbe",  "cmovc",
         "cmove",  "cmovg",  "cmovge", "cmovl",   "cmovle", "cmovna",  "cmovnae",  "cmovnb",  "cmovnbe",
@@ -339,7 +339,7 @@ namespace
     });
 
     // x86 registers (sorted, lowercase — matching is case-insensitive)
-    constexpr auto asmRegisters = std::to_array<std::string_view>({
+    constexpr auto AsmRegisters = std::to_array<std::string_view>({
         "ah",    "al",     "ax",    "bh",    "bl",    "bp",    "bpl",   "bx",    "ch",    "cl",     "cr0",
         "cr2",   "cr3",    "cr4",   "cs",    "cx",    "dh",    "di",    "dil",   "dl",    "dr0",    "dr1",
         "dr2",   "dr3",    "dr6",   "dr7",   "ds",    "dx",    "eax",   "ebp",   "ebx",   "ecx",    "edi",
@@ -357,21 +357,21 @@ namespace
     });
 
     // x86 assembly directives — NASM/MASM style (sorted)
-    constexpr auto asmDirectives = std::to_array<std::string_view>({
+    constexpr auto AsmDirectives = std::to_array<std::string_view>({
         "align", "bits",   "byte",    "common",  "db",      "dd",    "dq",    "dw",    "dword",
         "equ",   "extern", "global",  "incbin",  "include", "org",   "qword", "resb",  "resd",
         "resq",  "resw",   "section", "segment", "times",   "use16", "use32", "use64", "word",
     });
 
     // AT&T/GAS directives (stored without leading dot, sorted)
-    constexpr auto asmGasDirectives = std::to_array<std::string_view>({
+    constexpr auto AsmGasDirectives = std::to_array<std::string_view>({
         "align",  "ascii", "asciz",        "bss",    "byte",  "comm",    "data", "endm",    "extern", "file",
         "global", "globl", "intel_syntax", "long",   "macro", "p2align", "quad", "section", "set",    "short",
         "size",   "skip",  "space",        "string", "text",  "type",    "weak", "word",    "zero",
     });
 
     // PowerShell keywords (sorted, lowercase — matched case-insensitively)
-    constexpr auto powershellKeywords = std::to_array<std::string_view>({
+    constexpr auto PowershellKeywords = std::to_array<std::string_view>({
         "begin",        "break",   "catch",   "class",    "continue", "data",   "define",   "do",
         "dynamicparam", "else",    "elseif",  "end",      "enum",     "exit",   "filter",   "finally",
         "for",          "foreach", "from",    "function", "hidden",   "if",     "in",       "inlinescript",
@@ -380,7 +380,7 @@ namespace
     });
 
     // PowerShell word operators (sorted, lowercase, stored without the leading dash)
-    constexpr auto powershellOperators = std::to_array<std::string_view>({
+    constexpr auto PowershellOperators = std::to_array<std::string_view>({
         "and",      "as",        "band",     "bnot",        "bor",    "bxor",    "ccontains", "ceq",
         "cge",      "cgt",       "cle",      "clike",       "clt",    "cmatch",  "cne",       "cnotcontains",
         "cnotlike", "cnotmatch", "contains", "creplace",    "csplit", "eq",      "f",         "ge",
@@ -390,7 +390,7 @@ namespace
     });
 
     // Windows CMD / batch keywords (sorted, lowercase — matched case-insensitively)
-    constexpr auto cmdKeywords = std::to_array<std::string_view>({
+    constexpr auto CmdKeywords = std::to_array<std::string_view>({
         "assoc",    "break",  "call",  "cd",    "chdir",  "cls",      "color",  "copy",   "date",
         "defined",  "del",    "dir",   "echo",  "else",   "endlocal", "equ",    "erase",  "errorlevel",
         "exist",    "exit",   "for",   "ftype", "geq",    "goto",     "gtr",    "if",     "in",
@@ -678,9 +678,9 @@ namespace
                     ++pos;
                 auto const word = line.substr(start, pos - start);
 
-                if (isInSortedArray(cppKeywords, word))
+                if (isInSortedArray(CppKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
-                else if (isInSortedArray(cppTypes, word))
+                else if (isInSortedArray(CppTypes, word))
                     fillRange(map, start, pos - start, HighlightCategory::Type);
                 else if (word.starts_with("std"))
                     fillRange(map, start, pos - start, HighlightCategory::Type);
@@ -838,9 +838,9 @@ namespace
                     ++pos;
                 auto const word = line.substr(start, pos - start);
 
-                if (isInSortedArray(pythonKeywords, word))
+                if (isInSortedArray(PythonKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
-                else if (isInSortedArray(pythonBuiltins, word))
+                else if (isInSortedArray(PythonBuiltins, word))
                     fillRange(map, start, pos - start, HighlightCategory::Function);
                 continue;
             }
@@ -982,9 +982,9 @@ namespace
                     ++pos;
                 auto const word = line.substr(start, pos - start);
 
-                if (isInSortedArray(bashKeywords, word))
+                if (isInSortedArray(BashKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
-                else if (isInSortedArray(bashBuiltins, word))
+                else if (isInSortedArray(BashBuiltins, word))
                     fillRange(map, start, pos - start, HighlightCategory::Function);
                 continue;
             }
@@ -1091,9 +1091,9 @@ namespace
                     ++pos;
                 auto const word = line.substr(start, pos - start);
 
-                if (isInSortedArray(cmakeKeywords, word))
+                if (isInSortedArray(CmakeKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
-                else if (isInSortedArray(cmakeTypes, word))
+                else if (isInSortedArray(CmakeTypes, word))
                     fillRange(map, start, pos - start, HighlightCategory::Type);
                 continue;
             }
@@ -1252,7 +1252,7 @@ namespace
                 while (pos < len && (line[pos] >= 'a' && line[pos] <= 'z'))
                     ++pos;
                 auto const word = line.substr(start, pos - start);
-                if (isInSortedArray(jsonKeywords, word))
+                if (isInSortedArray(JsonKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
                 continue;
             }
@@ -1344,7 +1344,7 @@ namespace
                         while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '\t'))
                             trimmed.remove_suffix(1);
 
-                        if (isInSortedArray(yamlKeywords, trimmed))
+                        if (isInSortedArray(YamlKeywords, trimmed))
                             fillRange(map, pos, valueEnd - pos, HighlightCategory::Keyword);
                         else if (!trimmed.empty()
                                  && (isDigit(trimmed[0])
@@ -1365,7 +1365,7 @@ namespace
                 }
                 // Not a key, check if it's a keyword value
                 auto const word = line.substr(start, pos - start);
-                if (isInSortedArray(yamlKeywords, word))
+                if (isInSortedArray(YamlKeywords, word))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
                 continue;
             }
@@ -1575,7 +1575,7 @@ namespace
                 auto const directive = line.substr(start + 1, pos - start - 1);
                 char lowerBuf[64];
                 auto const lowerDirective = toLowerInto(directive, lowerBuf);
-                if (isInSortedArray(asmGasDirectives, lowerDirective))
+                if (isInSortedArray(AsmGasDirectives, lowerDirective))
                     fillRange(map, start, pos - start, HighlightCategory::Preprocessor);
                 continue;
             }
@@ -1592,7 +1592,7 @@ namespace
                 auto const regName = line.substr(start + 1, pos - start - 1);
                 char lowerBuf[64];
                 auto const lowerReg = toLowerInto(regName, lowerBuf);
-                if (isInSortedArray(asmRegisters, lowerReg))
+                if (isInSortedArray(AsmRegisters, lowerReg))
                     fillRange(map, start, pos - start, HighlightCategory::Variable);
                 continue;
             }
@@ -1646,19 +1646,19 @@ namespace
                 auto const lower = toLowerInto(word, lowerBuf);
 
                 // Check instructions, including AT&T suffix stripping (b/w/l/q)
-                auto isInstruction = isInSortedArray(asmInstructions, lower);
+                auto isInstruction = isInSortedArray(AsmInstructions, lower);
                 if (!isInstruction && lower.size() > 1)
                 {
                     auto const lastCh = lower.back();
                     if (lastCh == 'b' || lastCh == 'w' || lastCh == 'l' || lastCh == 'q')
-                        isInstruction = isInSortedArray(asmInstructions, lower.substr(0, lower.size() - 1));
+                        isInstruction = isInSortedArray(AsmInstructions, lower.substr(0, lower.size() - 1));
                 }
 
                 if (isInstruction)
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
-                else if (isInSortedArray(asmRegisters, lower))
+                else if (isInSortedArray(AsmRegisters, lower))
                     fillRange(map, start, pos - start, HighlightCategory::Variable);
-                else if (isInSortedArray(asmDirectives, lower))
+                else if (isInSortedArray(AsmDirectives, lower))
                     fillRange(map, start, pos - start, HighlightCategory::Preprocessor);
                 continue;
             }
@@ -1782,7 +1782,7 @@ namespace
                 auto const word = line.substr(wordStart, pos - wordStart);
                 std::array<char, 64> buf {};
                 auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
-                if (isInSortedArray(powershellOperators, lower))
+                if (isInSortedArray(PowershellOperators, lower))
                     fillRange(map, start, pos - start, HighlightCategory::Operator);
                 // Otherwise a parameter name like -Path — left as default text.
                 continue;
@@ -1853,7 +1853,7 @@ namespace
                 auto const word = line.substr(start, pos - start);
                 std::array<char, 64> buf {};
                 auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
-                if (isInSortedArray(powershellKeywords, lower))
+                if (isInSortedArray(PowershellKeywords, lower))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
                 else if (word.find('-') != std::string_view::npos)
                     fillRange(map, start, pos - start, HighlightCategory::Function);
@@ -2006,7 +2006,7 @@ namespace
                 auto const word = line.substr(start, pos - start);
                 std::array<char, 32> buf {};
                 auto const lower = word.size() <= buf.size() ? toLowerInto(word, buf.data()) : word;
-                if (isInSortedArray(cmdKeywords, lower))
+                if (isInSortedArray(CmdKeywords, lower))
                     fillRange(map, start, pos - start, HighlightCategory::Keyword);
                 continue;
             }

@@ -22,20 +22,20 @@ CoreVM::CoreStringArray makeArgs(std::initializer_list<std::string_view> items)
 }
 
 // Empty option set
-std::span<InlineOptionDef const> const kNoOptions {};
+std::span<InlineOptionDef const> const NoOptions {};
 
-constexpr InlineOptionDef kSimpleBoolOptions[] = {
+constexpr InlineOptionDef SimpleBoolOptions[] = {
     { .shortFlag = "-r", .longFlag = "--recursive", .description = "Recurse" },
     { .shortFlag = "-v", .longFlag = "--verbose", .description = "Verbose" },
     { .shortFlag = "-f", .longFlag = "--force", .description = "Force" },
 };
 
-constexpr InlineOptionDef kValueOptions[] = {
+constexpr InlineOptionDef ValueOptions[] = {
     { .shortFlag = "-n", .longFlag = {}, .description = "Number of lines", .takesValue = true },
     { .shortFlag = "-d", .longFlag = "--delimiter", .description = "Delimiter", .takesValue = true },
 };
 
-constexpr InlineOptionDef kMixedOptions[] = {
+constexpr InlineOptionDef MixedOptions[] = {
     { .shortFlag = "-r", .longFlag = {}, .description = "Reverse" },
     { .shortFlag = "-n", .longFlag = {}, .description = "Numeric" },
     { .shortFlag = "-k", .longFlag = {}, .description = "Key field", .takesValue = true },
@@ -50,7 +50,7 @@ constexpr InlineOptionDef kMixedOptions[] = {
 TEST_CASE("InlineArgParser.empty_args", "[argparser]")
 {
     auto const args = makeArgs({ "cmd" });
-    auto const result = parseInlineArgs(args, kNoOptions);
+    auto const result = parseInlineArgs(args, NoOptions);
     CHECK_FALSE(result.helpRequested);
     CHECK(result.flags.empty());
     CHECK(result.positionalArgs.empty());
@@ -59,7 +59,7 @@ TEST_CASE("InlineArgParser.empty_args", "[argparser]")
 TEST_CASE("InlineArgParser.positional_only", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "file1.txt", "file2.txt" });
-    auto const result = parseInlineArgs(args, kNoOptions);
+    auto const result = parseInlineArgs(args, NoOptions);
     CHECK_FALSE(result.helpRequested);
     REQUIRE(result.positionalArgs.size() == 2);
     CHECK(result.positionalArgs[0] == "file1.txt");
@@ -69,7 +69,7 @@ TEST_CASE("InlineArgParser.positional_only", "[argparser]")
 TEST_CASE("InlineArgParser.skips_arg0", "[argparser]")
 {
     auto const args = makeArgs({ "head", "-n", "5" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     CHECK_FALSE(result.helpRequested);
     // "head" (arg0) should be skipped
     CHECK(result.positionalArgs.empty());
@@ -85,21 +85,21 @@ TEST_CASE("InlineArgParser.skips_arg0", "[argparser]")
 TEST_CASE("InlineArgParser.help_short", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-h" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.helpRequested);
 }
 
 TEST_CASE("InlineArgParser.help_long", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--help" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.helpRequested);
 }
 
 TEST_CASE("InlineArgParser.help_stops_parsing", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r", "--help", "-v" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.helpRequested);
     // -r before --help should be parsed, -v after should not
     CHECK(result.flags.size() == 1);
@@ -108,7 +108,7 @@ TEST_CASE("InlineArgParser.help_stops_parsing", "[argparser]")
 TEST_CASE("InlineArgParser.help_always_recognized_even_without_options", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-h" });
-    auto const result = parseInlineArgs(args, kNoOptions);
+    auto const result = parseInlineArgs(args, NoOptions);
     CHECK(result.helpRequested);
 }
 
@@ -119,7 +119,7 @@ TEST_CASE("InlineArgParser.help_always_recognized_even_without_options", "[argpa
 TEST_CASE("InlineArgParser.single_short_flag", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK_FALSE(result.hasFlag("-v"));
 }
@@ -127,7 +127,7 @@ TEST_CASE("InlineArgParser.single_short_flag", "[argparser]")
 TEST_CASE("InlineArgParser.multiple_separate_short_flags", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r", "-v" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK(result.hasFlag("-v"));
     CHECK_FALSE(result.hasFlag("-f"));
@@ -136,7 +136,7 @@ TEST_CASE("InlineArgParser.multiple_separate_short_flags", "[argparser]")
 TEST_CASE("InlineArgParser.combined_short_flags", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-rfv" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK(result.hasFlag("-f"));
     CHECK(result.hasFlag("-v"));
@@ -146,7 +146,7 @@ TEST_CASE("InlineArgParser.combined_short_flags", "[argparser]")
 TEST_CASE("InlineArgParser.unknown_short_flag_becomes_positional", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-x" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.flags.empty());
     REQUIRE(result.positionalArgs.size() == 1);
     CHECK(result.positionalArgs[0] == "-x");
@@ -155,7 +155,7 @@ TEST_CASE("InlineArgParser.unknown_short_flag_becomes_positional", "[argparser]"
 TEST_CASE("InlineArgParser.combined_with_unknown_becomes_positional", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-rx" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     // -r is valid but -x is not — entire -rx becomes positional, no flags recorded
     CHECK(result.flags.empty());
     REQUIRE(result.positionalArgs.size() == 1);
@@ -169,7 +169,7 @@ TEST_CASE("InlineArgParser.combined_with_unknown_becomes_positional", "[argparse
 TEST_CASE("InlineArgParser.long_flag", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--recursive" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     // Canonical flag is the short form
     CHECK(result.hasFlag("-r"));
 }
@@ -177,7 +177,7 @@ TEST_CASE("InlineArgParser.long_flag", "[argparser]")
 TEST_CASE("InlineArgParser.unknown_long_flag_becomes_positional", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--unknown" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.flags.empty());
     REQUIRE(result.positionalArgs.size() == 1);
     CHECK(result.positionalArgs[0] == "--unknown");
@@ -190,7 +190,7 @@ TEST_CASE("InlineArgParser.unknown_long_flag_becomes_positional", "[argparser]")
 TEST_CASE("InlineArgParser.short_value_separate_arg", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-n", "10" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     auto const val = result.getFlagValue("-n");
     REQUIRE(val.has_value());
     CHECK(*val == "10");
@@ -200,7 +200,7 @@ TEST_CASE("InlineArgParser.short_value_attached", "[argparser]")
 {
     // -n10 (value attached to flag in combined form)
     auto const args = makeArgs({ "cmd", "-n10" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     auto const val = result.getFlagValue("-n");
     REQUIRE(val.has_value());
     CHECK(*val == "10");
@@ -209,7 +209,7 @@ TEST_CASE("InlineArgParser.short_value_attached", "[argparser]")
 TEST_CASE("InlineArgParser.long_value_equals", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--delimiter=:" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     auto const val = result.getFlagValue("-d");
     REQUIRE(val.has_value());
     CHECK(*val == ":");
@@ -218,7 +218,7 @@ TEST_CASE("InlineArgParser.long_value_equals", "[argparser]")
 TEST_CASE("InlineArgParser.long_value_separate_arg", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--delimiter", ":" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     auto const val = result.getFlagValue("-d");
     REQUIRE(val.has_value());
     CHECK(*val == ":");
@@ -227,7 +227,7 @@ TEST_CASE("InlineArgParser.long_value_separate_arg", "[argparser]")
 TEST_CASE("InlineArgParser.getFlagValue_missing_returns_nullopt", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "file.txt" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     CHECK_FALSE(result.getFlagValue("-n").has_value());
 }
 
@@ -239,7 +239,7 @@ TEST_CASE("InlineArgParser.combined_bool_then_value", "[argparser]")
 {
     // -rk 2 — -r is boolean, -k takes value "2"
     auto const args = makeArgs({ "cmd", "-rk", "2" });
-    auto const result = parseInlineArgs(args, kMixedOptions);
+    auto const result = parseInlineArgs(args, MixedOptions);
     CHECK(result.hasFlag("-r"));
     auto const val = result.getFlagValue("-k");
     REQUIRE(val.has_value());
@@ -250,7 +250,7 @@ TEST_CASE("InlineArgParser.combined_value_takes_rest", "[argparser]")
 {
     // -rnk2 — -r bool, -n bool, -k takes "2" (rest of string)
     auto const args = makeArgs({ "cmd", "-rnk2" });
-    auto const result = parseInlineArgs(args, kMixedOptions);
+    auto const result = parseInlineArgs(args, MixedOptions);
     CHECK(result.hasFlag("-r"));
     CHECK(result.hasFlag("-n"));
     auto const val = result.getFlagValue("-k");
@@ -265,7 +265,7 @@ TEST_CASE("InlineArgParser.combined_value_takes_rest", "[argparser]")
 TEST_CASE("InlineArgParser.end_of_options", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--", "-r", "--verbose" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.flags.empty());
     REQUIRE(result.positionalArgs.size() == 2);
     CHECK(result.positionalArgs[0] == "-r");
@@ -275,7 +275,7 @@ TEST_CASE("InlineArgParser.end_of_options", "[argparser]")
 TEST_CASE("InlineArgParser.flags_before_end_of_options", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r", "--", "-v" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK_FALSE(result.hasFlag("-v"));
     REQUIRE(result.positionalArgs.size() == 1);
@@ -285,7 +285,7 @@ TEST_CASE("InlineArgParser.flags_before_end_of_options", "[argparser]")
 TEST_CASE("InlineArgParser.help_after_end_of_options_is_positional", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "--", "--help" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK_FALSE(result.helpRequested);
     REQUIRE(result.positionalArgs.size() == 1);
     CHECK(result.positionalArgs[0] == "--help");
@@ -298,7 +298,7 @@ TEST_CASE("InlineArgParser.help_after_end_of_options_is_positional", "[argparser
 TEST_CASE("InlineArgParser.flags_and_positionals_interleaved", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r", "file1.txt", "-v", "file2.txt" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK(result.hasFlag("-v"));
     REQUIRE(result.positionalArgs.size() == 2);
@@ -313,7 +313,7 @@ TEST_CASE("InlineArgParser.flags_and_positionals_interleaved", "[argparser]")
 TEST_CASE("InlineArgParser.hasFlag_false_when_not_present", "[argparser]")
 {
     auto const args = makeArgs({ "cmd", "-r" });
-    auto const result = parseInlineArgs(args, kSimpleBoolOptions);
+    auto const result = parseInlineArgs(args, SimpleBoolOptions);
     CHECK(result.hasFlag("-r"));
     CHECK_FALSE(result.hasFlag("-v"));
     CHECK_FALSE(result.hasFlag("-f"));
@@ -323,7 +323,7 @@ TEST_CASE("InlineArgParser.getFlagValue_returns_last_occurrence", "[argparser]")
 {
     // If -n is given multiple times, getFlagValue returns the first occurrence
     auto const args = makeArgs({ "cmd", "-n", "5", "-n", "10" });
-    auto const result = parseInlineArgs(args, kValueOptions);
+    auto const result = parseInlineArgs(args, ValueOptions);
     auto const val = result.getFlagValue("-n");
     REQUIRE(val.has_value());
     CHECK(*val == "5"); // first occurrence
@@ -339,7 +339,7 @@ TEST_CASE("InlineArgParser.generateHelp_includes_title", "[argparser]")
         .name = "head",
         .briefDescription = "Output the first lines of files.",
         .usageLine = "head [OPTIONS] [FILE...]",
-        .options = kValueOptions,
+        .options = ValueOptions,
     };
     auto const help = generateInlineHelp(desc);
     CHECK(help.find("# head") != std::string::npos);
@@ -351,7 +351,7 @@ TEST_CASE("InlineArgParser.generateHelp_includes_description", "[argparser]")
         .name = "head",
         .briefDescription = "Output the first lines of files.",
         .usageLine = "head [OPTIONS] [FILE...]",
-        .options = kValueOptions,
+        .options = ValueOptions,
     };
     auto const help = generateInlineHelp(desc);
     CHECK(help.find("Output the first lines") != std::string::npos);
@@ -363,7 +363,7 @@ TEST_CASE("InlineArgParser.generateHelp_includes_usage", "[argparser]")
         .name = "head",
         .briefDescription = "Output the first lines of files.",
         .usageLine = "head [OPTIONS] [FILE...]",
-        .options = kValueOptions,
+        .options = ValueOptions,
     };
     auto const help = generateInlineHelp(desc);
     CHECK(help.find("`head [OPTIONS] [FILE...]`") != std::string::npos);
@@ -375,7 +375,7 @@ TEST_CASE("InlineArgParser.generateHelp_includes_options_table", "[argparser]")
         .name = "head",
         .briefDescription = "Output the first lines of files.",
         .usageLine = "head [OPTIONS] [FILE...]",
-        .options = kValueOptions,
+        .options = ValueOptions,
     };
     auto const help = generateInlineHelp(desc);
     CHECK(help.find("## Options") != std::string::npos);
@@ -400,14 +400,14 @@ TEST_CASE("InlineArgParser.generateHelp_always_includes_help_option", "[argparse
 
 TEST_CASE("InlineArgParser.generateHelp_with_options_includes_help_row", "[argparser]")
 {
-    constexpr InlineOptionDef opts[] = {
+    constexpr InlineOptionDef Opts[] = {
         { .shortFlag = "-r", .longFlag = {}, .description = "Reverse" },
     };
     InlineCommandDescriptor desc {
         .name = "sort",
         .briefDescription = "Sort lines.",
         .usageLine = "sort [OPTIONS] [FILE...]",
-        .options = opts,
+        .options = Opts,
     };
     auto const help = generateInlineHelp(desc);
     CHECK(help.find("## Options") != std::string::npos);

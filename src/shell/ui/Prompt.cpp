@@ -172,8 +172,8 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         // resume on non-input activity (focus change, a finished background job),
         // which arrives as a std::nullopt wake; nextEvent() cannot represent "no
         // event", so use nextEventFor with a long sentinel for the blocking case.
-        constexpr auto idleSentinel = std::chrono::milliseconds { 60'000 };
-        auto const waitFor = (timeout < 0) ? idleSentinel : std::chrono::milliseconds { timeout };
+        constexpr auto IdleSentinel = std::chrono::milliseconds { 60'000 };
+        auto const waitFor = (timeout < 0) ? IdleSentinel : std::chrono::milliseconds { timeout };
         auto event = std::optional<tui::InputEvent> {};
         try
         {
@@ -685,8 +685,8 @@ void emitPartialLineIndicator(NativeHandle handle, int cursorColumn)
         return;
 
     // SGR 2 (dim) + U+23CE (return symbol) + SGR 0 (reset) + CSI K (clear to EOL) + CR LF
-    static constexpr std::string_view indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
-    platformWrite(handle, indicator.data(), indicator.size());
+    static constexpr std::string_view Indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
+    platformWrite(handle, Indicator.data(), Indicator.size());
 }
 
 } // namespace endo

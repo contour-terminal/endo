@@ -76,13 +76,13 @@ namespace
     /// @return The selected provider name, or empty on cancel.
     auto promptProviderSelection() -> std::string
     {
-        constexpr auto labels = std::array {
+        constexpr auto Labels = std::array {
             "Claude (Anthropic)"sv,
             "OpenAI"sv,
             "Gemini (Google)"sv,
             "GitHub Copilot"sv,
         };
-        auto const sel = askSingleSelect("Select a provider to authenticate:", labels);
+        auto const sel = askSingleSelect("Select a provider to authenticate:", Labels);
         if (!sel)
             return {};
         return std::string(KnownProviders[*sel].name);
@@ -293,11 +293,11 @@ namespace
         }
 
         // Ask which account type.
-        constexpr auto accountTypes = std::array {
+        constexpr auto AccountTypes = std::array {
             "Claude.ai (MAX/Pro subscription)"sv,
             "Anthropic Console (Teams/Enterprise)"sv,
         };
-        auto const accountSel = askSingleSelect("Select account type:", accountTypes);
+        auto const accountSel = askSingleSelect("Select account type:", AccountTypes);
         if (!accountSel)
             return EXIT_FAILURE;
 

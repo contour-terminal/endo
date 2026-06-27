@@ -32,8 +32,8 @@ namespace
     /// Checks if a line ends with a block-opening construct.
     [[nodiscard]] bool endsWithBlockOpener(std::string const& trimmedLine)
     {
-        static constexpr std::string_view openers[] = { "=", "->", "then", "do", "with" };
-        for (auto const opener: openers)
+        static constexpr std::string_view Openers[] = { "=", "->", "then", "do", "with" };
+        for (auto const opener: Openers)
         {
             if (trimmedLine.ends_with(opener))
             {

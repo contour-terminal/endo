@@ -1105,8 +1105,8 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
     auto seen = std::set<std::string> {};
 
 #if defined(_WIN32)
-    static constexpr auto localCmd = "git branch --format=\"%(refname:short)\" 2>NUL";
-    static constexpr auto remoteCmd = "git branch -r --format=\"%(refname:short)\" 2>NUL";
+    static constexpr auto LocalCmd = "git branch --format=\"%(refname:short)\" 2>NUL";
+    static constexpr auto RemoteCmd = "git branch -r --format=\"%(refname:short)\" 2>NUL";
 #else
     static constexpr auto localCmd = "git branch --format='%(refname:short)' 2>/dev/null";
     static constexpr auto remoteCmd = "git branch -r --format='%(refname:short)' 2>/dev/null";
@@ -1114,7 +1114,7 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
 
     if (!remoteOnly)
     {
-        for (auto const& branch: runCommand(localCmd))
+        for (auto const& branch: runCommand(LocalCmd))
         {
             if (seen.insert(branch).second)
                 results.push_back(QueryResult { .text = branch, .description = "local branch" });
@@ -1123,7 +1123,7 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
 
     if (!localOnly)
     {
-        for (auto const& branch: runCommand(remoteCmd))
+        for (auto const& branch: runCommand(RemoteCmd))
         {
             auto stripped = branch;
             if (auto const slash = branch.find('/'); slash != std::string::npos)

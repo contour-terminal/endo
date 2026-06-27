@@ -361,8 +361,8 @@ namespace
 {
     /// Directive markers recognized in shell-style (`#`) comments to delimit verbatim regions.
     /// Data-driven so the spelling lives in one place rather than scattered string literals.
-    constexpr std::string_view formatOffDirective = "endo format off";
-    constexpr std::string_view formatOnDirective = "endo format on";
+    constexpr std::string_view FormatOffDirective = "endo format off";
+    constexpr std::string_view FormatOnDirective = "endo format on";
 
     /// Returns the comment body with the leading `#` / `//` marker and surrounding ASCII
     /// whitespace stripped, so it can be matched against a directive string.
@@ -390,13 +390,13 @@ std::vector<SourceFormatter::VerbatimRegion> SourceFormatter::collectVerbatimReg
     for (auto const& comment: comments)
     {
         auto const body = stripCommentMarker(comment.text);
-        if (body == formatOffDirective)
+        if (body == FormatOffDirective)
         {
             // Nested `off` is ignored: the first `off` wins until the next `on`.
             if (!openLine)
                 openLine = comment.location.begin.line;
         }
-        else if (body == formatOnDirective)
+        else if (body == FormatOnDirective)
         {
             if (openLine)
             {

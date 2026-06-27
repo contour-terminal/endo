@@ -23,8 +23,8 @@ namespace tui
 
 namespace
 {
-    constexpr int detailMaxWidth = 40; ///< Maximum detail panel width.
-    constexpr int detailMinWidth = 20; ///< Minimum detail panel width.
+    constexpr int DetailMaxWidth = 40; ///< Maximum detail panel width.
+    constexpr int DetailMinWidth = 20; ///< Minimum detail panel width.
 
     /// @brief Truncates a string to fit within a given width, adding ellipsis.
     /// @return A pair of (truncated string, display width).
@@ -207,7 +207,7 @@ void CompletionPopup::render(Canvas& canvas)
     auto const detailWidth = detailPanelWidth();
     auto const availableForDetail = canvas.width() - menuWidth;
 
-    if (!_detailContent.empty() && detailWidth > 0 && availableForDetail >= detailMinWidth)
+    if (!_detailContent.empty() && detailWidth > 0 && availableForDetail >= DetailMinWidth)
     {
         auto const panelWidth = std::min(detailWidth, availableForDetail);
         auto const border = BorderChars::fromStyle(BorderStyle::Single);
@@ -545,7 +545,7 @@ void CompletionPopup::updateDetailContent()
     }
 
     // Parse markdown with width clamped to detail panel max
-    _detailContent = StyledText::fromMarkdown(detail, detailMaxWidth - 2);
+    _detailContent = StyledText::fromMarkdown(detail, DetailMaxWidth - 2);
 }
 
 int CompletionPopup::detailPanelWidth() const
@@ -554,8 +554,8 @@ int CompletionPopup::detailPanelWidth() const
         return 0;
 
     // Content width + 2 (shared left border + right border)
-    auto const contentWidth = std::min(_detailContent.maxLineWidth(), detailMaxWidth - 2);
-    return std::clamp(contentWidth + 2, detailMinWidth, detailMaxWidth);
+    auto const contentWidth = std::min(_detailContent.maxLineWidth(), DetailMaxWidth - 2);
+    return std::clamp(contentWidth + 2, DetailMinWidth, DetailMaxWidth);
 }
 
 } // namespace tui
