@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PosixEnvironmentProvider.hpp"
 
-#include <platform/PathUtils.hpp>
-
 #include <algorithm>
 #include <filesystem>
 
 #include <unistd.h>
+
+#include <platform/PathUtils.hpp>
 
 #if defined(__APPLE__)
     #include <crt_externs.h>

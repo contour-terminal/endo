@@ -9,9 +9,10 @@
     #include <string>
     #include <vector>
 
+    #include <sys/sysctl.h>
+
     #include <libproc.h>
     #include <pwd.h>
-    #include <sys/sysctl.h>
     #include <unistd.h>
 
 namespace endo::platform

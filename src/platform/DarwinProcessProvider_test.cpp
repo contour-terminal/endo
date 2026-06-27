@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #if defined(__APPLE__)
 
-    #include "darwin/DarwinProcessProvider.hpp"
-
     #include <catch2/catch_test_macros.hpp>
 
     #include <algorithm>
     #include <ranges>
 
     #include <unistd.h>
+
+    #include "darwin/DarwinProcessProvider.hpp"
 
 using namespace endo::platform;
 

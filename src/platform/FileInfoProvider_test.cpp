@@ -229,9 +229,9 @@ TEST_CASE("LinuxFileInfoProvider.populates_stat_metadata", "[platform][linux]")
     REQUIRE(entries.size() == 1);
     auto const& e = entries[0];
     CHECK(e.size == 8192);
-    CHECK(e.blocks > 0);     // allocated blocks reported (st_blocks)
-    CHECK(e.dev != 0);       // device id reported (st_dev)
-    CHECK(e.ino != 0);       // inode reported (st_ino)
+    CHECK(e.blocks > 0); // allocated blocks reported (st_blocks)
+    CHECK(e.dev != 0);   // device id reported (st_dev)
+    CHECK(e.ino != 0);   // inode reported (st_ino)
     CHECK(e.isSymlink == false);
     CHECK(e.isDir == false);
 }

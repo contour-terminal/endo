@@ -265,10 +265,10 @@ void FuzzyPickerPopup::refilter()
             // Boost by coverage: more of the path covered = higher rank
             if (ciResult.textGraphemeCount > 0)
             {
-                auto const coveragePercent = static_cast<int>(
-                    (static_cast<double>(ciResult.patternGraphemeCount)
-                     / static_cast<double>(ciResult.textGraphemeCount))
-                    * 150);
+                auto const coveragePercent =
+                    static_cast<int>((static_cast<double>(ciResult.patternGraphemeCount)
+                                      / static_cast<double>(ciResult.textGraphemeCount))
+                                     * 150);
                 score += coveragePercent;
             }
 
