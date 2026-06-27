@@ -14,8 +14,7 @@
 // Define ENDO_GENERATOR_FORCE_FALLBACK to compile the self-contained fallback even
 // when std::generator is available — used to exercise the fallback on platforms whose
 // standard library ships <generator> (e.g. MSVC STL).
-#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L \
-    && !defined(ENDO_GENERATOR_FORCE_FALLBACK)
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L && !defined(ENDO_GENERATOR_FORCE_FALLBACK)
 
     #include <generator>
 

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LinuxProcessProvider.hpp"
-#include "ProcStatusParser.hpp"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#include "ProcStatusParser.hpp"
 
 #if !defined(_WIN32)
     #include <pwd.h>

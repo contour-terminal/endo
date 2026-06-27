@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #if !defined(_WIN32)
 
-    #include "linux/ProcStatusParser.hpp"
-
     #include <catch2/catch_test_macros.hpp>
+
+    #include "linux/ProcStatusParser.hpp"
 
 using namespace endo::platform;
 
