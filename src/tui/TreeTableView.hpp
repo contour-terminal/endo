@@ -15,8 +15,10 @@
 #include <tui/InputEvent.hpp>
 #include <tui/TerminalOutput.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -165,6 +167,14 @@ class TreeTableView: public Component
     /// Computes per-column widths for canvas width @p totalWidth (distributes Flex).
     [[nodiscard]] std::vector<int> computeWidths(int totalWidth) const;
 
+    /// Moves the cursor to row index @p index (clamped) and notifies listeners.
+    void selectIndex(std::size_t index);
+
+    /// Maps a component-relative, 1-based @p row coordinate to a model row index.
+    /// @param row The component-relative row (1-based, as delivered in a MouseEvent).
+    /// @return The row index, or std::nullopt if @p row is the header or below the last row.
+    [[nodiscard]] std::optional<std::size_t> rowIndexAt(int row) const;
+
     TreeTableModel& _model;           ///< Data + navigation seam.
     TreeTableConfig _config;          ///< Layout configuration.
     std::size_t _cursor = 0;          ///< Cursor index into the current rows.
@@ -174,6 +184,14 @@ class TreeTableView: public Component
     /// Remembered cursor index per current-node depth, restored on ascend. Keyed by the
     /// model's title so revisiting a node returns to where the user left off.
     std::vector<std::pair<std::string, std::size_t>> _cursorHistory;
+
+    // Double-click tracking: a left-press on the already-clicked row within the interval
+    // activates (descends into) it, like a desktop double-click.
+    bool _hadClick = false;                               ///< A prior left-press may begin a double-click.
+    std::size_t _lastClickRow = 0;                        ///< Row index of the prior left-press.
+    std::chrono::steady_clock::time_point _lastClickTime; ///< When the prior left-press happened.
+
+    static constexpr auto kDoubleClickInterval = std::chrono::milliseconds { 400 };
 };
 
 } // namespace tui
