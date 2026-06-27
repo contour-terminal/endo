@@ -207,15 +207,95 @@ TEST_CASE("TreeTableView: handles j/k/l/h key events", "[treetable]")
 
 namespace
 {
+/// Builds a left-button press at component-relative, 1-based row @p y.
+[[nodiscard]] InputEvent mousePress(int y)
+{
+    return InputEvent { MouseEvent { .type = MouseEvent::Type::Press, .button = 0, .x = 1, .y = y } };
+}
+} // namespace
+
+TEST_CASE("TreeTableView: left-click selects the row under the pointer", "[treetable][mouse]")
+{
+    FakeModel model;
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 10 });
+
+    // Header occupies row 1; the first data row is row 2. Clicking row 3 selects index 1.
+    CHECK(view.onEvent(mousePress(3)) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 1);
+    CHECK(view.onEvent(mousePress(2)) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 0);
+}
+
+TEST_CASE("TreeTableView: double-click activates (descends into) the row", "[treetable][mouse]")
+{
+    FakeModel model;
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 10 });
+
+    // Row 3 is index 1 = node 2 ("dir"), which is descendable. Two quick presses descend.
+    CHECK(view.onEvent(mousePress(3)) == EventResult::Handled);
+    REQUIRE(model.current() == 0); // first click only selects
+    CHECK(view.onEvent(mousePress(3)) == EventResult::Handled);
+    CHECK(model.current() == 2);    // second click activates
+    CHECK(view.cursorIndex() == 0); // descend resets the cursor
+}
+
+TEST_CASE("TreeTableView: two clicks on different rows do not activate", "[treetable][mouse]")
+{
+    FakeModel model;
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 10 });
+
+    CHECK(view.onEvent(mousePress(3)) == EventResult::Handled); // index 1 (dir)
+    CHECK(view.onEvent(mousePress(4)) == EventResult::Handled); // index 2 (leaf) — different row
+    CHECK(model.current() == 0);                                // no descend
+    CHECK(view.cursorIndex() == 2);
+}
+
+TEST_CASE("TreeTableView: clicks on the header or below the list are ignored", "[treetable][mouse]")
+{
+    FakeModel model;
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 10 });
+
+    view.moveCursor(1);
+    REQUIRE(view.cursorIndex() == 1);
+    CHECK(view.onEvent(mousePress(1)) == EventResult::Ignored);  // header row
+    CHECK(view.onEvent(mousePress(15)) == EventResult::Ignored); // below the 3 rows
+    CHECK(view.cursorIndex() == 1);                              // selection unchanged
+}
+
+TEST_CASE("TreeTableView: wheel scroll moves the selection", "[treetable][mouse]")
+{
+    FakeModel model;
+    TreeTableView view(model);
+    view.setArea(Rect { .x = 0, .y = 0, .width = 20, .height = 10 });
+
+    auto wheel = [](MouseEvent::Type type) {
+        return InputEvent { MouseEvent { .type = type, .button = 0, .x = 1, .y = 1 } };
+    };
+
+    CHECK(view.onEvent(wheel(MouseEvent::Type::ScrollDown)) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 1);
+    CHECK(view.onEvent(wheel(MouseEvent::Type::ScrollUp)) == EventResult::Handled);
+    CHECK(view.cursorIndex() == 0);
+}
+
+namespace
+{
 /// A flat model with @p n rows and no children, to exercise paging motions.
 class FlatModel: public TreeTableModel
 {
   public:
     explicit FlatModel(int n): _n(n) {}
+
     [[nodiscard]] std::vector<TableColumn> columns() const override
     {
-        return { TableColumn { .header = "N", .width = ColumnWidth::Flex, .size = 4, .align = ColumnAlign::Left } };
+        return { TableColumn {
+            .header = "N", .width = ColumnWidth::Flex, .size = 4, .align = ColumnAlign::Left } };
     }
+
     [[nodiscard]] std::vector<RowId> rows() const override
     {
         std::vector<RowId> out;
@@ -224,12 +304,22 @@ class FlatModel: public TreeTableModel
             out.push_back(static_cast<RowId>(i));
         return out;
     }
+
     [[nodiscard]] std::string cellText(RowId row, std::size_t) const override { return std::to_string(row); }
-    [[nodiscard]] RowStyle rowStyle(RowId, bool sel) const override { return RowStyle { .style = {}, .selected = sel }; }
+
+    [[nodiscard]] RowStyle rowStyle(RowId, bool sel) const override
+    {
+        return RowStyle { .style = {}, .selected = sel };
+    }
+
     [[nodiscard]] bool canDescend(RowId) const override { return false; }
+
     bool descend(RowId) override { return false; }
+
     bool ascend() override { return false; }
+
     [[nodiscard]] std::string currentTitle() const override { return "/"; }
+
     void sortBy(int) override {}
 
   private:

@@ -192,7 +192,73 @@ EventResult TreeTableView::onEvent(InputEvent const& event)
             default: break;
         }
     }
+    else if (auto const* mouse = std::get_if<MouseEvent>(&event))
+    {
+        // The wheel moves the selection. Most terminals translate wheel events to arrow keys in
+        // the alternate screen, but some deliver real scroll events — handle both.
+        if (mouse->type == MouseEvent::Type::ScrollUp)
+        {
+            moveCursor(-1);
+            return EventResult::Handled;
+        }
+        if (mouse->type == MouseEvent::Type::ScrollDown)
+        {
+            moveCursor(1);
+            return EventResult::Handled;
+        }
+
+        // Left-press selects the row under the pointer; a second left-press on the same row
+        // within the double-click interval activates it (descends), like a desktop double-click.
+        if (mouse->type == MouseEvent::Type::Press && mouse->button == 0)
+        {
+            auto const index = rowIndexAt(mouse->y);
+            if (!index.has_value())
+            {
+                _hadClick = false; // a click off the rows breaks any pending double-click
+                return EventResult::Ignored;
+            }
+
+            auto const now = std::chrono::steady_clock::now();
+            auto const isDoubleClick =
+                _hadClick && _lastClickRow == *index && (now - _lastClickTime) <= kDoubleClickInterval;
+
+            selectIndex(*index);
+
+            if (isDoubleClick)
+            {
+                descendCursor();
+                _hadClick = false; // reset so a third press starts a fresh click
+            }
+            else
+            {
+                _hadClick = true;
+                _lastClickRow = *index;
+                _lastClickTime = now;
+            }
+            return EventResult::Handled;
+        }
+    }
     return EventResult::Ignored;
+}
+
+std::optional<std::size_t> TreeTableView::rowIndexAt(int row) const
+{
+    auto const headerLines = _config.showHeader ? 1 : 0;
+    auto const relRow = (row - 1) - headerLines; // mouse row is 1-based; the header sits above
+    if (relRow < 0)
+        return std::nullopt; // header (or above)
+    auto const index = _scroll + static_cast<std::size_t>(relRow);
+    if (index >= _model.rows().size())
+        return std::nullopt; // empty space below the last row
+    return index;
+}
+
+void TreeTableView::selectIndex(std::size_t index)
+{
+    _cursor = index;
+    clampCursor();
+    if (_onChanged)
+        _onChanged();
 }
 
 std::vector<int> TreeTableView::computeWidths(int totalWidth) const
