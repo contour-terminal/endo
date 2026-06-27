@@ -81,6 +81,9 @@ class MockTerminalOutput: public TerminalOutput
     /// @brief Returns the total number of flush() calls since construction.
     [[nodiscard]] int flushCount() const noexcept;
 
+    /// @brief Returns the text most recently passed to copyToClipboard (empty if never called).
+    [[nodiscard]] std::string const& clipboardText() const noexcept;
+
   private:
     int _cols;
     int _rows;
@@ -91,6 +94,7 @@ class MockTerminalOutput: public TerminalOutput
     bool _cursorVisible = true;
     int _scrollCount = 0;
     int _flushCount = 0;
+    std::string _clipboard;
 };
 
 } // namespace tui
