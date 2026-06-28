@@ -101,6 +101,12 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://endo-lang.org/")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
+    # Emit a separate debug-symbols package (endo-dbgsym_<ver>_<arch>.ddeb) and ship
+    # a stripped main .deb. This requires the binary to be built unstripped and with
+    # a build-id; the `clang-deb` preset (RelWithDebInfo + -Wl,--build-id) satisfies
+    # both. A plain `-O3` Release build (no -g) would yield an empty debug package.
+    set(CPACK_DEBIAN_DEBUGINFO_PACKAGE ON)
+
     # RPM
     set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
     set(CPACK_RPM_PACKAGE_GROUP "System Environment/Shells")

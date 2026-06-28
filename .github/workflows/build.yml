@@ -243,3 +243,24 @@ jobs:
         name: endo-vscode-extension
         path: editors/vscode/*.vsix
         retention-days: 30
+
+  linux-deb:
+    runs-on: ubuntu-latest
+    name: "Linux .deb (Ubuntu 26.04)"
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history + tags so the package version is derived correctly
+
+    - name: Build & install-test .deb in Docker
+      run: ./scripts/package-deb.sh dist
+
+    - name: Upload .deb / .ddeb artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-deb-ubuntu-2604
+        path: |
+          dist/*.deb
+          dist/*.ddeb
+        retention-days: 30

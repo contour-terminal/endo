@@ -96,6 +96,26 @@ jobs:
           cp build/clang-release-static/src/shell/endo endo-${VERSION}-linux-x86_64
           gh release upload ${{ env.RELEASE_TAG }} endo-${VERSION}-linux-x86_64 --clobber
 
+  linux-deb:
+    needs: create-release
+    runs-on: ubuntu-latest
+    name: Linux .deb (Ubuntu 26.04)
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Build & install-test .deb in Docker
+        run: ./scripts/package-deb.sh dist
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ env.RELEASE_TAG }} dist/*.deb dist/*.ddeb --clobber
+
   macos:
     needs: create-release
     runs-on: macos-14

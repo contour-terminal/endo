@@ -1,0 +1,11 @@
+# Keep the Docker build context small. .git is excluded: it is often a worktree
+# pointer file that does not resolve inside the container, and the package version
+# is injected via the ENDO_VERSION build-arg instead (see packaging/deb/Dockerfile).
+.git
+build/
+dist/
+.cache/
+.vscode/
+editors/vscode/node_modules/
+**/*.o
+**/*.obj
