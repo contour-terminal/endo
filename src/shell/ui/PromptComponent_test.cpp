@@ -127,12 +127,12 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     comp.inputField().setText(typed);
 
     // First Tab: insert the longest common prefix, no popup yet.
-    comp.processInput(tabEvent());
+    (void) comp.processInput(tabEvent());
     CHECK(comp.text() == expected);
     CHECK_FALSE(comp.completionVisible());
 
     // Second Tab: the common prefix no longer extends the word, so show the popup.
-    comp.processInput(tabEvent());
+    (void) comp.processInput(tabEvent());
     CHECK(comp.completionVisible());
 
     fs::remove_all(base);

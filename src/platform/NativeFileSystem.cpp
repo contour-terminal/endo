@@ -248,7 +248,8 @@ namespace
             // Second hop failed: restore the original name so the entry is not stranded
             // under the temporary. Best-effort — the reported error stays the second hop's.
             std::error_code rollbackError;
-            fs::rename(candidate, from, rollbackError);
+            auto const& originalName = from;
+            fs::rename(candidate, originalName, rollbackError);
             return false;
         }
         ec = std::make_error_code(std::errc::file_exists);
