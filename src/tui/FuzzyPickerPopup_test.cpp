@@ -188,12 +188,14 @@ TEST_CASE("FuzzyPickerPopup.fuzzy_matching")
 TEST_CASE("FuzzyPickerPopup.substring_matches_prioritized")
 {
     FuzzyPickerPopup popup;
-    // "Shell.cpp" has "Shell" as a contiguous substring.
-    // "src/shell/completion/FileCompleter.cpp" also contains "shell" but is a longer path.
-    // The shorter path with higher coverage should rank higher.
+    // Both "shell.cpp" and "src/shell/completion/FileCompleter.cpp" contain "shell"
+    // as an exact-case contiguous substring, so they land in the same match tier.
+    // (Both lowercase so case-sensitivity does not confound the comparison — that
+    // dimension is covered by case_sensitive_substring_ranked_higher.) The shorter
+    // path with higher coverage should then rank higher.
     popup.show({
         "src/shell/completion/FileCompleter.cpp",
-        "Shell.cpp",
+        "shell.cpp",
         "src/tui/FuzzyMatch.hpp",
     });
 
@@ -202,10 +204,10 @@ TEST_CASE("FuzzyPickerPopup.substring_matches_prioritized")
         (void) popup.processEvent(charKey(ch));
     }
 
-    // "Shell.cpp" should rank first (contiguous substring + higher coverage percentage)
+    // "shell.cpp" should rank first (same substring tier, higher coverage percentage)
     auto const* selected = popup.selectedItem();
     REQUIRE(selected != nullptr);
-    CHECK(*selected == "Shell.cpp");
+    CHECK(*selected == "shell.cpp");
 }
 
 TEST_CASE("FuzzyPickerPopup.coverage_affects_ranking")

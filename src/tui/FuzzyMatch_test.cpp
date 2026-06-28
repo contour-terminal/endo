@@ -3,6 +3,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
+#include <string_view>
+
 using namespace tui;
 
 // ============================================================================
@@ -11,11 +14,13 @@ using namespace tui;
 
 TEST_CASE("FuzzyMatch.basic_match_ds_downloads")
 {
+    // "ds" occurs verbatim in "Downloa[ds]", so the contiguous substring is
+    // preferred over the scattered D...s subsequence.
     auto result = FuzzyMatch::matchSmartCase("Downloads", "ds");
     CHECK(result.matches);
     CHECK(result.matchedChars == 2);
     REQUIRE(result.positions.size() == 2);
-    CHECK(result.positions[0] == 0); // D
+    CHECK(result.positions[0] == 7); // d
     CHECK(result.positions[1] == 8); // s
 }
 
@@ -346,6 +351,46 @@ TEST_CASE("FuzzyMatchResult.isContiguousSubstring_false_scattered")
     CHECK_FALSE(result.isContiguousSubstring());
 }
 
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_true_despite_earlier_grapheme")
+{
+    // Regression: pressing Ctrl+R and typing "endo.exe" must match the history
+    // entry "./build/clangcl-debug/src/shell/endo.exe". The leading 'e' of the
+    // pattern also occurs earlier in "...clangcl-debug...", so a greedy matcher
+    // would bind to that 'e' and highlight a stray 'e' plus "ndo.exe". The
+    // substring-first match must instead report the contiguous "endo.exe" block.
+    auto const text = std::string_view { "./build/clangcl-debug/src/shell/endo.exe" };
+    auto result = FuzzyMatch::matchSmartCase(text, "endo.exe");
+    CHECK(result.matches);
+    CHECK(result.isContiguousSubstring());
+
+    // Positions must cover the trailing "endo.exe" block, not the stray 'e' in
+    // "debug" — this is what gets highlighted in the Ctrl+R popup.
+    auto const start = FuzzyMatch::countGraphemes("./build/clangcl-debug/src/shell/");
+    REQUIRE(result.positions.size() == 8);
+    for (auto const i: std::views::iota(size_t { 0 }, result.positions.size()))
+        CHECK(result.positions[i] == start + i);
+
+    // Quality alone does not reliably carry this match: for an entry this long it
+    // sits at/below the default threshold, so isContiguousSubstring() is what
+    // keeps it from being filtered out of history search.
+    auto const threshold = FuzzyConfig {}.minMatchThreshold;
+    CHECK(result.quality(FuzzyMatch::countGraphemes(text)) <= threshold);
+}
+
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_true_when_first_grapheme_repeats")
+{
+    // "cat" appears contiguously in "con[cat]enate"; the pattern's leading 'c'
+    // also occurs earlier at index 0, so a greedy matcher would scatter the
+    // positions. Substring-first matching must report the contiguous block.
+    auto result = FuzzyMatch::matchSmartCase("concatenate", "cat");
+    CHECK(result.matches);
+    CHECK(result.isContiguousSubstring());
+    REQUIRE(result.positions.size() == 3);
+    CHECK(result.positions[0] == 3); // c in "concat"
+    CHECK(result.positions[1] == 4); // a
+    CHECK(result.positions[2] == 5); // t
+}
+
 TEST_CASE("FuzzyMatchResult.isContiguousSubstring_false_no_match")
 {
     auto result = FuzzyMatch::matchSmartCase("hello", "xyz");
@@ -505,11 +550,12 @@ TEST_CASE("FuzzyMatch.single_char_text")
 TEST_CASE("FuzzyMatch.pattern_at_very_end")
 {
     // "testfile.txt" = t(0), e(1), s(2), t(3), f(4), i(5), l(6), e(7), .(8), t(9), x(10), t(11)
-    // Greedy matching finds first 't' at 0, then 'x' at 10, then 't' at 11
+    // "txt" occurs verbatim as the trailing extension ".[txt]", so the contiguous
+    // substring {9,10,11} is preferred over the scattered greedy match {0,10,11}.
     auto result = FuzzyMatch::matchSmartCase("testfile.txt", "txt");
     CHECK(result.matches);
     REQUIRE(result.positions.size() == 3);
-    CHECK(result.positions[0] == 0);  // first 't'
+    CHECK(result.positions[0] == 9);  // 't' in ".txt"
     CHECK(result.positions[1] == 10); // 'x'
     CHECK(result.positions[2] == 11); // last 't'
 }
