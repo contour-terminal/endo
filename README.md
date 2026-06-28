@@ -176,9 +176,26 @@ cmake --build --preset clang-release
 sudo cmake --install build/clang-release
 ```
 
-### Package Managers
+### Debian / Ubuntu (`.deb`)
 
-> Coming soon — Homebrew, Scoop, and distro packages are on the roadmap.
+Each [release](https://github.com/contour-terminal/endo/releases) ships a `.deb`
+built against the latest Ubuntu LTS, plus a matching `.ddeb` with debug symbols:
+
+```bash
+sudo apt install ./endo_<version>_amd64.deb
+# optional, for debugging / crash reports:
+sudo apt install ./endo-dbgsym_<version>_amd64.ddeb
+```
+
+To build the package yourself (requires Docker):
+
+```bash
+./scripts/package-deb.sh dist   # writes dist/endo_<version>_amd64.deb (+ .ddeb)
+```
+
+### Other Package Managers
+
+> Coming soon — Homebrew, Scoop, and RPM packages are on the roadmap.
 
 ## Contributing
 

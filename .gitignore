@@ -4,6 +4,7 @@ _ucd/
 out/
 build/
 target/
+dist/
 
 compile_commands.json
 /src/vtparser/

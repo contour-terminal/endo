@@ -72,6 +72,15 @@
             }
         },
         {
+            "name": "clang-deb",
+            "inherits": "clang-release",
+            "displayName": "Clang Debian Package (RelWithDebInfo)",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_EXE_LINKER_FLAGS": "-Wl,--build-id=sha1"
+            }
+        },
+        {
             "name": "clang-coverage",
             "inherits": "unix-base",
             "displayName": "Clang Coverage",
@@ -211,6 +220,10 @@
         {
             "name": "clang-release-static",
             "configurePreset": "clang-release-static"
+        },
+        {
+            "name": "clang-deb",
+            "configurePreset": "clang-deb"
         },
         {
             "name": "clang-coverage",
@@ -366,6 +379,12 @@
             "name": "clang-release-static-package",
             "configurePreset": "clang-release-static",
             "displayName": "Clang Release Static Package"
+        },
+        {
+            "name": "clang-deb",
+            "configurePreset": "clang-deb",
+            "displayName": "Debian Package (.deb + .ddeb)",
+            "generators": ["DEB"]
         }
     ]
 }
