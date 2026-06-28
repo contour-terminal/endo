@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <string_view>
 #include <thread>
 
 #include <platform/PathUtils.hpp>
@@ -1995,6 +1996,70 @@ TEST_CASE("shell.builtin.mv_combined_flags")
     fs::remove_all(base);
 }
 
+namespace
+{
+/// Returns the actual on-disk spelling of the single entry inside @p parent whose
+/// name matches @p name case-insensitively, or an empty path if none exists.
+///
+/// Needed because `fs::exists("Foo")` is true on case-insensitive filesystems even
+/// when the entry is really stored as `foo`, so a recase can only be observed by
+/// reading back the directory entry's exact spelling.
+std::filesystem::path onDiskName(std::filesystem::path const& parent, std::string_view name)
+{
+    namespace fs = std::filesystem;
+    for (auto const& entry: fs::directory_iterator(parent))
+    {
+        auto const candidate = entry.path().filename().string();
+        if (endo::platform::equalsCaseInsensitive(candidate, name))
+            return candidate;
+    }
+    return {};
+}
+} // namespace
+
+TEST_CASE("shell.builtin.mv_case_only_rename_directory")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_recase_dir";
+    fs::remove_all(base);
+    fs::create_directories(base / "foo");
+    std::ofstream(base / "foo" / "keep.txt") << "data";
+
+    TestShell shell;
+    // Renaming `foo` -> `Foo` must recase the directory itself, not move it into a
+    // `Foo/foo` subdirectory, and must succeed on case-insensitive filesystems.
+    shell(std::format("mv {} {}", (base / "foo").string(), (base / "Foo").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(onDiskName(base, "foo") == "Foo");
+    CHECK(fs::exists(base / "Foo" / "keep.txt"));
+    CHECK(!fs::exists(base / "Foo" / "foo"));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_case_only_rename_file")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_recase_file";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    std::ofstream(base / "readme.txt") << "hello";
+
+    TestShell shell;
+    shell(std::format("mv {} {}", (base / "readme.txt").string(), (base / "README.txt").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(onDiskName(base, "readme.txt") == "README.txt");
+
+    {
+        std::ifstream ifs(base / "README.txt");
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "hello");
+    }
+
+    fs::remove_all(base);
+}
+
 // ============================================================================
 // Variable Substitution - $VAR and ${VAR}
 // ============================================================================
@@ -3136,6 +3201,66 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     REQUIRE(results.size() == 1);
     CHECK(results[0].text == "sub/item.txt"); // Relative, not an absolute path.
 }
+
+#if defined(_WIN32)
+TEST_CASE("FileCompleter.absolute_directory_corrects_case")
+{
+    // On case-insensitive filesystems, completing an absolute directory typed in the
+    // wrong case must echo the on-disk capitalization (".../foo" -> ".../Foo/") rather
+    // than the case the user typed.
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_case_completion";
+    std::filesystem::remove_all(tempDir);
+    std::filesystem::create_directories(tempDir / "Foo");
+
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
+
+    // Type the directory in lower-case; it resolves case-insensitively to "Foo".
+    auto const typed = endo::platform::normalizePath((tempDir / "foo").string());
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::FilePath,
+        .prefix = typed,
+        .cursorPosition = typed.size() + 3,
+        .fullInput = "cd " + typed,
+    };
+    auto const results = completer.complete(context);
+
+    std::filesystem::remove_all(tempDir);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].displayText == "Foo/");
+    CHECK(results[0].text.ends_with("/Foo/"));
+    CHECK(results[0].text.find("/foo/") == std::string::npos);
+}
+
+TEST_CASE("FileCompleter.partial_prefix_corrects_case")
+{
+    // A partial directory name typed in the wrong case (even with leading upper-case,
+    // which would otherwise trigger smart-case) must still match and recase on a
+    // case-insensitive filesystem (e.g. "Lastrada-to" -> "lastrada-tools/").
+    auto const tempDir = std::filesystem::temp_directory_path() / "endo_partial_case_completion";
+    std::filesystem::remove_all(tempDir);
+    std::filesystem::create_directories(tempDir / "lastrada-tools");
+
+    endo::TestEnvironment env;
+    endo::FileCompleter completer(env);
+
+    auto const typed = endo::platform::normalizePath((tempDir / "Lastrada-to").string());
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::FilePath,
+        .prefix = typed,
+        .cursorPosition = typed.size() + 3,
+        .fullInput = "cd " + typed,
+    };
+    auto const results = completer.complete(context);
+
+    std::filesystem::remove_all(tempDir);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].displayText == "lastrada-tools/");
+    CHECK(results[0].text.ends_with("/lastrada-tools/"));
+}
+#endif
 
 // ========================================================================
 // String Interpolation Tests

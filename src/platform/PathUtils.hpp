@@ -1,12 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <string>
 #include <string_view>
 
 namespace endo::platform
 {
+
+/// @brief Compares two strings for equality, ignoring ASCII lettercase.
+///
+/// @param a First string.
+/// @param b Second string.
+/// @return True if @p a and @p b are equal when compared case-insensitively.
+[[nodiscard]] inline bool equalsCaseInsensitive(std::string_view a, std::string_view b) noexcept
+{
+    return std::ranges::equal(
+        a, b, [](unsigned char x, unsigned char y) noexcept { return std::tolower(x) == std::tolower(y); });
+}
+
+/// @brief Whether the host filesystem resolves paths case-insensitively by default.
+///
+/// True on Windows and the default macOS volume format, where `foo` and `FOO` name the
+/// same entry. Path completion and matching consult this so the shell mirrors how the
+/// OS itself resolves names — e.g. completing `Lastrada-to` to the on-disk
+/// `lastrada-tools/`. POSIX (Linux) filesystems are case-sensitive, so it is false there
+/// and smart-case matching is retained.
+inline constexpr bool FilesystemCaseInsensitive =
+#if defined(_WIN32) || defined(__APPLE__)
+    true;
+#else
+    false;
+#endif
 
 /// @brief Normalizes a path string to use forward slashes.
 ///
@@ -52,6 +79,26 @@ namespace endo::platform
 /// @param p The path to canonicalize.
 /// @return The path with on-disk capitalization and forward slashes.
 [[nodiscard]] auto canonicalCasePath(std::filesystem::path const& p) -> std::string;
+
+/// @brief Tests whether two paths name the same directory entry differing only in
+/// the lettercase of their final component.
+///
+/// Returns true when @p from and @p to share an identical parent path and have final
+/// components that compare equal case-insensitively (ASCII) yet differ byte-for-byte —
+/// e.g. `foo` vs `Foo`, or `dir/a` vs `dir/A`. This is the signature of a
+/// rename-to-recase, which case-insensitive filesystems (Windows, the default macOS
+/// volume format) cannot perform with a single rename and which `mv` must route as an
+/// in-place rename rather than a move-into-directory. Returns false when the final
+/// components are byte-identical (a true no-op rename), when either has no final
+/// component, or when the parents differ.
+///
+/// Both paths are lexically normalized and stripped of a trailing separator before
+/// comparison; the check is purely lexical and touches no filesystem.
+///
+/// @param from The source path.
+/// @param to The destination path.
+/// @return True if the rename only changes the lettercase of the final component.
+[[nodiscard]] bool isCaseOnlyRename(std::filesystem::path const& from, std::filesystem::path const& to);
 
 /// @brief Resolves POSIX-style device paths to their platform-native equivalent.
 ///

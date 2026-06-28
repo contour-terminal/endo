@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <string>
+
 #include <platform/PathUtils.hpp>
 
 #if defined(_WIN32)
     #include <cwctype>
     #include <memory>
-    #include <string>
     #include <string_view>
     #include <type_traits>
 
@@ -13,6 +14,33 @@
 
 namespace endo::platform
 {
+
+bool isCaseOnlyRename(std::filesystem::path const& from, std::filesystem::path const& to)
+{
+    // Reduce both paths to their canonical lexical spelling and drop any trailing
+    // separator so that `foo/` and `foo` are treated identically.
+    auto const stripTrailingSeparator = [](std::filesystem::path const& p) {
+        auto text = p.lexically_normal().generic_string();
+        while (text.size() > 1 && text.back() == '/')
+            text.pop_back();
+        return std::filesystem::path(text);
+    };
+
+    auto const source = stripTrailingSeparator(from);
+    auto const dest = stripTrailingSeparator(to);
+
+    auto const sourceName = source.filename().generic_string();
+    auto const destName = dest.filename().generic_string();
+
+    if (sourceName.empty() || destName.empty())
+        return false;
+    if (sourceName == destName)
+        return false; // Identical spelling — a no-op, not a recase.
+    if (source.parent_path() != dest.parent_path())
+        return false;
+
+    return equalsCaseInsensitive(sourceName, destName);
+}
 
 auto canonicalCasePath(std::filesystem::path const& p) -> std::string
 {
