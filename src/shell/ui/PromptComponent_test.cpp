@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <shell/completion/Completer.hpp>
+
 #include <tui/InputEvent.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <string_view>
 #include <thread>
 
 #include "PromptComponent.hpp"
+#include <platform/PathUtils.hpp>
+#include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace endo;
 
@@ -34,6 +39,12 @@ tui::InputEvent charEvent(char ch)
 tui::InputEvent backspaceEvent()
 {
     return tui::KeyEvent { .key = tui::KeyCode::Backspace, .modifiers = tui::Modifier::None };
+}
+
+/// @brief Creates a Tab key event (triggers completion).
+tui::InputEvent tabEvent()
+{
+    return tui::KeyEvent { .key = tui::KeyCode::Tab, .modifiers = tui::Modifier::None };
 }
 
 /// @brief Creates a Ctrl+E key event (accepts ghost text at end of line).
@@ -86,6 +97,45 @@ TEST_CASE("PromptComponent.ctrl_d_double_press_exits", "[prompt]")
 
     auto const second = comp.processInput(ctrlD());
     CHECK(second == PromptComponent::Action::Eof);
+}
+
+TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
+{
+    // Bash-style completion: the first Tab fills in the longest common prefix shared by
+    // all candidates (e.g. "last" -> "lastrada-") without showing the popup; only the
+    // next Tab opens the popup to disambiguate.
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_prompt_common_prefix";
+    fs::remove_all(base);
+    fs::create_directories(base / "lastrada-tools");
+    fs::create_directories(base / "lastrada-config");
+
+    endo::InMemoryHistory history;
+    endo::TestEnvironment env;
+    endo::FSharpPersistentState fsharpState;
+    endo::Completer completer(env, history, fsharpState);
+
+    // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
+    // The inserted prefix carries the directory's real on-disk capitalization, so the
+    // expectation is built from canonicalCasePath(), not the raw (possibly short-name)
+    // temp path.
+    auto const typed = "cd " + endo::platform::normalizePath((base / "last").string());
+    auto const expected = "cd " + endo::platform::canonicalCasePath(base) + "/lastrada-";
+
+    auto comp = PromptComponent();
+    comp.setCompleter(&completer);
+    comp.inputField().setText(typed);
+
+    // First Tab: insert the longest common prefix, no popup yet.
+    comp.processInput(tabEvent());
+    CHECK(comp.text() == expected);
+    CHECK_FALSE(comp.completionVisible());
+
+    // Second Tab: the common prefix no longer extends the word, so show the popup.
+    comp.processInput(tabEvent());
+    CHECK(comp.completionVisible());
+
+    fs::remove_all(base);
 }
 
 TEST_CASE("PromptComponent.ctrl_d_after_timeout_shows_hint_again", "[prompt]")
