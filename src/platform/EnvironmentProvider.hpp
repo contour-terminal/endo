@@ -84,6 +84,22 @@ class EnvironmentProvider
         return std::nullopt;
     }
 
+    /// @brief Returns the current user's login name.
+    ///
+    /// Tries USER, then LOGNAME (both POSIX), then USERNAME (Windows).
+    ///
+    /// @return The login name, or std::nullopt if none of the variables are set.
+    [[nodiscard]] auto userName() const -> std::optional<std::string>
+    {
+        if (auto user = get("USER"); user && !user->empty())
+            return *user;
+        if (auto logname = get("LOGNAME"); logname && !logname->empty())
+            return *logname;
+        if (auto username = get("USERNAME"); username && !username->empty())
+            return *username;
+        return std::nullopt;
+    }
+
     /// @brief Returns the user's configuration base directory.
     ///
     /// On Unix: XDG_CONFIG_HOME or ~/.config.

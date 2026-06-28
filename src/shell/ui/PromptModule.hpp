@@ -73,6 +73,7 @@ struct PromptContext
     int terminalWidth = 80;                       ///< Terminal width in columns.
     bool isSSH = false;                           ///< Whether running inside an SSH session.
     std::string hostname;                         ///< Hostname of the machine.
+    std::string username;                         ///< Current user's login name.
     tui::Theme const* theme = nullptr;            ///< Current TUI theme.
     ResolvedPromptColors const* resolvedColors =
         nullptr; ///< Resolved prompt colors (overrides merged with theme).

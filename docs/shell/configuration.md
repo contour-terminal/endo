@@ -97,6 +97,17 @@ Available presets: `minimal-arrow`, `lambda-clean`, `opencode-bar`, `powerline`,
 `transient`, `dashboard`, `boxed-module`, `gradient-glow`, `context-adaptive`,
 `endo-signature`.
 
+### User and host
+
+Most presets begin the info line with the `hostname` module, which renders your
+identity as `user@host` (fish-style) to the left of the working directory --
+for example, `alice@web-prod-01`. It is shown in every session, so when you SSH
+into a remote machine the prompt makes the change of host obvious. The username
+is taken from `USER` (or `LOGNAME`, or `USERNAME` on Windows) and the hostname
+from the local machine. The minimal presets (`minimal-arrow`, `lambda-clean`)
+omit it to stay compact. The user and host portions are colored independently
+via `shell_prompt_color_username` and `shell_prompt_color_hostname`.
+
 ### Layout
 
 ```endo
@@ -343,7 +354,8 @@ shell_prompt_color_duration <- "#FFB86C:#FF5555"
 | `shell_prompt_color_indicator_error` | Indicator when last command failed |
 | `shell_prompt_color_exit_code` | Exit code badge |
 | `shell_prompt_color_duration` | Command duration badge |
-| `shell_prompt_color_hostname` | Hostname (shown in SSH sessions) |
+| `shell_prompt_color_hostname` | Host portion of the `user@host` identity |
+| `shell_prompt_color_username` | User portion of the `user@host` identity |
 | `shell_prompt_color_separator` | Left bar / separator |
 | `shell_prompt_color_badge` | Badge background (F# mode, structured output) |
 | `shell_prompt_color_badge_text` | Badge text |

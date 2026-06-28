@@ -326,8 +326,18 @@ static constexpr std::array PromptProperties = {
         .name = "shell_prompt_color_hostname",
         .type = CoreVM::LiteralType::String,
         .description = "Hostname text color (#RRGGBB, gradient, or theme)",
-        .detail = "**shell_prompt_color_hostname** -- property\n\nSets the hostname module text color (shown "
-                  "in SSH sessions).",
+        .detail = "**shell_prompt_color_hostname** -- property\n\nSets the host portion of the `user@host` "
+                  "prompt identity.",
+        .readOnly = false,
+        .enumValues = ColorValues,
+        .extraSetterTypes = StringOrFunctionExtraTypes,
+    },
+    PropertyDescriptor {
+        .name = "shell_prompt_color_username",
+        .type = CoreVM::LiteralType::String,
+        .description = "Username text color (#RRGGBB, gradient, or theme)",
+        .detail = "**shell_prompt_color_username** -- property\n\nSets the user portion of the `user@host` "
+                  "prompt identity.",
         .readOnly = false,
         .enumValues = ColorValues,
         .extraSetterTypes = StringOrFunctionExtraTypes,

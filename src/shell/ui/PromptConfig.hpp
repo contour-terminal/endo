@@ -74,6 +74,7 @@ struct PromptColorOverrides
     std::optional<ColorSpec> exitCode;       ///< Exit code badge color.
     std::optional<ColorSpec> duration;       ///< Duration badge color.
     std::optional<ColorSpec> hostname;       ///< Hostname text color.
+    std::optional<ColorSpec> username;       ///< Username text color.
     std::optional<ColorSpec>
         background; ///< Prompt background (solid only; gradient bg uses auroraBackground).
     std::optional<ColorSpec> separator; ///< Separator/bar color.

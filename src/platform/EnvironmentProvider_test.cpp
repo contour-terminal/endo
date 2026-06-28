@@ -37,6 +37,52 @@ TEST_CASE("TestEnvironmentProvider.keys", "[platform]")
     CHECK(keys.size() == 2);
 }
 
+TEST_CASE("EnvironmentProvider.userName_prefers_USER", "[platform]")
+{
+    TestEnvironmentProvider env;
+    env.set("USER", "alice");
+    env.set("LOGNAME", "bob");
+    env.set("USERNAME", "carol");
+    auto const name = env.userName();
+    REQUIRE(name.has_value());
+    CHECK(*name == "alice");
+}
+
+TEST_CASE("EnvironmentProvider.userName_falls_back_to_LOGNAME", "[platform]")
+{
+    TestEnvironmentProvider env;
+    env.set("LOGNAME", "bob");
+    env.set("USERNAME", "carol");
+    auto const name = env.userName();
+    REQUIRE(name.has_value());
+    CHECK(*name == "bob");
+}
+
+TEST_CASE("EnvironmentProvider.userName_falls_back_to_USERNAME", "[platform]")
+{
+    TestEnvironmentProvider env;
+    env.set("USERNAME", "carol");
+    auto const name = env.userName();
+    REQUIRE(name.has_value());
+    CHECK(*name == "carol");
+}
+
+TEST_CASE("EnvironmentProvider.userName_skips_empty_values", "[platform]")
+{
+    TestEnvironmentProvider env;
+    env.set("USER", "");
+    env.set("USERNAME", "carol");
+    auto const name = env.userName();
+    REQUIRE(name.has_value());
+    CHECK(*name == "carol");
+}
+
+TEST_CASE("EnvironmentProvider.userName_missing", "[platform]")
+{
+    TestEnvironmentProvider env;
+    CHECK(!env.userName().has_value());
+}
+
 TEST_CASE("TestEnvironmentProvider.changeDirectory", "[platform]")
 {
     TestEnvironmentProvider env("/home/user");

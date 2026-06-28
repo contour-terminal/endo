@@ -326,6 +326,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             { "exit_code", &PromptColorOverrides::exitCode },
             { "duration", &PromptColorOverrides::duration },
             { "hostname", &PromptColorOverrides::hostname },
+            { "username", &PromptColorOverrides::username },
             { "separator", &PromptColorOverrides::separator },
             { "badge", &PromptColorOverrides::badge },
             { "badge_text", &PromptColorOverrides::badgeText },

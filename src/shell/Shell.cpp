@@ -106,6 +106,7 @@
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
+#include <platform/SystemInfo.hpp>
 #include <platform/Types.hpp>
 #include <platform/UserPaths.hpp>
 #if defined(_WIN32)
@@ -938,17 +939,9 @@ void Shell::emitCurrentWorkingDirectory()
     }
 
     // Get hostname for the file:// URI
-    auto hostname = std::array<char, 256> {};
-#if defined(_WIN32)
-    DWORD hostnameLen = static_cast<DWORD>(hostname.size());
-    if (!GetComputerNameA(hostname.data(), &hostnameLen))
-        hostname[0] = '\0';
-#else
-    if (gethostname(hostname.data(), hostname.size()) != 0)
-        hostname[0] = '\0';
-#endif
+    auto const hostname = platform::hostName();
 
-    _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname.data(), encoded));
+    _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname, encoded));
 }
 
 void Shell::emitWindowTitle(std::string_view title)
@@ -1298,19 +1291,10 @@ void Shell::updatePromptContext()
     ctx.lastExitCode = _exitCode;
     ctx.lastDuration = _lastCommandDuration;
     ctx.terminalWidth = prompt.terminal().columns();
-    ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
-    if (ctx.isSSH)
-    {
-        auto buf = std::array<char, 256> {};
-#if defined(_WIN32)
-        DWORD bufLen = static_cast<DWORD>(buf.size());
-        if (GetComputerNameA(buf.data(), &bufLen))
-            ctx.hostname = buf.data();
-#else
-        if (gethostname(buf.data(), buf.size()) == 0)
-            ctx.hostname = buf.data();
-#endif
-    }
+    ctx.isSSH = _env.get("SSH_CONNECTION").has_value();
+    // Populate identity unconditionally so the prompt can show user@host in every session.
+    ctx.hostname = platform::hostName();
+    ctx.username = _env.userName().value_or("");
     ctx.theme = &tui::currentTheme();
     ctx.fsharpState = &_fsharpState;
     ctx.outputDefs = &_outputDefinitions;

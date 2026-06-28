@@ -27,6 +27,7 @@ struct ResolvedPromptColors
     ColorSpec exitCode;       ///< Exit code badge color.
     ColorSpec duration;       ///< Duration badge color.
     ColorSpec hostname;       ///< Hostname text color.
+    ColorSpec username;       ///< Username text color.
     tui::Color background;    ///< Prompt background (may be monostate for transparent).
     ColorSpec separator;      ///< Separator/bar color.
     ColorSpec badge;          ///< Badge background color.

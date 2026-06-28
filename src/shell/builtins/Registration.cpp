@@ -1182,6 +1182,7 @@ void Shell::registerPromptBuiltins()
     registerColorProp("shell_prompt_color_exit_code",       "exit_code",       &PromptColorOverrides::exitCode);
     registerColorProp("shell_prompt_color_duration",        "duration",        &PromptColorOverrides::duration);
     registerColorProp("shell_prompt_color_hostname",        "hostname",        &PromptColorOverrides::hostname);
+    registerColorProp("shell_prompt_color_username",        "username",        &PromptColorOverrides::username);
     registerColorProp("shell_prompt_color_separator",       "separator",       &PromptColorOverrides::separator);
     registerColorProp("shell_prompt_color_badge",           "badge",           &PromptColorOverrides::badge);
     registerColorProp("shell_prompt_color_badge_text",      "badge_text",      &PromptColorOverrides::badgeText);

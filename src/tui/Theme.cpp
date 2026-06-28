@@ -97,6 +97,7 @@ auto darkTheme() -> Theme
         .exitCode = 0xFF5555_rgb,       // Red
         .duration = 0xFFB86C_rgb,       // Orange
         .hostname = 0xB482FF_rgb,       // Purple
+        .username = 0x82E0A0_rgb,       // Soft green
         .background = 0x2D3237_rgb,     // Soft gray
         .separator = 0x61AFEF_rgb,      // Soft blue (left bar)
         .badge = 0x3C4148_rgb,          // Dark badge bg
@@ -220,6 +221,7 @@ auto lightTheme() -> Theme
         .exitCode = 0xC83232_rgb,       // Red
         .duration = 0xC88200_rgb,       // Orange
         .hostname = 0x6400B4_rgb,       // Purple
+        .username = 0x008250_rgb,       // Green
         .background = 0xEBEDF0_rgb,     // Light gray
         .separator = 0x0064C8_rgb,      // Blue
         .badge = 0xDCE1E6_rgb,          // Light badge bg
@@ -337,6 +339,7 @@ auto monoTheme() -> Theme
         .exitCode = 0xFFFFFF_rgb,
         .duration = 0xC8C8C8_rgb,
         .hostname = 0xFFFFFF_rgb,
+        .username = 0xFFFFFF_rgb,
         .background = 0x1E1E1E_rgb,
         .separator = 0xC8C8C8_rgb,
         .badge = 0x323232_rgb,
