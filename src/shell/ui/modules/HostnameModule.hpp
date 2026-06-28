@@ -6,7 +6,12 @@
 namespace endo
 {
 
-/// @brief Prompt module that shows hostname when running under SSH.
+/// @brief Prompt module that shows the current `user@host` identity.
+///
+/// Renders the login name and hostname in fish-style `user@host` form to the left of
+/// the working directory. Shown in every session (local and remote) so the prompt always
+/// conveys who you are and which machine you're on. Hidden only when neither the username
+/// nor the hostname could be determined.
 class HostnameModule final: public PromptModule
 {
   public:

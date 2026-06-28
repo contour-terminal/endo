@@ -34,7 +34,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::TwoLine,
         .separator = SeparatorStyle::Bar,
         .indicator = "> ",
-        .infoLineModules = { "path", "git" },
+        .infoLineModules = { "hostname", "path", "git" },
         .rightPromptModules = {},
     },
     PromptConfig {
@@ -42,7 +42,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::Powerline,
         .separator = SeparatorStyle::Powerline,
         .indicator = "\xe2\x9d\xaf ", // ❯
-        .infoLineModules = { "path", "git" },
+        .infoLineModules = { "hostname", "path", "git" },
         .rightPromptModules = {},
     },
     PromptConfig {
@@ -51,7 +51,7 @@ static std::vector<PromptConfig> const& presets()
         .separator = SeparatorStyle::Rounded,
         .transient = TransientMode::Arrow,
         .indicator = "\xe2\x9d\xaf ", // ❯
-        .infoLineModules = { "path", "git" },
+        .infoLineModules = { "hostname", "path", "git" },
         .rightPromptModules = {},
     },
     PromptConfig {
@@ -59,7 +59,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::TwoLine,
         .separator = SeparatorStyle::None,
         .indicator = "\xe2\x9d\xaf ", // ❯
-        .infoLineModules = { "path", "git" },
+        .infoLineModules = { "hostname", "path", "git" },
         .rightPromptModules = { "duration", "shell_level", "battery", "clock" },
     },
     PromptConfig {
@@ -67,7 +67,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::Boxed,
         .separator = SeparatorStyle::Boxed,
         .indicator = "\xe2\x9d\xaf\xe2\x9d\xaf ", // ❯❯
-        .infoLineModules = { "path", "git", "toolchain" },
+        .infoLineModules = { "hostname", "path", "git", "toolchain" },
         .rightPromptModules = {},
     },
     PromptConfig {
@@ -75,7 +75,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::TwoLine,
         .separator = SeparatorStyle::None,
         .indicator = "\xe2\x9e\xa4\xe2\x9e\xa4\xe2\x9e\xa4 ", // ➤➤➤
-        .infoLineModules = { "path", "git" },
+        .infoLineModules = { "hostname", "path", "git" },
         .rightPromptModules = {},
         .colorOverrides = { .path = ColorSpec { { 0x5078FF_rgb, 0x00DCC8_rgb } } }, // Blue → Teal gradient
     },
@@ -92,7 +92,7 @@ static std::vector<PromptConfig> const& presets()
         .layout = PromptLayoutKind::TwoLine,
         .separator = SeparatorStyle::Rounded,
         .indicator = "|> ",
-        .infoLineModules = { "path", "git", "fsharp_mode", "structured_output" },
+        .infoLineModules = { "hostname", "path", "git", "fsharp_mode", "structured_output" },
         .rightPromptModules = { "duration", "exit_status", "shell_level", "battery", "clock" },
         .auroraBackground = {
             0x252545_rgb, // deep indigo

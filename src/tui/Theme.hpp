@@ -103,6 +103,7 @@ struct Theme
         RgbColor exitCode;       ///< Exit code badge color.
         RgbColor duration;       ///< Duration badge color.
         RgbColor hostname;       ///< Hostname text color.
+        RgbColor username;       ///< Username text color.
         RgbColor background;     ///< Prompt background color.
         RgbColor separator;      ///< Separator/bar color.
         RgbColor badge;          ///< Badge background color.

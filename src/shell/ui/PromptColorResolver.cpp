@@ -62,6 +62,7 @@ ResolvedPromptColors resolvePromptColors(PromptColorOverrides const& overrides,
     resolved.exitCode = resolveField(overrides.exitCode, themeColors.exitCode);
     resolved.duration = resolveField(overrides.duration, themeColors.duration);
     resolved.hostname = resolveField(overrides.hostname, themeColors.hostname);
+    resolved.username = resolveField(overrides.username, themeColors.username);
     resolved.separator = resolveField(overrides.separator, themeColors.separator);
     resolved.badge = resolveField(overrides.badge, themeColors.badge);
     resolved.badgeText = resolveField(overrides.badgeText, themeColors.badgeText);
