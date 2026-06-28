@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -91,6 +92,9 @@ double FuzzyMatchResult::quality(size_t graphemeCount) const noexcept
 
 bool FuzzyMatchResult::isContiguousSubstring() const noexcept
 {
+    // match() reports a contiguous block whenever the pattern occurs verbatim, so
+    // the greedy subsequence path can only ever yield longestRun < matchedChars.
+    // A full-length run therefore uniquely identifies a substring match.
     return matches && matchedChars > 0 && longestRun == matchedChars;
 }
 
@@ -167,6 +171,58 @@ FuzzyMatchResult FuzzyMatch::match(std::string_view text,
 
     if (patternGraphemes.size() > textGraphemes.size())
         return result;
+
+    // Substring-first matching: prefer a contiguous occurrence of the pattern
+    // over a greedy subsequence.
+    //
+    // The greedy matcher below binds each pattern grapheme to its first available
+    // occurrence, which scatters the match when an earlier occurrence of the
+    // leading grapheme exists — e.g. matching "endo.exe" against
+    // "./build/clangcl-debug/src/shell/endo.exe" would bind the leading 'e' to
+    // "...clangcl-debug..." and highlight a stray 'e' plus "ndo.exe". When the
+    // pattern occurs verbatim we instead report that contiguous block: it
+    // highlights the run the user actually typed and ranks ahead of a scattered
+    // match (single run, word-start aware). All fuzzy consumers — history search,
+    // ghost text, completion, the fuzzy file finder — share this behavior.
+    //
+    // Case-fold each grapheme once rather than per comparison so the scan stays
+    // cheap on the hot completion/history path — O(textLen + patternLen) folds
+    // instead of O(textLen * patternLen). Case-sensitive matching needs no folds.
+    auto const substringStart = [&]() -> std::optional<size_t> {
+        auto const locate = [](std::vector<std::string> const& haystack,
+                               std::vector<std::string> const& needle) -> std::optional<size_t> {
+            auto const found = std::ranges::search(haystack, needle);
+            if (found.empty())
+                return std::nullopt;
+            return static_cast<size_t>(std::ranges::distance(haystack.begin(), found.begin()));
+        };
+        if (caseSensitive)
+            return locate(textGraphemes, patternGraphemes);
+        auto const fold = [](std::vector<std::string> const& graphemes) {
+            auto folded = std::vector<std::string> {};
+            folded.reserve(graphemes.size());
+            for (auto const& grapheme: graphemes)
+                folded.push_back(casefoldGrapheme(grapheme));
+            return folded;
+        };
+        return locate(fold(textGraphemes), fold(patternGraphemes));
+    }();
+
+    if (substringStart.has_value())
+    {
+        for (auto const offset: std::views::iota(size_t { 0 }, patternGraphemes.size()))
+        {
+            auto const textIdx = *substringStart + offset;
+            result.positions.push_back(textIdx);
+            if (isWordStart(text, textIdx, graphemeByteOffsets))
+                result.wordStartMatches++;
+        }
+        result.matchedChars = patternGraphemes.size();
+        result.longestRun = patternGraphemes.size();
+        result.consecutiveRuns = 1;
+        result.matches = true;
+        return result;
+    }
 
     size_t patternIdx = 0;
     size_t lastMatchIdx = SIZE_MAX;

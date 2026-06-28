@@ -5,9 +5,13 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ranges>
 #include <sstream>
+#include <string>
+#include <system_error>
 
 #include <platform/NativeFileSystem.hpp>
+#include <platform/PathUtils.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -205,14 +209,76 @@ std::expected<void, std::string> NativeFileSystem::copyFile(fs::path const& from
     return {};
 }
 
+namespace
+{
+
+    /// Renames @p from to @p to in two hops via a unique temporary name in the
+    /// destination's parent directory.
+    ///
+    /// Used to perform a lettercase-only rename (e.g. `foo` -> `Foo`) on case-insensitive
+    /// filesystems, where a direct rename is rejected because source and destination
+    /// resolve to the same entry. A free temporary name is found in the destination's
+    /// directory, the entry is moved there, then moved on to its final name. If the second
+    /// hop fails the entry is rolled back to its original name so it is never stranded under
+    /// the temporary.
+    ///
+    /// @param from The existing source entry.
+    /// @param to The desired destination, in the same directory and differing only in case.
+    /// @param ec Set to the error that aborted the operation; cleared on success.
+    /// @return True on success, false otherwise (with @p ec describing the failure).
+    [[nodiscard]] bool renameViaTemporary(fs::path const& from, fs::path const& to, std::error_code& ec)
+    {
+        auto const parent = to.parent_path();
+        auto const baseName = to.filename().string();
+        for (auto const attempt: std::views::iota(0, 1000))
+        {
+            auto const candidate = parent / (baseName + ".endo-recase-" + std::to_string(attempt));
+            if (fs::exists(candidate, ec))
+                continue;
+            ec.clear();
+
+            fs::rename(from, candidate, ec);
+            if (ec)
+                return false;
+
+            fs::rename(candidate, to, ec);
+            if (!ec)
+                return true;
+
+            // Second hop failed: restore the original name so the entry is not stranded
+            // under the temporary. Best-effort — the reported error stays the second hop's.
+            std::error_code rollbackError;
+            auto const& originalName = from;
+            fs::rename(candidate, originalName, rollbackError);
+            return false;
+        }
+        ec = std::make_error_code(std::errc::file_exists);
+        return false;
+    }
+
+} // namespace
+
 std::expected<void, std::string> NativeFileSystem::rename(fs::path const& from, fs::path const& to) const
 {
     std::error_code ec;
     fs::rename(from, to, ec);
-    if (ec)
-        return std::unexpected(
-            std::format("Cannot rename '{}' to '{}': {}", from.string(), to.string(), ec.message()));
-    return {};
+    if (!ec)
+        return {};
+
+    // On case-insensitive filesystems (Windows, the default macOS volume format) a
+    // rename that changes only the lettercase of the final path component — e.g.
+    // `foo` -> `Foo` — can be rejected because source and destination resolve to the
+    // same entry. Perform such a recase in two hops through a temporary name so the
+    // lettercase change still takes effect.
+    if (isCaseOnlyRename(from, to))
+    {
+        std::error_code recaseError;
+        if (renameViaTemporary(from, to, recaseError))
+            return {};
+    }
+
+    return std::unexpected(
+        std::format("Cannot rename '{}' to '{}': {}", from.string(), to.string(), ec.message()));
 }
 
 std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSystem::listDirectory(

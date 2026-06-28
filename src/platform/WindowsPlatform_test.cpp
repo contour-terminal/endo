@@ -271,3 +271,36 @@ TEST_CASE("platformRead.returns_zero_on_closed_pipe_eof", "[platform]")
     ::close(readH);
 #endif
 }
+
+// ============================================================================
+// isCaseOnlyRename
+// ============================================================================
+
+TEST_CASE("isCaseOnlyRename.detects_final_component_recase", "[platform]")
+{
+    // Same parent, final component differing only in lettercase.
+    CHECK(isCaseOnlyRename("foo", "Foo"));
+    CHECK(isCaseOnlyRename("Foo", "foo"));
+    CHECK(isCaseOnlyRename("dir/a", "dir/A"));
+    CHECK(isCaseOnlyRename("a/b/readme", "a/b/README"));
+    // A trailing separator (e.g. on a directory operand) must not defeat detection.
+    CHECK(isCaseOnlyRename("foo/", "Foo"));
+    CHECK(isCaseOnlyRename("foo", "Foo/"));
+    // A redundant ./ prefix normalizes away before comparison.
+    CHECK(isCaseOnlyRename("./foo", "Foo"));
+}
+
+TEST_CASE("isCaseOnlyRename.rejects_non_recase", "[platform]")
+{
+    // Identical spelling is a no-op, not a recase.
+    CHECK_FALSE(isCaseOnlyRename("foo", "foo"));
+    // Genuinely different names.
+    CHECK_FALSE(isCaseOnlyRename("foo", "bar"));
+    CHECK_FALSE(isCaseOnlyRename("foo", "foobar"));
+    // Same final component but different parent directories: a real move.
+    CHECK_FALSE(isCaseOnlyRename("a/foo", "b/Foo"));
+    CHECK_FALSE(isCaseOnlyRename("foo", "sub/Foo"));
+    // Missing final component on either side.
+    CHECK_FALSE(isCaseOnlyRename("", "Foo"));
+    CHECK_FALSE(isCaseOnlyRename("foo", ""));
+}

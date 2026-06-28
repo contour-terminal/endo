@@ -1846,6 +1846,16 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const sources = std::span(paths.data(), paths.size() - 1);
     auto const destIsDir = _fs.isDirectory(dest);
 
+    // A single-source move whose destination names the very same entry as the source,
+    // differing only in the lettercase of the final path component (e.g. `mv foo Foo`),
+    // is a pure rename-to-recase. On case-insensitive filesystems the destination appears
+    // to already exist (it *is* the source) and isDirectory(dest) reports the source's own
+    // type, so without this guard the move would be misrouted into the directory (target
+    // `Foo/foo`) or rejected as a self-overwrite. Detect it up front so the entry itself
+    // is renamed; NativeFileSystem::rename performs the underlying recase safely.
+    auto const caseOnlyRename =
+        sources.size() == 1 && platform::isCaseOnlyRename(std::filesystem::path(sources.front()), dest);
+
     if (sources.size() > 1 && !destIsDir)
     {
         error("mv: target '{}' is not a directory", platform::normalizePath(dest));
@@ -1864,10 +1874,11 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
-        auto const target = destIsDir ? dest / srcPath.filename() : dest;
+        auto const target = (destIsDir && !caseOnlyRename) ? dest / srcPath.filename() : dest;
 
-        // Check if target already exists
-        if (_fs.exists(target))
+        // Check if target already exists. A case-only recase necessarily collides with the
+        // source itself on case-insensitive filesystems, so skip the clobber/overwrite gate.
+        if (!caseOnlyRename && _fs.exists(target))
         {
             if (noClobber)
                 continue;

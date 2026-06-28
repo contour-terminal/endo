@@ -43,12 +43,15 @@ struct FuzzyMatchResult
 
 /// @brief Fuzzy string matching with grapheme cluster awareness.
 ///
-/// Matches pattern characters in order but allows gaps between them.
-/// All operations work on Unicode grapheme clusters, not bytes.
+/// When the pattern occurs verbatim as a contiguous substring, that block is
+/// reported (best highlight, ranks ahead of a scattered match). Otherwise the
+/// pattern characters are matched in order with gaps allowed (subsequence /
+/// abbreviation matching). All operations work on Unicode grapheme clusters,
+/// not bytes.
 ///
 /// Examples:
-/// - "ds" matches "Downloads" (D...s) -> positions = {0, 8}
-/// - "dcm" matches "Documents" (D.c.m....)
+/// - "ds" matches "Downloads" as the substring "...loaDS" -> positions = {7, 8}
+/// - "dcm" matches "Documents" (D.c.m...., subsequence) -> positions = {0, 2, 4}
 /// - "📁d" matches "📁Downloads" -> positions = {0, 1}
 ///
 /// Integrates with smart case rules:
@@ -60,7 +63,7 @@ struct FuzzyMatchResult
 ///   auto result = FuzzyMatch::matchSmartCase("Downloads", "ds");
 ///   if (result.matches) {
 ///       int score = FuzzyMatch::calculateScore(50, "Downloads", "ds", result);
-///       // result.positions = {0, 8} for highlighting 'D' and 's'
+///       // result.positions = {7, 8} for highlighting the "ds" in "Downloads"
 ///   }
 /// @endcode
 struct FuzzyMatch

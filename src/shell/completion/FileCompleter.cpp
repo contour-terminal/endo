@@ -58,6 +58,23 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
         }
     }
 
+    // Returns the on-disk capitalization of an existing absolute path so completions
+    // echo the real case rather than the case the user typed (e.g. "D:/foo" -> "D:/Foo").
+    // Relative and tilde-prefixed paths are left exactly as typed: canonicalCasePath()
+    // resolves to an absolute path and would otherwise rewrite "foo/" into an absolute
+    // path or expand "~/foo" into the literal home directory.
+    auto const caseCorrect = [](std::filesystem::path const& path, std::string_view typed) -> std::string {
+        bool const isTilde = !typed.empty() && typed.front() == '~';
+        return (path.is_absolute() && !isTilde) ? platform::canonicalCasePath(path) : std::string(typed);
+    };
+
+    // Appends a trailing '/' to a non-empty directory prefix so listed children are
+    // joined onto it correctly.
+    auto const ensureTrailingSlash = [](std::string& s) {
+        if (!s.empty() && s.back() != '/')
+            s += '/';
+    };
+
     std::error_code ec;
     std::filesystem::path dir;
     std::string filePrefix;
@@ -69,17 +86,21 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
         {
             dir = expandedPath;
             filePrefix = "";
-            pathPrefix = std::string(prefix);
+            // Echo the directory's real capitalization so listed children carry the
+            // corrected case (e.g. "D:/foo/" -> "D:/Foo/<child>").
+            pathPrefix = caseCorrect(expandedPath, prefix);
+            ensureTrailingSlash(pathPrefix);
         }
         else
         {
             // Path is a directory but doesn't end with /, treat as complete match
-            // and offer trailing slash
+            // and offer trailing slash, correcting the typed case (e.g. "D:/foo" ->
+            // "D:/Foo/").
+            std::string const completedDir = caseCorrect(expandedPath, prefix);
             std::vector<CompletionItem> results;
-            std::string completedPath = std::string(prefix) + "/";
             results.push_back(
-                CompletionItem { .text = completedPath,
-                                 .displayText = std::filesystem::path(prefix).filename().string() + "/",
+                CompletionItem { .text = completedDir + "/",
+                                 .displayText = std::filesystem::path(completedDir).filename().string() + "/",
                                  .description = "directory",
                                  .score = 100 });
             return results;
@@ -117,8 +138,7 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
                 // typed (e.g. "foo/") into an absolute one.
                 pathPrefix =
                     dir.is_absolute() ? platform::canonicalCasePath(dir) : platform::normalizePath(dir);
-                if (!pathPrefix.empty() && pathPrefix.back() != '/')
-                    pathPrefix += '/';
+                ensureTrailingSlash(pathPrefix);
             }
         }
     }
@@ -239,6 +259,13 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     tui::FuzzyConfig fuzzyConfig;
     double const minThreshold = fuzzyConfig.minMatchThreshold;
 
+    // On case-insensitive filesystems (Windows, default macOS) path matching must ignore
+    // case so a wrong-case prefix still finds — and recases — the real entry (e.g.
+    // "Lastrada-to" -> "lastrada-tools/"). The candidate text is built from the on-disk
+    // filename below, so casing is corrected automatically. POSIX is case-sensitive, so
+    // smart-case matching is kept there.
+    bool const caseInsensitive = platform::FilesystemCaseInsensitive;
+
     for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
     {
         if (ec)
@@ -251,14 +278,17 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
             continue;
 
         // Option C: Check both prefix and fuzzy matches
-        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(filename, prefix);
+        bool isPrefixMatch = caseInsensitive
+                                 ? tui::SmartCaseMatch::matchesPrefixCaseInsensitive(filename, prefix)
+                                 : tui::SmartCaseMatch::matchesPrefix(filename, prefix);
         tui::FuzzyMatchResult fuzzyResult;
         bool isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
             // Try fuzzy matching only if not a prefix match
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(filename, prefix);
+            fuzzyResult = caseInsensitive ? tui::FuzzyMatch::match(filename, prefix, /*caseSensitive=*/false)
+                                          : tui::FuzzyMatch::matchSmartCase(filename, prefix);
             size_t textLen = tui::FuzzyMatch::countGraphemes(filename);
             isFuzzyMatch =
                 fuzzyResult.matches

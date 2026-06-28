@@ -631,6 +631,29 @@ TEST_CASE("PersistentHistory.required_paths_validation_disabled", "[history][req
     CHECK(results.front().entry == "cat ~/missing.txt");
 }
 
+TEST_CASE("PersistentHistory.fuzzy_finds_substring_after_repeated_grapheme", "[history][fuzzy]")
+{
+    // Regression: Ctrl+R over history failed to surface an entry when the typed
+    // query was a contiguous substring whose leading grapheme also appeared
+    // earlier in the command (the greedy matcher scattered the match and the
+    // long entry fell below the fuzzy quality threshold). The command has no
+    // path arguments, so required-paths validation is not involved here.
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory { testFs() };
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("./build/clangcl-debug/src/shell/endo.exe",
+                endo::HistoryAddContext { .cwd = "~/projects/endo", .requiredPaths = {} });
+
+    auto options = endo::FuzzySearchOptions {
+        .currentCwd = "/home/u/projects/endo",
+        .home = "/home/u",
+    };
+    auto const results = history.searchFuzzy("endo.exe", 200, options);
+    REQUIRE(results.size() == 1);
+    CHECK(results.front().entry == "./build/clangcl-debug/src/shell/endo.exe");
+}
+
 TEST_CASE("PersistentHistory.readd_updates_cwd_and_paths", "[history][cwd]")
 {
     auto dir = TempDir {};

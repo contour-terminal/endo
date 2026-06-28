@@ -1343,6 +1343,29 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
             updateGhostText();
             return;
         }
+
+        // Several prefix candidates: insert their longest common prefix first (bash-style)
+        // and defer the popup. The popup only appears on the next Tab, once the common
+        // prefix no longer extends the typed word. Fuzzy-only candidates are excluded —
+        // they share no meaningful leading prefix — so an all-fuzzy result shows the popup
+        // immediately.
+        std::vector<tui::CompletionItem> prefixMatches;
+        for (auto const& item: completions)
+            if (isPrefixMatch(item))
+                prefixMatches.push_back(item);
+
+        if (prefixMatches.size() > 1)
+        {
+            auto const ctx = Completer::analyzeContext(text, cursor);
+            auto const commonPrefix = tui::Completer::findCommonPrefix(prefixMatches);
+            if (commonPrefix.size() > ctx.prefix.size())
+            {
+                insertCompletion(commonPrefix);
+                dismissPopup();
+                updateGhostText();
+                return;
+            }
+        }
     }
 
     // Multiple matches (or force-show): populate and show popup
