@@ -2009,7 +2009,7 @@ std::filesystem::path onDiskName(std::filesystem::path const& parent, std::strin
     namespace fs = std::filesystem;
     for (auto const& entry: fs::directory_iterator(parent))
     {
-        auto const candidate = entry.path().filename().string();
+        auto candidate = entry.path().filename().string();
         if (endo::platform::equalsCaseInsensitive(candidate, name))
             return candidate;
     }

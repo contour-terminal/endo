@@ -19,6 +19,7 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  LLVM_VERSION: "22"
 
 jobs:
   create-release:
@@ -47,8 +48,8 @@ jobs:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
 
-      - name: Install Clang 21
-        run: wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
+      - name: Install Clang ${{ env.LLVM_VERSION }}
+        run: wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ env.LLVM_VERSION }}
 
       - name: Install system dependencies
         run: sudo apt-get install -y ninja-build libc6-dev
@@ -68,8 +69,8 @@ jobs:
       - name: Configure
         run: >
           cmake --preset clang-release-static
-          -DCMAKE_C_COMPILER=clang-21
-          -DCMAKE_CXX_COMPILER=clang++-21
+          -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
+          -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
