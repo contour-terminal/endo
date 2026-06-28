@@ -12,6 +12,9 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  LLVM_VERSION: "22"
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -41,7 +44,7 @@ jobs:
       run: |
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
-        sudo ./llvm.sh 21
+        sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
     - name: Install Homebrew dependencies (macOS)
       if: runner.os == 'macOS'
@@ -71,7 +74,7 @@ jobs:
 
     - name: Configure CMake (Linux)
       if: runner.os == 'Linux'
-      run: cmake --preset clang-release -DCMAKE_C_COMPILER=clang-21 -DCMAKE_CXX_COMPILER=clang++-21
+      run: cmake --preset clang-release -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }} -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
 
     - name: Configure CMake (macOS)
       if: runner.os == 'macOS'
@@ -130,7 +133,7 @@ jobs:
       run: |
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
-        sudo ./llvm.sh 21
+        sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
     - name: "Get library crispy & vtparser"
       run: python3 scripts/get_contour_dirs.py
@@ -138,8 +141,8 @@ jobs:
     - name: Configure CMake
       run: >
         cmake -B build/static
-        -DCMAKE_CXX_COMPILER=clang++-21
-        -DCMAKE_C_COMPILER=clang-21
+        -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
+        -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
         -DCMAKE_BUILD_TYPE=Release
         -DENABLE_STATIC_LINKING=ON
         -GNinja
