@@ -132,6 +132,8 @@ class TerminalInput
     HANDLE _hStdout = INVALID_HANDLE_VALUE;
     DWORD _originalInputMode = 0;
     DWORD _originalOutputMode = 0;
+    UINT _originalOutputCp = 0;    ///< Console output code page to restore on shutdown (0 = not saved).
+    UINT _originalInputCp = 0;     ///< Console input code page to restore on shutdown (0 = not saved).
     HANDLE _resizeEvent = nullptr; ///< Manual-reset event for resize notification.
 #else
     int _fd = 0;    // STDIN_FILENO
