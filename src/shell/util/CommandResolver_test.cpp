@@ -208,6 +208,101 @@ TEST_CASE("CommandResolver.findInPath.honors_PATHEXT_ordering")
     REQUIRE(!result.empty());
     CHECK(result.ends_with("foo.exe"));
 }
+
+TEST_CASE("CommandResolver.findInPath.typed_non_PATHEXT_extension_resolves_verbatim")
+{
+    // A name typed with an extension is used verbatim even when that extension is not in
+    // PATHEXT (cmd.exe semantics: an explicit extension is never augmented). Without this
+    // an explicitly typed "deploy.ps1" would be dropped when ".ps1" is absent from PATHEXT.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/deploy.ps1");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd"); // note: no .ps1
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("deploy.ps1");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("deploy.ps1"));
+}
+
+TEST_CASE("CommandResolver.findInPath.empty_PATHEXT_falls_back_to_defaults")
+{
+    // An empty/blank PATHEXT must not strand bare lookups: fall back to the default
+    // executable extensions so "docker" still resolves to "docker.exe".
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", "");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("docker");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("docker.exe"));
+}
+
+TEST_CASE("CommandResolver.findInPath.empty_PATHEXT_token_does_not_reshadow")
+{
+    // A stray empty token (e.g. ".exe;;.cmd") must be skipped — otherwise it would append
+    // nothing and re-probe the bare name, letting the extensionless shim shadow docker.exe.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker");
+    fs.addExecutable("/bin/docker.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;;.cmd");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("docker");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("docker.exe"));
+}
+
+TEST_CASE("CommandResolver.findInPath.extensionless_does_not_shadow_later_directory")
+{
+    // The user's real scenario: an extensionless "docker" shim in an earlier PATH directory
+    // must not shadow the real "docker.exe" in a later one.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/a");
+    fs.addDirectory("/b");
+    fs.addExecutable("/a/docker"); // extensionless shim, earlier in PATH
+    fs.addExecutable("/b/docker.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/a;/b");
+    env.set("PATHEXT", ".exe;.cmd;.bat");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("docker");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("docker.exe"));
+}
+
+TEST_CASE("CommandResolver.resolve.invalidates_cache_on_PATHEXT_change")
+{
+    // resolve() caches per command; since PATHEXT now governs whether anything is found,
+    // a PATHEXT change (with PATH unchanged) must invalidate the cached result.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".cmd"); // no .exe yet → docker.exe unreachable
+
+    auto const resolver = CommandResolver(env, fs);
+    CHECK(resolver.resolve("docker").type == CommandType::NotFound);
+
+    env.set("PATHEXT", ".exe;.cmd"); // now docker.exe is reachable
+    CHECK(resolver.resolve("docker").type == CommandType::External);
+}
 #endif
 
 #if !defined(_WIN32)

@@ -5,8 +5,7 @@
 
 #include <crispy/utils.h>
 
-#include <algorithm>
-#include <cctype>
+#include <array>
 #include <filesystem>
 
 #include <platform/EnvironmentProvider.hpp>
@@ -55,17 +54,79 @@ CommandInfo CommandResolver::resolve(std::string_view command) const
 
 void CommandResolver::invalidateCache()
 {
-    _cachedPath.clear();
+    _cacheKey.clear();
     _pathCache.clear();
+}
+
+#if defined(_WIN32)
+namespace
+{
+    /// Executable extensions used when %PATHEXT% is unset, empty, or all-blank. Lower-cased
+    /// because Windows path comparison is case-insensitive and isExecutableFile() ignores case.
+    constexpr std::array<std::string_view, 5> DefaultPathExt { ".exe", ".cmd", ".bat", ".com", ".ps1" };
+
+    /// Trims leading/trailing ASCII whitespace from @p value.
+    constexpr std::string_view trim(std::string_view value) noexcept
+    {
+        value = crispy::trimRight(value);
+        while (!value.empty() && std::string_view(" \t\r\n").find(value.front()) != std::string_view::npos)
+            value.remove_prefix(1);
+        return value;
+    }
+
+    /// Returns the PATHEXT extension list, skipping empty/blank tokens (e.g. from a stray
+    /// ";;") and falling back to DefaultPathExt when none remain — an empty token would
+    /// otherwise re-introduce the bare-name probe and let an extensionless shim shadow the
+    /// real executable.
+    std::vector<std::string> pathExtList(EnvironmentProvider const& env)
+    {
+        auto extensions = std::vector<std::string> {};
+        if (auto const pathext = env.get("PATHEXT"))
+            for (auto const& raw: crispy::split(*pathext, ';'))
+                if (auto const ext = trim(raw); !ext.empty())
+                    extensions.emplace_back(ext);
+
+        if (extensions.empty())
+            for (auto const& ext: DefaultPathExt)
+                extensions.emplace_back(ext);
+
+        return extensions;
+    }
+} // namespace
+#endif
+
+std::vector<std::string> CommandResolver::candidateNames([[maybe_unused]] EnvironmentProvider const& env,
+                                                         std::string_view command)
+{
+#if !defined(_WIN32)
+    return { std::string(command) };
+#else
+    // cmd.exe / PowerShell semantics: a name typed *with* an extension is used verbatim and
+    // PATHEXT is not applied; a bare name is expanded only to "command + ext" for each
+    // PATHEXT entry, and the extensionless name itself is never probed. The latter is what
+    // stops an extensionless "docker" shim from shadowing the real "docker.exe".
+    if (std::filesystem::path(command).has_extension())
+        return { std::string(command) };
+
+    auto names = std::vector<std::string> {};
+    for (auto const& ext: pathExtList(env))
+        names.emplace_back(std::string(command) + ext);
+    return names;
+#endif
 }
 
 std::string CommandResolver::findInPath(std::string_view command) const
 {
-    auto const matches = findAllInPath(command);
+    auto const matches = search(command, /*firstOnly=*/true);
     return matches.empty() ? std::string {} : matches.front();
 }
 
 std::vector<std::string> CommandResolver::findAllInPath(std::string_view command) const
+{
+    return search(command, /*firstOnly=*/false);
+}
+
+std::vector<std::string> CommandResolver::search(std::string_view command, bool firstOnly) const
 {
     auto const pathEnv = _env.get("PATH");
     if (!pathEnv)
@@ -77,79 +138,34 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
     auto const pathSep = ':';
 #endif
 
-    auto const paths = crispy::split(*pathEnv, pathSep);
-
-#if defined(_WIN32)
-    // Build PATHEXT extensions list
-    auto extensions = std::vector<std::string> {};
-    if (auto const pathext = _env.get("PATHEXT"))
-    {
-        auto const exts = crispy::split(*pathext, ';');
-        for (auto const& ext: exts)
-            extensions.emplace_back(ext);
-    }
-    else
-    {
-        extensions = { ".exe", ".cmd", ".bat", ".com", ".ps1" };
-    }
-
-    // Determine whether the typed command already ends with a recognized PATHEXT
-    // extension (case-insensitive), e.g. "docker.exe". If so it is probed verbatim;
-    // otherwise the bare name is only tried with each PATHEXT extension appended.
-    auto const iequals = [](std::string_view lhs, std::string_view rhs) {
-        return std::ranges::equal(
-            lhs, rhs, [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
-    };
-    auto const commandExtension = std::filesystem::path(command).extension().string();
-    auto const hasPathExtExtension =
-        !commandExtension.empty()
-        && std::ranges::any_of(extensions, [&](auto const& ext) { return iequals(ext, commandExtension); });
-#endif
+    // Candidate file names are independent of the PATH directory, so compute them once.
+    auto const names = candidateNames(_env, command);
 
     auto results = std::vector<std::string> {};
 
-    for (auto const& pathStr: paths)
+    for (auto const& pathStr: crispy::split(*pathEnv, pathSep))
     {
         if (pathStr.empty())
             continue;
 
-        std::filesystem::path dir(pathStr);
-
+        auto const dir = std::filesystem::path(pathStr);
         if (!_fs.exists(dir) || !_fs.isDirectory(dir))
             continue;
 
-        auto const candidate = dir / std::string(command);
-
-#if defined(_WIN32)
-        // On Windows a bare command name is runnable only through a PATHEXT extension;
-        // an extensionless file is never an executable command (cmd.exe / PowerShell
-        // semantics). So:
-        //   - if the typed command already carries a PATHEXT extension (e.g. "docker.exe"),
-        //     probe that exact name only;
-        //   - otherwise (e.g. "docker") probe "command + ext" for each PATHEXT entry, in
-        //     PATHEXT order, and never the bare extensionless name.
-        // Without this, an extensionless "docker" shim shadows the real "docker.exe".
-        auto const candidates = [&]() {
-            auto result = std::vector<std::filesystem::path> {};
-            if (hasPathExtExtension)
-                result.push_back(candidate);
-            else
-                for (auto const& ext: extensions)
-                    result.push_back(std::filesystem::path(candidate.string() + ext));
-            return result;
-        }();
-
-        for (auto const& cand: candidates)
+        for (auto const& name: names)
         {
-            if (!_fs.isExecutableFile(cand))
+            auto const candidate = dir / name;
+            if (!_fs.isExecutableFile(candidate))
                 continue;
-            results.push_back(platform::normalizePath(cand));
-            break; // At most one match per PATH directory
-        }
+#if defined(_WIN32)
+            results.push_back(platform::normalizePath(candidate));
 #else
-        if (_fs.isExecutableFile(candidate))
             results.push_back(candidate.string());
 #endif
+            if (firstOnly)
+                return results;
+            break; // At most one match per PATH directory
+        }
     }
 
     return results;
@@ -157,14 +173,24 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
 
 void CommandResolver::refreshCacheIfNeeded() const
 {
-    auto const pathEnv = _env.get("PATH");
-    std::string currentPath = pathEnv ? std::string(*pathEnv) : "";
+    auto const currentKey = computeCacheKey();
 
-    if (currentPath != _cachedPath)
+    if (currentKey != _cacheKey)
     {
-        _cachedPath = currentPath;
+        _cacheKey = currentKey;
         _pathCache.clear();
     }
+}
+
+std::string CommandResolver::computeCacheKey() const
+{
+    auto key = _env.get("PATH").value_or(std::string {});
+#if defined(_WIN32)
+    // PATHEXT also governs resolution on Windows, so a change to it must invalidate the
+    // cache too. '\x1f' (unit separator) cannot occur in a PATH/PATHEXT value.
+    key.append("\x1f").append(_env.get("PATHEXT").value_or(std::string {}));
+#endif
+    return key;
 }
 
 std::set<std::string> const& CommandResolver::builtinNames()
