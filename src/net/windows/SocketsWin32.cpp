@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
+
+// winsock2.h MUST precede windows.h / ws2tcpip.h (which project headers pull in),
+// so this block leads every Win32 net translation unit.
+// clang-format off
+#if defined(_WIN32)
+    #include <winsock2.h>
+    #include <windows.h>
+    #include <ws2tcpip.h>
+#endif
+// clang-format on
+
 #include <net/Sockets.hpp>
 
 #if defined(_WIN32)
 
     #include <string>
-
-    #include <ws2tcpip.h>
 
     #include <net/windows/WindowsListener.hpp>
     #include <net/windows/WindowsSocket.hpp>
