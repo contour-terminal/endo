@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: exists with a boolean-field predicate is true when any row matches
+# mode: structured
+# expect: true
+
+print (ls |> exists (_.isDir))

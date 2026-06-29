@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A record boolean field that is true takes the then branch
+# expect: T
+
+type R = { flag: bool; name: string }
+
+let r = { flag = true; name = "x" }
+
+if r.flag then print "T"
+else print "F"

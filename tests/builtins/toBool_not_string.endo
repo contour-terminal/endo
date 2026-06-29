@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: not("hello"): toBool("hello") = false (falsy), BNot(false) = true
-# expect: true
+# description: not("hello"): toBool("hello") = true (truthy), BNot(true) = false
+# expect: false
 
 print (not "hello")
