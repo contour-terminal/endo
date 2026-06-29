@@ -10,6 +10,8 @@ add_library(endo-net STATIC
     ISocket.hpp
     IListener.hpp
     Sockets.hpp
+    HttpServer.hpp
+    HttpServer.cpp
     testing/InMemoryTransport.hpp
     testing/InMemoryTransport.cpp
 )
@@ -47,6 +49,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-net
         test_main.cpp
         Socket_test.cpp
+        HttpServer_test.cpp
     )
 
     target_include_directories(test-endo-net PRIVATE ${CMAKE_SOURCE_DIR}/src)

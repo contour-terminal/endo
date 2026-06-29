@@ -469,6 +469,28 @@ Runner::RunResult Runner::runWithResult()
     return loopWithResult();
 }
 
+Runner::InvokeResult Runner::invoke(std::span<Value const> args)
+{
+    assert(_state == State::Inactive);
+
+    // Set up the entry function's frame exactly as a UCALL would: the arguments sit
+    // at the base of the stack (fp = 0), where the function reads its parameters.
+    _fp = 0;
+    _ip = 0;
+    _stack.ensureCapacity(args.size() + _function->stackSize());
+    for (auto const arg: args)
+        push(arg);
+
+    auto const result = loopWithResult();
+    if (!result)
+        return std::unexpected(result.error());
+
+    // The top-level URET (handled in the loop) left the return value on the stack.
+    if (_stack.size() == 0)
+        return std::unexpected(makeError("invoked function returned no value"));
+    return _stack[-1];
+}
+
 RuntimeError Runner::makeError(std::string message) const
 {
     return RuntimeError { .message = std::move(message), .location = _function->locationOf(_ip) };
@@ -1668,8 +1690,13 @@ Runner::RunResult Runner::loopWithResult()
         {
             if (_callStack.empty())
             {
+                // Top-level return: a function invoked directly via Runner::invoke
+                // (no caller frame) is returning. Leave its result on the stack for
+                // the caller to read and stop the loop. (Programs with an implicit
+                // end terminate via EXIT/EXITPOP, not here.)
+                _state = State::Inactive;
                 _ip = get_pc();
-                return handleRuntimeError(makeError("URET without matching UCALL"));
+                return true;
             }
 
             Value retVal = pop();

@@ -3930,6 +3930,51 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // httpServe: custom codegen — the handler argument is a function value, which the
+    // data-driven builtin table cannot express, so the call is emitted here directly.
+    // Signature: httpServe port handler, where port : int and handler : string -> string.
+    if (name == "httpServe")
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("httpServe requires exactly 2 arguments (port, handler), got {}",
+                            argExprs.size());
+            return true;
+        }
+
+        auto* portVal = codegen(argExprs[0]);
+        if (!portVal)
+        {
+            reportTypeError("Failed to evaluate httpServe port argument");
+            return true;
+        }
+        if (portVal->type() != CoreVM::LiteralType::Number)
+        {
+            reportTypeError("httpServe port argument must be an integer");
+            return true;
+        }
+
+        // The handler must be a function reference (named function or lambda literal).
+        // tryEmitFunctionRef compiles it and yields a FunctionRefInstr whose runtime
+        // value the callback ABI reads back via Params::getFunction.
+        auto* handlerVal = tryEmitFunctionRef(*argExprs[1]);
+        if (!handlerVal)
+        {
+            reportTypeError("httpServe handler argument must be a function (string -> string)");
+            return true;
+        }
+
+        auto* callback = findCallback("httpServe(IH)I");
+        if (!callback)
+        {
+            reportTypeError("httpServe builtin not registered");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { portVal, handlerVal }, "httpServe");
+        return true;
+    }
+
     if (name == "rand")
     {
         if (argExprs.empty())
@@ -8369,12 +8414,18 @@ void IRGenerator::visit(ast::ParenExpr const& node)
 
 CoreVM::Value* IRGenerator::tryEmitFunctionRef(ast::Expr const& value)
 {
+    // Unwrap parentheses so a parenthesized lambda/identifier — e.g. `(fun p -> ...)`
+    // — is recognized the same as an unparenthesized one.
+    ast::Expr const* expr = &value;
+    while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(expr))
+        expr = paren->inner.get();
+
     std::string funcName;
 
     // Case A: lambda literal — register the lambda, then fall through with its synthesized name.
     // Use a prompt-callback-specific prefix so the lambda is persisted across REPL prompts
     // (regular lambda names starting with `__lambda_` are stripped by the persistence pass).
-    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(&value))
+    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(expr))
     {
         funcName = generatePromptCallbackName();
 
@@ -8392,7 +8443,7 @@ CoreVM::Value* IRGenerator::tryEmitFunctionRef(ast::Expr const& value)
         registerFSharpFunction(funcName, std::move(func));
     }
     // Case B: named F# function referenced by identifier.
-    else if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(&value))
+    else if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(expr))
     {
         if (lookupFSharpFunction(ident->name))
             funcName = ident->name;

@@ -25,7 +25,7 @@ by category. Each example is executable and verified by the documentation test s
 - [15.17 FileMode Type](#1517-filemode-type) -- `FileMode.fromBits`, `.isReadable`, `.isWritable`, `.isExecutable`, `.owner`, `.group`, `.other`
 - [15.18 File Permission Helpers](#1518-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
 - [15.19 Display Formatting](#1519-display-formatting) -- `toText`, `string`
-- [15.20 HTTP](#1520-http) -- `fetch`
+- [15.20 HTTP](#1520-http) -- `fetch`, `httpServe`
 - [15.21 Timing](#1521-timing) -- `time`
 - [15.22 JSON](#1522-json) -- `Json.query`
 - [15.23 Lazy Evaluation](#1523-lazy-evaluation) -- `force`
@@ -1558,6 +1558,31 @@ match fetch "https://example.com" with
 | Ok body  -> println body
 | Error e  -> println $"Failed: {e}"
 ```
+
+#### `httpServe`
+
+**Signature:** `httpServe port handler : int`
+
+Starts an HTTP server on `port` (bound to `127.0.0.1`). For each request, `handler`
+is called with the request **path** and must return the response **body** string;
+the server replies with `200 OK` and that body. `httpServe` blocks, serving
+connections on the coroutine reactor until interrupted (Ctrl+C), then returns `0`.
+
+The handler runs on the single reactor thread, so it should not call blocking
+builtins; one request is served at a time.
+
+It returns `0` on a clean shutdown (Ctrl+C) or `1` if the port could not be bound.
+Call it as a bare statement to run a server, or bind the result (`let rc = ...`) if
+you want to inspect that exit status.
+
+<!-- endo-no-check -->
+```endo
+let handler path = "you asked for " + path
+httpServe 8080 handler
+```
+
+> Connections are handled asynchronously by the runtime's reactor (non-blocking
+> sockets parked on readiness), not by blocking a thread per connection.
 
 ---
 

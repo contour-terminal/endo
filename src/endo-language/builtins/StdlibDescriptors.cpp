@@ -49,6 +49,7 @@ static constexpr ParamDescriptor FormatNumberTwoParams[] = { { .name="separator"
 static constexpr ParamDescriptor FormatNumberOneParams[] = { { .name="number", .type=LT::Number } };
 static constexpr ParamDescriptor RandRangeParams[] = { { .name="min", .type=LT::Number }, { .name="max", .type=LT::Number } };
 static constexpr ParamDescriptor FetchTwoParams[] = { { .name="url", .type=LT::String }, { .name="headers", .type=LT::Number } };
+static constexpr ParamDescriptor HttpServeParams[] = { { .name="port", .type=LT::Number }, { .name="handler", .type=LT::Function } };
 static constexpr ParamDescriptor JsonQueryParams[] = { { .name="path", .type=LT::String }, { .name="json", .type=LT::String } };
 static constexpr ParamDescriptor RegisterCompleterParams[] = { { .name="command", .type=LT::String }, { .name="function_name", .type=LT::String } };
 
@@ -306,6 +307,12 @@ static const std::array descriptors = {
     StdlibDescriptor { .userFacingName="fetch", .vmName="fetch", .returnType=LT::Number, .params=UrlStringParam, .sharedImpl=nullptr,
         .description="fetch url -> result<string, string>",
         .detail="**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
+    // httpServe — signature-only registration (real implementation is Shell::builtinHttpServe,
+    // registered directly in Registration.cpp because it needs the Shell instance). This entry
+    // registers the httpServe(IH)I signature for the compiler/test runtime and drives LSP docs.
+    StdlibDescriptor { .userFacingName="httpServe", .vmName="httpServe", .returnType=LT::Number, .params=HttpServeParams, .sharedImpl=nullptr,
+        .description="httpServe port handler -> int",
+        .detail="**httpServe** `port -> (string -> string) -> int`\n\nStarts an HTTP server on **port**; **handler** maps a request path to a response body. Blocks serving connections until interrupted (Ctrl+C), then returns 0." },
     // register_completer — kept for backward compatibility but no longer user-facing
     // (use Completion.register instead)
     StdlibDescriptor { .userFacingName="", .vmName="", .returnType=LT::Void, .params=RegisterCompleterParams, .sharedImpl=nullptr,

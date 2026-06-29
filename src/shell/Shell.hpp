@@ -538,6 +538,11 @@ class Shell final: public SignalCallback
     void builtinFetch(CoreVM::Params& context);
     // NOLINTNEXTLINE(readability-make-member-function-const)
     void builtinFetchWithHeaders(CoreVM::Params& context);
+    /// Starts an HTTP server: `httpServe port handler` where `handler : string -> string`
+    /// maps a request path to a response body. Blocks the calling flow, serving
+    /// connections via the coroutine reactor until interrupted (Ctrl+C).
+    /// @param context VM call params: [1]=port (Number), [2]=handler (Function).
+    void builtinHttpServe(CoreVM::Params& context);
 
     // --- Core shell methods ---
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);

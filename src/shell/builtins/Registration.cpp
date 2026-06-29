@@ -532,6 +532,14 @@ void Shell::registerOutputBuiltins()
         .param<CoreVM::CoreNumber>("headers")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinFetchWithHeaders, this);
+
+    // HTTP server: httpServe port handler, where handler : string -> string maps a
+    // request path to a response body. Blocks serving connections via the reactor.
+    _runtime.registerFunction("httpServe")
+        .param<CoreVM::CoreNumber>("port")
+        .param<CoreVM::Function const*>("handler")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinHttpServe, this);
     // clang-format on
 }
 

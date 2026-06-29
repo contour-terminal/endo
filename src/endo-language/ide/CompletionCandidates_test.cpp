@@ -739,10 +739,10 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 // standardLibraryCandidates tests
 // =============================================================================
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_56_entries", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_all_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 64);
+    CHECK(stdlib.size() == 65);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -1060,8 +1060,8 @@ TEST_CASE("CompletionCandidates.builtinCandidates.shell_builtin_count_stability"
     for (auto const& b: builtins)
         if (b.kind == CompletionKind::Builtin)
             ++nonPropertyCount;
-    // 70 shell builtins + 11 shell keywords + 64 stdlib functions = 145
-    CHECK(nonPropertyCount == 145);
+    // 70 shell builtins + 11 shell keywords + 65 stdlib functions = 146
+    CHECK(nonPropertyCount == 146);
 }
 
 // =============================================================================

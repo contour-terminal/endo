@@ -55,6 +55,7 @@ inline constexpr std::array compilerBuiltins = {
     CompilerBuiltinEntry { .name = "rand",               .stmtStrategy = StmtParseStrategy::FSharpWithPipeline },
     CompilerBuiltinEntry { .name = "time",               .stmtStrategy = StmtParseStrategy::FSharpWithPipeline },
     CompilerBuiltinEntry { .name = "register_completer", .stmtStrategy = StmtParseStrategy::FSharpSimple },
+    CompilerBuiltinEntry { .name = "httpServe",          .stmtStrategy = StmtParseStrategy::FSharpSimple },
     CompilerBuiltinEntry { .name = "exec",               .stmtStrategy = StmtParseStrategy::ExecPipeline,       .excludeFromPrimary = true },
     CompilerBuiltinEntry { .name = "force" },
 };
