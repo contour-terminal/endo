@@ -97,6 +97,10 @@ Available presets: `minimal-arrow`, `lambda-clean`, `opencode-bar`, `powerline`,
 `transient`, `dashboard`, `boxed-module`, `gradient-glow`, `context-adaptive`,
 `endo-signature`.
 
+The default `endo-signature` preset uses a transparent prompt background by
+default, so the prompt blends with the terminal's own background. Set
+`shell_prompt_color_background` to a color (or `"theme"`) to override it.
+
 ### User and host
 
 Most presets begin the info line with the `hostname` module, which renders your
