@@ -6,12 +6,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#if !defined(_WIN32)
-    #include <array>
-
-    #include <unistd.h>
-#endif
-
 #include <chrono>
 #include <ranges>
 #include <vector>
@@ -19,6 +13,7 @@
 #include <coro/Cancellation.hpp>
 #include <coro/Task.hpp>
 #include <platform/Clock.hpp>
+#include <platform/SystemPipe.hpp>
 
 using endo::coro::OperationCancelled;
 using endo::coro::Task;
@@ -489,38 +484,33 @@ TEST_CASE("waitReadable on an invalid fd resolves immediately as cancelled", "[T
     REQUIRE(source.waitCount() == 0); // never blocked: an unwaitable fd resolves inline
 }
 
-#if !defined(_WIN32)
-TEST_CASE("waitReadable resolves over a real pipe via PollEventSource", "[TuiRuntime][fd][poll]")
+TEST_CASE("waitReadable resolves over a real SystemPipe via PollEventSource", "[TuiRuntime][fd][poll]")
 {
-    // End-to-end through the real poll(2) path (not the scripted mock): a pipe whose
-    // write end already holds a byte is readable, so a flow parked on waitReadable
-    // resolves on the first real poll and reads the byte back.
-    auto pipeFds = std::array<int, 2> {};
-    REQUIRE(::pipe(pipeFds.data()) == 0);
-    auto const readFd = pipeFds[0];
-    auto const writeFd = pipeFds[1];
+    // End-to-end through the real OS readiness path (poll(2) / WaitForMultipleObjects),
+    // not the scripted mock: a SystemPipe whose write end already holds a byte is
+    // readable, so a flow parked on waitReadable resolves on the first real wait and
+    // reads the byte back. SystemPipe gives a reactor-waitable read end on every
+    // platform, so this test runs identically on Linux, macOS, and Windows.
+    auto pipe = endo::platform::createSystemPipe();
+    REQUIRE(pipe.has_value());
 
     char const payload = 'Z';
-    REQUIRE(::write(writeFd, &payload, 1) == 1);
+    REQUIRE((*pipe)->write(&payload, 1).has_value());
 
     auto source = tui::runtime::PollEventSource {};
     auto runtime = TuiRuntime { source };
 
-    auto readByte = [](TuiRuntime* rt, int fd) -> Task<char> {
-        co_await rt->waitReadable(fd);
+    auto readByte = [](TuiRuntime* rt, endo::platform::SystemPipe* p) -> Task<char> {
+        co_await rt->waitReadable(p->waitHandle());
         char buf = 0;
-        auto const got = ::read(fd, &buf, 1);
-        co_return got == 1 ? buf : '\0';
+        auto const got = p->read(&buf, 1);
+        co_return (got.has_value() && *got == 1) ? buf : '\0';
     };
 
-    auto const result = runtime.blockOn(readByte(&runtime, readFd));
+    auto const result = runtime.blockOn(readByte(&runtime, pipe->get()));
     REQUIRE(result == 'Z');
     REQUIRE(source.attachedCount() == 0); // the awaiter detached on resume
-
-    ::close(readFd);
-    ::close(writeFd);
 }
-#endif
 
 TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiRuntime][fd]")
 {
