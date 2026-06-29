@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/InputEvent.hpp>
+#include <tui/runtime/PollEventSource.hpp>
 #include <tui/runtime/TuiRuntime.hpp>
 #include <tui/runtime/testing/MockEventSource.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+
+#if !defined(_WIN32)
+    #include <array>
+
+    #include <unistd.h>
+#endif
 
 #include <chrono>
 #include <ranges>
@@ -125,6 +132,21 @@ Task<int> awaitCustomDelayOrCancel(TuiRuntime* runtime, int delayMs, int cancelS
     }
 }
 
+/// Waits for @p fd to become readable; returns 1 on readiness or @p cancelSentinel
+/// if cancelled while parked.
+Task<int> awaitReadableOrCancel(TuiRuntime* runtime, endo::platform::NativeHandle fd, int cancelSentinel)
+{
+    try
+    {
+        co_await runtime->waitReadable(fd);
+        co_return 1;
+    }
+    catch (OperationCancelled const&)
+    {
+        co_return cancelSentinel;
+    }
+}
+
 KeyEvent keyOf(char32_t codepoint)
 {
     return KeyEvent { .codepoint = codepoint };
@@ -154,6 +176,22 @@ Task<void> parkForeverWithGuard(TuiRuntime* runtime, bool* destroyed)
     {
         // Expected on runtime teardown: the frame unwinds and `guard` destructs,
         // which is exactly what this flow exists to demonstrate.
+        static_cast<void>(destroyed);
+    }
+}
+
+/// Parks on waitReadable with an RAII guard; proves the frame unwinds (guard runs)
+/// if the runtime is torn down while the fd wait is parked.
+Task<void> waitReadableWithGuard(TuiRuntime* runtime, endo::platform::NativeHandle fd, bool* destroyed)
+{
+    *destroyed = false;
+    auto guard = UnwindFlag { destroyed };
+    try
+    {
+        co_await runtime->waitReadable(fd);
+    }
+    catch (OperationCancelled const&)
+    {
         static_cast<void>(destroyed);
     }
 }
@@ -409,6 +447,94 @@ TEST_CASE("An invalid FdToken is falsy and equals the invalid sentinel", "[Event
     auto const invalid = tui::runtime::FdToken::invalid();
     REQUIRE_FALSE(static_cast<bool>(invalid));
     REQUIRE(invalid == tui::runtime::FdToken {});
+}
+
+TEST_CASE("waitReadable resumes when the registered fd becomes readable", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    // The awaiter attaches the fd during await_suspend (the first wait()), which the
+    // mock tokenises as FdToken{1}; script that token readable so the first wait
+    // resolves the park.
+    source.pushReadable(tui::runtime::FdToken { 1 });
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -1;
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, /*fd=*/42, Cancelled));
+
+    REQUIRE(result == 1);
+}
+
+TEST_CASE("waitReadable on an interrupt cancels the parked flow", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    source.pushInterrupt(); // SIGINT while parked → root stop → OperationCancelled
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -7;
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, /*fd=*/42, Cancelled));
+
+    REQUIRE(result == Cancelled);
+}
+
+TEST_CASE("waitReadable on an invalid fd resolves immediately as cancelled", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -3;
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::InvalidHandle, Cancelled));
+
+    REQUIRE(result == Cancelled);
+    REQUIRE(source.waitCount() == 0); // never blocked: an unwaitable fd resolves inline
+}
+
+#if !defined(_WIN32)
+TEST_CASE("waitReadable resolves over a real pipe via PollEventSource", "[TuiRuntime][fd][poll]")
+{
+    // End-to-end through the real poll(2) path (not the scripted mock): a pipe whose
+    // write end already holds a byte is readable, so a flow parked on waitReadable
+    // resolves on the first real poll and reads the byte back.
+    auto pipeFds = std::array<int, 2> {};
+    REQUIRE(::pipe(pipeFds.data()) == 0);
+    auto const readFd = pipeFds[0];
+    auto const writeFd = pipeFds[1];
+
+    char const payload = 'Z';
+    REQUIRE(::write(writeFd, &payload, 1) == 1);
+
+    auto source = tui::runtime::PollEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    auto readByte = [](TuiRuntime* rt, int fd) -> Task<char> {
+        co_await rt->waitReadable(fd);
+        char buf = 0;
+        auto const got = ::read(fd, &buf, 1);
+        co_return got == 1 ? buf : '\0';
+    };
+
+    auto const result = runtime.blockOn(readByte(&runtime, readFd));
+    REQUIRE(result == 'Z');
+    REQUIRE(source.attachedCount() == 0); // the awaiter detached on resume
+
+    ::close(readFd);
+    ::close(writeFd);
+}
+#endif
+
+TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    source.pushTimeout(); // benign wait for the root's post-completion pump
+    auto destroyed = false;
+    {
+        auto runtime = TuiRuntime { source };
+        runtime.spawn(waitReadableWithGuard(&runtime, /*fd=*/42, &destroyed));
+        runtime.blockOn(awaitZeroDelay(&runtime)); // drive the spawned flow to its park
+        REQUIRE_FALSE(destroyed);
+    } // ~TuiRuntime: stop + flush fd waiters + drain → the frame unwinds, guard runs
+
+    REQUIRE(destroyed);
 }
 
 TEST_CASE("Destroying the runtime unwinds a parked spawned flow via RAII", "[TuiRuntime]")

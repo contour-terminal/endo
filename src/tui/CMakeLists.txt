@@ -40,6 +40,7 @@ add_library(tui
     platform/TerminalShared.cpp
     runtime/TuiRuntime.cpp
     runtime/TerminalEventSource.cpp
+    runtime/PollEventSource.cpp
 )
 
 # Platform-specific terminal implementations
