@@ -62,7 +62,8 @@ class CommandResolver
     /// @brief Searches $PATH for the first executable matching @p command.
     ///
     /// On POSIX, also verifies execute permission bits.
-    /// On Windows, reads PATHEXT and tries each extension.
+    /// On Windows, applies PATHEXT (see @ref candidateNames for the exact rule).
+    /// Stops at the first match.
     ///
     /// @param command  Bare command name (no path separators).
     /// @return Full path string if found, empty string if not found.
@@ -80,12 +81,39 @@ class CommandResolver
     EnvironmentProvider const& _env;
     FileSystem const& _fs;
 
-    // Cache for efficiency
-    mutable std::string _cachedPath;
+    // Cache for efficiency. The key combines $PATH and (on Windows) $PATHEXT, since both
+    // govern resolution; a change to either invalidates the per-command results.
+    mutable std::string _cacheKey;
     mutable std::unordered_map<std::string, std::string> _pathCache; // command -> full path
 
-    /// @brief Refreshes the PATH cache if $PATH has changed.
+    /// @brief Refreshes the PATH cache if $PATH (or, on Windows, $PATHEXT) has changed.
     void refreshCacheIfNeeded() const;
+
+    /// @brief Computes the cache key from the resolution-relevant environment.
+    /// @return $PATH on POSIX; "$PATH\\x1f$PATHEXT" on Windows.
+    [[nodiscard]] std::string computeCacheKey() const;
+
+    /// @brief Searches $PATH for executables matching @p command.
+    /// @param command   Bare command name (no path separators).
+    /// @param firstOnly Stop after the first match (used by findInPath()).
+    /// @return Full path strings for the matches found (may be empty).
+    [[nodiscard]] std::vector<std::string> search(std::string_view command, bool firstOnly) const;
+
+    /// @brief Builds the candidate file names (relative to each PATH directory) for @p command.
+    ///
+    /// POSIX: always just @p command itself.
+    /// Windows (cmd.exe / PowerShell semantics):
+    ///   - if @p command already carries an extension, it is used verbatim and PATHEXT is
+    ///     not applied (an explicitly typed name is never augmented);
+    ///   - otherwise the bare name is expanded to `command + ext` for each PATHEXT entry and
+    ///     the extensionless name is never probed — this is what stops an extensionless
+    ///     `docker` shim from shadowing the real `docker.exe`.
+    ///
+    /// @param env     Environment provider, used to read PATHEXT on Windows (unused on POSIX).
+    /// @param command Bare command name.
+    /// @return Ordered list of candidate file names.
+    [[nodiscard]] static std::vector<std::string> candidateNames(EnvironmentProvider const& env,
+                                                                 std::string_view command);
 };
 
 } // namespace endo
