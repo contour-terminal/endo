@@ -15,6 +15,8 @@ add_library(endo-platform STATIC
     Pipe.cpp
     SystemPipe.hpp
     SystemPipe.cpp
+    WinsockInit.hpp
+    WinsockInit.cpp
     EnvironmentProvider.hpp
     UserPaths.hpp
     PathUtils.hpp

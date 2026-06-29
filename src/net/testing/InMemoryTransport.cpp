@@ -9,6 +9,7 @@
 // clang-format on
 
 #include <net/testing/InMemoryTransport.hpp>
+#include <platform/WinsockInit.hpp>
 
 #if !defined(_WIN32)
     #include <array>
@@ -31,6 +32,7 @@ namespace endo::net::testing
 
 std::expected<SocketPair, NetError> makeSocketPair(tui::runtime::TuiRuntime& runtime)
 {
+    endo::platform::ensureWinsockInitialized();
     auto fds = std::array<int, 2> {};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds.data()) != 0)
         return std::unexpected(makeNetError(NetErrorCode::Other, errno, "socketpair"));
@@ -100,6 +102,7 @@ namespace
 
 std::expected<SocketPair, NetError> makeSocketPair(tui::runtime::TuiRuntime& runtime)
 {
+    endo::platform::ensureWinsockInitialized();
     SOCKET a = INVALID_SOCKET;
     SOCKET b = INVALID_SOCKET;
     if (!makeLoopbackPair(a, b))

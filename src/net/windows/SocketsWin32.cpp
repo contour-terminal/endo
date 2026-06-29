@@ -18,6 +18,7 @@
 
     #include <net/windows/WindowsListener.hpp>
     #include <net/windows/WindowsSocket.hpp>
+    #include <platform/WinsockInit.hpp>
 
 namespace endo::net
 {
@@ -27,6 +28,7 @@ std::expected<std::unique_ptr<IListener>, NetError> listen(tui::runtime::TuiRunt
                                                            std::uint16_t port,
                                                            int backlog)
 {
+    endo::platform::ensureWinsockInitialized();
     return WindowsListener::bind(runtime, host, port, backlog)
         .transform(
             [](std::unique_ptr<WindowsListener> listener) -> std::unique_ptr<IListener> { return listener; });
@@ -36,6 +38,7 @@ endo::coro::Task<std::expected<std::unique_ptr<ISocket>, NetError>> connect(tui:
                                                                             std::string_view host,
                                                                             std::uint16_t port)
 {
+    endo::platform::ensureWinsockInitialized();
     auto hints = addrinfo {};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;

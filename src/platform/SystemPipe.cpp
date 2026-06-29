@@ -9,9 +9,10 @@
 #endif
 // clang-format on
 
-#include <platform/SystemPipe.hpp>
-
 #include <array>
+
+#include <platform/SystemPipe.hpp>
+#include <platform/WinsockInit.hpp>
 
 #if !defined(_WIN32)
     #include <sys/socket.h>
@@ -213,6 +214,7 @@ namespace
 
 std::expected<std::unique_ptr<SystemPipe>, PlatformError> createSystemPipe()
 {
+    ensureWinsockInitialized(); // no-op on POSIX; required before any socket call on Windows
 #if !defined(_WIN32)
     auto fds = std::array<int, 2> {};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds.data()) != 0)
