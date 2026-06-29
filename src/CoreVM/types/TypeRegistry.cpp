@@ -154,16 +154,23 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->kind = TypeKind::Product;
     fileInfoType->id = BuiltinTypeId::FileInfo;
     fileInfoType->name = "FileInfo";
-    fileInfoType->slotCount = 5;
+    fileInfoType->slotCount = 7;
     fileInfoType->fields = {
         { .name = "name", .offset = 0, .type = LiteralType::String },
         { .name = "size", .offset = 1, .type = LiteralType::Object, .nestedTypeName = "Size" },
         { .name = "mode", .offset = 2, .type = LiteralType::Object, .nestedTypeName = "FileMode" },
         { .name = "mtime", .offset = 3, .type = LiteralType::Object, .nestedTypeName = "DateTime" },
-        { .name = "isDir", .offset = 4, .type = LiteralType::Boolean },
+        // isDir/isSymlink/target drive presentation (folder slash, symlink icon, "name ->
+        // target" suffix) and are hidden from the default table, but remain field-accessible.
+        { .name = "isDir", .offset = 4, .type = LiteralType::Boolean, .display = false },
+        { .name = "isSymlink", .offset = 5, .type = LiteralType::Boolean, .display = false },
+        { .name = "target", .offset = 6, .type = LiteralType::String, .display = false },
     };
     fileInfoType->producingCommand = "ls";
-    // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects
+    // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects.
+    // Slots 0 (name) and 6 (target) are Strings: CoreString lives in the Runner's
+    // separate string arena (not the GC object pool), so String slots are intentionally
+    // NOT traced and must stay out of fixedObjectSlots.
     fileInfoType->traceInfo.fixedObjectSlots = { 1, 2, 3 };
     addType(std::move(fileInfoType));
 

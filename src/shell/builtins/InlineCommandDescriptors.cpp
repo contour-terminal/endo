@@ -81,7 +81,11 @@ static constexpr InlineOptionDef TouchOptions[] = {
 
 static constexpr InlineOptionDef LnOptions[] = {
     { .shortFlag = "-s", .longFlag = {}, .description = "Create symbolic link" },
-    { .shortFlag = "-f", .longFlag = {}, .description = "Remove existing destination files" },
+    { .shortFlag = "-f", .longFlag = {}, .description = "Remove existing destination (incl. dangling symlink)" },
+    { .shortFlag = "-n", .longFlag = "--no-dereference",
+      .description = "Treat a symlink at the destination as a normal file" },
+    { .shortFlag = "-t", .longFlag = "--target-directory",
+      .description = "Create all links inside the given directory", .takesValue = true },
     { .shortFlag = "-v", .longFlag = {}, .description = "Explain what is being done" },
 };
 
@@ -220,7 +224,7 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "kill [-SIGNAL] PID|%JOB ...",
           .noStdinFn = &Shell::executeInlineKill },
         { .name = "ln",        .briefDescription = "Create hard or symbolic links.",
-          .usageLine = "ln [OPTIONS] TARGET LINK_NAME",
+          .usageLine = "ln [OPTIONS] TARGET [LINK_NAME] | ln [OPTIONS] TARGET... DIRECTORY",
           .options = LnOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .noStdinFn = &Shell::executeInlineLn },
         { .name = "mkdir",     .briefDescription = "Create directories.",

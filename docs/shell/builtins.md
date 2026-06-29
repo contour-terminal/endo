@@ -1590,18 +1590,32 @@ Create links between files.
 **Syntax:**
 
 ```
-ln [OPTIONS] TARGET LINK_NAME
+ln [OPTIONS] TARGET                 # link in the current directory, named after TARGET
+ln [OPTIONS] TARGET LINK_NAME       # create LINK_NAME as a link to TARGET
+ln [OPTIONS] TARGET... DIRECTORY    # create links to each TARGET inside DIRECTORY
 ```
 
-**Description:** Creates a link from LINK_NAME to TARGET. By default, creates a hard link.
-Use `-s` for symbolic links.
+**Description:** Creates a link to TARGET. By default, creates a hard link; use `-s` for a
+symbolic link.
+
+Operand handling follows GNU `ln`:
+
+- With a single TARGET, the link is created in the current directory, named after TARGET's
+  basename (e.g. `ln -s build/clang-debug/compile_commands.json` creates
+  `./compile_commands.json`).
+- If LINK_NAME is an existing directory, the link is created inside it, named after TARGET's
+  basename.
+- With more than two operands, the last must be an existing directory and a link to each
+  preceding TARGET is created inside it.
 
 **Options:**
 
 | Option | Description |
 |---|---|
 | `-s` | Create a symbolic link |
-| `-f` | Remove existing destination file |
+| `-f` | Remove an existing destination first (including a dangling symlink) |
+| `-n`, `--no-dereference` | Treat a symlink at the destination as a normal file (replace it rather than follow into it) |
+| `-t`, `--target-directory=DIR` | Create all links inside DIR |
 | `-v` | Explain what is being done |
 | `--help` | Display help |
 
@@ -1611,7 +1625,10 @@ Use `-s` for symbolic links.
 ```endo
 ln -s /usr/bin/python3 python
 ln original.txt hardlink.txt
-ln -sf newtarget existing-link
+ln -sf newtarget existing-link              # replaces existing-link, even if dangling
+ln -sf build/clang-debug/compile_commands.json   # creates ./compile_commands.json
+ln -s target.txt some-directory             # creates some-directory/target.txt
+ln -s -t bin app1 app2 app3                 # links app1..app3 inside bin/
 ```
 
 ---

@@ -21,6 +21,7 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <random>
 #include <ranges>
 #include <regex>
@@ -4022,86 +4023,182 @@ int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle 
 
 int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
+    namespace fs = std::filesystem;
+
     bool symbolic = false;
     bool force = false;
+    bool noDereference = false;
     bool verbose = false;
+    std::optional<std::string> targetDir; // set by -t / --target-directory
+    bool noMoreOptions = false;
     std::vector<std::string> operands;
 
     for (size_t i = 1; i < args.size(); ++i)
     {
         std::string_view arg = args.at(i);
-        if (arg == "--help")
-            return renderMarkdownHelp(outputFd,
-                                      "# ln\n"
-                                      "\n"
-                                      "Create hard or symbolic links.\n"
-                                      "\n"
-                                      "## Usage\n"
-                                      "\n"
-                                      "`ln [OPTIONS] TARGET LINK_NAME`\n"
-                                      "\n"
-                                      "## Options\n"
-                                      "\n"
-                                      "| Option | Description |\n"
-                                      "|--------|-------------|\n"
-                                      "| `-s` | Create symbolic link |\n"
-                                      "| `-f` | Remove existing destination files |\n"
-                                      "| `-v` | Explain what is being done |\n"
-                                      "| `--help` | Display this help |\n");
-        if (arg == "--")
+        if (!noMoreOptions)
         {
-            for (auto const j: std::views::iota(i + 1, args.size()))
-                operands.push_back(args.at(j));
-            break;
-        }
-        if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
-        {
-            for (auto const j: std::views::iota(1uz, arg.size()))
+            if (arg == "--help")
+                return renderMarkdownHelp(
+                    outputFd,
+                    "# ln\n"
+                    "\n"
+                    "Create hard or symbolic links.\n"
+                    "\n"
+                    "## Usage\n"
+                    "\n"
+                    "`ln [OPTIONS] TARGET`            create a link to TARGET in the current directory\n"
+                    "`ln [OPTIONS] TARGET LINK_NAME`  create LINK_NAME as a link to TARGET\n"
+                    "`ln [OPTIONS] TARGET... DIR`     create links to each TARGET inside DIR\n"
+                    "\n"
+                    "If LINK_NAME is an existing directory, the link is created inside it,\n"
+                    "named after TARGET's basename.\n"
+                    "\n"
+                    "## Options\n"
+                    "\n"
+                    "| Option | Description |\n"
+                    "|--------|-------------|\n"
+                    "| `-s` | Create symbolic link |\n"
+                    "| `-f` | Remove existing destination (including a dangling symlink) |\n"
+                    "| `-n`, `--no-dereference` | Treat an existing symlink at the destination as a "
+                    "normal file (replace it rather than follow into it) |\n"
+                    "| `-t`, `--target-directory=DIR` | Create all links inside DIR |\n"
+                    "| `-v` | Explain what is being done |\n"
+                    "| `--help` | Display this help |\n");
+            if (arg == "--")
             {
-                switch (arg[j])
-                {
-                    case 's': symbolic = true; break;
-                    case 'f': force = true; break;
-                    case 'v': verbose = true; break;
-                    default: error("ln: invalid option -- '{}'", arg[j]); return 1;
-                }
+                noMoreOptions = true;
+                continue;
             }
-            continue;
+            if (arg == "--no-dereference")
+            {
+                noDereference = true;
+                continue;
+            }
+            if (arg.starts_with("--target-directory="))
+            {
+                targetDir = std::string(arg.substr(std::string_view("--target-directory=").size()));
+                continue;
+            }
+            if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+            {
+                for (auto const j: std::views::iota(1uz, arg.size()))
+                {
+                    switch (arg[j])
+                    {
+                        case 's': symbolic = true; break;
+                        case 'f': force = true; break;
+                        case 'n': noDereference = true; break;
+                        case 'v': verbose = true; break;
+                        case 't':
+                            // -t takes the next argument as the target directory.
+                            if (i + 1 >= args.size())
+                            {
+                                error("ln: option requires an argument -- 't'");
+                                return 1;
+                            }
+                            targetDir = args.at(++i);
+                            break;
+                        default: error("ln: invalid option -- '{}'", arg[j]); return 1;
+                    }
+                }
+                continue;
+            }
         }
         operands.emplace_back(arg);
     }
 
-    if (operands.size() < 2)
+    if (operands.empty())
     {
-        error("ln: missing operand");
+        error("ln: missing file operand");
         return 1;
     }
 
-    auto const& target = operands[0];
-    auto const& linkName = operands[1];
+    /// Decides whether @p dest should be treated as a directory to place the link inside.
+    /// With -n, an existing symlink at @p dest is treated as a plain destination so it can
+    /// be replaced rather than dereferenced into.
+    auto const isDirectoryForLinking = [&](std::string const& dest) {
+        std::error_code ec;
+        if (noDereference && fs::is_symlink(fs::symlink_status(dest, ec)))
+            return false;
+        return fs::is_directory(dest, ec);
+    };
 
-    std::error_code ec;
-    if (force && std::filesystem::exists(linkName, ec))
-        std::filesystem::remove(linkName, ec);
+    /// Creates a single link from @p target to @p linkName, honoring -s/-f/-n/-v.
+    /// @return 0 on success, 1 on failure (after reporting the error).
+    auto const createOneLink = [&](std::string const& target, std::string const& linkName) -> int {
+        std::error_code ec;
 
-    if (symbolic)
-        std::filesystem::create_symlink(target, linkName, ec);
-    else
-        std::filesystem::create_hard_link(target, linkName, ec);
+        // lstat-style existence check: symlink_status does not follow the final component,
+        // so a dangling symlink at linkName is detected (and removable) — unlike exists().
+        auto const st = fs::symlink_status(linkName, ec);
+        bool const present = !ec && st.type() != fs::file_type::not_found;
+        if (present && (force || (noDereference && fs::is_symlink(st))))
+        {
+            std::error_code removeEc;
+            fs::remove(linkName, removeEc); // remove the link/file itself, never recurse
+        }
 
-    if (ec)
+        ec.clear();
+        if (symbolic)
+            fs::create_symlink(target, linkName, ec);
+        else
+            fs::create_hard_link(target, linkName, ec);
+
+        if (ec)
+        {
+            error("ln: failed to create link '{}' -> '{}': {}", linkName, target, ec.message());
+            return 1;
+        }
+
+        if (verbose)
+        {
+            auto msg = std::format("'{}' -> '{}'\n", linkName, target);
+            [[maybe_unused]] auto written = platformWrite(outputFd, msg.data(), msg.size());
+        }
+        return 0;
+    };
+
+    auto const linkInDir = [](std::string const& target, std::string const& dir) {
+        return (fs::path(dir) / fs::path(target).filename()).string();
+    };
+
+    /// Creates a link to each target inside @p dir (which must already exist as a directory),
+    /// each named after its target's basename. Used by both -t DIR and the TARGET... DIRECTORY
+    /// form. @return the worst (non-zero on any failure) exit code.
+    auto const linkAllIntoDir = [&](std::string const& dir, std::span<std::string const> targets) -> int {
+        std::error_code ec;
+        if (!fs::is_directory(dir, ec))
+        {
+            error("ln: target directory '{}' is not a directory", dir);
+            return 1;
+        }
+        int rc = 0;
+        for (auto const& target: targets)
+            rc |= createOneLink(target, linkInDir(target, dir));
+        return rc;
+    };
+
+    if (targetDir)
+        return linkAllIntoDir(*targetDir, operands);
+
+    if (operands.size() == 1)
     {
-        error("ln: failed to create link '{}' -> '{}': {}", linkName, target, ec.message());
-        return 1;
+        // Single operand: link in the current directory, named after the target's basename.
+        auto const& target = operands[0];
+        return createOneLink(target, fs::path(target).filename().string());
     }
 
-    if (verbose)
+    if (operands.size() == 2)
     {
-        auto msg = std::format("'{}' -> '{}'\n", linkName, target);
-        [[maybe_unused]] auto written = platformWrite(outputFd, msg.data(), msg.size());
+        auto const& target = operands[0];
+        auto const& dest = operands[1];
+        auto const linkName = isDirectoryForLinking(dest) ? linkInDir(target, dest) : dest;
+        return createOneLink(target, linkName);
     }
 
-    return 0;
+    // More than two operands: the last must be an existing directory.
+    return linkAllIntoDir(operands.back(), std::span(operands).first(operands.size() - 1));
 }
 
 // ---------------------------------------------------------------------------

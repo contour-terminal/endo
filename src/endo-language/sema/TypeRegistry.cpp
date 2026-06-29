@@ -94,6 +94,8 @@ void TypeDefinitionRegistry::registerBuiltins()
             { .name = "mode", .offset = 2, .type = CoreVM::LiteralType::Object },
             { .name = "mtime", .offset = 3, .type = CoreVM::LiteralType::Object },
             { .name = "isDir", .offset = 4, .type = CoreVM::LiteralType::Boolean },
+            { .name = "isSymlink", .offset = 5, .type = CoreVM::LiteralType::Boolean },
+            { .name = "target", .offset = 6, .type = CoreVM::LiteralType::String },
         };
         for (auto const& f: fileInfoType.fields)
             fileInfoType.fieldTypes[f.name] = f.type;
