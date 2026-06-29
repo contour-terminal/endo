@@ -428,8 +428,10 @@ TEST_CASE("A non-input activity wake resumes a timed input waiter with no event"
 TEST_CASE("EventSource fd registry hands out distinct tokens and reports readiness", "[EventSource]")
 {
     auto source = MockEventSource {};
-    auto const a = source.attach(7, tui::runtime::FdInterest::Read);
-    auto const b = source.attach(8, tui::runtime::FdInterest::Write);
+    // The mock ignores the handle value (it returns synthetic tokens); use real
+    // native handles so this compiles on Windows, where NativeHandle is void*.
+    auto const a = source.attach(endo::platform::standardInput(), tui::runtime::FdInterest::Read);
+    auto const b = source.attach(endo::platform::standardOutput(), tui::runtime::FdInterest::Write);
 
     REQUIRE(static_cast<bool>(a));
     REQUIRE(static_cast<bool>(b));
@@ -469,7 +471,7 @@ TEST_CASE("waitReadable resumes when the registered fd becomes readable", "[TuiR
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -1;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, /*fd=*/42, Cancelled));
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == 1);
 }
@@ -481,7 +483,7 @@ TEST_CASE("waitReadable on an interrupt cancels the parked flow", "[TuiRuntime][
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -7;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, /*fd=*/42, Cancelled));
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == Cancelled);
 }
@@ -568,7 +570,7 @@ TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiR
     auto destroyed = false;
     {
         auto runtime = TuiRuntime { source };
-        runtime.spawn(waitReadableWithGuard(&runtime, /*fd=*/42, &destroyed));
+        runtime.spawn(waitReadableWithGuard(&runtime, endo::platform::standardInput(), &destroyed));
         runtime.blockOn(awaitZeroDelay(&runtime)); // drive the spawned flow to its park
         REQUIRE_FALSE(destroyed);
     } // ~TuiRuntime: stop + flush fd waiters + drain → the frame unwinds, guard runs
