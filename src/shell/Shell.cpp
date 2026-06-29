@@ -1088,8 +1088,12 @@ void Shell::loadCompleters()
     loadDir(ENDO_COMPLETERS_DIR);
 #endif
 
-    // Register the ScriptedCompleter provider if any completers were loaded
-    if (!_completerFunctions.commands().empty())
+    // Register the ScriptedCompleter provider if any completers were loaded. The
+    // completer subsystem only exists once interactive mode is initialized; when it
+    // is not (e.g. non-interactive use, or a test invoking completer functions
+    // directly), the functions are still loaded above and remain callable via
+    // executeCompleterFunction — only the interactive provider is skipped.
+    if (completer && !_completerFunctions.commands().empty())
     {
         completer->addProvider(std::make_unique<ScriptedCompleter>(
             _completerFunctions,

@@ -286,5 +286,8 @@ Endo ships with completers for the following commands:
 | `glab` | `glab.endo` | Full subcommand tree for GitLab CLI, with alias resolution |
 | `flatpak` | `flatpak.endo` | Subcommands, dynamic app/remote listing |
 | `claude` | `claude.endo` | Subcommands, model names, permission modes, output formats |
+| `dnf` | `dnf.endo` | DNF 4 subcommands/options, installed (`rpm -qa`) and available (`dnf repoquery -C`) package names |
+| `dnf5` | `dnf5.endo` | DNF 5 subcommands/options, installed and available package names |
+| `rpm` | `rpm.endo` | Mode/query options, installed package names in query/erase/verify modes |
 
 These serve as good reference implementations when writing your own completers.

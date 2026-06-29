@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -2624,6 +2625,52 @@ TEST_CASE("shell.subst.no_fd_leak")
     CHECK(allCaptured);
 }
 #endif
+
+// ============================================================================
+// Package-manager completers (shared _rpm_common.endo helpers)
+// ============================================================================
+
+namespace
+{
+/// @brief True if any completion in @p result has the given insert text.
+bool hasCompletionText(endo::CompleterExecutionResult const& result, std::string_view text)
+{
+    return std::ranges::any_of(result.completions, [text](auto const& c) { return c.text == text; });
+}
+} // namespace
+
+TEST_CASE("shell.completer.rpm_family_shared_helpers")
+{
+    // End-to-end check that the dnf/dnf5/rpm completers resolve the shared symbols
+    // defined in _rpm_common.endo (which loads first thanks to its `_` prefix).
+    // Exercises the real completer files via the live completion path, so an
+    // "undefined function" regression in the shared-helper refactor would fail here.
+    TestShell shell;
+    shell.shell.loadCompleters();
+
+    // `dnf clean <TAB>` resolves rpm_clean_targets from the shared file.
+    auto const dnfClean = shell.shell.executeCompleterFunction("dnf_complete", { "clean" }, "");
+    CHECK(dnfClean.errors.empty());
+    CHECK(hasCompletionText(dnfClean, "metadata"));
+    CHECK(hasCompletionText(dnfClean, "expire-cache"));
+
+    // `dnf5 clean <TAB>` resolves the same shared rpm_clean_targets.
+    auto const dnf5Clean = shell.shell.executeCompleterFunction("dnf5_complete", { "clean" }, "");
+    CHECK(dnf5Clean.errors.empty());
+    CHECK(hasCompletionText(dnf5Clean, "metadata"));
+
+    // dnf5 history = shared baseline (rpm_history_subcommands) plus the dnf5-only
+    // `store`; the shared entries must still be present after the `@` append.
+    auto const dnf5History = shell.shell.executeCompleterFunction("dnf5_complete", { "history" }, "");
+    CHECK(dnf5History.errors.empty());
+    CHECK(hasCompletionText(dnf5History, "rollback")); // from shared baseline
+    CHECK(hasCompletionText(dnf5History, "store"));    // dnf5-only addition
+
+    // `rpm -q <pkg-prefix>` uses the shared rpm_installed_packages helper; the
+    // function must at least resolve (no compile error) even if no package matches.
+    auto const rpmQuery = shell.shell.executeCompleterFunction("rpm_complete", { "-q" }, "");
+    CHECK(rpmQuery.errors.empty());
+}
 
 // ============================================================================
 // Process Substitution
@@ -5266,7 +5313,9 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer = std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    // No need to construct the interactive `completer` here: loadCompleters() loads
+    // the completer functions into the registry regardless, and only skips
+    // registering the interactive provider when the completer subsystem is absent.
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();

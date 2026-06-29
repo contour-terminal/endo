@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Completer for dnf (DNF 4), Fedora/CentOS/RHEL's package manager. Completes
+# subcommands, global options, per-subcommand options, and package names.
+# Installed-package names come from `rpm -qa` (fast, offline); available package
+# names come from `dnf repoquery` (may refresh metadata).
+#
+# On systems where `dnf` is a symlink to dnf5 the surface differs slightly; see
+# dnf5.endo for the dnf5-native completer.
+
+# Installed-package names come from the shared `rpm_installed_packages` helper in
+# _rpm_common.endo (loaded first). Available package names come from `dnf
+# repoquery` below.
+#
+# Available package names. Uses `-C` (cacheonly) so completion never blocks on a
+# metadata refresh/download; run `dnf makecache` to update the cache.
+let dnf_available_packages _ =
+    $(dnf -q -C repoquery --queryformat "%{name}\n")
+        |> split "\n"
+        |> filter (_ != "")
+
+let dnf_complete args prefix =
+    let subcommands = [
+        Completion.described "install" "Install a package";
+        Completion.described "remove" "Remove a package";
+        Completion.described "erase" "Remove a package (alias)";
+        Completion.described "upgrade" "Upgrade packages";
+        Completion.described "update" "Upgrade packages (alias)";
+        Completion.described "downgrade" "Downgrade a package";
+        Completion.described "reinstall" "Reinstall a package";
+        Completion.described "search" "Search package metadata";
+        Completion.described "info" "Show package details";
+        Completion.described "list" "List packages";
+        Completion.described "provides" "Find what provides a value";
+        Completion.described "whatprovides" "Find what provides a value (alias)";
+        Completion.described "repoquery" "Query the package database";
+        Completion.described "autoremove" "Remove unneeded dependency packages";
+        Completion.described "check-update" "Check for available upgrades";
+        Completion.described "clean" "Remove cached data";
+        Completion.described "makecache" "Generate the metadata cache";
+        Completion.described "history" "Manage transaction history";
+        Completion.described "group" "Manage comps groups";
+        Completion.described "module" "Manage modules";
+        Completion.described "repolist" "List enabled repositories";
+        Completion.described "repoinfo" "Show repository details";
+        Completion.described "distro-sync" "Sync to the latest available versions";
+        Completion.described "mark" "Mark a package as user/dependency installed";
+        Completion.described "shell" "Run an interactive dnf shell";
+        Completion.described "swap" "Remove one package and install another";
+        Completion.described "deplist" "List package dependencies";
+        Completion.described "updateinfo" "Show advisory information";
+        Completion.described "config-manager" "Manage configuration and repos";
+        Completion.described "download" "Download a package";
+        Completion.described "builddep" "Install build dependencies";
+        Completion.described "versionlock" "Lock package versions";
+        Completion.described "copr" "Manage Copr repositories";
+        Completion.described "needs-restarting" "Check if services need restarting"
+    ]
+    let global_options = [
+        Completion.described "-y" "Automatically answer yes";
+        Completion.described "--assumeyes" "Automatically answer yes";
+        Completion.described "--assumeno" "Automatically answer no";
+        Completion.described "-q" "Quiet output";
+        Completion.described "--quiet" "Quiet output";
+        Completion.described "-v" "Verbose output";
+        Completion.described "--verbose" "Verbose output";
+        Completion.described "-h" "Show help"; Completion.described "--help" "Show help";
+        Completion.described "--version" "Show version";
+        Completion.described "-C" "Run entirely from system cache";
+        Completion.described "--cacheonly" "Run entirely from system cache";
+        Completion.described "--refresh" "Force refreshing metadata first";
+        Completion.described "--nogpgcheck" "Disable GPG signature checking";
+        Completion.described "--enablerepo" "Enable additional repositories";
+        Completion.described "--disablerepo" "Disable repositories";
+        Completion.described "--repo" "Enable just specific repositories";
+        Completion.described "--repoid" "Enable just specific repositories";
+        Completion.described "-x" "Exclude packages by name or glob";
+        Completion.described "--exclude" "Exclude packages by name or glob";
+        Completion.described "--best" "Try the best available package versions";
+        Completion.described "--nobest" "Do not limit to the best candidate";
+        Completion.described "--allowerasing" "Allow erasing of installed packages";
+        Completion.described "--skip-broken" "Skip packages with broken dependencies";
+        Completion.described "--downloadonly" "Download packages without installing";
+        Completion.described "--installroot" "Set the install root";
+        Completion.described "-b" "Include bugfix-relevant packages";
+        Completion.described "--bugfix" "Include bugfix-relevant packages";
+        Completion.described "--security" "Include security-relevant packages";
+        Completion.described "--enhancement" "Include enhancement-relevant packages";
+        Completion.described "--newpackage" "Include newpackage-relevant packages";
+        Completion.described "-c" "Configuration file location";
+        Completion.described "--config" "Configuration file location";
+        Completion.described "--setopt" "Set an arbitrary config option";
+        Completion.described "--releasever" "Override $releasever";
+        Completion.described "--forcearch" "Force a different architecture";
+        Completion.described "--noplugins" "Disable all plugins";
+        Completion.described "--disableplugin" "Disable plugins by name";
+        Completion.described "--enableplugin" "Enable plugins by name"
+    ]
+    # clean/group/module/history subcommand tables are shared with dnf5 via
+    # _rpm_common.endo (rpm_clean_targets, rpm_group_subcommands, etc.).
+    match args with
+    | [] when startsWith "-" prefix -> global_options
+    | [] -> subcommands
+    | ["clean"] -> rpm_clean_targets
+    | ["group"] -> rpm_group_subcommands
+    | ["module"] -> rpm_module_subcommands
+    | ["history"] -> rpm_history_subcommands
+    | ["install"] | ["search"] | ["download"] | ["builddep"] | ["info"] | ["provides"] | ["whatprovides"] | ["repoquery"] | ["deplist"] -> dnf_available_packages ()
+    | ["remove"] | ["erase"] | ["upgrade"] | ["update"] | ["downgrade"] | ["reinstall"] | ["distro-sync"] | ["autoremove"] | ["mark"] | ["swap"] -> rpm_installed_packages ()
+    | _ when startsWith "-" prefix -> global_options
+    | _ -> []
+
+Completion.register "dnf" dnf_complete

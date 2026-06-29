@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: dnf5 completer: module subcommand completion
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/dnf5.endo
+# expect: enable
+# expect: disable
+# expect: install
+# expect: remove
+# expect: reset
+# expect: list
+# expect: info
+
+let _ = dnf5_complete ["module"] "" |> each println

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rpm completer: option completion with dash prefix
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/rpm.endo
+# expect-expr: _ |> contains "-q"
+# expect-expr: _ |> contains "--query"
+# expect-expr: _ |> contains "-i"
+# expect-expr: _ |> contains "--install"
+# expect-expr: _ |> contains "-U"
+# expect-expr: _ |> contains "--upgrade"
+# expect-expr: _ |> contains "-e"
+# expect-expr: _ |> contains "--erase"
+# expect-expr: _ |> contains "-V"
+# expect-expr: _ |> contains "--verify"
+# expect-expr: _ |> contains "--whatprovides"
+# expect-expr: _ |> contains "--queryformat"
+
+let _ = rpm_complete [] "-" |> each println

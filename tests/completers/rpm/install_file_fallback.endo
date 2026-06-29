@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rpm completer: install mode takes file paths, so package-name list is empty
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/rpm.endo
+# expect-exit: 0
+# expect:
+
+let _ = rpm_complete ["-i"] "" |> each println
