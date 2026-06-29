@@ -25,6 +25,7 @@
 
 #include <coro/Cancellation.hpp>
 #include <coro/Task.hpp>
+#include <platform/Clock.hpp>
 
 namespace tui::runtime
 {
@@ -60,7 +61,11 @@ class TuiRuntime
 {
   public:
     /// @param source The multiplexed wait the pump drives (not owned; outlives the runtime).
-    explicit TuiRuntime(EventSource& source) noexcept;
+    /// @param clock The monotonic time source for timers, timed waits, and delays
+    ///        (not owned; outlives the runtime). Defaults to the process steady
+    ///        clock; tests inject a @c ManualClock for deterministic timing.
+    explicit TuiRuntime(EventSource& source,
+                        endo::platform::IClock& clock = endo::platform::defaultSteadyClock()) noexcept;
 
     TuiRuntime(TuiRuntime const&) = delete;
     TuiRuntime& operator=(TuiRuntime const&) = delete;
@@ -93,6 +98,11 @@ class TuiRuntime
 
     /// @return The root cancellation source; `request_stop()` cancels every flow.
     [[nodiscard]] endo::coro::StopSource& rootStopSource() noexcept { return _rootStop; }
+
+    /// @return The monotonic clock backing all timers, timed waits, and delays.
+    ///         Awaiters read deadlines through this so tests can drive time
+    ///         deterministically via an injected @c ManualClock.
+    [[nodiscard]] endo::platform::IClock& clock() const noexcept { return _clock; }
 
     /// Sets the handler invoked when the @c EventSource reports an interrupt
     /// (SIGINT / Ctrl+C). The default requests cancellation of the root source.
@@ -151,7 +161,7 @@ class TuiRuntime
     /// @return True if the parked input waiter's deadline has elapsed.
     [[nodiscard]] bool inputDeadlinePassed() const noexcept
     {
-        return _inputDeadline.has_value() && *_inputDeadline <= std::chrono::steady_clock::now();
+        return _inputDeadline.has_value() && *_inputDeadline <= _clock.now();
     }
 
     void scheduleTimer(std::chrono::steady_clock::time_point deadline, std::coroutine_handle<> waiter);
@@ -216,6 +226,7 @@ class TuiRuntime
     void wakeAllWaiters();
 
     EventSource& _source;                       ///< The injected multiplexed wait.
+    endo::platform::IClock& _clock;             ///< The injected monotonic time source.
     std::deque<std::coroutine_handle<>> _ready; ///< Coroutines ready to resume now.
     std::vector<TimerEntry> _timers;            ///< Min-heap by deadline (soonest at front).
     std::deque<InputEvent> _inputBuffer;        ///< Decoded input awaiting a consumer.
@@ -366,7 +377,7 @@ class DelayAwaiter
     {
     }
 
-    [[nodiscard]] bool await_ready() const noexcept { return _deadline <= std::chrono::steady_clock::now(); }
+    [[nodiscard]] bool await_ready() const noexcept { return _deadline <= _runtime.clock().now(); }
 
     template <typename Promise>
     [[nodiscard]] bool await_suspend(std::coroutine_handle<Promise> awaiting)

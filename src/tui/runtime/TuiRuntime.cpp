@@ -9,7 +9,8 @@
 namespace tui::runtime
 {
 
-TuiRuntime::TuiRuntime(EventSource& source) noexcept: _source(source)
+TuiRuntime::TuiRuntime(EventSource& source, endo::platform::IClock& clock) noexcept:
+    _source(source), _clock(clock)
 {
 }
 
@@ -71,7 +72,7 @@ int TuiRuntime::computeTimeoutMs() const
     if (!soonest)
         return -1; // Block indefinitely until a source becomes ready.
 
-    auto const now = std::chrono::steady_clock::now();
+    auto const now = _clock.now();
     if (*soonest <= now)
         return 0;
 
@@ -96,7 +97,7 @@ void TuiRuntime::routeDecodedEvent(InputEvent&& event)
 
 void TuiRuntime::fireExpiredTimers()
 {
-    auto const now = std::chrono::steady_clock::now();
+    auto const now = _clock.now();
     while (!_timers.empty() && _timers.front().deadline <= now)
     {
         std::ranges::pop_heap(_timers, soonestFirst);
@@ -206,17 +207,17 @@ NextInputEventAwaiter TuiRuntime::nextEvent() noexcept
 
 NextEventForAwaiter TuiRuntime::nextEventFor(std::chrono::milliseconds timeout) noexcept
 {
-    return NextEventForAwaiter { *this, std::chrono::steady_clock::now() + timeout };
+    return NextEventForAwaiter { *this, _clock.now() + timeout };
 }
 
 NextActivityAwaiter TuiRuntime::nextActivity(std::chrono::milliseconds timeout) noexcept
 {
-    return NextActivityAwaiter { *this, std::chrono::steady_clock::now() + timeout };
+    return NextActivityAwaiter { *this, _clock.now() + timeout };
 }
 
 DelayAwaiter TuiRuntime::delay(std::chrono::milliseconds duration) noexcept
 {
-    return DelayAwaiter { *this, std::chrono::steady_clock::now() + duration };
+    return DelayAwaiter { *this, _clock.now() + duration };
 }
 
 NextAgentReadyAwaiter TuiRuntime::nextAgentReady() noexcept

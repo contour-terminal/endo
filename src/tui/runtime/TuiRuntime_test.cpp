@@ -11,9 +11,11 @@
 
 #include <coro/Cancellation.hpp>
 #include <coro/Task.hpp>
+#include <platform/Clock.hpp>
 
 using endo::coro::OperationCancelled;
 using endo::coro::Task;
+using endo::platform::ManualClock;
 using tui::InputEvent;
 using tui::KeyEvent;
 using tui::runtime::TuiRuntime;
@@ -89,6 +91,32 @@ Task<int> awaitDelayOrCancel(TuiRuntime* runtime, int cancelSentinel)
     try
     {
         co_await runtime->delay(std::chrono::milliseconds { 500 });
+        co_return 0;
+    }
+    catch (OperationCancelled const&)
+    {
+        co_return cancelSentinel;
+    }
+}
+
+/// Parks on a delay of @p delayMs, then sets *fired and returns it. Used with a
+/// ManualClock to prove the timer fires only once the clock crosses the deadline.
+Task<int> awaitDelayThenFire(TuiRuntime* runtime, int delayMs, bool* fired)
+{
+    co_await runtime->delay(std::chrono::milliseconds { delayMs });
+    *fired = true;
+    co_return delayMs;
+}
+
+/// Parks on a delay of @p delayMs; sets *fired if it elapses, or returns
+/// @p cancelSentinel if cancelled while parked. Lets a ManualClock test assert
+/// the delay did NOT fire when the clock never advanced past the deadline.
+Task<int> awaitCustomDelayOrCancel(TuiRuntime* runtime, int delayMs, int cancelSentinel, bool* fired)
+{
+    try
+    {
+        co_await runtime->delay(std::chrono::milliseconds { delayMs });
+        *fired = true;
         co_return 0;
     }
     catch (OperationCancelled const&)
@@ -266,6 +294,75 @@ TEST_CASE("A pending delay bounds the wait timeout", "[TuiRuntime]")
     auto const firstTimeout = source.recordedTimeouts().front();
     REQUIRE(firstTimeout > 0);
     REQUIRE(firstTimeout <= 500);
+}
+
+TEST_CASE("An injected ManualClock makes a delay's computed timeout exact", "[TuiRuntime][clock]")
+{
+    // With time frozen, computeTimeoutMs has no real-clock jitter: a delay(100ms)
+    // must yield exactly 100 as the bounding timeout on the first wait.
+    auto source = MockEventSource {};
+    source.pushInterrupt(); // unblock the test (the timer never fires; clock is frozen)
+    auto clock = ManualClock {};
+    auto runtime = TuiRuntime { source, clock };
+
+    auto fired = false;
+    constexpr auto Sentinel = -3;
+    // The delay parks; the interrupt then cancels it (delay throws OperationCancelled).
+    auto const result = runtime.blockOn(awaitCustomDelayOrCancel(&runtime, 100, Sentinel, &fired));
+
+    REQUIRE(result == Sentinel);
+    REQUIRE_FALSE(fired); // clock never advanced, so the timer never elapsed
+    REQUIRE(source.recordedTimeouts().front() == 100);
+}
+
+namespace
+{
+
+/// A MockEventSource that advances an injected ManualClock by a fixed step on
+/// every wait(). This models the passage of time deterministically: the runtime
+/// schedules a delay against the clock, and each blocking wait "elapses" exactly
+/// `step` of clock time, so a delay fires after a known number of waits — with no
+/// real sleeping.
+class ClockAdvancingSource: public MockEventSource
+{
+  public:
+    ClockAdvancingSource(ManualClock& clock, std::chrono::milliseconds step) noexcept:
+        _clock(clock), _step(step)
+    {
+    }
+
+    tui::runtime::WaitOutcome wait(int timeoutMs) override
+    {
+        _clock.advance(_step);
+        return MockEventSource::wait(timeoutMs);
+    }
+
+  private:
+    ManualClock& _clock;
+    std::chrono::milliseconds _step;
+};
+
+} // namespace
+
+TEST_CASE("A delay fires deterministically once the ManualClock crosses its deadline", "[TuiRuntime][clock]")
+{
+    // The runtime fires expired timers using the injected clock. Each scripted wait
+    // advances the ManualClock by 40ms, so a 100ms delay must still be pending after
+    // the first two waits (80ms) and fire on the third (120ms) — no real time passes.
+    auto clock = ManualClock {};
+    auto source = ClockAdvancingSource { clock, std::chrono::milliseconds { 40 } };
+    source.pushTimeout(); // 40ms elapsed: still pending
+    source.pushTimeout(); // 80ms elapsed: still pending
+    source.pushTimeout(); // 120ms elapsed: timer is now due → flow resumes
+    auto runtime = TuiRuntime { source, clock };
+
+    auto fired = false;
+    auto const result = runtime.blockOn(awaitDelayThenFire(&runtime, 100, &fired));
+
+    REQUIRE(fired);
+    REQUIRE(result == 100);
+    // The flow resumed on the third wait, not before: time only moved via the clock.
+    REQUIRE(source.waitCount() == 3);
 }
 
 TEST_CASE("A non-input activity wake resumes a timed input waiter with no event", "[TuiRuntime]")

@@ -5,6 +5,7 @@
 add_library(endo-platform STATIC
     PlatformError.hpp
     Types.hpp
+    Clock.hpp
     WaitResult.hpp
     Wakeup.hpp
     MessageQueue.hpp
@@ -102,6 +103,7 @@ enable_clang_tidy(endo-platform)
 if(ENDO_TESTING)
     add_executable(test-endo-platform
         test_main.cpp
+        Clock_test.cpp
         FileSystem_test.cpp
         Generator_test.cpp
         InterruptThrottle_test.cpp
