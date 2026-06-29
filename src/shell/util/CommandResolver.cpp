@@ -5,6 +5,8 @@
 
 #include <crispy/utils.h>
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 #include <platform/EnvironmentProvider.hpp>
@@ -90,6 +92,18 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
     {
         extensions = { ".exe", ".cmd", ".bat", ".com", ".ps1" };
     }
+
+    // Determine whether the typed command already ends with a recognized PATHEXT
+    // extension (case-insensitive), e.g. "docker.exe". If so it is probed verbatim;
+    // otherwise the bare name is only tried with each PATHEXT extension appended.
+    auto const iequals = [](std::string_view lhs, std::string_view rhs) {
+        return std::ranges::equal(
+            lhs, rhs, [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+    };
+    auto const commandExtension = std::filesystem::path(command).extension().string();
+    auto const hasPathExtExtension =
+        !commandExtension.empty()
+        && std::ranges::any_of(extensions, [&](auto const& ext) { return iequals(ext, commandExtension); });
 #endif
 
     auto results = std::vector<std::string> {};
@@ -107,12 +121,21 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
         auto const candidate = dir / std::string(command);
 
 #if defined(_WIN32)
-        // On Windows, check the exact name first, then try each PATHEXT extension.
+        // On Windows a bare command name is runnable only through a PATHEXT extension;
+        // an extensionless file is never an executable command (cmd.exe / PowerShell
+        // semantics). So:
+        //   - if the typed command already carries a PATHEXT extension (e.g. "docker.exe"),
+        //     probe that exact name only;
+        //   - otherwise (e.g. "docker") probe "command + ext" for each PATHEXT entry, in
+        //     PATHEXT order, and never the bare extensionless name.
+        // Without this, an extensionless "docker" shim shadows the real "docker.exe".
         auto const candidates = [&]() {
             auto result = std::vector<std::filesystem::path> {};
-            result.push_back(candidate);
-            for (auto const& ext: extensions)
-                result.push_back(std::filesystem::path(candidate.string() + ext));
+            if (hasPathExtExtension)
+                result.push_back(candidate);
+            else
+                for (auto const& ext: extensions)
+                    result.push_back(std::filesystem::path(candidate.string() + ext));
             return result;
         }();
 

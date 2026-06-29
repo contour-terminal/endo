@@ -138,6 +138,76 @@ TEST_CASE("CommandResolver.findInPath.PATHEXT_resolution")
     REQUIRE(!result.empty());
     CHECK(result.ends_with(".cmd"));
 }
+
+TEST_CASE("CommandResolver.findInPath.prefers_PATHEXT_over_extensionless")
+{
+    // Regression: a bare command name must resolve to its PATHEXT executable, not to an
+    // extensionless shim of the same name that happens to sit earlier in the directory.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker");     // extensionless shim — not a runnable Windows command
+    fs.addExecutable("/bin/docker.exe"); // the real CLI
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd;.bat");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("docker");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("docker.exe"));
+}
+
+TEST_CASE("CommandResolver.findInPath.extensionless_only_is_not_found")
+{
+    // On Windows an extensionless file is not a runnable command, so a bare lookup that
+    // can only find one must report not-found rather than returning the unrunnable file.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd;.bat");
+
+    auto const resolver = CommandResolver(env, fs);
+    CHECK(resolver.findInPath("docker").empty());
+}
+
+TEST_CASE("CommandResolver.findInPath.explicit_extension_resolves")
+{
+    // A command typed with an explicit PATHEXT extension is probed verbatim.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/docker.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd;.bat");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("docker.exe");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("docker.exe"));
+}
+
+TEST_CASE("CommandResolver.findInPath.honors_PATHEXT_ordering")
+{
+    // When several PATHEXT variants exist, the one earliest in PATHEXT wins.
+    platform::testing::InMemoryFileSystem fs;
+    fs.addDirectory("/bin");
+    fs.addExecutable("/bin/foo.cmd");
+    fs.addExecutable("/bin/foo.exe");
+
+    platform::TestEnvironmentProvider env;
+    env.set("PATH", "/bin");
+    env.set("PATHEXT", ".exe;.cmd");
+
+    auto const resolver = CommandResolver(env, fs);
+    auto const result = resolver.findInPath("foo");
+    REQUIRE(!result.empty());
+    CHECK(result.ends_with("foo.exe"));
+}
 #endif
 
 #if !defined(_WIN32)
