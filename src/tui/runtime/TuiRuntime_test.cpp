@@ -2,11 +2,13 @@
 #include <tui/InputEvent.hpp>
 #include <tui/runtime/PollEventSource.hpp>
 #include <tui/runtime/TuiRuntime.hpp>
+#include <tui/runtime/WithTimeout.hpp>
 #include <tui/runtime/testing/MockEventSource.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <optional>
 #include <ranges>
 #include <vector>
 
@@ -140,6 +142,19 @@ Task<int> awaitReadableOrCancel(TuiRuntime* runtime, endo::platform::NativeHandl
     {
         co_return cancelSentinel;
     }
+}
+
+/// A value-producing task that completes synchronously — the "work wins" arm.
+Task<int> produceValue(int value)
+{
+    co_return value;
+}
+
+/// Parks on a never-ready fd forever (until cancelled) — the "timeout wins" arm.
+Task<int> parkOnFdForever(TuiRuntime* runtime, endo::platform::NativeHandle fd)
+{
+    co_await runtime->waitReadable(fd);
+    co_return 0;
 }
 
 KeyEvent keyOf(char32_t codepoint)
@@ -510,6 +525,40 @@ TEST_CASE("waitReadable resolves over a real SystemPipe via PollEventSource", "[
     auto const result = runtime.blockOn(readByte(&runtime, pipe->get()));
     REQUIRE(result == 'Z');
     REQUIRE(source.attachedCount() == 0); // the awaiter detached on resume
+}
+
+TEST_CASE("withTimeout returns the work's value when it finishes first", "[TuiRuntime][timeout]")
+{
+    auto source = MockEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    // The work completes synchronously, so the timeout arm never matters.
+    auto result =
+        runtime.blockOn(tui::runtime::withTimeout(&runtime, produceValue(42), std::chrono::seconds { 10 }));
+
+    REQUIRE(result.has_value());
+    REQUIRE(*result == 42);
+}
+
+TEST_CASE("withTimeout returns nullopt and cancels the work when the deadline fires",
+          "[TuiRuntime][timeout][poll]")
+{
+    // The work parks on a SystemPipe that never receives data, so only the timeout
+    // arm can win. When it does, whenAny requests stop; the parked waitReadable is
+    // re-queued via the stop-callback (requeueForCancellation) and unwinds, so the
+    // work is genuinely cancelled rather than leaking. A short real timeout drives
+    // the runtime's timer.
+    auto pipe = endo::platform::createSystemPipe();
+    REQUIRE(pipe.has_value());
+
+    auto source = tui::runtime::PollEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    auto result = runtime.blockOn(tui::runtime::withTimeout(
+        &runtime, parkOnFdForever(&runtime, (*pipe)->waitHandle()), std::chrono::milliseconds { 20 }));
+
+    REQUIRE_FALSE(result.has_value());    // the timeout won
+    REQUIRE(source.attachedCount() == 0); // the cancelled work detached its fd
 }
 
 TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiRuntime][fd]")

@@ -68,6 +68,29 @@ void TuiRuntime::unregisterFdWaiter(FdToken token) noexcept
     _fdWaiters.erase(token);
 }
 
+void TuiRuntime::requeueForCancellation(std::coroutine_handle<> waiter)
+{
+    if (!waiter || waiter.done())
+        return;
+
+    // If parked as an fd waiter, drop and detach its registration so the stale
+    // entry cannot also fire. A timer-parked handle has no index here; its heap
+    // entry is left in place and skipped later (the handle will be done by then).
+    for (auto it = _fdWaiters.begin(); it != _fdWaiters.end(); ++it)
+    {
+        if (it->second == waiter)
+        {
+            _source.detach(it->first);
+            _fdWaiters.erase(it);
+            break;
+        }
+    }
+
+    // Re-queue once. drainReadyQueue skips already-done handles, and a later stale
+    // timer fire will see done() and skip it, so a single push is safe.
+    _ready.push_back(waiter);
+}
+
 void TuiRuntime::wakeFdWaiters(std::vector<FdToken> const& tokens)
 {
     for (auto const token: tokens)

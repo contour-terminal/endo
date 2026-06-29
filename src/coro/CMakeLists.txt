@@ -12,6 +12,7 @@ target_sources(endo-coro INTERFACE
     FILES
         Task.hpp
         WhenAll.hpp
+        WhenAny.hpp
         Awaitable.hpp
         Cancellation.hpp
 )
@@ -24,6 +25,7 @@ if(ENDO_TESTING)
     add_executable(test-coro
         test_main.cpp
         Task_test.cpp
+        WhenAny_test.cpp
     )
 
     target_include_directories(test-coro PRIVATE ${CMAKE_SOURCE_DIR}/src)
