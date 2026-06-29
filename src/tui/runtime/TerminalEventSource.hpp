@@ -48,19 +48,14 @@ class TerminalEventSource: public EventSource
 
     [[nodiscard]] WaitOutcome wait(int timeoutMs) override;
 
-    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override;
-    void updateInterest(FdToken token, FdInterest interest) override;
-    void detach(FdToken token) override;
+    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override
+    {
+        return _registry.attach(fd, interest);
+    }
+
+    void detach(FdToken token) override { _registry.detach(token); }
 
   private:
-    /// One user-registered fd watched alongside the terminal's own sources.
-    struct FdRegistration
-    {
-        FdToken token {}; ///< Identity handed back to the caller.
-        endo::platform::NativeHandle fd = endo::platform::InvalidHandle; ///< The watched native handle.
-        FdInterest interest = FdInterest::None;                          ///< Current readiness interest.
-    };
-
     /// Consumes protocol-response events (via @c Terminal::consumeProtocolReports
     /// so the policy lives in one place) and folds a pending SIGINT into the
     /// outcome, clearing the flag so the runtime observes each interrupt once. A
@@ -81,12 +76,11 @@ class TerminalEventSource: public EventSource
         return outcome;
     }
 
-    Terminal& _terminal;                        ///< Provides input handles, decode, report handlers.
-    endo::platform::Wakeup* _agentWakeup;       ///< Agent-message wakeup, or nullptr.
-    endo::platform::Wakeup* _interruptWakeup;   ///< Interrupt wakeup, or nullptr.
-    endo::platform::NativeHandle _signalFd;     ///< POSIX signal fd, or InvalidHandle.
-    std::vector<FdRegistration> _registrations; ///< User-attached fds (waitReadable/waitWritable).
-    std::uint64_t _nextToken = 0;               ///< Source of never-zero registration tokens.
+    Terminal& _terminal;                      ///< Provides input handles, decode, report handlers.
+    endo::platform::Wakeup* _agentWakeup;     ///< Agent-message wakeup, or nullptr.
+    endo::platform::Wakeup* _interruptWakeup; ///< Interrupt wakeup, or nullptr.
+    endo::platform::NativeHandle _signalFd;   ///< POSIX signal fd, or InvalidHandle.
+    FdRegistry _registry;                     ///< User-attached fds (waitReadable/waitWritable).
 };
 
 } // namespace tui::runtime

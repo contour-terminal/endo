@@ -36,24 +36,18 @@ class PollEventSource: public EventSource
 
     [[nodiscard]] WaitOutcome wait(int timeoutMs) override;
 
-    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override;
-    void updateInterest(FdToken token, FdInterest interest) override;
-    void detach(FdToken token) override;
+    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override
+    {
+        return _registry.attach(fd, interest);
+    }
+
+    void detach(FdToken token) override { _registry.detach(token); }
 
     /// @return The number of fds currently attached.
-    [[nodiscard]] std::size_t attachedCount() const noexcept { return _registrations.size(); }
+    [[nodiscard]] std::size_t attachedCount() const noexcept { return _registry.size(); }
 
   private:
-    /// One watched fd and its current readiness interest.
-    struct FdRegistration
-    {
-        FdToken token {};                                                ///< Identity returned to the caller.
-        endo::platform::NativeHandle fd = endo::platform::InvalidHandle; ///< The watched native handle.
-        FdInterest interest = FdInterest::None;                          ///< Current readiness interest.
-    };
-
-    std::vector<FdRegistration> _registrations; ///< Watched fds, in registration order.
-    std::uint64_t _nextToken = 0;               ///< Source of never-zero registration tokens.
+    FdRegistry _registry; ///< Watched fds, in registration order.
 };
 
 } // namespace tui::runtime

@@ -19,9 +19,11 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     // interrupt wakeup) followed by user-registered fds. Unlike the legacy
     // TerminalInput::poll(), the agent and interrupt wakeups ARE included, so an
     // agent message or Ctrl+C wakes the wait immediately. WaitForMultipleObjects
-    // rejects null handles, so a handle is only added once it is real.
-    auto handles = std::vector<HANDLE> {};
-    handles.reserve(4 + _registrations.size());
+    // rejects null handles, so a handle is only added once it is real. The buffer is
+    // thread_local and cleared (capacity kept) so the hot pump path is alloc-free.
+    auto const& registrations = _registry.registrations();
+    static thread_local std::vector<HANDLE> handles;
+    handles.clear();
 
     handles.push_back(input.inputNativeHandle());
 
@@ -38,7 +40,7 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
         handles.push_back(_interruptWakeup->nativeHandle());
 
     // User fds: only those with a real handle and non-empty interest take part.
-    for (auto const& reg: _registrations)
+    for (auto const& reg: registrations)
         if (reg.fd != nullptr && reg.fd != endo::platform::InvalidHandle && reg.interest != FdInterest::None)
             handles.push_back(reg.fd);
 
@@ -89,7 +91,7 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     // Route user-registered fds: a signalled handle satisfies its interest. The
     // socket layer maps precise socket events onto a waitable event via
     // WSAEventSelect, so "signalled" here means "the requested readiness occurred".
-    for (auto const& reg: _registrations)
+    for (auto const& reg: registrations)
     {
         if (!signalled(reg.fd))
             continue;

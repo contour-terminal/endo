@@ -82,6 +82,52 @@ struct WaitOutcome
     std::vector<FdToken> readyWrite; ///< Registered (non-runtime) fds that became writable this wait.
 };
 
+/// One user-registered fd and its current readiness interest.
+struct FdRegistration
+{
+    FdToken token {};                                                ///< Identity returned to the caller.
+    endo::platform::NativeHandle fd = endo::platform::InvalidHandle; ///< The watched native handle.
+    FdInterest interest = FdInterest::None;                          ///< Current readiness interest.
+};
+
+/// The shared fd-registration list every concrete @c EventSource embeds. Owns the
+/// token allocation and the registration vector so the registry mechanism lives in
+/// one place; each source's platform-specific @c wait() folds @c registrations()
+/// into its native wait set and routes readiness back by token.
+class FdRegistry
+{
+  public:
+    /// Registers @p fd with @p interest.
+    /// @param fd The native handle to watch (not owned).
+    /// @param interest The readiness bits to start watching.
+    /// @return A token naming the registration, or @c FdToken::invalid() on failure.
+    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest)
+    {
+        if (fd == endo::platform::InvalidHandle)
+            return FdToken::invalid();
+        auto const token = FdToken { ++_nextToken };
+        _registrations.push_back(FdRegistration { .token = token, .fd = fd, .interest = interest });
+        return token;
+    }
+
+    /// Removes a registration. Idempotent.
+    /// @param token The registration to drop.
+    void detach(FdToken token)
+    {
+        std::erase_if(_registrations, [token](FdRegistration const& reg) { return reg.token == token; });
+    }
+
+    /// @return The current registrations, in registration order.
+    [[nodiscard]] std::vector<FdRegistration> const& registrations() const noexcept { return _registrations; }
+
+    /// @return The number of fds currently registered.
+    [[nodiscard]] std::size_t size() const noexcept { return _registrations.size(); }
+
+  private:
+    std::vector<FdRegistration> _registrations; ///< Watched fds, in registration order.
+    std::uint64_t _nextToken = 0;               ///< Source of never-zero registration tokens.
+};
+
 /// Abstraction over "block until something happens, with a timeout".
 ///
 /// The real implementation (@c TerminalEventSource) multiplexes terminal input,
@@ -112,12 +158,6 @@ class EventSource
     /// @param interest The readiness bits to start watching.
     /// @return A token naming the registration, or @c FdToken::invalid() on failure.
     [[nodiscard]] virtual FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) = 0;
-
-    /// Changes the readiness interest of an attached fd. Passing @c FdInterest::None
-    /// mutes the fd without detaching it.
-    /// @param token The registration to modify.
-    /// @param interest The new interest mask.
-    virtual void updateInterest(FdToken token, FdInterest interest) = 0;
 
     /// Removes a registration. Idempotent; a no-op for an unknown or @c Invalid token.
     /// @param token The registration to drop.

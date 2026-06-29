@@ -1,59 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/runtime/PollEventSource.hpp>
 
-#include <algorithm>
-
 #if defined(_WIN32)
     #include <windows.h>
 #else
+    #include <tui/runtime/platform/PollHelpers.hpp>
+
     #include <poll.h>
 #endif
 
 namespace tui::runtime
 {
 
-FdToken PollEventSource::attach(endo::platform::NativeHandle fd, FdInterest interest)
-{
-    if (fd == endo::platform::InvalidHandle)
-        return FdToken::invalid();
-    auto const token = FdToken { ++_nextToken };
-    _registrations.push_back(FdRegistration { .token = token, .fd = fd, .interest = interest });
-    return token;
-}
-
-void PollEventSource::updateInterest(FdToken token, FdInterest interest)
-{
-    auto const it = std::ranges::find(_registrations, token, &FdRegistration::token);
-    if (it != _registrations.end())
-        it->interest = interest;
-}
-
-void PollEventSource::detach(FdToken token)
-{
-    std::erase_if(_registrations, [token](FdRegistration const& reg) { return reg.token == token; });
-}
-
 #if !defined(_WIN32)
-
-namespace
-{
-    /// Translates a readiness interest mask into poll(2) event bits.
-    [[nodiscard]] short toPollEvents(FdInterest interest) noexcept
-    {
-        short events = 0;
-        if (hasInterest(interest, FdInterest::Read))
-            events |= POLLIN;
-        if (hasInterest(interest, FdInterest::Write))
-            events |= POLLOUT;
-        return events;
-    }
-} // namespace
 
 WaitOutcome PollEventSource::wait(int timeoutMs)
 {
-    auto fds = std::vector<pollfd> {};
-    fds.reserve(_registrations.size());
-    for (auto const& reg: _registrations)
+    auto const& registrations = _registry.registrations();
+    static thread_local std::vector<pollfd> fds;
+    fds.clear();
+    for (auto const& reg: registrations)
         fds.push_back({ .fd = reg.fd, .events = toPollEvents(reg.interest), .revents = 0 });
 
     auto outcome = WaitOutcome {};
@@ -75,15 +41,8 @@ WaitOutcome PollEventSource::wait(int timeoutMs)
         // the next successful poll. Either way, nothing ready this round.
         return outcome;
 
-    for (std::size_t i = 0; i < _registrations.size(); ++i)
-    {
-        auto const& reg = _registrations[i];
-        auto const revents = fds[i].revents;
-        if ((revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) != 0)
-            outcome.readyRead.push_back(reg.token);
-        if ((revents & POLLOUT) != 0)
-            outcome.readyWrite.push_back(reg.token);
-    }
+    for (std::size_t i = 0; i < registrations.size(); ++i)
+        routePollRevents(registrations[i].token, fds[i].revents, outcome);
     return outcome;
 }
 
@@ -91,9 +50,10 @@ WaitOutcome PollEventSource::wait(int timeoutMs)
 
 WaitOutcome PollEventSource::wait(int timeoutMs)
 {
-    auto handles = std::vector<HANDLE> {};
-    handles.reserve(_registrations.size());
-    for (auto const& reg: _registrations)
+    auto const& registrations = _registry.registrations();
+    static thread_local std::vector<HANDLE> handles;
+    handles.clear();
+    for (auto const& reg: registrations)
         if (reg.fd != nullptr && reg.fd != endo::platform::InvalidHandle && reg.interest != FdInterest::None)
             handles.push_back(reg.fd);
 
@@ -115,7 +75,7 @@ WaitOutcome PollEventSource::wait(int timeoutMs)
     auto const signalled = [](HANDLE handle) {
         return handle != nullptr && WaitForSingleObject(handle, 0) == WAIT_OBJECT_0;
     };
-    for (auto const& reg: _registrations)
+    for (auto const& reg: registrations)
     {
         if (!signalled(reg.fd))
             continue;

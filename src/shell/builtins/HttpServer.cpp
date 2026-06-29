@@ -76,7 +76,7 @@ void Shell::builtinHttpServe(CoreVM::Params& context)
         return endo::net::HttpResponse::ok(invokeHandler(handler, globals, request.path));
     };
 
-    auto serveFlow = endo::net::serve(&runtime, listener->get(), std::move(requestHandler));
+    auto serveFlow = endo::net::serve(listener->get(), std::move(requestHandler));
     try
     {
         runtime.blockOn(std::move(serveFlow));

@@ -39,7 +39,6 @@ add_library(tui
     completer/SmartCaseMatch.cpp
     platform/TerminalShared.cpp
     runtime/TuiRuntime.cpp
-    runtime/TerminalEventSource.cpp
     runtime/PollEventSource.cpp
 )
 

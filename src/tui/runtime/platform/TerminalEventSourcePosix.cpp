@@ -3,6 +3,8 @@
 
 #if !defined(_WIN32)
 
+    #include <tui/runtime/platform/PollHelpers.hpp>
+
     #include <cerrno>
     #include <cstddef>
     #include <iterator>
@@ -13,22 +15,6 @@
 namespace tui::runtime
 {
 
-namespace
-{
-    /// Translates a readiness interest mask into poll(2) event bits.
-    /// @param interest The interest to translate.
-    /// @return The corresponding POLLIN/POLLOUT bitmask.
-    [[nodiscard]] short toPollEvents(FdInterest interest) noexcept
-    {
-        short events = 0;
-        if (hasInterest(interest, FdInterest::Read))
-            events |= POLLIN;
-        if (hasInterest(interest, FdInterest::Write))
-            events |= POLLOUT;
-        return events;
-    }
-} // namespace
-
 WaitOutcome TerminalEventSource::wait(int timeoutMs)
 {
     auto& input = _terminal.input();
@@ -36,9 +22,11 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     // Build the wait set: the terminal's own sources (input, resize, agent wakeup,
     // interrupt wakeup, signal fd) followed by any user-registered fds. The known
     // sources are tracked by index for their typed routing; user fds are routed by
-    // token into readyRead / readyWrite.
-    auto fds = std::vector<pollfd> {};
-    fds.reserve(5 + _registrations.size());
+    // token into readyRead / readyWrite. The buffer is thread_local and cleared
+    // (capacity kept) so this hot pump path is allocation-free in steady state.
+    static thread_local std::vector<pollfd> fds;
+    fds.clear();
+    auto const& registrations = _registry.registrations();
 
     auto const inputIndex = fds.size();
     fds.push_back({ .fd = input.inputNativeHandle(), .events = POLLIN, .revents = 0 });
@@ -72,9 +60,9 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
     }
 
     // The first registrationBase entries are the known sources; the rest map 1:1
-    // onto _registrations, in order.
+    // onto the registry, in order.
     auto const registrationBase = fds.size();
-    for (auto const& reg: _registrations)
+    for (auto const& reg: registrations)
         fds.push_back({ .fd = reg.fd, .events = toPollEvents(reg.interest), .revents = 0 });
 
     auto const result = ::poll(fds.data(), static_cast<nfds_t>(fds.size()), timeoutMs);
@@ -141,17 +129,10 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
                                   std::make_move_iterator(parsed.end()));
     }
 
-    // Route user-registered fds. HUP/ERR resolve a read waiter too (so the caller
-    // can observe EOF rather than the pump spinning), matching the input-fd policy.
-    for (std::size_t i = 0; i < _registrations.size(); ++i)
-    {
-        auto const& reg = _registrations[i];
-        auto const revents = fds[registrationBase + i].revents;
-        if ((revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) != 0)
-            outcome.readyRead.push_back(reg.token);
-        if ((revents & POLLOUT) != 0)
-            outcome.readyWrite.push_back(reg.token);
-    }
+    // Route user-registered fds via the shared helper (HUP/ERR resolve a read
+    // waiter too, so the caller observes EOF rather than the pump spinning).
+    for (std::size_t i = 0; i < registrations.size(); ++i)
+        routePollRevents(registrations[i].token, fds[registrationBase + i].revents, outcome);
 
     return finalize(std::move(outcome));
 }

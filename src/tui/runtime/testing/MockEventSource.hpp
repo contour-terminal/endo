@@ -82,8 +82,6 @@ class MockEventSource: public EventSource
         return FdToken { ++_nextToken };
     }
 
-    void updateInterest(FdToken /*token*/, FdInterest /*interest*/) override {}
-
     void detach(FdToken token) override
     {
         if (token && _attached > 0)

@@ -187,9 +187,8 @@ namespace
     }
 } // namespace
 
-endo::coro::Task<void> serve(tui::runtime::TuiRuntime* runtime, IListener* listener, HttpHandler handler)
+endo::coro::Task<void> serve(IListener* listener, HttpHandler handler)
 {
-    static_cast<void>(runtime);
     while (true)
     {
         auto accepted = co_await listener->accept();

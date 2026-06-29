@@ -8,8 +8,6 @@
 /// `std::function`s so the layer is fully testable without the VM; the builtin
 /// supplies a handler that dispatches into a script function.
 
-#include <tui/runtime/TuiRuntime.hpp>
-
 #include <expected>
 #include <functional>
 #include <string>
@@ -66,14 +64,12 @@ using HttpHandler = std::function<HttpResponse(HttpRequest const&)>;
 /// request to @p handler. Each accepted connection is handled in sequence on the
 /// single runtime thread (a slow handler stalls the loop — acceptable for the
 /// single-threaded scripting model). Returns when the listener is closed /
-/// cancelled.
-/// @param runtime The runtime whose reactor drives the I/O (not owned).
+/// cancelled. The listener and its accepted sockets already carry the runtime that
+/// drives their I/O, so it need not be passed separately.
 /// @param listener The bound listener to accept from (not owned).
 /// @param handler The request handler.
 /// @return A task that completes when serving stops.
-[[nodiscard]] endo::coro::Task<void> serve(tui::runtime::TuiRuntime* runtime,
-                                           IListener* listener,
-                                           HttpHandler handler);
+[[nodiscard]] endo::coro::Task<void> serve(IListener* listener, HttpHandler handler);
 
 /// Reads and parses a single HTTP/1.1 request from @p socket (handling a
 /// Content-Length body). Exposed for testing the framing directly.
