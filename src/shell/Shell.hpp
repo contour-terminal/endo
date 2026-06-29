@@ -21,6 +21,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
@@ -726,16 +727,78 @@ class Shell final: public SignalCallback
 
     RedirectState _redirectState;
 
+    /// State for capturing the output of a command substitution (`$(...)`).
+    ///
+    /// On POSIX the capture sink is a regular (anonymous, unlinked) temp file
+    /// rather than a pipe: a temp file has no fixed kernel buffer, so writing to it
+    /// never blocks regardless of how much the captured command(s) emit. This
+    /// sidesteps the pipe-buffer deadlock a pipe-backed capture hits at ~64KB — for
+    /// in-process builtins (which write synchronously on the one thread) as well as
+    /// external processes — without needing a concurrent drain. The bytes are read
+    /// back from @ref fd at subst_end.
+    ///
+    /// On Windows the sink stays a @ref Pipe (the prior behavior); a temp-file sink
+    /// there would need extra handle-inheritance plumbing, and the >64KB deadlock
+    /// this guards against is the POSIX path that blocks completion of e.g.
+    /// `$(dnf repoquery)`.
+    // Note: @ref fd is a raw NativeHandle closed via the noexcept @ref platformClose
+    // rather than a crispy::file_descriptor RAII wrapper. The wrapper's close()
+    // throws std::system_error on failure, which is unsafe here: this destructor
+    // runs during std::vector reallocation and stack unwinding, where a throwing
+    // close would call std::terminate. The hand-rolled move-and-null below keeps the
+    // fd handling noexcept.
     struct SubstitutionCapture
     {
-        std::unique_ptr<Pipe> pipe;
-        NativeHandle savedStdout = InvalidHandle;
-        std::string output;
+        NativeHandle fd = InvalidHandle;          ///< POSIX: temp-file fd used as the capture sink.
+        std::unique_ptr<Pipe> pipe;               ///< Windows: pipe used as the capture sink.
+        NativeHandle savedStdout = InvalidHandle; ///< Pipeline stdout fd to restore at subst_end.
 
+        SubstitutionCapture() = default;
+
+        /// Closes the temp-file @ref fd so it is not leaked. The @ref pipe closes
+        /// itself via its own destructor. This runs whenever the capture is popped
+        /// from the owning stack (e.g. when a nested substitution completes), so
+        /// every `$(...)` releases its capture sink instead of leaking one fd.
+        ~SubstitutionCapture() { clear(); }
+
+        /// Move-constructs by transferring ownership and nulling @p other's @ref fd,
+        /// so the moved-from object's destructor does not close the fd this object
+        /// now owns (which would be a double-close). Needed because the owning
+        /// stack (`std::vector`) may move elements when it reallocates.
+        SubstitutionCapture(SubstitutionCapture&& other) noexcept:
+            fd(std::exchange(other.fd, InvalidHandle)),
+            pipe(std::move(other.pipe)),
+            savedStdout(std::exchange(other.savedStdout, InvalidHandle))
+        {
+        }
+
+        /// Move-assigns by first releasing this object's own resources, then taking
+        /// ownership of @p other's and nulling its @ref fd (see the move ctor).
+        SubstitutionCapture& operator=(SubstitutionCapture&& other) noexcept
+        {
+            if (this != &other)
+            {
+                clear();
+                fd = std::exchange(other.fd, InvalidHandle);
+                pipe = std::move(other.pipe);
+                savedStdout = std::exchange(other.savedStdout, InvalidHandle);
+            }
+            return *this;
+        }
+
+        SubstitutionCapture(SubstitutionCapture const&) = delete;
+        SubstitutionCapture& operator=(SubstitutionCapture const&) = delete;
+
+        /// Closes the temp-file @ref fd (if open) and the @ref pipe, and resets
+        /// @ref savedStdout. Safe to call more than once.
         void clear();
     };
 
-    std::optional<SubstitutionCapture> _substitutionCapture;
+    /// Stack of active command-substitution captures. A stack (rather than a single
+    /// slot) is required for nested substitutions such as `$(echo $(rpm -qa))`: the
+    /// inner `$(...)` pushes its own capture and pops it on completion, leaving the
+    /// outer capture's fd and saved stdout intact.
+    std::vector<SubstitutionCapture> _substitutionCaptures;
 
     std::vector<std::unique_ptr<Pipe>> _processSubstitutionPipes;
     std::string _procSubstFdPath;

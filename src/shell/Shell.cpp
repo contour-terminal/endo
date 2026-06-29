@@ -547,12 +547,10 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
 
 void Shell::SubstitutionCapture::clear()
 {
+    platformClose(fd);
+    fd = InvalidHandle;
     pipe.reset();
-    if (savedStdout != InvalidHandle)
-    {
-        savedStdout = InvalidHandle;
-    }
-    output.clear();
+    savedStdout = InvalidHandle;
 }
 
 // ========================================================================

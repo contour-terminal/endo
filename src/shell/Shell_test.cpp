@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ranges>
 #include <string_view>
 #include <thread>
 
@@ -33,6 +34,10 @@ using crispy::escape;
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
+
+#if !defined(_WIN32)
+    #include <sys/resource.h>
+#endif
 
 namespace
 {
@@ -2537,12 +2542,88 @@ TEST_CASE("shell.subst.with_variable")
     CHECK(escape(shell("echo $(echo $MSG)").output()) == escape("hello\n"));
 }
 
+#if !defined(_WIN32)
+TEST_CASE("shell.subst.large_output_no_deadlock")
+{
+    // Regression: capturing output larger than the kernel pipe buffer (~64KB)
+    // must not deadlock. A pipe-backed capture blocked the writer in write() while
+    // the shell had not yet drained the reader; the POSIX temp-file-backed capture
+    // has no fixed buffer, so it never blocks. We capture `cat` (a builtin) of a
+    // ~256KB file — well over the ~64KB pipe buffer — into a let binding (no
+    // pipeline involved) and assert the captured length; reaching the assertion
+    // proves no deadlock.
+    //
+    // POSIX-only: the temp-file capture is the POSIX path. Windows keeps the prior
+    // pipe-backed capture (which retains the historical >64KB limitation), so this
+    // regression does not apply there.
+    auto const path = std::filesystem::temp_directory_path() / "endo_test_large_capture.txt";
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        std::string const line(255, 'x');
+        for ([[maybe_unused]] auto const i: std::views::iota(0, 1024)) // 1024 * 256 = 256 KiB
+            out << line << '\n';
+    }
+
+    TestShell shell;
+    // Capture into a binding, then print its length via F# string length. No
+    // pipeline, no external command — just the substitution capture path.
+    auto const out =
+        std::string(shell("let captured = $(cat " + path.string() + ")\nprintln captured.length").output());
+    std::filesystem::remove(path);
+    // 256 KiB minus the single trailing newline trimmed by command substitution.
+    CHECK(out.find("262143") != std::string::npos);
+}
+#endif
+
 TEST_CASE("shell.subst.in_pipeline")
 {
     // Command substitution as part of a pipeline
     TestShell shell;
     CHECK(escape(shell("echo $(echo hello) | cat").output()) == escape("hello\n"));
 }
+
+TEST_CASE("shell.subst.nested")
+{
+    // Nested command substitution: the inner $(...) must not clobber the outer
+    // capture's state. Regression for the single-slot capture that lost the outer
+    // fd / saved stdout when the inner substitution pushed. `echo` here is the
+    // shell builtin, so both substitutions capture in-process.
+    TestShell shell;
+    CHECK(escape(shell("echo $(echo $(echo hello))").output()) == escape("hello\n"));
+}
+
+#if !defined(_WIN32)
+TEST_CASE("shell.subst.no_fd_leak")
+{
+    // Regression: each $(...) opened an mkstemp temp file whose fd was never
+    // closed, so after enough substitutions the process ran out of descriptors and
+    // every further substitution silently returned empty. Lower the fd soft limit
+    // so exhaustion would trigger within a few iterations, then run many
+    // substitutions and assert every one still captures — proving the fd is
+    // released each time.
+    rlimit original {};
+    REQUIRE(::getrlimit(RLIMIT_NOFILE, &original) == 0);
+    rlimit limited = original;
+    limited.rlim_cur = 64; // well below the iteration count below
+    REQUIRE(::setrlimit(RLIMIT_NOFILE, &limited) == 0);
+
+    TestShell shell;
+    bool allCaptured = true;
+    for ([[maybe_unused]] auto const i: std::views::iota(0, 256))
+    {
+        auto const out = std::string(shell("println $(echo ok)").output());
+        if (out.find("ok") == std::string::npos)
+        {
+            allCaptured = false;
+            break;
+        }
+    }
+
+    // Restore before asserting so a failure does not leave the limit clamped.
+    ::setrlimit(RLIMIT_NOFILE, &original);
+    CHECK(allCaptured);
+}
+#endif
 
 // ============================================================================
 // Process Substitution
