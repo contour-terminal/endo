@@ -325,8 +325,19 @@ class IRGenerator final: public ast::Visitor
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
 
-    /// Converts a value to a boolean for conditional branching.
+    /// True if @p value is already a 0/1 boolean truth value: either a Boolean, or a Void
+    /// value annotated Boolean (e.g. a record field access, whose IR type is always Void).
+    [[nodiscard]] bool isAlreadyBooleanValue(CoreVM::Value* value) const;
+
+    /// Converts a value to a boolean truth value for conditional branching.
+    /// Boolean values (and Void values annotated Boolean, e.g. record field access) are
+    /// returned as-is; other types yield true when non-zero / non-empty.
     CoreVM::Value* toBool(CoreVM::Value* value);
+
+    /// Treats @p value as a command exit code: success (0) maps to true. Used by shell
+    /// `&&`/`||` (LogicalAndStmt/LogicalOrStmt), which chain on exit status rather than
+    /// value truthiness, so it is the inverse of toBool for the numeric case.
+    CoreVM::Value* exitCodeToSuccess(CoreVM::Value* value);
 
     /// Checks if any expression in the list contains a runtime-evaluated expression.
     [[nodiscard]] static bool containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions);

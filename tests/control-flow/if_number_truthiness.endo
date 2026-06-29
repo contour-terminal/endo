@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A non-zero number is truthy and zero is falsy in an if condition
+# expect: T
+# expect: F
+
+if 5 then print "T"
+else print "F"
+println ""
+if 0 then print "T"
+else print "F"

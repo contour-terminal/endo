@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: empty string is truthy in shell semantics ("" == "")
-# expect: yes
+# description: empty string is falsy ("")
+# expect: no
 
 if "" then print "yes"
 else print "no"

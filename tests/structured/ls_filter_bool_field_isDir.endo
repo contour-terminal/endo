@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A boolean field returned bare from a filter predicate keeps the matching rows
+# mode: structured
+# expect: [docs]
+
+print (ls |> filter (_.isDir) |> map (_.name))

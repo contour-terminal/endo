@@ -1858,7 +1858,7 @@ void IRGenerator::visit(ast::LogicalAndStmt const& node)
     auto* leftResult = codegen(node.left.get());
     if (!leftResult)
         leftResult = _builder.createLoad(successStorage, "and.left.ok");
-    auto* leftSuccess = toBool(leftResult);
+    auto* leftSuccess = exitCodeToSuccess(leftResult);
     _builder.createStore(successStorage, leftSuccess);
 
     CoreVM::BasicBlock* evalRight = _builder.createBlock("and.evalRight");
@@ -1869,7 +1869,7 @@ void IRGenerator::visit(ast::LogicalAndStmt const& node)
     _builder.setInsertPoint(evalRight);
     auto* rightResult = codegen(node.right.get());
     if (rightResult)
-        _builder.createStore(successStorage, toBool(rightResult));
+        _builder.createStore(successStorage, exitCodeToSuccess(rightResult));
     _builder.createBr(end);
 
     _builder.setInsertPoint(end);
@@ -1884,19 +1884,19 @@ void IRGenerator::visit(ast::LogicalOrStmt const& node)
     auto* leftResult = codegen(node.left.get());
     if (!leftResult)
         leftResult = _builder.createLoad(successStorage, "or.left.ok");
-    auto* leftSuccess = toBool(leftResult);
+    auto* leftSuccess = exitCodeToSuccess(leftResult);
     _builder.createStore(successStorage, leftSuccess);
 
     CoreVM::BasicBlock* evalRight = _builder.createBlock("or.evalRight");
     CoreVM::BasicBlock* end = _builder.createBlock("or.end");
 
-    // toBool returns true for exit code 0 (success), so we flip the branches
+    // exitCodeToSuccess returns true for exit code 0 (success), so we flip the branches
     _builder.createCondBr(leftSuccess, end, evalRight);
 
     _builder.setInsertPoint(evalRight);
     auto* rightResult = codegen(node.right.get());
     if (rightResult)
-        _builder.createStore(successStorage, toBool(rightResult));
+        _builder.createStore(successStorage, exitCodeToSuccess(rightResult));
     _builder.createBr(end);
 
     _builder.setInsertPoint(end);
@@ -3116,14 +3116,39 @@ void IRGenerator::visit(ast::ContinueExpr const& /*node*/)
     _result = nullptr;
 }
 
+bool IRGenerator::isAlreadyBooleanValue(CoreVM::Value* value) const
+{
+    // A record field access emits an ObjGetSlotInstr typed Void with the real field type
+    // carried in an inner-type annotation, so a boolean field arrives as Void+Boolean-inner.
+    if (value->type() == CoreVM::LiteralType::Boolean)
+        return true;
+    if (value->type() == CoreVM::LiteralType::Void)
+        if (auto const inner = getInnerType(value); inner && *inner == CoreVM::LiteralType::Boolean)
+            return true;
+    return false;
+}
+
 CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
 {
-    if (value->type() == CoreVM::LiteralType::Boolean)
+    // Already a 0/1 truth value — JZ/CondBr test non-zero directly; comparing would invert it.
+    if (isAlreadyBooleanValue(value))
         return value;
+    // Truthiness for the remaining types: non-zero / non-empty (true when "set").
     if (value->type() == CoreVM::LiteralType::Float)
-        return _builder.createFCmpEQ(value, _builder.getFloat(0.0));
+        return _builder.createFCmpNE(value, _builder.getFloat(0.0));
     if (value->type() == CoreVM::LiteralType::String)
-        return _builder.createSCmpEQ(value, _builder.get(std::string("")));
+        return _builder.createSCmpNE(value, _builder.get(std::string("")));
+    return _builder.createNCmpNE(value, _builder.get(static_cast<CoreVM::CoreNumber>(0)));
+}
+
+CoreVM::Value* IRGenerator::exitCodeToSuccess(CoreVM::Value* value)
+{
+    // Shell `&&`/`||` chain on command exit status, where 0 means success/true.
+    // A boolean operand (e.g. `true && cmd`) is already a truth value — pass it through,
+    // mirroring toBool, so it never reaches the number-only comparison below.
+    if (isAlreadyBooleanValue(value))
+        return value;
+    // A numeric exit code: success is 0 (the inverse of value truthiness).
     return _builder.createNCmpEQ(value, _builder.get(static_cast<CoreVM::CoreNumber>(0)));
 }
 

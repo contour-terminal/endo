@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: forall with a boolean-field predicate is false when not every row matches
+# mode: structured
+# expect: false
+
+print (ls |> forall (_.isDir))

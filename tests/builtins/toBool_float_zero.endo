@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: zero float is truthy in shell semantics (0.0 == 0.0)
-# expect: yes
+# description: zero float is falsy (0.0)
+# expect: no
 
 if 0.0 then print "yes"
 else print "no"
