@@ -75,6 +75,7 @@ if(ENDO_TESTING)
         types/TypeSystem_test.cpp
         vm/ObjectPool_test.cpp
         vm/GarbageCollector_test.cpp
+        vm/Runner_test.cpp
     )
     target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
     add_test(NAME test-corevm COMMAND test-corevm)
