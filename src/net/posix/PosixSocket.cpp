@@ -9,6 +9,13 @@
 
     #include <unistd.h>
 
+    // macOS / BSD lack MSG_NOSIGNAL; they suppress SIGPIPE via the SO_NOSIGPIPE
+    // socket option instead (set in the constructor). Fall back to 0 for the send
+    // flag there so the call still compiles and behaves.
+    #if !defined(MSG_NOSIGNAL)
+        #define MSG_NOSIGNAL 0
+    #endif
+
 namespace endo::net
 {
 
@@ -38,6 +45,13 @@ namespace
 PosixSocket::PosixSocket(tui::runtime::TuiRuntime& runtime, int fd, std::string peerAddress) noexcept:
     _runtime(runtime), _fd(fd), _peerAddress(std::move(peerAddress))
 {
+    #if defined(SO_NOSIGPIPE)
+    // macOS / BSD: suppress SIGPIPE on writes to a peer-closed socket at the socket
+    // level (the portable analogue of Linux's MSG_NOSIGNAL send flag).
+    int const one = 1;
+    if (_fd >= 0)
+        ::setsockopt(_fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+    #endif
 }
 
 PosixSocket::~PosixSocket()
