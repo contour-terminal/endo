@@ -377,6 +377,40 @@ TEST_CASE("A non-input activity wake resumes a timed input waiter with no event"
     REQUIRE(result == 0);
 }
 
+TEST_CASE("EventSource fd registry hands out distinct tokens and reports readiness", "[EventSource]")
+{
+    auto source = MockEventSource {};
+    auto const a = source.attach(7, tui::runtime::FdInterest::Read);
+    auto const b = source.attach(8, tui::runtime::FdInterest::Write);
+
+    REQUIRE(static_cast<bool>(a));
+    REQUIRE(static_cast<bool>(b));
+    REQUIRE_FALSE(a == b);
+    REQUIRE(source.attachedCount() == 2);
+
+    source.pushReadable(a);
+    source.pushWritable(b);
+
+    auto const first = source.wait(0);
+    REQUIRE(first.readyRead.size() == 1);
+    REQUIRE(first.readyRead.front() == a);
+
+    auto const second = source.wait(0);
+    REQUIRE(second.readyWrite.size() == 1);
+    REQUIRE(second.readyWrite.front() == b);
+
+    source.detach(a);
+    source.detach(b);
+    REQUIRE(source.attachedCount() == 0);
+}
+
+TEST_CASE("An invalid FdToken is falsy and equals the invalid sentinel", "[EventSource]")
+{
+    auto const invalid = tui::runtime::FdToken::invalid();
+    REQUIRE_FALSE(static_cast<bool>(invalid));
+    REQUIRE(invalid == tui::runtime::FdToken {});
+}
+
 TEST_CASE("Destroying the runtime unwinds a parked spawned flow via RAII", "[TuiRuntime]")
 {
     auto source = MockEventSource {};

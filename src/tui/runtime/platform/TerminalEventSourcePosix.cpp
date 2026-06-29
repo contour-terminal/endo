@@ -3,56 +3,81 @@
 
 #if !defined(_WIN32)
 
-    #include <array>
     #include <cerrno>
     #include <cstddef>
     #include <iterator>
+    #include <vector>
 
     #include <poll.h>
 
 namespace tui::runtime
 {
 
+namespace
+{
+    /// Translates a readiness interest mask into poll(2) event bits.
+    /// @param interest The interest to translate.
+    /// @return The corresponding POLLIN/POLLOUT bitmask.
+    [[nodiscard]] short toPollEvents(FdInterest interest) noexcept
+    {
+        short events = 0;
+        if (hasInterest(interest, FdInterest::Read))
+            events |= POLLIN;
+        if (hasInterest(interest, FdInterest::Write))
+            events |= POLLOUT;
+        return events;
+    }
+} // namespace
+
 WaitOutcome TerminalEventSource::wait(int timeoutMs)
 {
     auto& input = _terminal.input();
 
-    // Build the wait set: input, resize, agent wakeup, interrupt wakeup, signal fd.
-    auto fds = std::array<pollfd, 5> {};
-    auto count = nfds_t { 0 };
+    // Build the wait set: the terminal's own sources (input, resize, agent wakeup,
+    // interrupt wakeup, signal fd) followed by any user-registered fds. The known
+    // sources are tracked by index for their typed routing; user fds are routed by
+    // token into readyRead / readyWrite.
+    auto fds = std::vector<pollfd> {};
+    fds.reserve(5 + _registrations.size());
 
-    auto const inputIndex = count;
-    fds[count++] = { .fd = input.inputNativeHandle(), .events = POLLIN, .revents = 0 };
+    auto const inputIndex = fds.size();
+    fds.push_back({ .fd = input.inputNativeHandle(), .events = POLLIN, .revents = 0 });
 
     auto resizeIndex = -1;
     if (auto const resizeFd = input.resizeNativeHandle(); resizeFd != endo::platform::InvalidHandle)
     {
-        resizeIndex = static_cast<int>(count);
-        fds[count++] = { .fd = resizeFd, .events = POLLIN, .revents = 0 };
+        resizeIndex = static_cast<int>(fds.size());
+        fds.push_back({ .fd = resizeFd, .events = POLLIN, .revents = 0 });
     }
 
     auto agentIndex = -1;
     if (_agentWakeup != nullptr)
     {
-        agentIndex = static_cast<int>(count);
-        fds[count++] = { .fd = _agentWakeup->nativeHandle(), .events = POLLIN, .revents = 0 };
+        agentIndex = static_cast<int>(fds.size());
+        fds.push_back({ .fd = _agentWakeup->nativeHandle(), .events = POLLIN, .revents = 0 });
     }
 
     auto interruptIndex = -1;
     if (_interruptWakeup != nullptr)
     {
-        interruptIndex = static_cast<int>(count);
-        fds[count++] = { .fd = _interruptWakeup->nativeHandle(), .events = POLLIN, .revents = 0 };
+        interruptIndex = static_cast<int>(fds.size());
+        fds.push_back({ .fd = _interruptWakeup->nativeHandle(), .events = POLLIN, .revents = 0 });
     }
 
     auto signalIndex = -1;
     if (_signalFd != endo::platform::InvalidHandle)
     {
-        signalIndex = static_cast<int>(count);
-        fds[count++] = { .fd = _signalFd, .events = POLLIN, .revents = 0 };
+        signalIndex = static_cast<int>(fds.size());
+        fds.push_back({ .fd = _signalFd, .events = POLLIN, .revents = 0 });
     }
 
-    auto const result = ::poll(fds.data(), count, timeoutMs);
+    // The first registrationBase entries are the known sources; the rest map 1:1
+    // onto _registrations, in order.
+    auto const registrationBase = fds.size();
+    for (auto const& reg: _registrations)
+        fds.push_back({ .fd = reg.fd, .events = toPollEvents(reg.interest), .revents = 0 });
+
+    auto const result = ::poll(fds.data(), static_cast<nfds_t>(fds.size()), timeoutMs);
 
     auto outcome = WaitOutcome {};
     if (result == 0)
@@ -114,6 +139,18 @@ WaitOutcome TerminalEventSource::wait(int timeoutMs)
             outcome.events.insert(outcome.events.end(),
                                   std::make_move_iterator(parsed.begin()),
                                   std::make_move_iterator(parsed.end()));
+    }
+
+    // Route user-registered fds. HUP/ERR resolve a read waiter too (so the caller
+    // can observe EOF rather than the pump spinning), matching the input-fd policy.
+    for (std::size_t i = 0; i < _registrations.size(); ++i)
+    {
+        auto const& reg = _registrations[i];
+        auto const revents = fds[registrationBase + i].revents;
+        if ((revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) != 0)
+            outcome.readyRead.push_back(reg.token);
+        if ((revents & POLLOUT) != 0)
+            outcome.readyWrite.push_back(reg.token);
     }
 
     return finalize(std::move(outcome));

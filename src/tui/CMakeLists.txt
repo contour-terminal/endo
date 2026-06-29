@@ -39,6 +39,7 @@ add_library(tui
     completer/SmartCaseMatch.cpp
     platform/TerminalShared.cpp
     runtime/TuiRuntime.cpp
+    runtime/TerminalEventSource.cpp
 )
 
 # Platform-specific terminal implementations
