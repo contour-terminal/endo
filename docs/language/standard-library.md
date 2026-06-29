@@ -1347,6 +1347,12 @@ Lists directory contents as structured records.
 | `mode` | `FileMode` | Unix file permissions |
 | `mtime` | `DateTime` | Last modification time |
 | `isDir` | `bool` | Whether entry is a directory |
+| `isSymlink` | `bool` | Whether entry is a symbolic link |
+| `target` | `str` | Symbolic link target (empty for non-symlinks) |
+
+The `isDir`, `isSymlink`, and `target` fields are available for field access and
+pipelines but are not shown as columns in the default `ls` table; a symlink is
+instead rendered inline as `name -> target`.
 
 <!-- endo-no-check -->
 ```endo
@@ -1361,6 +1367,9 @@ ls |> sortBy _.mtime.epoch
 
 # Filter directories only
 ls |> filter _.isDir |> map _.name
+
+# Show where symbolic links point
+ls |> filter _.isSymlink |> map (fun f -> $"{f.name} -> {f.target}")
 
 # Access nested fields
 match head ls with

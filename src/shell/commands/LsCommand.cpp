@@ -42,6 +42,13 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
         auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, file.mtime);
         record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
         record->setSlot(4, static_cast<uint64_t>(file.isDir ? 1 : 0));
+        record->setSlot(5, static_cast<uint64_t>(file.isSymlink ? 1 : 0));
+        // Reuse the shared empty-string sentinel for the common non-symlink case to avoid a
+        // heap allocation + known-string insertion per directory entry on this listing path.
+        record->setSlot(6,
+                        reinterpret_cast<uintptr_t>(file.symlinkTarget.empty()
+                                                        ? runner.emptyString()
+                                                        : runner.newString(file.symlinkTarget)));
 
         // Cons this record onto the list
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);

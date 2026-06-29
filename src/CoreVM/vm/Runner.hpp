@@ -217,10 +217,13 @@ class Runner
     /// Returns the GC suspects set (for testing/inspection).
     [[nodiscard]] std::unordered_set<TypedObject*> const& gcSuspects() const noexcept { return _gcSuspects; }
 
+    /// Returns the shared, always-allocated empty CoreString sentinel.
+    /// Prefer this over newString("") when storing an empty string value to avoid a
+    /// per-call heap allocation and known-string insertion.
+    [[nodiscard]] const CoreString* emptyString() const { return &*_stringGarbage.begin(); }
+
   private:
     void consume(Opcode op);
-
-    const CoreString* emptyString() const { return &*_stringGarbage.begin(); }
 
     CoreString* catString(const CoreString& a, const CoreString& b);
 

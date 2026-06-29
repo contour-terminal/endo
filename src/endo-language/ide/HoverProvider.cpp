@@ -389,7 +389,7 @@ namespace
             { "FileInfo",
               "`FileInfo` \u2014 Record type for file/directory information\n\n"
               "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`\n\n"
+              "bool`, `isSymlink: bool`, `target: str`\n\n"
               "Returned by `ls`. Supports dot access and pattern matching.\n\n"
               "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```" },
             { "ProcessInfo",
@@ -407,7 +407,7 @@ namespace
               "`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
               "Lists directory contents as structured FileInfo records.\n\n"
               "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`" },
+              "bool`, `isSymlink: bool`, `target: str`" },
             { "ps",
               "`ps` : `list<ProcessInfo>`\n\n"
               "Lists running processes as structured ProcessInfo records.\n\n"

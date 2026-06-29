@@ -16,6 +16,7 @@
 
 #include <bit>
 #include <filesystem>
+#include <ranges>
 
 #include <platform/GlobMatch.hpp>
 #include <platform/NativeFileSystem.hpp>
@@ -79,21 +80,45 @@ namespace
             int64_t mode;
             int64_t mtime;
             bool isDir;
+            bool isSymlink;
+            char const* target;
         };
 
+        // NOTE: many tests/structured/*.endo cases assert the exact count, names, sizes,
+        // and modes of these three entries — do not add/remove rows here without updating
+        // them. Symlink field access (isSymlink/target) is covered by Catch2 tests that
+        // construct FileInfo records directly, so no symlink row is needed in this fixture.
         constexpr MockFile AllFiles[] = {
-            { .name = "docs", .size = 4096, .mode = 0755, .mtime = 1700000000, .isDir = true },
-            { .name = "hello.txt", .size = 42, .mode = 0644, .mtime = 1700001000, .isDir = false },
-            { .name = "script.sh", .size = 256, .mode = 0755, .mtime = 1700002000, .isDir = false },
+            { .name = "docs",
+              .size = 4096,
+              .mode = 0755,
+              .mtime = 1700000000,
+              .isDir = true,
+              .isSymlink = false,
+              .target = "" },
+            { .name = "hello.txt",
+              .size = 42,
+              .mode = 0644,
+              .mtime = 1700001000,
+              .isDir = false,
+              .isSymlink = false,
+              .target = "" },
+            { .name = "script.sh",
+              .size = 256,
+              .mode = 0755,
+              .mtime = 1700002000,
+              .isDir = false,
+              .isSymlink = false,
+              .target = "" },
         };
 
         // Determine which entries to include based on the path argument.
         auto const hasGlob = endo::containsGlobChars(path);
 
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
-        for (int i = 2; i >= 0; --i)
+        // Build the cons-list right-to-left so the result keeps AllFiles order.
+        for (auto const& f: std::ranges::reverse_view(AllFiles))
         {
-            auto const& f = AllFiles[i];
 
             // Filter: directory path returns all, glob filters by pattern, else exact name match.
             if (!path.empty() && path != "." && path != "/tmp" && !path.starts_with("/home/testuser"))
@@ -120,6 +145,8 @@ namespace
             auto* mtimeObj = builtins::makeDateTimeFromEpoch(runner, f.mtime);
             record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
             record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
+            record->setSlot(5, static_cast<uint64_t>(f.isSymlink ? 1 : 0));
+            record->setSlot(6, reinterpret_cast<uintptr_t>(runner->newString(f.target)));
             list =
                 runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }

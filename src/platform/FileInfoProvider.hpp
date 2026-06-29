@@ -16,15 +16,17 @@ namespace endo::platform
 /// them leave the documented sentinel defaults (@c blocks = -1, @c dev/@c ino = 0).
 struct FileEntry
 {
-    std::string name;       ///< File name (not full path).
-    int64_t size = 0;       ///< Apparent size in bytes (st_size).
-    int64_t blocks = -1;    ///< Allocated 512-byte blocks (st_blocks); -1 if unknown.
-    int64_t mode = 0;       ///< Permission bits (e.g. 0755).
-    int64_t mtime = 0;      ///< Last modification time as epoch seconds.
-    uint64_t dev = 0;       ///< Device id (st_dev) for cross-filesystem detection; 0 if unknown.
-    uint64_t ino = 0;       ///< Inode number (st_ino) for hardlink dedup; 0 if unknown.
-    bool isDir = false;     ///< Whether this entry is a directory.
-    bool isSymlink = false; ///< Whether this entry is a symbolic link (from lstat, not followed).
+    std::string name;          ///< File name (not full path).
+    int64_t size = 0;          ///< Apparent size in bytes (st_size).
+    int64_t blocks = -1;       ///< Allocated 512-byte blocks (st_blocks); -1 if unknown.
+    int64_t mode = 0;          ///< Permission bits (e.g. 0755).
+    int64_t mtime = 0;         ///< Last modification time as epoch seconds.
+    uint64_t dev = 0;          ///< Device id (st_dev) for cross-filesystem detection; 0 if unknown.
+    uint64_t ino = 0;          ///< Inode number (st_ino) for hardlink dedup; 0 if unknown.
+    bool isDir = false;        ///< Whether this entry is a directory.
+    bool isSymlink = false;    ///< Whether this entry is a symbolic link (from lstat, not followed).
+    std::string symlinkTarget; ///< Target path of a symbolic link (verbatim, possibly relative);
+                               ///< empty if not a symlink or if the target could not be read.
 };
 
 /// Abstract interface for listing directory contents.

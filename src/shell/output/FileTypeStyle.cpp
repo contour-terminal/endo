@@ -29,6 +29,7 @@ namespace
     // clang-format off
     constexpr auto DirColor        = rgb(0x5C7AFF); // bold blue
     constexpr auto ExecColor       = rgb(0x50FA7B); // bold green
+    constexpr auto SymlinkColor    = rgb(0x00CDCD); // cyan (GNU ls default for symlinks)
     constexpr auto CppColor        = rgb(0x61AFEF); // blue
     constexpr auto PythonColor     = rgb(0x3776AB); // python blue
     constexpr auto RustColor       = rgb(0xDEA584); // rust orange
@@ -77,6 +78,7 @@ namespace
     constexpr auto IconFolder     = "\xEF\x84\x95"; // U+F115 nf-fa-folder_open
     constexpr auto IconFile       = "\xEF\x80\x96"; // U+F016 nf-fa-file_o
     constexpr auto IconExec       = "\xEF\x80\x93"; // U+F013 nf-fa-cog
+    constexpr auto IconSymlink    = "\xEF\x92\x81"; // U+F481 nf-oct-file_symlink_file
     constexpr auto IconTerminal   = "\xEF\x84\xA0"; // U+F120 nf-fa-terminal
     constexpr auto IconCpp        = "\xEE\x98\x9D"; // U+E61D nf-custom-c
     constexpr auto IconPython     = "\xEE\x9C\xBC"; // U+E73C nf-dev-python
@@ -220,9 +222,22 @@ namespace
     }
 } // namespace
 
-FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode)
+FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode, bool isSymlink)
 {
     auto decoration = FileDecoration {};
+
+    // 0. Symbolic link (takes visual priority over the link's target type)
+    if (isSymlink)
+    {
+        decoration.icon = IconSymlink;
+        decoration.style.fg = SymlinkColor;
+
+        // Hidden links still get the dim attribute (additive).
+        if (!name.empty() && name[0] == '.')
+            decoration.style.dim = true;
+
+        return decoration;
+    }
 
     // 1. Directory
     if (isDir)

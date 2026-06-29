@@ -257,6 +257,43 @@ TEST_CASE("LinuxFileInfoProvider.marks_symlink", "[platform][linux]")
     CHECK(entries[1].isDir == true);
 }
 
+TEST_CASE("LinuxFileInfoProvider.populates_symlink_target", "[platform][linux]")
+{
+    // A symlink entry must expose its target path verbatim (read via readlink),
+    // while a regular file leaves symlinkTarget empty.
+    TempDir tmp;
+    tmp.createFile("real.txt", "data");
+    fs::create_symlink("real.txt", tmp.path / "link.txt"); // relative target, kept verbatim
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 2);
+    // Sorted by name: "link.txt" < "real.txt"
+    CHECK(entries[0].name == "link.txt");
+    CHECK(entries[0].isSymlink == true);
+    CHECK(entries[0].symlinkTarget == "real.txt");
+    CHECK(entries[1].name == "real.txt");
+    CHECK(entries[1].isSymlink == false);
+    CHECK(entries[1].symlinkTarget.empty());
+}
+
+TEST_CASE("LinuxFileInfoProvider.populates_dangling_symlink_target", "[platform][linux]")
+{
+    // readlink succeeds for a dangling symlink: the target string is still reported
+    // even though it does not resolve to an existing file.
+    TempDir tmp;
+    fs::create_symlink("missing_target", tmp.path / "broken.lnk");
+
+    LinuxFileInfoProvider provider;
+    auto entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 1);
+    CHECK(entries[0].name == "broken.lnk");
+    CHECK(entries[0].isSymlink == true);
+    CHECK(entries[0].symlinkTarget == "missing_target");
+}
+
 TEST_CASE("LinuxFileInfoProvider.siblings_share_device", "[platform][linux]")
 {
     // Two entries in the same directory live on the same filesystem, so their

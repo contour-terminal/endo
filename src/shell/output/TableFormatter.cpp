@@ -237,9 +237,23 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         }
     }
 
+    bool const isFileInfo = (recordTypeId == CoreVM::BuiltinTypeId::FileInfo);
+
+    // Hide fields the type marks non-display (FieldInfo::display == false). Such fields stay
+    // accessible via field access/completion but are not rendered as columns — they typically
+    // drive presentation instead (e.g. FileInfo's isDir/isSymlink/target feed the folder slash,
+    // symlink icon, and "name -> target" suffix). Tuples have no hidden fields.
+    if (resolvedFields.empty())
+    {
+        auto const& allFields = records[0]->type->fields;
+        if (std::ranges::any_of(allFields, [](auto const& f) { return !f.display; }))
+            for (auto const& f: allFields)
+                if (f.display)
+                    resolvedFields.push_back(f);
+    }
+
     auto const& fields = resolvedFields.empty() ? records[0]->type->fields : resolvedFields;
     auto const numCols = fields.size();
-    bool const isFileInfo = (recordTypeId == CoreVM::BuiltinTypeId::FileInfo);
     bool const decorateFiles = isFileInfo && config.useColor;
 
     // Determine per-column alignment and FileMode columns from the first record's runtime types
@@ -287,8 +301,9 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         std::vector<std::string> row;
         row.reserve(numCols);
 
-        // Compute file decoration for this row (if applicable)
-        auto const isDir = decorateFiles && record->getSlot(4) != 0;
+        // FileInfo hidden slots that drive visuals: isDir (4), isSymlink (5), target (6).
+        auto const isDir = isFileInfo && record->getSlot(4) != 0;
+        auto const isSymlink = isFileInfo && record->getSlot(5) != 0;
         if (decorateFiles)
         {
             auto const nameSlot = record->getSlot(0);
@@ -304,15 +319,24 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
                     mode = static_cast<int64_t>(modeObj->getSlot(0));
             }
             fileDecorations.push_back(
-                getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode));
+                getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode, isSymlink));
         }
 
         for (size_t col = 0; col < numCols; ++col)
         {
-            auto slotVal = record->getSlot(static_cast<uint8_t>(col));
+            auto slotVal = record->getSlot(fields[col].offset);
             auto cell = fieldValueToString(slotVal, fields[col], runner);
             if (config.showDirectorySlash && col == 0 && isDir)
                 cell += '/';
+            // Append the symlink target to the name cell ("name -> target"), GNU ls -l style.
+            if (isSymlink && col == 0)
+            {
+                auto const targetSlot = record->getSlot(6);
+                auto const* targetStr =
+                    reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(targetSlot));
+                if (targetStr && !targetStr->empty())
+                    cell += " -> " + *targetStr;
+            }
             if (std::cmp_not_equal(col, config.autoGrowColumn))
                 cell = truncate(cell, config.maxColumnWidth);
             auto cellDisplayWidth = displayWidth(cell);

@@ -57,6 +57,15 @@ namespace
         fileEntry.isDir = fs::is_directory(status);
         fileEntry.isSymlink = fs::is_symlink(dirEntry.symlink_status(ec));
         ec.clear();
+        if (fileEntry.isSymlink)
+        {
+            // Read the link target verbatim. Reading a reparse point can fail without the
+            // required privilege; on failure leave the target empty (graceful degradation).
+            auto const target = fs::read_symlink(dirEntry.path(), ec);
+            if (!ec)
+                fileEntry.symlinkTarget = toUtf8(target);
+            ec.clear();
+        }
         fileEntry.size = 0;
 
         // Windows std::filesystem does not expose st_blocks/st_dev/st_ino. Leave the

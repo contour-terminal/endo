@@ -34,6 +34,10 @@ struct FieldInfo
     uint8_t offset {};                      ///< Slot offset within the object's data area
     LiteralType type = LiteralType::Number; ///< The VM type of this field's value
     std::string nestedTypeName; ///< For Object-typed fields, the nested type name (e.g., "Size", "DateTime")
+    bool display = true;        ///< Whether this field is shown as a column in default table output.
+                                ///< Hidden fields remain accessible via field access and completion;
+                                ///< they typically drive presentation (e.g. an isSymlink flag rendered
+                                ///< inline) rather than warranting their own column.
 };
 
 /// Information about a module-level function associated with a type.

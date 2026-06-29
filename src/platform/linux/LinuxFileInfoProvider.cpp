@@ -37,6 +37,15 @@ namespace
 
         entry.name = std::move(name);
         entry.isSymlink = S_ISLNK(st.st_mode);
+        if (entry.isSymlink)
+        {
+            // Read the link target verbatim (do not canonicalize), matching `ls -l`.
+            // A failure (e.g. permissions) leaves symlinkTarget empty, which is acceptable.
+            std::error_code ec;
+            auto const target = fs::read_symlink(fullPath, ec);
+            if (!ec)
+                entry.symlinkTarget = target.string();
+        }
         entry.mode = static_cast<int64_t>(st.st_mode) & 0777;
         entry.mtime = static_cast<int64_t>(st.st_mtime);
         entry.dev = static_cast<uint64_t>(st.st_dev);

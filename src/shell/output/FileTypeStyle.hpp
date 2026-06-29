@@ -19,14 +19,18 @@ struct FileDecoration
 
 /// Returns the visual decoration (icon and color) for a file based on its properties.
 ///
-/// Priority chain: directory > executable > extension match > fallback.
+/// Priority chain: symlink > directory > executable > extension match > fallback.
 /// Hidden files (names starting with '.') additionally get the dim attribute.
 ///
-/// @param name  File name (used for extension matching and hidden-file detection).
-/// @param isDir Whether the file is a directory.
-/// @param mode  POSIX permission bits (0777 mask); used to detect executables.
+/// @param name      File name (used for extension matching and hidden-file detection).
+/// @param isDir     Whether the file is a directory.
+/// @param mode      POSIX permission bits (0777 mask); used to detect executables.
+/// @param isSymlink Whether the file is a symbolic link (takes visual priority).
 /// @return FileDecoration with an icon glyph and an SGR style.
-[[nodiscard]] FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode);
+[[nodiscard]] FileDecoration getFileDecoration(std::string_view name,
+                                               bool isDir,
+                                               int64_t mode,
+                                               bool isSymlink = false);
 
 /// Colorizes a permission string (e.g., "rwxr-xr-x") with per-character SGR colors.
 ///
