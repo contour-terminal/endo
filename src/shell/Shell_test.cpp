@@ -30,6 +30,7 @@ using crispy::escape;
 
 #include "Shell.hpp"
 #include "TTY.hpp"
+#include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
@@ -77,6 +78,24 @@ TEST_CASE("shell.syntax.exit")
     CHECK(shell("exit").exitCode == 0);
     CHECK(shell("exit 1").exitCode == 1);
     CHECK(shell("exit 123").exitCode == 123);
+}
+
+// ============================================================================
+// Startup environment
+// ============================================================================
+
+TEST_CASE("shell.env.SHELL_is_absolute_path")
+{
+    // Regression: SHELL used to be the bare name "endo". It must be the
+    // fully-qualified path to the running executable, because programs such as
+    // sudo-rs' `sudo -s` read SHELL and refuse to spawn a non-absolute value.
+    TestShell shell;
+    auto const value = shell.env.get("SHELL");
+    REQUIRE(value.has_value());
+    CHECK(*value != "endo");
+    auto const exe = endo::platform::executablePath();
+    REQUIRE(exe.has_value());
+    CHECK(*value == endo::platform::normalizePath(*exe));
 }
 
 // ============================================================================
