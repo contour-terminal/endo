@@ -23,4 +23,13 @@ std::unique_ptr<ProcessProvider> createNativeProcessProvider()
 #endif
 }
 
+ProcessNameMatchPolicy nativeProcessNameMatchPolicy()
+{
+#if defined(_WIN32)
+    return { .caseInsensitive = true, .stripExeSuffix = true };
+#else
+    return {};
+#endif
+}
+
 } // namespace endo::platform

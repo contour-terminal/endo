@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/commands/PkillCommand.hpp>
+#include <shell/commands/ProcessMatch.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 
 #include <format>
@@ -10,25 +11,6 @@ namespace endo::pkill_cmd
 
 namespace
 {
-
-    /// Splits a comma-separated user list into individual usernames.
-    /// Empty entries are skipped.
-    std::vector<std::string> splitUsers(std::string_view spec)
-    {
-        auto users = std::vector<std::string> {};
-        size_t start = 0;
-        while (start <= spec.size())
-        {
-            auto const comma = spec.find(',', start);
-            auto const end = (comma == std::string_view::npos) ? spec.size() : comma;
-            if (end > start)
-                users.emplace_back(spec.substr(start, end - start));
-            if (comma == std::string_view::npos)
-                break;
-            start = comma + 1;
-        }
-        return users;
-    }
 
     /// Consumes the value for an option that requires one, returning the consumed string
     /// or an error describing the missing operand.
@@ -110,7 +92,7 @@ std::expected<PkillOptions, std::string> parsePkillArgs(std::span<std::string co
             auto val = takeValue(args, i, "u");
             if (!val.has_value())
                 return std::unexpected(val.error());
-            opts.userFilter = splitUsers(*val);
+            opts.userFilter = process_match::splitCommaList(*val);
             if (opts.userFilter.empty())
                 return std::unexpected(std::string("pkill: -u requires at least one user"));
             continue;

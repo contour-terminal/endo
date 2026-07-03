@@ -38,12 +38,28 @@ class ProcessProvider
 /// Returns a Linux/Darwin/Windows provider depending on the build target.
 [[nodiscard]] std::unique_ptr<ProcessProvider> createNativeProcessProvider();
 
+/// How ProcessEntry::command compares against user-supplied program names.
+///
+/// Windows file names are case-insensitive and executables carry an ".exe"
+/// suffix, so both relaxations are enabled there; POSIX platforms compare
+/// names verbatim.
+struct ProcessNameMatchPolicy
+{
+    bool caseInsensitive = false; ///< Compare names case-insensitively.
+    bool stripExeSuffix = false;  ///< Also match with a trailing ".exe" stripped.
+};
+
+/// Returns the process-name match policy of the platform this shell was built for.
+[[nodiscard]] ProcessNameMatchPolicy nativeProcessNameMatchPolicy();
+
 } // namespace endo::platform
 
 // Backward-compatible aliases in the endo namespace
 namespace endo
 {
 using endo::platform::createNativeProcessProvider;
+using endo::platform::nativeProcessNameMatchPolicy;
 using endo::platform::ProcessEntry;
+using endo::platform::ProcessNameMatchPolicy;
 using endo::platform::ProcessProvider;
 } // namespace endo

@@ -9,17 +9,18 @@
 /// and LSP builtin descriptors. Adding a new builtin = one table entry
 /// + one implementation function.
 
-#include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <shell/completion/CommandSpec.hpp>
 
-#include <CoreVM/CoreVM.hpp>
+#include <endo-language/builtins/BuiltinSignatures.hpp>
 
-#include <platform/Types.hpp>
+#include <CoreVM/CoreVM.hpp>
 
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -45,6 +46,20 @@ struct InlineOptionDef
     bool takesValue = false;      ///< Whether this flag consumes the next arg as its value
 };
 
+/// @brief Dynamic-query completion for an inline builtin's positional arguments.
+///
+/// When queryTag is non-empty, the generated completion spec resolves
+/// positional-argument candidates through a CommandQueryProvider at completion
+/// time (e.g. live process names) instead of file paths.
+struct InlinePositionalQuery
+{
+    std::string_view queryTag;         ///< e.g., "process-names" (empty: no dynamic query)
+    std::string_view description;      ///< Help text for the positional argument
+    bool repeatable = false;           ///< Whether the positional argument repeats
+    std::string_view overrideFlag;     ///< Option that switches the query tag (e.g., "-f")
+    std::string_view overrideQueryTag; ///< Query tag used while overrideFlag is present
+};
+
 /// @brief Single source of truth for an inline builtin command.
 ///
 /// Drives: dispatch, arg parsing, help generation, completion specs,
@@ -54,14 +69,15 @@ struct InlineCommandDescriptor
     using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle);
     using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle, NativeHandle);
 
-    std::string_view name;                       ///< Command name (e.g., "head")
-    std::string_view briefDescription;           ///< One-line (e.g., "Output first lines of files")
-    std::string_view usageLine;                  ///< e.g., "head [OPTIONS] [FILE...]"
-    std::span<InlineOptionDef const> options;     ///< Flag/option definitions
-    bool acceptsFileArgs = false;                ///< Whether positional args are file paths
-    bool fileArgsRepeatable = false;             ///< Whether multiple file args are accepted
-    NoStdinFn noStdinFn = nullptr;               ///< Implementation (no stdin)
-    WithStdinFn withStdinFn = nullptr;           ///< Implementation (with stdin)
+    std::string_view name;                      ///< Command name (e.g., "head")
+    std::string_view briefDescription;          ///< One-line (e.g., "Output first lines of files")
+    std::string_view usageLine;                 ///< e.g., "head [OPTIONS] [FILE...]"
+    std::span<InlineOptionDef const> options;   ///< Flag/option definitions
+    bool acceptsFileArgs = false;               ///< Whether positional args are file paths
+    bool fileArgsRepeatable = false;            ///< Whether multiple file args are accepted
+    InlinePositionalQuery positionalQuery = {}; ///< Dynamic-query completion for positional args
+    NoStdinFn noStdinFn = nullptr;              ///< Implementation (no stdin)
+    WithStdinFn withStdinFn = nullptr;          ///< Implementation (with stdin)
 
     /// @brief Calls the appropriate function variant.
     [[nodiscard]] int execute(Shell& shell,
