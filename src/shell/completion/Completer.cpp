@@ -34,7 +34,7 @@ Completer::Completer(EnvironmentProvider const& env,
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
     for (auto& spec: createBuiltinSpecs())
     {
-        // Process names are the only dynamic query builtins declare (via
+        // Process names are the only dynamic query that builtins declare (via
         // InlineCommandDescriptor::positionalQuery), so any DynamicQuery
         // positional is served by the shared ProcessNameQueryProvider.
         auto queryProvider = std::unique_ptr<CommandQueryProvider> {};

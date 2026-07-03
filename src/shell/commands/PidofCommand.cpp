@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <charconv>
 #include <format>
-#include <ranges>
+#include <functional>
 
 #include <platform/PathUtils.hpp>
 
@@ -158,8 +158,10 @@ std::vector<int64_t> findPids(std::span<ProcessEntry const> entries,
         });
     };
 
-    auto pids = entries | std::views::filter(isRequested) | std::views::transform(&ProcessEntry::pid)
-                | std::ranges::to<std::vector>();
+    auto pids = std::vector<int64_t> {};
+    for (auto const& entry: entries)
+        if (isRequested(entry))
+            pids.push_back(entry.pid);
 
     std::ranges::sort(pids, std::ranges::greater {});
     if (opts.singleShot && pids.size() > 1)
