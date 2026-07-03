@@ -636,7 +636,13 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
-    _env.setAndExport("SHELL", "endo");
+    // SHELL must be a fully-qualified path (not a bare name): programs such as
+    // sudo-rs' `sudo -s` read SHELL and refuse to spawn it unless it resolves to
+    // an absolute path. Fall back to "endo" only if the path cannot be determined.
+    if (auto const exePath = endo::platform::executablePath())
+        _env.setAndExport("SHELL", endo::platform::normalizePath(*exePath));
+    else
+        _env.setAndExport("SHELL", "endo");
     _env.set("PWD", _env.currentDirectory());
 
     // Track shell nesting level (0 = outermost)
