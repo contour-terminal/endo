@@ -34,20 +34,14 @@ Completer::Completer(EnvironmentProvider const& env,
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
     for (auto& spec: createBuiltinSpecs())
     {
-        if (spec.command == "pkill")
-        {
-            spec.positionalArgs.clear();
-            spec.positionalArgs.push_back(
-                ArgDef { .kind = ArgKind::DynamicQuery,
-                         .description = "Process name pattern",
-                         .queryTag = "process-names",
-                         .repeatable = false,
-                         .optionQueryOverrides = { { "-f", "process-command-lines" } } });
-            specCompleter->registerCommand(std::move(spec),
-                                           std::make_unique<ProcessNameQueryProvider>(*_processProvider));
-            continue;
-        }
-        specCompleter->registerCommand(std::move(spec), nullptr);
+        // Process names are the only dynamic query builtins declare (via
+        // InlineCommandDescriptor::positionalQuery), so any DynamicQuery
+        // positional is served by the shared ProcessNameQueryProvider.
+        auto queryProvider = std::unique_ptr<CommandQueryProvider> {};
+        if (std::ranges::any_of(spec.positionalArgs,
+                                [](ArgDef const& arg) { return arg.kind == ArgKind::DynamicQuery; }))
+            queryProvider = std::make_unique<ProcessNameQueryProvider>(*_processProvider);
+        specCompleter->registerCommand(std::move(spec), std::move(queryProvider));
     }
     // Register after createBuiltinSpecs() to overwrite the auto-generated spec with subcommands
     specCompleter->registerCommand(createHistorySpec(), nullptr);

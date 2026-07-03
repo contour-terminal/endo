@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: pidof without program names exits 2
+# mode: shell
+# expect-exit: 2
+
+pidof

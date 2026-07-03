@@ -797,6 +797,100 @@ kill -l
 
 ---
 
+## pgrep
+
+Print PIDs of processes matched by name or command-line pattern.
+
+**Syntax:**
+
+```
+pgrep [OPTIONS] PATTERN
+```
+
+**Description:** Lists the process IDs of all running processes whose command name matches
+PATTERN, an ECMAScript regular expression. By default a substring search is performed and
+one PID is printed per line. Exits with status 0 if at least one process matched, 1 if
+none did.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-f` | Match PATTERN against the full command line |
+| `-x` | Require an exact (anchored) match |
+| `-i` | Case-insensitive pattern match |
+| `-v` | Invert the match: select non-matching processes |
+| `-c` | Print only the count of matched processes |
+| `-l` | Print the process name along with the PID |
+| `-n` | Match only the newest (highest PID) process |
+| `-o` | Match only the oldest (lowest PID) process |
+| `-u USER[,USER]` | Only match processes owned by the listed users |
+| `-d DELIM` | Delimiter between printed PIDs (default: newline) |
+| `-h`, `--help` | Show help |
+
+**Portability:** Matching runs against the platform's most reliable command field — the
+full `argv[0]` path on Linux, the (possibly truncated) command name on macOS, and the
+executable name (including `.exe`) on Windows. `-f` is accepted for CLI compatibility but
+targets the same field on all platforms.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+pgrep sleep
+pgrep -x sleep
+pgrep -l ssh
+pgrep -c -u alice bash
+pgrep -d , sleep
+```
+
+---
+
+## pidof
+
+Print PIDs of running processes matching program names.
+
+**Syntax:**
+
+```
+pidof [OPTIONS] PROGRAM...
+```
+
+**Description:** Looks up the process IDs of all running processes whose program name
+equals one of the given PROGRAM names, and prints them space-separated on a single line,
+newest (highest PID) first. Unlike `pgrep`, matching is exact, not pattern-based. Exits
+with status 0 if at least one PID was found, 1 otherwise.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-s` | Single shot: print at most one PID |
+| `-q` | Quiet: print nothing, only set the exit status |
+| `-S SEP`, `--separator SEP` | Separator between printed PIDs (default: space) |
+| `-d SEP` | Alias for `-S` (sysvinit compatibility) |
+| `-o PID[,PID]` | Omit the listed PIDs from the result (repeatable) |
+| `-h`, `--help` | Show help |
+
+**Portability:** A PROGRAM name matches the process's command field verbatim or by its
+path basename. On Linux, the command field is the full `argv[0]` path (so both
+`pidof sleep` and `pidof /usr/bin/sleep` work); on macOS it is the (possibly truncated)
+command name; on Windows the comparison is case-insensitive and a trailing `.exe` is
+ignored (`pidof notepad` matches `notepad.exe`).
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+pidof sleep
+pidof -s sleep
+pidof -q sleep
+pidof -d , sleep
+pidof -o 1234 sleep
+```
+
+---
+
 ## jobs
 
 List background jobs.

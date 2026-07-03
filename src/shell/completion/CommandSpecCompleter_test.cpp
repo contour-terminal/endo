@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <shell/completion/ProcessNameQueryProvider.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -9,6 +12,7 @@
 #include "CommandSpecCompleter.hpp"
 #include "GitSpec.hpp"
 #include "QueryCache.hpp"
+#include <platform/testing/MockProcessProvider.hpp>
 
 using namespace std::string_literals;
 
@@ -887,4 +891,111 @@ TEST_CASE("CommandSpecCompleter.worktree_prune_options")
     CHECK_FALSE(results.empty());
     CHECK(hasCompletion(results, "--dry-run"));
     CHECK(hasCompletion(results, "--verbose"));
+}
+
+// ============================================================================
+// Process-name completion (pidof / pgrep / pkill wiring)
+// ============================================================================
+
+namespace
+{
+
+/// @brief Creates a MockProcessProvider with a fixed set of processes.
+endo::platform::testing::MockProcessProvider createMockProcessProvider()
+{
+    auto provider = endo::platform::testing::MockProcessProvider {};
+    provider.setProcesses({
+        { .pid = 100,
+          .ppid = 1,
+          .user = "alice",
+          .cpuPercent = 0.0,
+          .memKb = 0,
+          .command = "/usr/bin/sleep" },
+        { .pid = 200, .ppid = 1, .user = "bob", .cpuPercent = 0.0, .memKb = 0, .command = "bash" },
+        { .pid = 300,
+          .ppid = 1,
+          .user = "alice",
+          .cpuPercent = 0.0,
+          .memKb = 0,
+          .command = "/usr/bin/sleep" },
+    });
+    return provider;
+}
+
+/// @brief Registers a process-name spec (mirroring Completer's wiring) backed by @p provider.
+endo::CommandSpecCompleter createProcessNameCompleter(endo::ProcessProvider const& provider,
+                                                      std::string command,
+                                                      bool repeatable)
+{
+    auto spec = endo::CommandSpec { .command = std::move(command),
+                                    .description = "test spec",
+                                    .globalOptions = {},
+                                    .subcommands = {},
+                                    .positionalArgs = { endo::ArgDef {
+                                        .kind = endo::ArgKind::DynamicQuery,
+                                        .description = "Process name",
+                                        .queryTag = "process-names",
+                                        .repeatable = repeatable,
+                                        .optionQueryOverrides = {},
+                                    } } };
+    auto completer = endo::CommandSpecCompleter {};
+    completer.registerCommand(std::move(spec), std::make_unique<endo::ProcessNameQueryProvider>(provider));
+    return completer;
+}
+
+} // namespace
+
+TEST_CASE("CommandSpecCompleter.pidof_completes_process_names")
+{
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pidof", true);
+    auto ctx = makeGitContext("pidof ", "", "pidof");
+    auto results = completer.complete(ctx);
+
+    CHECK(hasCompletion(results, "/usr/bin/sleep"));
+    CHECK(hasCompletion(results, "bash"));
+}
+
+TEST_CASE("CommandSpecCompleter.pidof_deduplicates_process_names")
+{
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pidof", true);
+    auto ctx = makeGitContext("pidof ", "", "pidof");
+    auto results = completer.complete(ctx);
+
+    auto const count = std::count_if(
+        results.begin(), results.end(), [](auto const& item) { return item.text == "/usr/bin/sleep"; });
+    CHECK(count == 1);
+}
+
+TEST_CASE("CommandSpecCompleter.pidof_repeatable_second_positional")
+{
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pidof", true);
+    auto ctx = makeGitContext("pidof bash ", "", "pidof");
+    auto results = completer.complete(ctx);
+
+    CHECK(hasCompletion(results, "/usr/bin/sleep"));
+}
+
+TEST_CASE("CommandSpecCompleter.pgrep_completes_process_names")
+{
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pgrep", false);
+    auto ctx = makeGitContext("pgrep ", "", "pgrep");
+    auto results = completer.complete(ctx);
+
+    CHECK(hasCompletion(results, "bash"));
+    CHECK(hasCompletion(results, "/usr/bin/sleep"));
+}
+
+TEST_CASE("CommandSpecCompleter.pidof_prefix_filters_candidates")
+{
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pidof", true);
+    auto ctx = makeGitContext("pidof ba", "ba", "pidof");
+    auto results = completer.complete(ctx);
+
+    CHECK(hasCompletion(results, "bash"));
+    CHECK_FALSE(hasCompletion(results, "/usr/bin/sleep"));
 }
