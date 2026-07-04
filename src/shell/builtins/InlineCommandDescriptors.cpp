@@ -149,6 +149,27 @@ static constexpr InlineOptionDef PkillOptions[] = {
     { .shortFlag = "-u", .longFlag = {}, .description = "Restrict to processes owned by USER[,USER]", .takesValue = true },
 };
 
+static constexpr InlineOptionDef PgrepOptions[] = {
+    { .shortFlag = "-f", .longFlag = {}, .description = "Match against the full command line" },
+    { .shortFlag = "-x", .longFlag = {}, .description = "Require exact (anchored) match" },
+    { .shortFlag = "-i", .longFlag = {}, .description = "Case-insensitive match" },
+    { .shortFlag = "-v", .longFlag = {}, .description = "Invert the match (select non-matching processes)" },
+    { .shortFlag = "-c", .longFlag = {}, .description = "Print count of matched processes" },
+    { .shortFlag = "-l", .longFlag = {}, .description = "Print process name along with the PID" },
+    { .shortFlag = "-n", .longFlag = {}, .description = "Match only the newest process" },
+    { .shortFlag = "-o", .longFlag = {}, .description = "Match only the oldest process" },
+    { .shortFlag = "-u", .longFlag = {}, .description = "Restrict to processes owned by USER[,USER]", .takesValue = true },
+    { .shortFlag = "-d", .longFlag = {}, .description = "Delimiter between printed PIDs", .takesValue = true },
+};
+
+static constexpr InlineOptionDef PidofOptions[] = {
+    { .shortFlag = "-s", .longFlag = {}, .description = "Single shot: print at most one PID" },
+    { .shortFlag = "-q", .longFlag = {}, .description = "Quiet: no output, exit status only" },
+    { .shortFlag = "-S", .longFlag = "--separator", .description = "Separator between printed PIDs", .takesValue = true },
+    { .shortFlag = "-d", .longFlag = {}, .description = "Separator between printed PIDs (sysvinit alias)", .takesValue = true },
+    { .shortFlag = "-o", .longFlag = {}, .description = "Omit PID[,PID] from the result", .takesValue = true },
+};
+
 // clang-format on
 
 // ---------------------------------------------------------------------------
@@ -243,9 +264,22 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "nproc [OPTIONS]",
           .options = NprocOptions,
           .noStdinFn = &Shell::executeInlineNproc },
+        { .name = "pgrep",     .briefDescription = "Print PIDs of processes matched by name or command-line pattern.",
+          .usageLine = "pgrep [OPTIONS] PATTERN",
+          .options = PgrepOptions,
+          .positionalQuery = { .queryTag = "process-names", .description = "Process name pattern",
+                               .overrideFlag = "-f", .overrideQueryTag = "process-command-lines" },
+          .noStdinFn = &Shell::executeInlinePgrep },
+        { .name = "pidof",     .briefDescription = "Print PIDs of running processes matching program names.",
+          .usageLine = "pidof [OPTIONS] PROGRAM...",
+          .options = PidofOptions,
+          .positionalQuery = { .queryTag = "process-names", .description = "Program name", .repeatable = true },
+          .noStdinFn = &Shell::executeInlinePidof },
         { .name = "pkill",     .briefDescription = "Send signals to processes matched by name or command-line pattern.",
           .usageLine = "pkill [OPTIONS] [-SIGNAL] PATTERN",
           .options = PkillOptions,
+          .positionalQuery = { .queryTag = "process-names", .description = "Process name pattern",
+                               .overrideFlag = "-f", .overrideQueryTag = "process-command-lines" },
           .noStdinFn = &Shell::executeInlinePkill },
         { .name = "pwd",      .briefDescription = "Print the current working directory.",
           .usageLine = "pwd",

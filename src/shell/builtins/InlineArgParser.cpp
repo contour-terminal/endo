@@ -283,7 +283,20 @@ std::vector<CommandSpec> generateBuiltinCompletionSpecs(std::span<InlineCommandD
             OptionDef { .longName = "--help", .shortName = "-h", .description = "Show help" });
 
         // Positional args
-        if (desc.acceptsFileArgs)
+        if (!desc.positionalQuery.queryTag.empty())
+        {
+            auto overrides = std::vector<std::pair<std::string, std::string>> {};
+            if (!desc.positionalQuery.overrideFlag.empty())
+                overrides.emplace_back(std::string(desc.positionalQuery.overrideFlag),
+                                       std::string(desc.positionalQuery.overrideQueryTag));
+            spec.positionalArgs.push_back(
+                ArgDef { .kind = ArgKind::DynamicQuery,
+                         .description = std::string(desc.positionalQuery.description),
+                         .queryTag = std::string(desc.positionalQuery.queryTag),
+                         .repeatable = desc.positionalQuery.repeatable,
+                         .optionQueryOverrides = std::move(overrides) });
+        }
+        else if (desc.acceptsFileArgs)
         {
             spec.positionalArgs.push_back(ArgDef {
                 .kind = ArgKind::Path, .description = "File(s)", .repeatable = desc.fileArgsRepeatable });

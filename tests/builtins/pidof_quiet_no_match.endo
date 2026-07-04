@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: pidof -q prints nothing and exits 1 when no process matches
+# mode: shell
+# expect-exit: 1
+
+pidof -q no-such-program-xyzzy-12345

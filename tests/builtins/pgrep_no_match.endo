@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: pgrep exits 1 when no process matches
+# mode: shell
+# expect-exit: 1
+
+pgrep no-such-program-xyzzy-12345

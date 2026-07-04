@@ -306,6 +306,11 @@ class Shell final: public SignalCallback
     /// Executes the pkill builtin, sending signals to processes matched by name or command line. Returns exit
     /// code.
     [[nodiscard]] int executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the pgrep builtin, printing PIDs of processes matched by name or command line. Returns exit
+    /// code.
+    [[nodiscard]] int executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the pidof builtin, printing PIDs of processes matching program names. Returns exit code.
+    [[nodiscard]] int executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the whoami builtin. Returns exit code.
     [[nodiscard]] int executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the hostname builtin. Returns exit code.

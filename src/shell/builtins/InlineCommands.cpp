@@ -3,7 +3,10 @@
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
+#include <shell/commands/PgrepCommand.hpp>
+#include <shell/commands/PidofCommand.hpp>
 #include <shell/commands/PkillCommand.hpp>
+#include <shell/commands/ProcessMatch.hpp>
 #include <shell/commands/TimeoutCommand.hpp>
 #include <shell/history/RequiredPaths.hpp>
 
@@ -24,7 +27,6 @@
 #include <optional>
 #include <random>
 #include <ranges>
-#include <regex>
 #include <span>
 #include <sstream>
 #include <thread>
@@ -2767,20 +2769,6 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
 // pkill
 // ---------------------------------------------------------------------------
 
-namespace
-{
-
-    /// Returns true if @p entry's owner is listed in @p users. An empty @p users
-    /// list disables the filter (match-all).
-    [[nodiscard]] bool matchesUserFilter(ProcessEntry const& entry, std::vector<std::string> const& users)
-    {
-        if (users.empty())
-            return true;
-        return std::ranges::find(users, entry.user) != users.end();
-    }
-
-} // namespace
-
 int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
     auto pkillArgs = std::vector<std::string> {};
@@ -2840,61 +2828,30 @@ int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle 
                                   "| `pkill -l nginx` | List matching processes without signalling |\n"
                                   "| `pkill -u alice bash` | Only signal alice's bash processes |\n");
 
-    auto flags = std::regex::ECMAScript;
-    if (opts.caseInsensitive)
-        flags |= std::regex::icase;
-
-    auto const patternText = opts.exactMatch ? std::string("^(?:") + opts.pattern + ")$" : opts.pattern;
-
-    auto pattern = std::regex {};
-    try
-    {
-        pattern = std::regex(patternText, flags);
-    }
-    catch (std::regex_error const& ex)
-    {
-        error("pkill: invalid pattern '{}': {}", opts.pattern, ex.what());
-        return 2;
-    }
-
     auto provider = createNativeProcessProvider();
     auto entries = provider->listProcesses();
 
-    auto const selfPid = static_cast<int64_t>(_shellPid);
-
-    auto matches = std::vector<ProcessEntry> {};
-    for (auto const& entry: entries)
+    // Full-cmdline matching (-f) is accepted for CLI compatibility but matches
+    // the same field since richer data is not available across all platforms.
+    auto matched = process_match::filterProcesses(entries,
+                                                  process_match::MatchOptions {
+                                                      .pattern = opts.pattern,
+                                                      .exactMatch = opts.exactMatch,
+                                                      .caseInsensitive = opts.caseInsensitive,
+                                                      .userFilter = opts.userFilter,
+                                                      .newestOnly = opts.newestOnly,
+                                                      .oldestOnly = opts.oldestOnly,
+                                                      .excludePid = static_cast<int64_t>(_shellPid),
+                                                  });
+    if (!matched.has_value())
     {
-        if (entry.pid == selfPid)
-            continue;
-        if (!matchesUserFilter(entry, opts.userFilter))
-            continue;
-
-        // ProcessEntry::command is whatever the platform exposes most reliably
-        // (argv[0] on Linux, the command string on Darwin/Windows). Full-cmdline
-        // matching (-f) is accepted for CLI compatibility but matches the same
-        // field since richer data is not available across all platforms.
-        auto const& haystack = entry.command;
-        auto const matched =
-            opts.exactMatch ? std::regex_match(haystack, pattern) : std::regex_search(haystack, pattern);
-        if (matched)
-            matches.push_back(entry);
+        error("pkill: {}", matched.error());
+        return 2;
     }
 
+    auto const& matches = matched.value();
     if (matches.empty())
         return 1;
-
-    if (opts.newestOnly || opts.oldestOnly)
-    {
-        auto const cmp = [](ProcessEntry const& a, ProcessEntry const& b) {
-            return a.pid < b.pid;
-        };
-        auto const it =
-            opts.newestOnly ? std::ranges::max_element(matches, cmp) : std::ranges::min_element(matches, cmp);
-        auto picked = *it;
-        matches.clear();
-        matches.push_back(std::move(picked));
-    }
 
     if (opts.listOnly)
     {
@@ -2922,6 +2879,203 @@ int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle 
         }
     }
     return exitCode;
+}
+
+// ---------------------------------------------------------------------------
+// pgrep
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto pgrepArgs = std::vector<std::string> {};
+    for (auto const i: std::views::iota(1uz, args.size()))
+        pgrepArgs.push_back(args.at(i));
+
+    auto parsed = pgrep_cmd::parsePgrepArgs(pgrepArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 2;
+    }
+
+    auto const& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(outputFd,
+                                  "# pgrep\n"
+                                  "\n"
+                                  "Print PIDs of processes matched by name or command-line pattern.\n"
+                                  "\n"
+                                  "## Usage\n"
+                                  "\n"
+                                  "`pgrep [OPTIONS] PATTERN`\n"
+                                  "\n"
+                                  "## Options\n"
+                                  "\n"
+                                  "| Option | Description |\n"
+                                  "|---|---|\n"
+                                  "| `-f` | Match PATTERN against the full command line |\n"
+                                  "| `-x` | Require an exact (anchored) match |\n"
+                                  "| `-i` | Case-insensitive pattern match |\n"
+                                  "| `-v` | Invert the match: select non-matching processes |\n"
+                                  "| `-c` | Print only the count of matched processes |\n"
+                                  "| `-l` | Print the process name along with the PID |\n"
+                                  "| `-n` | Match only the newest (highest PID) process |\n"
+                                  "| `-o` | Match only the oldest (lowest PID) process |\n"
+                                  "| `-u USER[,USER]` | Only match processes owned by listed users |\n"
+                                  "| `-d DELIM` | Delimiter between printed PIDs (default: newline) |\n"
+                                  "| `-h`, `--help` | Show this help message |\n"
+                                  "\n"
+                                  "## Notes\n"
+                                  "\n"
+                                  "- PATTERN is an ECMAScript regular expression.\n"
+                                  "- Unlike `pkill`, the shell's own process can appear in the results.\n"
+                                  "- Matching runs against the platform's most reliable command field "
+                                  "(argv[0] on Linux, the command string on Darwin/Windows); `-f` is "
+                                  "accepted for CLI compatibility but targets the same field.\n"
+                                  "- Exit status is 0 if at least one process matched, 1 otherwise.\n"
+                                  "\n"
+                                  "## Examples\n"
+                                  "\n"
+                                  "| Example | Description |\n"
+                                  "|---|---|\n"
+                                  "| `pgrep sleep` | Print PIDs of every process matching `sleep` |\n"
+                                  "| `pgrep -x sleep` | Only exact name matches |\n"
+                                  "| `pgrep -l ssh` | Print `pid name` for each match |\n"
+                                  "| `pgrep -c -u alice bash` | Count alice's bash processes |\n"
+                                  "| `pgrep -d , sleep` | Separate PIDs with a comma |\n");
+
+    auto provider = createNativeProcessProvider();
+    auto entries = provider->listProcesses();
+
+    // Full-cmdline matching (-f) is accepted for CLI compatibility but matches
+    // the same field since richer data is not available across all platforms.
+    auto matched = process_match::filterProcesses(entries,
+                                                  process_match::MatchOptions {
+                                                      .pattern = opts.pattern,
+                                                      .exactMatch = opts.exactMatch,
+                                                      .caseInsensitive = opts.caseInsensitive,
+                                                      .invert = opts.invert,
+                                                      .userFilter = opts.userFilter,
+                                                      .newestOnly = opts.newestOnly,
+                                                      .oldestOnly = opts.oldestOnly,
+                                                  });
+    if (!matched.has_value())
+    {
+        error("pgrep: {}", matched.error());
+        return 2;
+    }
+
+    auto const& matches = matched.value();
+
+    if (opts.countOnly)
+    {
+        auto const output = std::format("{}\n", matches.size());
+        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        return matches.empty() ? 1 : 0;
+    }
+
+    if (matches.empty())
+        return 1;
+
+    auto output = std::string {};
+    for (auto const& m: matches)
+    {
+        if (!output.empty())
+            output += opts.delimiter;
+        if (opts.listName)
+            output += std::format("{} {}", m.pid, m.command);
+        else
+            output += std::format("{}", m.pid);
+    }
+    output += '\n';
+    [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// pidof
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto pidofArgs = std::vector<std::string> {};
+    for (auto const i: std::views::iota(1uz, args.size()))
+        pidofArgs.push_back(args.at(i));
+
+    auto parsed = pidof_cmd::parsePidofArgs(pidofArgs);
+    if (!parsed.has_value())
+    {
+        error("{}", parsed.error());
+        return 2;
+    }
+
+    auto const& opts = parsed.value();
+
+    if (opts.showHelp)
+        return renderMarkdownHelp(
+            outputFd,
+            "# pidof\n"
+            "\n"
+            "Print PIDs of running processes matching program names.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`pidof [OPTIONS] PROGRAM...`\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|---|---|\n"
+            "| `-s` | Single shot: print at most one PID |\n"
+            "| `-q` | Quiet: print nothing, only set the exit status |\n"
+            "| `-S SEP`, `--separator SEP` | Separator between printed PIDs (default: space) |\n"
+            "| `-d SEP` | Alias for `-S` (sysvinit compatibility) |\n"
+            "| `-o PID[,PID]` | Omit the listed PIDs from the result (repeatable) |\n"
+            "| `-h`, `--help` | Show this help message |\n"
+            "\n"
+            "## Notes\n"
+            "\n"
+            "- Program names are matched exactly against the platform's process "
+            "name (argv[0] or its basename on Linux, the command name on "
+            "Darwin/Windows).\n"
+            "- On Windows, matching is case-insensitive and a trailing `.exe` is "
+            "ignored.\n"
+            "- PIDs are printed on one line, newest (highest PID) first.\n"
+            "- The shell's own process is included when it matches; use `-o` to "
+            "exclude specific PIDs.\n"
+            "- Exit status is 0 if at least one PID was found, 1 otherwise.\n"
+            "\n"
+            "## Examples\n"
+            "\n"
+            "| Example | Description |\n"
+            "|---|---|\n"
+            "| `pidof sleep` | Print PIDs of every process named `sleep` |\n"
+            "| `pidof -s sleep` | Print only the newest matching PID |\n"
+            "| `pidof -q sleep` | No output; exit 0 only if a `sleep` process exists |\n"
+            "| `pidof -d , sleep` | Separate PIDs with a comma |\n"
+            "| `pidof -o 1234 sleep` | Exclude PID 1234 from the result |\n");
+
+    auto provider = createNativeProcessProvider();
+    auto entries = provider->listProcesses();
+
+    auto const pids = pidof_cmd::findPids(entries, opts, nativeProcessNameMatchPolicy());
+    if (pids.empty())
+        return 1;
+
+    if (!opts.quiet)
+    {
+        auto output = std::string {};
+        for (auto const pid: pids)
+        {
+            if (!output.empty())
+                output += opts.separator;
+            output += std::format("{}", pid);
+        }
+        output += '\n';
+        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+    }
+    return 0;
 }
 
 // ---------------------------------------------------------------------------

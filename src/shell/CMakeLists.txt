@@ -191,6 +191,12 @@ add_library(endo-shell STATIC
     commands/KillCommand.cpp
     commands/PkillCommand.hpp
     commands/PkillCommand.cpp
+    commands/PgrepCommand.hpp
+    commands/PgrepCommand.cpp
+    commands/PidofCommand.hpp
+    commands/PidofCommand.cpp
+    commands/ProcessMatch.hpp
+    commands/ProcessMatch.cpp
     completion/ProcessNameQueryProvider.hpp
     completion/ProcessNameQueryProvider.cpp
 )
@@ -283,6 +289,8 @@ if(ENDO_TESTING)
         commands/GrepCommand_test.cpp
         commands/TimeoutCommand_test.cpp
         commands/PkillCommand_test.cpp
+        commands/PgrepCommand_test.cpp
+        commands/PidofCommand_test.cpp
         ui/PromptComponent_test.cpp
         ui/PromptPresets_test.cpp
         ui/modules/GitModule_test.cpp
