@@ -309,6 +309,15 @@ TypeEnvPtr createStandardTypeEnv()
                                               types::list(types::typeVar(i)) },
                                             types::typeVar(j))));
 
+    // httpServe: int -> (string -> string) -> int
+    // Starts an HTTP server on the given port; the handler maps a request path to a
+    // response body. Blocks serving connections until interrupted, then returns 0.
+    env->bind("httpServe",
+              types::scheme({},
+                            types::function({ types::intType(),
+                                              types::function(types::strType(), types::strType()) },
+                                            types::intType())));
+
     // Option constructors
     // Some: forall a. a -> option<a>
     auto k = env->freshTypeVar();

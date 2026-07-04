@@ -9,7 +9,8 @@
 #include <tui/Terminal.hpp>
 #include <tui/runtime/EventSource.hpp>
 
-#include <utility>
+#include <cstdint>
+#include <vector>
 
 #include <platform/SignalHandler.hpp>
 #include <platform/Types.hpp>
@@ -47,6 +48,13 @@ class TerminalEventSource: public EventSource
 
     [[nodiscard]] WaitOutcome wait(int timeoutMs) override;
 
+    [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override
+    {
+        return _registry.attach(fd, interest);
+    }
+
+    void detach(FdToken token) override { _registry.detach(token); }
+
   private:
     /// Consumes protocol-response events (via @c Terminal::consumeProtocolReports
     /// so the policy lives in one place) and folds a pending SIGINT into the
@@ -72,6 +80,7 @@ class TerminalEventSource: public EventSource
     endo::platform::Wakeup* _agentWakeup;     ///< Agent-message wakeup, or nullptr.
     endo::platform::Wakeup* _interruptWakeup; ///< Interrupt wakeup, or nullptr.
     endo::platform::NativeHandle _signalFd;   ///< POSIX signal fd, or InvalidHandle.
+    FdRegistry _registry;                     ///< User-attached fds (waitReadable/waitWritable).
 };
 
 } // namespace tui::runtime

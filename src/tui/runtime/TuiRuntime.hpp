@@ -21,10 +21,12 @@
 #include <deque>
 #include <functional>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <coro/Cancellation.hpp>
 #include <coro/Task.hpp>
+#include <platform/Clock.hpp>
 
 namespace tui::runtime
 {
@@ -34,6 +36,7 @@ class NextEventForAwaiter;
 class NextActivityAwaiter;
 class DelayAwaiter;
 class NextAgentReadyAwaiter;
+class WaitFdAwaiter;
 
 /// What a `nextActivity()` wait observed first.
 enum class ActivityKind : std::uint8_t
@@ -60,7 +63,11 @@ class TuiRuntime
 {
   public:
     /// @param source The multiplexed wait the pump drives (not owned; outlives the runtime).
-    explicit TuiRuntime(EventSource& source) noexcept;
+    /// @param clock The monotonic time source for timers, timed waits, and delays
+    ///        (not owned; outlives the runtime). Defaults to the process steady
+    ///        clock; tests inject a @c ManualClock for deterministic timing.
+    explicit TuiRuntime(EventSource& source,
+                        endo::platform::IClock& clock = endo::platform::defaultSteadyClock()) noexcept;
 
     TuiRuntime(TuiRuntime const&) = delete;
     TuiRuntime& operator=(TuiRuntime const&) = delete;
@@ -94,6 +101,11 @@ class TuiRuntime
     /// @return The root cancellation source; `request_stop()` cancels every flow.
     [[nodiscard]] endo::coro::StopSource& rootStopSource() noexcept { return _rootStop; }
 
+    /// @return The monotonic clock backing all timers, timed waits, and delays.
+    ///         Awaiters read deadlines through this so tests can drive time
+    ///         deterministically via an injected @c ManualClock.
+    [[nodiscard]] endo::platform::IClock& clock() const noexcept { return _clock; }
+
     /// Sets the handler invoked when the @c EventSource reports an interrupt
     /// (SIGINT / Ctrl+C). The default requests cancellation of the root source.
     /// A consumer overrides this to scope cancellation (e.g. cancel only the open
@@ -119,6 +131,24 @@ class TuiRuntime
     /// @param duration How long to suspend.
     /// @return An awaitable that resumes after @p duration elapses.
     [[nodiscard]] DelayAwaiter delay(std::chrono::milliseconds duration) noexcept;
+
+    /// @param deadline The absolute instant (on this runtime's clock) to resume at.
+    /// @return An awaitable that resumes once the clock reaches @p deadline.
+    [[nodiscard]] DelayAwaiter sleepUntil(std::chrono::steady_clock::time_point deadline) noexcept;
+
+    /// Suspends until @p fd is readable (data, EOF, or HUP/ERR), without consuming
+    /// any bytes — the caller then performs a non-blocking read. The terminal input
+    /// fd is owned by `nextEvent()`; use this for other fds (pipes, PTYs, sockets).
+    /// @param fd The native handle to wait on (must outlive the await).
+    /// @return An awaitable resolving when @p fd is readable; throws
+    ///         @c OperationCancelled if the flow is cancelled while parked.
+    [[nodiscard]] WaitFdAwaiter waitReadable(endo::platform::NativeHandle fd) noexcept;
+
+    /// Suspends until @p fd is writable (space available in the send buffer).
+    /// @param fd The native handle to wait on (must outlive the await).
+    /// @return An awaitable resolving when @p fd is writable; throws
+    ///         @c OperationCancelled if the flow is cancelled while parked.
+    [[nodiscard]] WaitFdAwaiter waitWritable(endo::platform::NativeHandle fd) noexcept;
 
     /// @return An awaitable that resumes when the agent-message wakeup fires.
     [[nodiscard]] NextAgentReadyAwaiter nextAgentReady() noexcept;
@@ -151,7 +181,7 @@ class TuiRuntime
     /// @return True if the parked input waiter's deadline has elapsed.
     [[nodiscard]] bool inputDeadlinePassed() const noexcept
     {
-        return _inputDeadline.has_value() && *_inputDeadline <= std::chrono::steady_clock::now();
+        return _inputDeadline.has_value() && *_inputDeadline <= _clock.now();
     }
 
     void scheduleTimer(std::chrono::steady_clock::time_point deadline, std::coroutine_handle<> waiter);
@@ -172,6 +202,34 @@ class TuiRuntime
         assert(!_agentWaiter && "registerAgentWaiter: an agent waiter is already parked");
         _agentWaiter = waiter;
     }
+
+    /// Attaches @p fd to the event source for @p interest and parks @p waiter until
+    /// it becomes ready. Unlike the single input/agent waiter slots, several fd
+    /// waiters may be parked concurrently (one per distinct fd), so they live in a
+    /// map keyed by registration token.
+    /// @param fd The native handle to wait on.
+    /// @param interest The readiness to wait for (Read or Write).
+    /// @param waiter The coroutine to resume on readiness or cancellation.
+    /// @return The registration token (to detach on resume/cancel), or
+    ///         @c FdToken::invalid() if the attach failed.
+    [[nodiscard]] FdToken registerFdWaiter(endo::platform::NativeHandle fd,
+                                           FdInterest interest,
+                                           std::coroutine_handle<> waiter);
+
+    /// Detaches @p token from the event source and drops its parked waiter, if any.
+    /// Idempotent. Called by the awaiter on resume (ready or cancelled).
+    /// @param token The registration to remove.
+    void unregisterFdWaiter(FdToken token) noexcept;
+
+    /// Re-queues @p waiter for resumption because its cancellation token fired while
+    /// it was parked on a timer or fd. Used by the timed/fd awaiters' stop-callbacks
+    /// so a `whenAny`/`withTimeout` loser parked on `delay`/`waitReadable` unwinds
+    /// promptly instead of only when its deadline/fd eventually fires. The awaiter
+    /// then observes stop_requested() in await_resume and throws OperationCancelled;
+    /// its stale timer entry / fd registration is skipped (handle already done) or
+    /// detached by the awaiter. Safe to call once per parked waiter.
+    /// @param waiter The parked coroutine to resume for cancellation.
+    void requeueForCancellation(std::coroutine_handle<> waiter);
 
     /// @}
 
@@ -212,10 +270,16 @@ class TuiRuntime
     /// @param waiter The waiter slot to wake.
     void wakeWaiter(std::coroutine_handle<>& waiter);
 
+    /// Resumes the coroutines parked on the fds reported ready by a wait, detaching
+    /// each from the event source. Idempotent per token.
+    /// @param tokens The ready fd tokens (readyRead or readyWrite from the outcome).
+    void wakeFdWaiters(std::vector<FdToken> const& tokens);
+
     /// Wakes every parked flow so cancelled awaitables can unwind.
     void wakeAllWaiters();
 
     EventSource& _source;                       ///< The injected multiplexed wait.
+    endo::platform::IClock& _clock;             ///< The injected monotonic time source.
     std::deque<std::coroutine_handle<>> _ready; ///< Coroutines ready to resume now.
     std::vector<TimerEntry> _timers;            ///< Min-heap by deadline (soonest at front).
     std::deque<InputEvent> _inputBuffer;        ///< Decoded input awaiting a consumer.
@@ -224,6 +288,8 @@ class TuiRuntime
     bool _inputWaiterWantsAgent = false;  ///< Input waiter also wakes on an agent message (nextActivity).
     std::coroutine_handle<> _agentWaiter; ///< Flow parked in nextAgentReady(), if any.
     bool _agentPending = false; ///< Agent wakeup fired; consumed only by an agent-interested waiter.
+    std::unordered_map<FdToken, std::coroutine_handle<>>
+        _fdWaiters;                             ///< Flows parked on a generic fd, by token.
     std::vector<endo::coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
     endo::coro::StopSource _rootStop;           ///< Root cancellation source.
     std::function<void()> _onInterrupt;         ///< Interrupt policy; default cancels the root.
@@ -358,6 +424,12 @@ class NextActivityAwaiter
 };
 
 /// Awaitable that resumes after a delay (or throws on cancellation).
+///
+/// While parked it registers a stop-callback so that if its cancellation token is
+/// stopped before the deadline (e.g. a `whenAny`/`withTimeout` sibling won), the
+/// parked coroutine is re-queued promptly and unwinds via @c OperationCancelled,
+/// rather than lingering until the deadline elapses. The stale timer entry is
+/// skipped when it later fires (the handle is already done).
 class DelayAwaiter
 {
   public:
@@ -366,7 +438,7 @@ class DelayAwaiter
     {
     }
 
-    [[nodiscard]] bool await_ready() const noexcept { return _deadline <= std::chrono::steady_clock::now(); }
+    [[nodiscard]] bool await_ready() const noexcept { return _deadline <= _runtime.clock().now(); }
 
     template <typename Promise>
     [[nodiscard]] bool await_suspend(std::coroutine_handle<Promise> awaiting)
@@ -376,17 +448,21 @@ class DelayAwaiter
         if (_token.stop_requested())
             return false;
         _runtime.scheduleTimer(_deadline, awaiting);
+        _cancelReg.emplace(_token,
+                           [&runtime = _runtime, awaiting] { runtime.requeueForCancellation(awaiting); });
         return true;
     }
 
     /// @throws OperationCancelled if the flow was cancelled while parked.
-    void await_resume() const
+    void await_resume()
     {
+        _cancelReg.reset();
         if (_token.stop_requested())
             throw endo::coro::OperationCancelled {};
     }
 
   private:
+    std::optional<endo::coro::StopCallback<std::function<void()>>> _cancelReg;
     TuiRuntime& _runtime;
     std::chrono::steady_clock::time_point _deadline;
     endo::coro::StopToken _token;
@@ -422,6 +498,75 @@ class NextAgentReadyAwaiter
 
   private:
     TuiRuntime& _runtime;
+    endo::coro::StopToken _token;
+};
+
+/// Awaitable that resumes when a registered fd reaches a given readiness (Read or
+/// Write), or throws @c OperationCancelled if the awaiting flow is cancelled while
+/// parked. Returned by @c TuiRuntime::waitReadable / @c waitWritable.
+///
+/// Readiness is observed via the OS wait, so the awaiter is never ready before it
+/// suspends: it always parks (after attaching the fd to the event source), and the
+/// runtime resumes it when the wait reports the fd ready. On resume — whether ready
+/// or cancelled — it detaches the fd so the registration never outlives the await.
+class WaitFdAwaiter
+{
+  public:
+    /// @param runtime The runtime whose event source the fd is registered with.
+    /// @param fd The native handle to wait on.
+    /// @param interest The readiness to wait for (Read or Write).
+    WaitFdAwaiter(TuiRuntime& runtime, endo::platform::NativeHandle fd, FdInterest interest) noexcept:
+        _runtime(runtime), _fd(fd), _interest(interest)
+    {
+    }
+
+    /// Readiness is only known after the OS wait, so a valid fd never reports ready
+    /// before suspending. An invalid fd resolves immediately (await_resume then
+    /// reports cancellation), avoiding a pointless park on a handle that can never
+    /// signal.
+    [[nodiscard]] bool await_ready() const noexcept { return _fd == endo::platform::InvalidHandle; }
+
+    /// Captures the cancellation token, then (unless already cancelled) attaches the
+    /// fd and parks. Checks cancellation BEFORE registering so a cancelled flow
+    /// resumes immediately without leaving a dangling registration.
+    /// @param awaiting The coroutine performing the `co_await`.
+    /// @return False (resume now) if already cancelled or the attach failed; true to park.
+    template <typename Promise>
+    [[nodiscard]] bool await_suspend(std::coroutine_handle<Promise> awaiting)
+    {
+        if constexpr (requires { awaiting.promise().stopToken(); })
+            _token = awaiting.promise().stopToken();
+        if (_token.stop_requested())
+            return false;
+        _registration = _runtime.registerFdWaiter(_fd, _interest, awaiting);
+        if (!_registration)
+            return false; // attach failed: resume and surface the failure in await_resume
+        // If the token is stopped while parked (a whenAny/withTimeout sibling won),
+        // re-queue this coroutine promptly so it unwinds instead of waiting for the
+        // fd to become ready (which may never happen).
+        _cancelReg.emplace(_token,
+                           [&runtime = _runtime, awaiting] { runtime.requeueForCancellation(awaiting); });
+        return true;
+    }
+
+    /// Detaches the fd and, if the flow was cancelled while parked or the attach
+    /// failed, reports cancellation.
+    /// @throws OperationCancelled if cancelled while parked or the fd could not be attached.
+    void await_resume()
+    {
+        _cancelReg.reset();
+        if (_registration)
+            _runtime.unregisterFdWaiter(_registration);
+        if (_token.stop_requested() || !_registration)
+            throw endo::coro::OperationCancelled {};
+    }
+
+  private:
+    std::optional<endo::coro::StopCallback<std::function<void()>>> _cancelReg;
+    TuiRuntime& _runtime;
+    endo::platform::NativeHandle _fd;
+    FdInterest _interest;
+    FdToken _registration {};
     endo::coro::StopToken _token;
 };
 

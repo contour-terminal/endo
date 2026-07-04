@@ -134,6 +134,7 @@ if(ENDO_TESTING)
         codegen/ComputationExpressions_test.cpp
         codegen/CompleterScripts_test.cpp
         codegen/StringBuiltins_test.cpp
+        codegen/HttpServeCodegen_test.cpp
         builtins/JsonQuery_test.cpp
         builtins/StdlibDescriptors_test.cpp
         module/Module_test.cpp

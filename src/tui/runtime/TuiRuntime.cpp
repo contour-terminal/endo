@@ -9,7 +9,8 @@
 namespace tui::runtime
 {
 
-TuiRuntime::TuiRuntime(EventSource& source) noexcept: _source(source)
+TuiRuntime::TuiRuntime(EventSource& source, endo::platform::IClock& clock) noexcept:
+    _source(source), _clock(clock)
 {
 }
 
@@ -48,6 +49,65 @@ void TuiRuntime::scheduleTimer(std::chrono::steady_clock::time_point deadline, s
     std::ranges::push_heap(_timers, soonestFirst);
 }
 
+FdToken TuiRuntime::registerFdWaiter(endo::platform::NativeHandle fd,
+                                     FdInterest interest,
+                                     std::coroutine_handle<> waiter)
+{
+    auto const token = _source.attach(fd, interest);
+    if (!token)
+        return FdToken::invalid();
+    _fdWaiters.emplace(token, waiter);
+    return token;
+}
+
+void TuiRuntime::unregisterFdWaiter(FdToken token) noexcept
+{
+    if (!token)
+        return;
+    _source.detach(token);
+    _fdWaiters.erase(token);
+}
+
+void TuiRuntime::requeueForCancellation(std::coroutine_handle<> waiter)
+{
+    if (!waiter || waiter.done())
+        return;
+
+    // If parked as an fd waiter, drop and detach its registration so the stale
+    // entry cannot also fire. A timer-parked handle has no index here; its heap
+    // entry is left in place and skipped later (the handle will be done by then).
+    for (auto it = _fdWaiters.begin(); it != _fdWaiters.end(); ++it)
+    {
+        if (it->second == waiter)
+        {
+            _source.detach(it->first);
+            _fdWaiters.erase(it);
+            break;
+        }
+    }
+
+    // Re-queue once. drainReadyQueue skips already-done handles, and a later stale
+    // timer fire will see done() and skip it, so a single push is safe.
+    _ready.push_back(waiter);
+}
+
+void TuiRuntime::wakeFdWaiters(std::vector<FdToken> const& tokens)
+{
+    for (auto const token: tokens)
+    {
+        auto const it = _fdWaiters.find(token);
+        if (it == _fdWaiters.end())
+            continue;
+        auto const handle = it->second;
+        // Drop the parked slot now; the awaiter detaches the source registration in
+        // its await_resume. Erasing first keeps the map consistent if the resumed
+        // frame re-enters the runtime.
+        _fdWaiters.erase(it);
+        if (handle && !handle.done())
+            _ready.push_back(handle);
+    }
+}
+
 void TuiRuntime::drainReadyQueue()
 {
     while (!_ready.empty())
@@ -71,7 +131,7 @@ int TuiRuntime::computeTimeoutMs() const
     if (!soonest)
         return -1; // Block indefinitely until a source becomes ready.
 
-    auto const now = std::chrono::steady_clock::now();
+    auto const now = _clock.now();
     if (*soonest <= now)
         return 0;
 
@@ -96,7 +156,7 @@ void TuiRuntime::routeDecodedEvent(InputEvent&& event)
 
 void TuiRuntime::fireExpiredTimers()
 {
-    auto const now = std::chrono::steady_clock::now();
+    auto const now = _clock.now();
     while (!_timers.empty() && _timers.front().deadline <= now)
     {
         std::ranges::pop_heap(_timers, soonestFirst);
@@ -130,6 +190,18 @@ void TuiRuntime::wakeAllWaiters()
             _ready.push_back(entry.handle);
     _timers.clear();
 
+    // Flush every fd waiter so a cancelled awaitable can unwind. Detach each from
+    // the source and re-queue its handle; await_resume then observes the requested
+    // stop and throws OperationCancelled. Move the slots out first so a resumed
+    // frame re-entering the runtime cannot mutate the container mid-iteration.
+    auto parked = std::exchange(_fdWaiters, {});
+    for (auto const& [token, handle]: parked)
+    {
+        _source.detach(token);
+        if (handle && !handle.done())
+            _ready.push_back(handle);
+    }
+
     // Clear transient wait state so a reused runtime (the prompt runtime persists
     // across REPL iterations) cannot carry a stale deadline or pending flag into the
     // next blockOn. wakeWaiter already resets these when _inputWaiter was set; this
@@ -146,7 +218,7 @@ void TuiRuntime::pumpOnce()
     // Nothing is parked on a source: a well-formed root flow either completed
     // (the caller's loop will observe `done()`) or is awaiting a child task that
     // will itself park. Returning avoids a wait with no one to wake.
-    auto const hasParked = _inputWaiter || _agentWaiter || !_timers.empty();
+    auto const hasParked = _inputWaiter || _agentWaiter || !_timers.empty() || !_fdWaiters.empty();
     if (!hasParked)
         return;
 
@@ -192,6 +264,10 @@ void TuiRuntime::pumpOnce()
     if (_agentWaiter && _agentPending)
         wakeWaiter(_agentWaiter);
 
+    // Resume coroutines parked on any generic fd that became ready this wait.
+    wakeFdWaiters(outcome.readyRead);
+    wakeFdWaiters(outcome.readyWrite);
+
     fireExpiredTimers();
 
     // Resume coroutines woken during this iteration so an event is delivered in
@@ -206,17 +282,32 @@ NextInputEventAwaiter TuiRuntime::nextEvent() noexcept
 
 NextEventForAwaiter TuiRuntime::nextEventFor(std::chrono::milliseconds timeout) noexcept
 {
-    return NextEventForAwaiter { *this, std::chrono::steady_clock::now() + timeout };
+    return NextEventForAwaiter { *this, _clock.now() + timeout };
 }
 
 NextActivityAwaiter TuiRuntime::nextActivity(std::chrono::milliseconds timeout) noexcept
 {
-    return NextActivityAwaiter { *this, std::chrono::steady_clock::now() + timeout };
+    return NextActivityAwaiter { *this, _clock.now() + timeout };
 }
 
 DelayAwaiter TuiRuntime::delay(std::chrono::milliseconds duration) noexcept
 {
-    return DelayAwaiter { *this, std::chrono::steady_clock::now() + duration };
+    return DelayAwaiter { *this, _clock.now() + duration };
+}
+
+DelayAwaiter TuiRuntime::sleepUntil(std::chrono::steady_clock::time_point deadline) noexcept
+{
+    return DelayAwaiter { *this, deadline };
+}
+
+WaitFdAwaiter TuiRuntime::waitReadable(endo::platform::NativeHandle fd) noexcept
+{
+    return WaitFdAwaiter { *this, fd, FdInterest::Read };
+}
+
+WaitFdAwaiter TuiRuntime::waitWritable(endo::platform::NativeHandle fd) noexcept
+{
+    return WaitFdAwaiter { *this, fd, FdInterest::Write };
 }
 
 NextAgentReadyAwaiter TuiRuntime::nextAgentReady() noexcept

@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/InputEvent.hpp>
+#include <tui/runtime/PollEventSource.hpp>
 #include <tui/runtime/TuiRuntime.hpp>
+#include <tui/runtime/WithTimeout.hpp>
 #include <tui/runtime/testing/MockEventSource.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <optional>
 #include <ranges>
 #include <vector>
 
 #include <coro/Cancellation.hpp>
 #include <coro/Task.hpp>
+#include <platform/Clock.hpp>
+#include <platform/SystemPipe.hpp>
 
 using endo::coro::OperationCancelled;
 using endo::coro::Task;
+using endo::platform::ManualClock;
 using tui::InputEvent;
 using tui::KeyEvent;
 using tui::runtime::TuiRuntime;
@@ -97,6 +103,60 @@ Task<int> awaitDelayOrCancel(TuiRuntime* runtime, int cancelSentinel)
     }
 }
 
+/// Parks on a delay of @p delayMs, then sets *fired and returns it. Used with a
+/// ManualClock to prove the timer fires only once the clock crosses the deadline.
+Task<int> awaitDelayThenFire(TuiRuntime* runtime, int delayMs, bool* fired)
+{
+    co_await runtime->delay(std::chrono::milliseconds { delayMs });
+    *fired = true;
+    co_return delayMs;
+}
+
+/// Parks on a delay of @p delayMs; sets *fired if it elapses, or returns
+/// @p cancelSentinel if cancelled while parked. Lets a ManualClock test assert
+/// the delay did NOT fire when the clock never advanced past the deadline.
+Task<int> awaitCustomDelayOrCancel(TuiRuntime* runtime, int delayMs, int cancelSentinel, bool* fired)
+{
+    try
+    {
+        co_await runtime->delay(std::chrono::milliseconds { delayMs });
+        *fired = true;
+        co_return 0;
+    }
+    catch (OperationCancelled const&)
+    {
+        co_return cancelSentinel;
+    }
+}
+
+/// Waits for @p fd to become readable; returns 1 on readiness or @p cancelSentinel
+/// if cancelled while parked.
+Task<int> awaitReadableOrCancel(TuiRuntime* runtime, endo::platform::NativeHandle fd, int cancelSentinel)
+{
+    try
+    {
+        co_await runtime->waitReadable(fd);
+        co_return 1;
+    }
+    catch (OperationCancelled const&)
+    {
+        co_return cancelSentinel;
+    }
+}
+
+/// A value-producing task that completes synchronously — the "work wins" arm.
+Task<int> produceValue(int value)
+{
+    co_return value;
+}
+
+/// Parks on a never-ready fd forever (until cancelled) — the "timeout wins" arm.
+Task<int> parkOnFdForever(TuiRuntime* runtime, endo::platform::NativeHandle fd)
+{
+    co_await runtime->waitReadable(fd);
+    co_return 0;
+}
+
 KeyEvent keyOf(char32_t codepoint)
 {
     return KeyEvent { .codepoint = codepoint };
@@ -126,6 +186,22 @@ Task<void> parkForeverWithGuard(TuiRuntime* runtime, bool* destroyed)
     {
         // Expected on runtime teardown: the frame unwinds and `guard` destructs,
         // which is exactly what this flow exists to demonstrate.
+        static_cast<void>(destroyed);
+    }
+}
+
+/// Parks on waitReadable with an RAII guard; proves the frame unwinds (guard runs)
+/// if the runtime is torn down while the fd wait is parked.
+Task<void> waitReadableWithGuard(TuiRuntime* runtime, endo::platform::NativeHandle fd, bool* destroyed)
+{
+    *destroyed = false;
+    auto guard = UnwindFlag { destroyed };
+    try
+    {
+        co_await runtime->waitReadable(fd);
+    }
+    catch (OperationCancelled const&)
+    {
         static_cast<void>(destroyed);
     }
 }
@@ -268,6 +344,75 @@ TEST_CASE("A pending delay bounds the wait timeout", "[TuiRuntime]")
     REQUIRE(firstTimeout <= 500);
 }
 
+TEST_CASE("An injected ManualClock makes a delay's computed timeout exact", "[TuiRuntime][clock]")
+{
+    // With time frozen, computeTimeoutMs has no real-clock jitter: a delay(100ms)
+    // must yield exactly 100 as the bounding timeout on the first wait.
+    auto source = MockEventSource {};
+    source.pushInterrupt(); // unblock the test (the timer never fires; clock is frozen)
+    auto clock = ManualClock {};
+    auto runtime = TuiRuntime { source, clock };
+
+    auto fired = false;
+    constexpr auto Sentinel = -3;
+    // The delay parks; the interrupt then cancels it (delay throws OperationCancelled).
+    auto const result = runtime.blockOn(awaitCustomDelayOrCancel(&runtime, 100, Sentinel, &fired));
+
+    REQUIRE(result == Sentinel);
+    REQUIRE_FALSE(fired); // clock never advanced, so the timer never elapsed
+    REQUIRE(source.recordedTimeouts().front() == 100);
+}
+
+namespace
+{
+
+/// A MockEventSource that advances an injected ManualClock by a fixed step on
+/// every wait(). This models the passage of time deterministically: the runtime
+/// schedules a delay against the clock, and each blocking wait "elapses" exactly
+/// `step` of clock time, so a delay fires after a known number of waits — with no
+/// real sleeping.
+class ClockAdvancingSource: public MockEventSource
+{
+  public:
+    ClockAdvancingSource(ManualClock& clock, std::chrono::milliseconds step) noexcept:
+        _clock(clock), _step(step)
+    {
+    }
+
+    tui::runtime::WaitOutcome wait(int timeoutMs) override
+    {
+        _clock.advance(_step);
+        return MockEventSource::wait(timeoutMs);
+    }
+
+  private:
+    ManualClock& _clock;
+    std::chrono::milliseconds _step;
+};
+
+} // namespace
+
+TEST_CASE("A delay fires deterministically once the ManualClock crosses its deadline", "[TuiRuntime][clock]")
+{
+    // The runtime fires expired timers using the injected clock. Each scripted wait
+    // advances the ManualClock by 40ms, so a 100ms delay must still be pending after
+    // the first two waits (80ms) and fire on the third (120ms) — no real time passes.
+    auto clock = ManualClock {};
+    auto source = ClockAdvancingSource { clock, std::chrono::milliseconds { 40 } };
+    source.pushTimeout(); // 40ms elapsed: still pending
+    source.pushTimeout(); // 80ms elapsed: still pending
+    source.pushTimeout(); // 120ms elapsed: timer is now due → flow resumes
+    auto runtime = TuiRuntime { source, clock };
+
+    auto fired = false;
+    auto const result = runtime.blockOn(awaitDelayThenFire(&runtime, 100, &fired));
+
+    REQUIRE(fired);
+    REQUIRE(result == 100);
+    // The flow resumed on the third wait, not before: time only moved via the clock.
+    REQUIRE(source.waitCount() == 3);
+}
+
 TEST_CASE("A non-input activity wake resumes a timed input waiter with no event", "[TuiRuntime]")
 {
     auto source = MockEventSource {};
@@ -278,6 +423,159 @@ TEST_CASE("A non-input activity wake resumes a timed input waiter with no event"
     auto const result = runtime.blockOn(awaitEventForResult(&runtime, 500));
 
     REQUIRE(result == 0);
+}
+
+TEST_CASE("EventSource fd registry hands out distinct tokens and reports readiness", "[EventSource]")
+{
+    auto source = MockEventSource {};
+    // The mock ignores the handle value (it returns synthetic tokens); use real
+    // native handles so this compiles on Windows, where NativeHandle is void*.
+    auto const a = source.attach(endo::platform::standardInput(), tui::runtime::FdInterest::Read);
+    auto const b = source.attach(endo::platform::standardOutput(), tui::runtime::FdInterest::Write);
+
+    REQUIRE(static_cast<bool>(a));
+    REQUIRE(static_cast<bool>(b));
+    REQUIRE_FALSE(a == b);
+    REQUIRE(source.attachedCount() == 2);
+
+    source.pushReadable(a);
+    source.pushWritable(b);
+
+    auto const first = source.wait(0);
+    REQUIRE(first.readyRead.size() == 1);
+    REQUIRE(first.readyRead.front() == a);
+
+    auto const second = source.wait(0);
+    REQUIRE(second.readyWrite.size() == 1);
+    REQUIRE(second.readyWrite.front() == b);
+
+    source.detach(a);
+    source.detach(b);
+    REQUIRE(source.attachedCount() == 0);
+}
+
+TEST_CASE("An invalid FdToken is falsy and equals the invalid sentinel", "[EventSource]")
+{
+    auto const invalid = tui::runtime::FdToken::invalid();
+    REQUIRE_FALSE(static_cast<bool>(invalid));
+    REQUIRE(invalid == tui::runtime::FdToken {});
+}
+
+TEST_CASE("waitReadable resumes when the registered fd becomes readable", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    // The awaiter attaches the fd during await_suspend (the first wait()), which the
+    // mock tokenises as FdToken{1}; script that token readable so the first wait
+    // resolves the park.
+    source.pushReadable(tui::runtime::FdToken { 1 });
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -1;
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+
+    REQUIRE(result == 1);
+}
+
+TEST_CASE("waitReadable on an interrupt cancels the parked flow", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    source.pushInterrupt(); // SIGINT while parked → root stop → OperationCancelled
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -7;
+    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+
+    REQUIRE(result == Cancelled);
+}
+
+TEST_CASE("waitReadable on an invalid fd resolves immediately as cancelled", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    constexpr auto Cancelled = -3;
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::InvalidHandle, Cancelled));
+
+    REQUIRE(result == Cancelled);
+    REQUIRE(source.waitCount() == 0); // never blocked: an unwaitable fd resolves inline
+}
+
+TEST_CASE("waitReadable resolves over a real SystemPipe via PollEventSource", "[TuiRuntime][fd][poll]")
+{
+    // End-to-end through the real OS readiness path (poll(2) / WaitForMultipleObjects),
+    // not the scripted mock: a SystemPipe whose write end already holds a byte is
+    // readable, so a flow parked on waitReadable resolves on the first real wait and
+    // reads the byte back. SystemPipe gives a reactor-waitable read end on every
+    // platform, so this test runs identically on Linux, macOS, and Windows.
+    auto pipe = endo::platform::createSystemPipe();
+    REQUIRE(pipe.has_value());
+
+    char const payload = 'Z';
+    REQUIRE((*pipe)->write(&payload, 1).has_value());
+
+    auto source = tui::runtime::PollEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    auto readByte = [](TuiRuntime* rt, endo::platform::SystemPipe* p) -> Task<char> {
+        co_await rt->waitReadable(p->waitHandle());
+        char buf = 0;
+        auto const got = p->read(&buf, 1);
+        co_return (got.has_value() && *got == 1) ? buf : '\0';
+    };
+
+    auto const result = runtime.blockOn(readByte(&runtime, pipe->get()));
+    REQUIRE(result == 'Z');
+    REQUIRE(source.attachedCount() == 0); // the awaiter detached on resume
+}
+
+TEST_CASE("withTimeout returns the work's value when it finishes first", "[TuiRuntime][timeout]")
+{
+    auto source = MockEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    // The work completes synchronously, so the timeout arm never matters.
+    auto result =
+        runtime.blockOn(tui::runtime::withTimeout(&runtime, produceValue(42), std::chrono::seconds { 10 }));
+
+    REQUIRE(result.has_value());
+    REQUIRE(*result == 42);
+}
+
+TEST_CASE("withTimeout returns nullopt and cancels the work when the deadline fires",
+          "[TuiRuntime][timeout][poll]")
+{
+    // The work parks on a SystemPipe that never receives data, so only the timeout
+    // arm can win. When it does, whenAny requests stop; the parked waitReadable is
+    // re-queued via the stop-callback (requeueForCancellation) and unwinds, so the
+    // work is genuinely cancelled rather than leaking. A short real timeout drives
+    // the runtime's timer.
+    auto pipe = endo::platform::createSystemPipe();
+    REQUIRE(pipe.has_value());
+
+    auto source = tui::runtime::PollEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    auto result = runtime.blockOn(tui::runtime::withTimeout(
+        &runtime, parkOnFdForever(&runtime, (*pipe)->waitHandle()), std::chrono::milliseconds { 20 }));
+
+    REQUIRE_FALSE(result.has_value());    // the timeout won
+    REQUIRE(source.attachedCount() == 0); // the cancelled work detached its fd
+}
+
+TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiRuntime][fd]")
+{
+    auto source = MockEventSource {};
+    source.pushTimeout(); // benign wait for the root's post-completion pump
+    auto destroyed = false;
+    {
+        auto runtime = TuiRuntime { source };
+        runtime.spawn(waitReadableWithGuard(&runtime, endo::platform::standardInput(), &destroyed));
+        runtime.blockOn(awaitZeroDelay(&runtime)); // drive the spawned flow to its park
+        REQUIRE_FALSE(destroyed);
+    } // ~TuiRuntime: stop + flush fd waiters + drain → the frame unwinds, guard runs
+
+    REQUIRE(destroyed);
 }
 
 TEST_CASE("Destroying the runtime unwinds a parked spawned flow via RAII", "[TuiRuntime]")

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: httpServe type-checks and compiles with a named string->string handler
+# mode: ir-only
+
+# The bare-statement form is the canonical way to run a server: httpServe is registered as a
+# statement-level builtin (see compilerBuiltins), so it lowers through the builtin-call codegen
+# rather than being dispatched as an external command. Runtime serving behaviour is covered by
+# the net-layer round-trip in src/net/HttpServer_test.cpp; this asserts the language front-end
+# accepts and lowers the call (regression guard for it previously being an "Undefined function").
+
+let handler path = "you asked for " + path
+
+httpServe 8080 handler

@@ -157,6 +157,21 @@ class Runner
     bool run();
     RunResult runWithResult();
 
+    /// Result of invoking a function value: the raw return value (a CoreVM Value),
+    /// or a RuntimeError if the call failed.
+    using InvokeResult = std::expected<Value, RuntimeError>;
+
+    /// Invokes this runner's entry function with the given arguments and returns its
+    /// result — the mechanism a native builtin uses to call a script-provided
+    /// function value (e.g. an HTTP request handler) with arguments and read back
+    /// the typed result. The runner's entry @c function() must be the function to
+    /// call; @p args are pushed in order as its parameters (so args.size() should
+    /// equal its parameterCount()). The function returns via URET at the top level,
+    /// leaving its value on the stack, which this reads and returns.
+    /// @param args The argument values to pass, in parameter order.
+    /// @return The function's return value, or a RuntimeError on failure.
+    [[nodiscard]] InvokeResult invoke(std::span<Value const> args);
+
     void suspend();
     bool resume();
     RunResult resumeWithResult();

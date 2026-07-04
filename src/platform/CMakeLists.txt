@@ -5,6 +5,7 @@
 add_library(endo-platform STATIC
     PlatformError.hpp
     Types.hpp
+    Clock.hpp
     WaitResult.hpp
     Wakeup.hpp
     MessageQueue.hpp
@@ -12,6 +13,10 @@ add_library(endo-platform STATIC
     Process.cpp
     Pipe.hpp
     Pipe.cpp
+    SystemPipe.hpp
+    SystemPipe.cpp
+    WinsockInit.hpp
+    WinsockInit.cpp
     EnvironmentProvider.hpp
     UserPaths.hpp
     PathUtils.hpp
@@ -92,7 +97,8 @@ if(NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(endo-platform PUBLIC crispy::core Threads::Threads)
 else()
-    target_link_libraries(endo-platform PUBLIC crispy::core)
+    # ws2_32 for the loopback socket pair backing SystemPipe (WSAEventSelect etc.).
+    target_link_libraries(endo-platform PUBLIC crispy::core ws2_32)
 endif()
 
 enable_sanitizers(endo-platform)
@@ -102,6 +108,8 @@ enable_clang_tidy(endo-platform)
 if(ENDO_TESTING)
     add_executable(test-endo-platform
         test_main.cpp
+        Clock_test.cpp
+        SystemPipe_test.cpp
         FileSystem_test.cpp
         Generator_test.cpp
         InterruptThrottle_test.cpp

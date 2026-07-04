@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: httpServe rejects a non-function handler with a clear diagnostic
+# mode: ir-only
+# expect-error: httpServe handler argument must be a function
+
+httpServe 8080 "not a function"

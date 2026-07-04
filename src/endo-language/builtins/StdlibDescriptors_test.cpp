@@ -85,5 +85,5 @@ TEST_CASE("StdlibDescriptors.user_facing_count_stability", "[stdlib][invariants]
     for (auto const& desc: stdlibDescriptors())
         if (!desc.userFacingName.empty())
             ++count;
-    CHECK(count == 64);
+    CHECK(count == 65);
 }

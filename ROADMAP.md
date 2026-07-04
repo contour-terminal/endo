@@ -851,6 +851,45 @@ coroutine runtime now drives I/O so flows are expressed with `co_await`.
   bootstrap, and the agent-mode loop (driven by `nextActivity`)
 - [x] Unit tests for the coroutine primitives and the runtime (mock event source)
 
+### Phase 2.3.7: Platform-Independent Coroutine Reactor, Clock & Async Sockets
+
+**Status:** Complete
+
+**Dependency:** Phase 2.3.6
+
+**Rationale:** Extend the coroutine runtime into a complete, platform-independent
+async substrate (adapted in spirit from the sibling `fastcached` reactor): an
+injectable clock for deterministic timers, a generalized fd reactor, generic
+readiness awaitables, `whenAny`/`withTimeout`, a coroutine-native socket layer,
+and — as the flagship language consumer — a builtin HTTP server.
+
+**Tasks:**
+- [x] `IClock` seam (`src/platform/Clock.hpp`): `SteadyClock` + `ManualClock`, injected
+  into `TuiRuntime` (defaulted) so timer/timeout/`delay` behaviour is deterministic in
+  tests (no real sleeps)
+- [x] Generalized `EventSource` into a data-driven fd registry (`FdInterest`/`FdToken` +
+  `attach`/`updateInterest`/`detach` + `readyRead`/`readyWrite`); `TerminalEventSource`
+  builds its pollset from registrations (POSIX `poll` / Win32 `WaitForMultipleObjects`),
+  plus a headless `PollEventSource` for non-TTY reactor work
+- [x] Generic `waitReadable(fd)` / `waitWritable(fd)` awaitables with `std::stop_token`
+  cancellation and proactive unparking (`requeueForCancellation`); `sleepUntil`
+- [x] `SystemPipe` (`src/platform/`): cross-platform reactor-waitable byte channel
+  (socketpair / loopback + WSAEventSelect)
+- [x] `whenAny` + `withTimeout` combinators (`src/coro/WhenAny.hpp`, `src/tui/runtime/`)
+  with loser-cancellation
+- [x] Async socket layer (`src/net/`): `ISocket`/`IListener` as `Task<IoResult>`,
+  POSIX (`poll`-driven) and Windows (`WSAEventSelect`) backends, `InMemoryTransport`,
+  `listen`/`connect` factories
+- [x] `Runner::invoke(args)`: native→script function-value call with arguments + result
+- [x] `httpServe` builtin: async HTTP/1.1 server (`src/net/HttpServer`) dispatching to a
+  script `string -> string` handler. Typed as `int -> (string -> string) -> int` in the
+  Hindley-Milner inference env (`TypeEnv`, also feeding LSP inlay hints); registered as a
+  statement-level builtin (`compilerBuiltins`) and a `stdlib` descriptor (`httpServe(IH)I`),
+  with custom codegen that emits a function reference for the handler argument
+- [x] Tests: `ManualClock` timers, pipe/`SystemPipe` readiness, `whenAny`/`withTimeout`,
+  loopback socket + HTTP round-trips (incl. the `serve()` accept-loop), `invoke`, `httpServe`
+  codegen/validation unit tests, and `.endo` compile + negative tests
+
 ### Phase 2.4: Syntax Highlighting
 
 **Status:** Partially Complete (lexer-based token highlighting)
