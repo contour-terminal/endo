@@ -193,9 +193,11 @@ Key patterns used here:
 - **`match args with`** dispatches on the tokens already typed, determining what to
   complete next (subcommand, option, or dynamic value).
 - **`when startsWith "-" prefix`** guards detect when the user is typing an option flag.
-- **`$(command)` substitution** fetches dynamic values at completion time. Results are
-  cached for 2 seconds to avoid repeated subprocess calls while the user navigates the
-  menu.
+- **`$(command)` substitution** fetches dynamic values at completion time. Fetches
+  run only on an explicit **Tab** (never for inline ghost text), and their results are
+  cached — in memory for the session and on disk under `~/.cache/endo/completions/` —
+  so repeated Tabs, further typing, and later sessions do not re-run the subprocess.
+  See [Completion Timeout and Caching](configuration.md#completion-timeout-and-caching).
 - **`Completion.described`** provides short help text for each entry.
 - **Returning `[]`** signals that no completions are available, which falls back to file
   path completion.
@@ -264,7 +266,7 @@ useful for showing man-page excerpts, usage examples, or extended documentation.
 | Tab / Down | Select next item |
 | Up | Select previous item |
 | Enter | Accept selected completion |
-| Escape | Dismiss popup, or abort an in-progress completion |
+| Escape | Dismiss the completion popup |
 | Page Down | Jump down one page |
 | Page Up | Jump up one page |
 
@@ -272,10 +274,12 @@ As you continue typing, the menu filters in real-time using fuzzy matching. Item
 longer match are removed and scores are recalculated.
 
 When a completer runs a slow external command (for example querying packages), the
-lookup is bounded by `shell_completion_timeout` (3 s by default) and can be
-cancelled at any time by pressing **Escape** or **Ctrl+C**, so a hung completion
-never blocks the shell. See
-[Completion Timeout](configuration.md#completion-timeout) to configure it.
+lookup is bounded by `shell_completion_timeout` / `shell_completion_cold_timeout` and
+can be cancelled at any time by pressing **Ctrl+C**, so a hung completion never blocks
+the shell. Its result is also cached (in memory and on disk), so it runs at most once
+per list rather than on every keystroke. See
+[Completion Timeout and Caching](configuration.md#completion-timeout-and-caching) to
+configure it.
 
 ## Bundled Completers
 

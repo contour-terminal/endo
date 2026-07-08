@@ -221,24 +221,51 @@ shell_exit_confirm_timeout <- 0
 
 The default timeout is 1000 ms.
 
-### Completion Timeout
+### Completion Timeout and Caching
 
 Some completers run external commands to gather candidates (for example the
-`dnf`/`rpm` completers query installed and available packages). If such a command
-is slow or hangs, the completion is bounded by a timeout so the shell never blocks
-indefinitely — pressing **Escape** (or **Ctrl+C**) also aborts an in-progress
-completion immediately. On abort or timeout a short notice is shown and no
-completions are offered.
+`dnf`/`rpm` completers query installed and available packages). Two mechanisms keep
+these fast and non-blocking:
+
+- **Ghost text never runs these commands.** The inline autosuggestion shown as you
+  type is cache-only for scripted completers — it never spawns a subprocess — so
+  typing stays responsive. Only pressing **Tab** may fetch a fresh list.
+- **Results are cached, including on disk.** A fetched package list is cached in
+  memory for the session and persisted under
+  `$XDG_CACHE_HOME/endo/completions/` (falling back to `~/.cache/endo/completions/`),
+  so the first Tab of a later session is served instantly from disk. The cache key
+  excludes the word being typed, so once a list is cached, further keystrokes filter
+  it without re-fetching.
+
+If a fetch is slow or hangs, it is bounded by a timeout so the shell never blocks
+indefinitely; pressing **Ctrl+C** also aborts an in-progress completion immediately.
+On abort or timeout a short notice is shown and the previously cached list (if any)
+is used instead. Aborted and timed-out fetches are never cached, so a cancelled
+completion does not suppress the next attempt.
 
 ```endo
-# Abort a completion command after 5 seconds (default: 3000 ms)
+# Overall upper bound for a completion command (default: 3000 ms)
 shell_completion_timeout <- 5000
 
-# Disable the timeout — rely on Escape/Ctrl+C only
+# Shorter budget for a cold/uncached fetch, so the first Tab stays snappy
+# (default: 1000 ms). The effective deadline is the smaller of the two positive
+# budgets; 0 disables that budget.
+shell_completion_cold_timeout <- 1500
+
+# Disable both timeouts — rely on Ctrl+C only
 shell_completion_timeout <- 0
+shell_completion_cold_timeout <- 0
+
+# How long (seconds) a cached list is served before it is re-fetched (default: 250)
+shell_completion_cache_ttl <- 600
+
+# Disable the persistent on-disk cache (in-memory only). Set in init.endo, which is
+# loaded before completers, to take effect for the whole session.
+shell_completion_cache_enabled <- false
 ```
 
-The default timeout is 3000 ms.
+Defaults: overall timeout 3000 ms, cold-fetch timeout 1000 ms, cache freshness
+250 s, on-disk cache enabled.
 
 ### File Listing Icons
 
