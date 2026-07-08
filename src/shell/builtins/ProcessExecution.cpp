@@ -330,52 +330,8 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         // Process group leader is the first process
         ProcessId const pgid = _currentProcessGroupPids.front();
 
-        // Give terminal control to the pipeline's process group
-        auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
-        if (!setFgResult)
-            debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
-
-        bool anyStopped = false;
-        for (ProcessId const processPid: _currentProcessGroupPids)
-        {
-            auto const waitResult = _processManager.wait(processPid, WaitFlag::Untraced);
-            if (!waitResult.has_value())
-            {
-                error("Failed to wait for process {}: {}", processPid, toString(waitResult.error()));
-                continue;
-            }
-
-            _exitCode = waitResult->exitCode;
-            if (waitResult->stopped)
-            {
-                anyStopped = true;
-                debugLog()()("child process {} stopped\n", processPid);
-            }
-            else if (waitResult->signaled)
-            {
-                debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
-            }
-            else
-            {
-                debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
-            }
-        }
-
-        // Restore shell's terminal control
-        auto const restoreFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
-        if (!restoreFgResult)
-            debugLog()()("Failed to restore shell foreground: {}", toString(restoreFgResult.error()));
-
-        // If any process was stopped, add the whole pipeline to job table
-        if (anyStopped)
-        {
-            (void) jobTable.addJob(pgid, _currentProcessGroupPids, command);
-            // Mark the job as stopped
-            WaitResult stoppedResult { .exitCode = 0, .stopped = true };
-            jobTable.updateJobState(_currentProcessGroupPids.front(), stoppedResult);
-            _tty.writeToStdout(
-                std::format("\n[{}]+  Stopped                 {}\n", jobTable.getCurrentJob()->id, command));
-        }
+        // Blocking foreground wait, or the cancellable async path during a completion.
+        waitForPipeline(_currentProcessGroupPids, pgid, command);
 
         _pipelineCommands.clear();
 #else

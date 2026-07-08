@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/TerminalCompletionNotifier.hpp>
 #include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/RequiredPaths.hpp>
@@ -634,6 +635,10 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
+    // Default completion notifier writes a terminal notice; tests/embedders can
+    // swap it via setCompletionNotifier (e.g. NullCompletionNotifier).
+    _completionNotifier = std::make_unique<TerminalCompletionNotifier>(_tty);
+
     // SHELL must be a fully-qualified path (not a bare name): programs such as
     // sudo-rs' `sudo -s` read SHELL and refuse to spawn it unless it resolves to
     // an absolute path. Fall back to "endo" only if the path cannot be determined.
@@ -1151,7 +1156,20 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     auto const savedUnusedDetection = _unusedValueDetection;
     ++_configScriptDepth;
     _unusedValueDetection = false;
+
+    // Arm the cancellable substitution wait for the duration of this completion, so
+    // any `$(...)` a completer runs (e.g. `$(dnf repoquery)`) can be aborted by
+    // Escape or the timeout instead of blocking the shell. A scope guard restores it
+    // even if execute() throws (e.g. VM QuotaExceeded), so the flag never leaks into
+    // subsequent interactive command execution; the saved value keeps nested
+    // completion re-entry safe.
+    bool const savedCancellable = std::exchange(_completionWaitCancellable, true);
+    ScopeGuard const cancellableRestore { [this, savedCancellable] {
+        _completionWaitCancellable = savedCancellable;
+    } };
+
     (void) execute(expr, bufferingReport);
+
     --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
@@ -1168,6 +1186,11 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     }
 
     return result;
+}
+
+void Shell::setCompletionNotifier(std::unique_ptr<CompletionNotifier> notifier) noexcept
+{
+    _completionNotifier = notifier ? std::move(notifier) : std::make_unique<NullCompletionNotifier>();
 }
 
 void Shell::ensureInteractiveReady()

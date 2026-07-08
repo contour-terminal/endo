@@ -221,6 +221,25 @@ shell_exit_confirm_timeout <- 0
 
 The default timeout is 1000 ms.
 
+### Completion Timeout
+
+Some completers run external commands to gather candidates (for example the
+`dnf`/`rpm` completers query installed and available packages). If such a command
+is slow or hangs, the completion is bounded by a timeout so the shell never blocks
+indefinitely — pressing **Escape** (or **Ctrl+C**) also aborts an in-progress
+completion immediately. On abort or timeout a short notice is shown and no
+completions are offered.
+
+```endo
+# Abort a completion command after 5 seconds (default: 3000 ms)
+shell_completion_timeout <- 5000
+
+# Disable the timeout — rely on Escape/Ctrl+C only
+shell_completion_timeout <- 0
+```
+
+The default timeout is 3000 ms.
+
 ### File Listing Icons
 
 When listing files with `ls`, Nerd Font icons are shown next to each filename by default.

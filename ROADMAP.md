@@ -889,6 +889,13 @@ and — as the flagship language consumer — a builtin HTTP server.
 - [x] Tests: `ManualClock` timers, pipe/`SystemPipe` readiness, `whenAny`/`withTimeout`,
   loopback socket + HTTP round-trips (incl. the `serve()` accept-loop), `invoke`, `httpServe`
   codegen/validation unit tests, and `.endo` compile + negative tests
+- [x] Async, cancellable child-process wait (`waitProcessAsync`, `src/shell/AsyncProcessWait`):
+  a `WNOHANG`-poll + `delay` loop that a `whenAny`/`withTimeout` sibling can cancel. Used by
+  `Shell::awaitSubstitutionPipeline` so a tab-completion's `$(...)` (e.g. `$(dnf repoquery)`)
+  is bounded by `shell_completion_timeout` (3 s default) and abortable by Escape/Ctrl+C via a
+  nested `PollEventSource` reactor; abort/timeout notices route through an injected
+  `CompletionNotifier`. Fixed a stale-timer use-after-free in `requeueForCancellation` for
+  timer-parked `whenAny` losers.
 
 ### Phase 2.4: Syntax Highlighting
 

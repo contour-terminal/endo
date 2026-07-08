@@ -264,12 +264,18 @@ useful for showing man-page excerpts, usage examples, or extended documentation.
 | Tab / Down | Select next item |
 | Up | Select previous item |
 | Enter | Accept selected completion |
-| Escape | Dismiss popup |
+| Escape | Dismiss popup, or abort an in-progress completion |
 | Page Down | Jump down one page |
 | Page Up | Jump up one page |
 
 As you continue typing, the menu filters in real-time using fuzzy matching. Items that no
 longer match are removed and scores are recalculated.
+
+When a completer runs a slow external command (for example querying packages), the
+lookup is bounded by `shell_completion_timeout` (3 s by default) and can be
+cancelled at any time by pressing **Escape** or **Ctrl+C**, so a hung completion
+never blocks the shell. See
+[Completion Timeout](configuration.md#completion-timeout) to configure it.
 
 ## Bundled Completers
 

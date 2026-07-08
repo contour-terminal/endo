@@ -20,6 +20,7 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
+#include <shell/CompletionNotifier.hpp>
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/completion/LetBindingCompleter.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
@@ -5269,6 +5270,65 @@ TEST_CASE("shell.completion.executeCompleterFunction_options")
     REQUIRE_FALSE(result.completions.empty());
     CHECK(hasResult(result.completions, "--help"));
 }
+
+#if !defined(_WIN32)
+namespace
+{
+/// Records the last completion notification for assertions.
+struct RecordingCompletionNotifier final: endo::CompletionNotifier
+{
+    std::optional<endo::NotificationKind> lastKind;
+    int count = 0;
+
+    void notify(endo::NotificationKind kind, std::string_view /*message*/) override
+    {
+        lastKind = kind;
+        ++count;
+    }
+};
+} // namespace
+
+TEST_CASE("shell.completion.slow_substitution_does_not_hang")
+{
+    // End-to-end guarantee: a completer that runs a long-blocking external
+    // `$(/usr/bin/sleep 30)` must NOT hang the shell — with a short completion
+    // timeout, executeCompleterFunction returns far sooner than the 30s sleep.
+    //
+    // This asserts only the platform-independent property (no hang). The precise
+    // timeout → abort → notify sequence is proven deterministically, without real
+    // processes or wall-clock timing, in AsyncProcessWait_test.cpp; here the exact
+    // outcome depends on how the runner's spawn/PTY behaves, so the notifier kind is
+    // only checked opportunistically (if it fired at all, it must be a timeout).
+    TestShell ts;
+
+    auto owned = std::make_unique<RecordingCompletionNotifier>();
+    auto* const notifier = owned.get(); // borrowed for assertions after the move
+    ts.shell.setCompletionNotifier(std::move(owned));
+
+    // Short timeout so the test is fast; the completer sleeps far longer.
+    ts("shell_completion_timeout <- 300");
+    CHECK(ts.exitCode == 0);
+
+    // Full path so `sleep` is spawned as a real external process rather than the
+    // in-process `sleep` inline builtin — the async wait only governs externals.
+    ts(R"(
+        let slow_complete args prefix = [$(/usr/bin/sleep 30)]
+        Completion.register "slowcmd" slow_complete
+    )");
+    CHECK(ts.exitCode == 0);
+
+    auto const start = std::chrono::steady_clock::now();
+    auto const result = ts.shell.executeCompleterFunction("slow_complete", {}, "");
+    auto const elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+
+    // The core guarantee: returned well before the 30s sleep would have elapsed.
+    CHECK(elapsed < std::chrono::seconds { 10 });
+    // If a notice was surfaced, it must be the timeout (never a spurious abort).
+    if (notifier->lastKind.has_value())
+        CHECK(*notifier->lastKind == endo::NotificationKind::TimedOut);
+}
+#endif
 
 TEST_CASE("shell.completion.Completion_register_populates_registry")
 {

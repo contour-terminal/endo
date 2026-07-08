@@ -1067,6 +1067,17 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
+    // Time budget (ms) for a cancellable tab-completion command substitution before
+    // it is auto-aborted; 0 disables the timeout (Escape/Ctrl+C only). Set in
+    // init.endo, e.g. `shell_completion_timeout <- 5000`.
+    _runtime.registerProperty("shell_completion_timeout", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(_completionTimeoutMs.count()));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            _completionTimeoutMs = std::chrono::milliseconds { std::max(int64_t { 0 }, args.getInt(1)) };
+        });
+
     _runtime.registerProperty("shell_ls_icons", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_lsIcons); })
         .onSet([this](CoreVM::Params& args) { _lsIcons = args.getBool(1); });

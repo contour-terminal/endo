@@ -140,6 +140,13 @@ add_library(endo-shell STATIC
     DirectoryConfig.hpp
     DirectoryConfig.cpp
 
+    # Async process wait + completion notification
+    AsyncProcessWait.hpp
+    AsyncProcessWait.cpp
+    CompletionNotifier.hpp
+    TerminalCompletionNotifier.hpp
+    TerminalCompletionNotifier.cpp
+
     # Builtins
     builtins/InlineCommandDescriptor.hpp
     builtins/InlineCommandDescriptors.cpp
@@ -284,6 +291,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-shell
         test_main.cpp
         Shell_test.cpp
+        AsyncProcessWait_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
         commands/FindExpression_test.cpp

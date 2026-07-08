@@ -41,6 +41,7 @@ struct AgentRunOptions;
 } // namespace endo::agent
 #endif
 
+#include <shell/CompletionNotifier.hpp>
 #include <shell/DirectoryConfig.hpp>
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/CompleterFunctionRegistry.hpp>
@@ -276,6 +277,11 @@ class Shell final: public SignalCallback
     /// @return Pointer to the descriptor, or nullptr if not found.
     [[nodiscard]] static InlineCommandDescriptor const* findInlineBuiltin(std::string_view name);
 
+    /// @brief Injects the notifier used to surface completion abort/timeout notices.
+    /// @param notifier The notifier to use (ownership transferred). A null argument
+    ///        restores the default no-op behaviour.
+    void setCompletionNotifier(std::unique_ptr<CompletionNotifier> notifier) noexcept;
+
   private:
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
@@ -468,6 +474,38 @@ class Shell final: public SignalCallback
     // --- Substitution builtins (builtins/Substitution.cpp) ---
     void builtinSubstStart(CoreVM::Params& context);
     void builtinSubstEnd(CoreVM::Params& context);
+
+#if !defined(_WIN32)
+    /// @brief Waits for a finished foreground pipeline, choosing the blocking or the
+    /// cancellable path. Shared by the piped-command builtins.
+    ///
+    /// When a tab-completion is running (@ref _completionWaitCancellable) the wait
+    /// runs through @ref awaitSubstitutionPipeline so a slow/hung completer command
+    /// can be aborted; otherwise it performs the normal blocking foreground wait —
+    /// handing the terminal to the pipeline's group, waiting each process with
+    /// `WUNTRACED`, restoring terminal control, and registering a stopped pipeline as
+    /// a job. Sets @ref _exitCode to the last process's exit code.
+    /// @param pids The pipeline's process ids, in spawn order.
+    /// @param pgid The pipeline's process-group id.
+    /// @param command The display string for the job table (on Ctrl+Z).
+    void waitForPipeline(std::vector<ProcessId> const& pids, ProcessId pgid, std::string const& command);
+
+    /// @brief Waits for a completion substitution's pipeline through a nested
+    /// reactor that races the children against a timeout and an abort key.
+    ///
+    /// Used instead of the blocking foreground wait while a tab-completion runs
+    /// (@ref _completionWaitCancellable), so a slow or hung completer command
+    /// (`$(dnf repoquery)`, `$(rpm -qa)`) can be aborted by Escape/Ctrl+C or by the
+    /// @ref _completionTimeoutMs deadline. On abort/timeout it kills the process
+    /// group, marks the active capture aborted, and notifies via
+    /// @ref _completionNotifier. Deliberately does NOT hand the terminal to the
+    /// child (no `setForegroundPgrp`), so the abort-key watcher owns the TTY.
+    /// @param pids The pipeline's process ids, in spawn order.
+    /// @param pgid The pipeline's process-group id (killed on abort/timeout).
+    /// @return The exit code of the last process, or an abort code on cancellation.
+    [[nodiscard]] int awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, ProcessId pgid);
+#endif
+
     void builtinProcSubstFork(CoreVM::Params& context);
     void builtinProcSubstExit(CoreVM::Params& context);
     void builtinProcSubstGetPath(CoreVM::Params& context);
@@ -752,6 +790,10 @@ class Shell final: public SignalCallback
         NativeHandle fd = InvalidHandle;          ///< POSIX: temp-file fd used as the capture sink.
         std::unique_ptr<Pipe> pipe;               ///< Windows: pipe used as the capture sink.
         NativeHandle savedStdout = InvalidHandle; ///< Pipeline stdout fd to restore at subst_end.
+        bool aborted = false; ///< Set if this substitution was aborted/timed out, so subst_end
+                              ///< returns an empty capture instead of the killed child's partial
+                              ///< output. Per-capture (on the stack) so a nested abort never
+                              ///< blanks an unrelated outer capture.
 
         SubstitutionCapture() = default;
 
@@ -799,6 +841,21 @@ class Shell final: public SignalCallback
     /// inner `$(...)` pushes its own capture and pops it on completion, leaving the
     /// outer capture's fd and saved stdout intact.
     std::vector<SubstitutionCapture> _substitutionCaptures;
+
+    /// When true, command-substitution pipeline waits route through the async,
+    /// cancellable path (@ref awaitSubstitutionPipeline) instead of a blocking
+    /// `waitpid`. Armed only while a tab-completion runs (around the `execute()` in
+    /// @ref executeCompleterFunction), so interactive command execution keeps the
+    /// existing blocking wait and its SIGINT-to-child semantics.
+    bool _completionWaitCancellable = false;
+
+    /// Time budget for a cancellable completion wait; 0 disables the timeout (abort
+    /// key only). Configurable via the `shell_completion_timeout` property (ms).
+    std::chrono::milliseconds _completionTimeoutMs { 3000 };
+
+    /// Sink for completion abort/timeout notices. Defaults to a terminal notifier;
+    /// swappable via @ref setCompletionNotifier (e.g. to a no-op in tests).
+    std::unique_ptr<CompletionNotifier> _completionNotifier;
 
     std::vector<std::unique_ptr<Pipe>> _processSubstitutionPipes;
     std::string _procSubstFdPath;
