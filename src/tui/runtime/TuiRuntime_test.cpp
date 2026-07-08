@@ -157,6 +157,15 @@ Task<int> parkOnFdForever(TuiRuntime* runtime, endo::platform::NativeHandle fd)
     co_return 0;
 }
 
+/// Repeatedly parks on short delays (a poll loop) — never completes on its own, so
+/// only a timeout can win. Models a timer-parked whenAny loser whose frame is
+/// destroyed on cancellation (regression for a stale-timer use-after-free).
+Task<void> pollOnDelayForever(TuiRuntime* runtime)
+{
+    while (true)
+        co_await runtime->delay(std::chrono::milliseconds { 5 });
+}
+
 KeyEvent keyOf(char32_t codepoint)
 {
     return KeyEvent { .codepoint = codepoint };
@@ -471,7 +480,8 @@ TEST_CASE("waitReadable resumes when the registered fd becomes readable", "[TuiR
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -1;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == 1);
 }
@@ -483,7 +493,8 @@ TEST_CASE("waitReadable on an interrupt cancels the parked flow", "[TuiRuntime][
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -7;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == Cancelled);
 }
@@ -561,6 +572,26 @@ TEST_CASE("withTimeout returns nullopt and cancels the work when the deadline fi
 
     REQUIRE_FALSE(result.has_value());    // the timeout won
     REQUIRE(source.attachedCount() == 0); // the cancelled work detached its fd
+}
+
+TEST_CASE("withTimeout cancels a timer-parked (delay-poll) loser without a use-after-free",
+          "[TuiRuntime][timeout][poll]")
+{
+    // Regression: a whenAny loser parked on a delay had its stale timer heap entry
+    // left in place, relying on a later fire seeing handle.done(). But whenAny
+    // *destroys* the losing frame once it unwinds, so the stale entry dereferenced
+    // freed memory. The work here is a delay-poll loop (never completes), so only
+    // the timeout can win; it must cancel the loop cleanly. A real short timeout
+    // drives the runtime timer.
+    auto source = tui::runtime::PollEventSource {};
+    auto runtime = TuiRuntime { source };
+
+    // Reaching this assertion without an ASan use-after-free is the regression
+    // proof: the stale timer entry for the destroyed loser must not be dereferenced.
+    auto const finished = runtime.blockOn(
+        tui::runtime::withTimeout(&runtime, pollOnDelayForever(&runtime), std::chrono::milliseconds { 20 }));
+
+    REQUIRE_FALSE(finished); // the timeout won and cancelled the work
 }
 
 TEST_CASE("Destroying the runtime unwinds a flow parked on waitReadable", "[TuiRuntime][fd]")

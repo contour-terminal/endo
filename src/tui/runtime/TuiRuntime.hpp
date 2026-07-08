@@ -225,9 +225,11 @@ class TuiRuntime
     /// it was parked on a timer or fd. Used by the timed/fd awaiters' stop-callbacks
     /// so a `whenAny`/`withTimeout` loser parked on `delay`/`waitReadable` unwinds
     /// promptly instead of only when its deadline/fd eventually fires. The awaiter
-    /// then observes stop_requested() in await_resume and throws OperationCancelled;
-    /// its stale timer entry / fd registration is skipped (handle already done) or
-    /// detached by the awaiter. Safe to call once per parked waiter.
+    /// then observes stop_requested() in await_resume and throws OperationCancelled.
+    /// A timer-parked waiter has its heap entry nulled and an fd-parked one is
+    /// detached, so neither stale registration is dereferenced after the (possibly
+    /// destroyed) frame unwinds; a handle already in the ready queue is not queued
+    /// twice. Safe to call once per parked waiter.
     /// @param waiter The parked coroutine to resume for cancellation.
     void requeueForCancellation(std::coroutine_handle<> waiter);
 
@@ -428,8 +430,9 @@ class NextActivityAwaiter
 /// While parked it registers a stop-callback so that if its cancellation token is
 /// stopped before the deadline (e.g. a `whenAny`/`withTimeout` sibling won), the
 /// parked coroutine is re-queued promptly and unwinds via @c OperationCancelled,
-/// rather than lingering until the deadline elapses. The stale timer entry is
-/// skipped when it later fires (the handle is already done).
+/// rather than lingering until the deadline elapses. On cancellation the timer
+/// heap entry is nulled (see @c requeueForCancellation) so it is never dereferenced
+/// after the frame — which a `whenAny` loser destroys on unwind — is gone.
 class DelayAwaiter
 {
   public:
