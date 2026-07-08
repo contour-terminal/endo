@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,6 +22,19 @@ enum class CompletionContextType // NOLINT(performance-enum-size)
     Unknown        ///< Unable to determine context.
 };
 
+/// @brief Why a completion was requested.
+///
+/// Distinguishes a speculative ghost-text/autosuggestion query (fired ~100ms after
+/// every keystroke) from an explicit user Tab press. Providers that perform expensive
+/// or blocking work must not do it for @c Autosuggest — they serve cached data only —
+/// so typing never stalls the prompt. (See @c ScriptedCompleter, whose dnf/rpm
+/// completers shell out to package managers and so are cache-only for autosuggest.)
+enum class CompletionIntent : std::uint8_t
+{
+    Autosuggest, ///< Ghost-text suggestion; providers must be cheap / cache-only.
+    Explicit     ///< User pressed Tab; providers may perform expensive work.
+};
+
 /// @brief Context information for completion.
 struct CompletionContext
 {
@@ -30,6 +44,11 @@ struct CompletionContext
     size_t cursorPosition = 0;          ///< Cursor byte offset in input.
     std::optional<std::string> command; ///< Current command (for option context).
     std::string fullInput;              ///< Complete input line.
+
+    /// Why this completion was requested. Defaults to @c Explicit so every existing
+    /// caller (and the whole test suite) keeps the "may do expensive work" behaviour;
+    /// only the ghost-text path (@c Completer::suggest) sets @c Autosuggest.
+    CompletionIntent intent = CompletionIntent::Explicit;
 };
 
 /// @brief Analyzes input to determine completion context.

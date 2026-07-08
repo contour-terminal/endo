@@ -662,6 +662,16 @@ class Shell final: public SignalCallback
     std::vector<CollectedCompletion> _collectedCompletions;    ///< Buffer for __collect_completions bridge
     std::unique_ptr<DirectoryConfigManager> _dirConfigManager; ///< Per-directory config manager
 
+    /// Persistent (L2) completion cache, owned here and injected into the
+    /// ScriptedCompleter so scripted package lists survive shell restarts. Created in
+    /// @ref loadCompleters under the user's XDG cache directory.
+    std::unique_ptr<CompletionCache> _completionCache;
+
+    /// Tunables fed into the ScriptedCompleter at construction. Overridable from
+    /// init.endo (loaded before @ref loadCompleters) via the `shell_completion_cache_*`
+    /// properties, so the values are read once when the completer is built.
+    ScriptedCompleterConfig _completionCacheConfig;
+
     ProcessManager& _processManager;
 
     std::unique_ptr<CoreVM::Program> _currentProgram;
@@ -852,6 +862,20 @@ class Shell final: public SignalCallback
     /// Time budget for a cancellable completion wait; 0 disables the timeout (abort
     /// key only). Configurable via the `shell_completion_timeout` property (ms).
     std::chrono::milliseconds _completionTimeoutMs { 3000 };
+
+    /// Shorter budget applied to a cold/uncached completer fetch so the first Tab of a
+    /// session stays snappy (fish caps this at ~1s). The effective completion-wait
+    /// deadline is the smaller of the two positive budgets (0 = that budget disabled).
+    /// Configurable via the `shell_completion_cold_timeout` property (ms).
+    std::chrono::milliseconds _completionColdTimeoutMs { 1000 };
+
+    /// Outcome of the most recent completer-driven command substitution wait.
+    /// @ref awaitSubstitutionPipeline sets it to Aborted/TimedOut when the wait is
+    /// cancelled; @ref executeCompleterFunction reads it (and resets it to Ok before
+    /// each run) so an aborted completion's empty result is not cached. Read via an
+    /// explicit flag rather than sniffing the 130 exit code, which a completer's own
+    /// `$(...)` could legitimately produce.
+    CompleterExecutionStatus _lastCompletionOutcome = CompleterExecutionStatus::Ok;
 
     /// Sink for completion abort/timeout notices. Defaults to a terminal notifier;
     /// swappable via @ref setCompletionNotifier (e.g. to a no-op in tests).

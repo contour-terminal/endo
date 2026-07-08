@@ -21,6 +21,7 @@
     #include <tui/runtime/TuiRuntime.hpp>
     #include <tui/runtime/WithTimeout.hpp>
 
+    #include <algorithm>
     #include <chrono>
     #include <csignal>
     #include <cstdint>
@@ -176,13 +177,19 @@ namespace
         return endo::log::shellDebug();
     }
 
-    /// Reactor task that resolves when an abort key (Escape 0x1b or Ctrl+C 0x03) is
-    /// read from @p ttyFd. Used as a @c whenAny arm against the child wait so a
-    /// keypress cancels the completion. The terminal is in raw mode; bytes read here
-    /// are dropped (acceptable during a modal, short-lived completion). An ESC that
-    /// begins an escape sequence (arrow keys) also aborts — intentional: any ESC
-    /// during a hung completion should cancel it. Throws @c OperationCancelled if
-    /// the child wins the race first (its @c waitReadable is cancelled).
+    /// Reactor task that resolves when the abort key (Ctrl+C, 0x03) is read from
+    /// @p ttyFd. Used as a @c whenAny arm against the child wait so Ctrl+C cancels an
+    /// in-flight completion. The terminal is in raw mode; bytes read here are dropped
+    /// (acceptable during a modal, short-lived completion).
+    ///
+    /// Only Ctrl+C aborts — deliberately NOT Escape. An Escape byte can be a genuine
+    /// cancel, but it is also the first byte of every arrow/function-key escape
+    /// sequence, and a single @c read may not contain the whole sequence, so treating
+    /// ESC as abort made cursor keys cancel completions. Since ghost text no longer
+    /// shells out (only an explicit Tab does), the only keystrokes seen here are ones
+    /// pressed while a Tab-completion is genuinely running, and Ctrl+C is the
+    /// conventional, race-free cancel. Throws @c OperationCancelled if the child wins
+    /// the race first (its @c waitReadable is cancelled).
     coro::Task<void> watchTtyForAbortKey(tui::runtime::TuiRuntime* runtime, NativeHandle ttyFd)
     {
         while (true)
@@ -193,9 +200,9 @@ namespace
             if (n <= 0)
                 continue;
             for (auto const i: std::views::iota(0uz, static_cast<std::size_t>(n)))
-                if (buffer.at(i) == 0x1b || buffer.at(i) == 0x03)
-                    co_return; // abort key seen: win the race
-            // Other bytes: dropped; keep watching.
+                if (buffer.at(i) == 0x03)
+                    co_return; // Ctrl+C seen: win the race
+            // Other bytes (including ESC-prefixed cursor keys): dropped; keep watching.
         }
     }
 
@@ -309,11 +316,27 @@ int Shell::awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, Process
     int childExitCode = _exitCode;
     Outcome outcome = Outcome::Exited;
 
-    if (_completionTimeoutMs.count() > 0)
+    // Effective deadline: the smaller of the two positive budgets (0 = that budget
+    // disabled). A completer subprocess only reaches this wait on a cold/stale fetch
+    // (fresh cache hits never invoke the completer), so the tighter cold-fetch budget
+    // is what keeps a first-Tab `$(dnf repoquery)` snappy; the overall timeout is the
+    // upper bound and dominates only if set below the cold budget. Both 0 → abort-key
+    // only. See shell_completion_timeout / shell_completion_cold_timeout.
+    auto const effectiveTimeout = [this] {
+        auto const overall = _completionTimeoutMs;
+        auto const cold = _completionColdTimeoutMs;
+        if (overall.count() <= 0)
+            return cold;
+        if (cold.count() <= 0)
+            return overall;
+        return std::min(overall, cold);
+    }();
+
+    if (effectiveTimeout.count() > 0)
     {
         // Bound the child-vs-abort race by the timeout.
         auto const finished = runtime.blockOn(tui::runtime::withTimeout(
-            &runtime, raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode), _completionTimeoutMs));
+            &runtime, raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode), effectiveTimeout));
         if (!finished.has_value())
             outcome = Outcome::TimedOut;
         else
@@ -362,9 +385,14 @@ int Shell::awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, Process
         }
     }
 
+    // Record the outcome so executeCompleterFunction can avoid caching this run's
+    // (empty) result. Set before notifying so the flag is live regardless of sink.
+    _lastCompletionOutcome = (outcome == Outcome::TimedOut) ? CompleterExecutionStatus::TimedOut
+                                                            : CompleterExecutionStatus::Aborted;
+
     auto const kind = (outcome == Outcome::TimedOut) ? NotificationKind::TimedOut : NotificationKind::Aborted;
     auto const message = (outcome == Outcome::TimedOut)
-                             ? std::format("completion timed out after {}ms", _completionTimeoutMs.count())
+                             ? std::format("completion timed out after {}ms", effectiveTimeout.count())
                              : std::string { "completion aborted" };
     _completionNotifier->notify(kind, message);
 

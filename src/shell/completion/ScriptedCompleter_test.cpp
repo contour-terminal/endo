@@ -3,8 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <chrono>
 
 #include "CompleterFunctionRegistry.hpp"
+#include "CompletionCache.hpp"
 #include "ScriptedCompleter.hpp"
 
 using namespace std::string_literals;
@@ -54,12 +56,19 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
                 return { .completions = { cc("--user"), cc("--system"), cc("--verbose"), cc("-v") },
                          .errors = {} };
             if (args.empty())
-                return { .completions = { cc("run"), cc("install"), cc("uninstall"), cc("update"),
-                                          cc("list"), cc("info"), cc("search") },
+                return { .completions = { cc("run"),
+                                          cc("install"),
+                                          cc("uninstall"),
+                                          cc("update"),
+                                          cc("list"),
+                                          cc("info"),
+                                          cc("search") },
                          .errors = {} };
             if (args.size() == 1 && args[0] == "run")
-                return { .completions = { cc("com.visualstudio.code"), cc("org.mozilla.firefox"),
-                                          cc("org.gnome.Calculator"), cc("io.github.sxyazi.yazi") },
+                return { .completions = { cc("com.visualstudio.code"),
+                                          cc("org.mozilla.firefox"),
+                                          cc("org.gnome.Calculator"),
+                                          cc("io.github.sxyazi.yazi") },
                          .errors = {} };
         }
         return {};
@@ -305,4 +314,149 @@ TEST_CASE("ScriptedCompleter.args_extraction")
     REQUIRE(capturedArgs.size() == 2);
     CHECK(capturedArgs[0] == "run");
     CHECK(capturedArgs[1] == "--user");
+}
+
+TEST_CASE("ScriptedCompleter.autosuggest_never_invokes_callback_on_cold_cache")
+{
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        return { .completions = { cc("firefox"), cc("firewalld") }, .errors = {} };
+    };
+
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback);
+
+    // Ghost text on a cold cache must NOT shell out — this is the fix for the freeze.
+    auto ctx = makeContext("dnf install fire", "fire", "dnf");
+    ctx.intent = endo::CompletionIntent::Autosuggest;
+    auto results = completer.complete(ctx);
+
+    CHECK(callCount == 0);
+    CHECK(results.empty());
+}
+
+TEST_CASE("ScriptedCompleter.autosuggest_serves_from_warm_cache_without_fetching")
+{
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        return { .completions = { cc("firefox"), cc("firewalld") }, .errors = {} };
+    };
+
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback);
+
+    // Explicit Tab warms the cache (one fetch).
+    auto tab = makeContext("dnf install ", "", "dnf");
+    (void) completer.complete(tab);
+    CHECK(callCount == 1);
+
+    // A subsequent ghost-text request serves from cache without another fetch.
+    auto ghost = makeContext("dnf install fire", "fire", "dnf");
+    ghost.intent = endo::CompletionIntent::Autosuggest;
+    auto results = completer.complete(ghost);
+    CHECK(callCount == 1); // no additional fetch
+    CHECK(hasCompletion(results, "firefox"));
+}
+
+TEST_CASE("ScriptedCompleter.aborted_result_is_not_cached")
+{
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        // Simulate an aborted `$(dnf repoquery)`: empty completions, Aborted status.
+        return { .completions = {}, .errors = {}, .status = endo::CompleterExecutionStatus::Aborted };
+    };
+
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback);
+
+    auto ctx = makeContext("dnf install ", "", "dnf");
+    (void) completer.complete(ctx);
+    CHECK(callCount == 1);
+
+    // Because the run was aborted, its empty result must not be cached — a second
+    // Tab retries instead of serving a poisoned empty entry.
+    (void) completer.complete(ctx);
+    CHECK(callCount == 2);
+}
+
+TEST_CASE("ScriptedCompleter.aborted_fetch_falls_back_to_stale_cache")
+{
+    int callCount = 0;
+    bool abortNext = false;
+    auto callback = [&](std::string_view /*funcName*/,
+                        std::vector<std::string> const& /*args*/,
+                        std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        if (abortNext)
+            return { .completions = {}, .errors = {}, .status = endo::CompleterExecutionStatus::Aborted };
+        return { .completions = { cc("firefox") }, .errors = {} };
+    };
+
+    // A clock we can advance to force staleness.
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    endo::ScriptedCompleterConfig config; // freshTtl 250s, hardTtl 6h
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback, nullptr, config, [&fakeNow] { return fakeNow; });
+
+    auto ctx = makeContext("dnf install ", "", "dnf");
+    auto r1 = completer.complete(ctx);
+    CHECK(callCount == 1);
+    CHECK(hasCompletion(r1, "firefox"));
+
+    // Advance past freshTtl so the next Tab refetches, but make that fetch abort.
+    fakeNow += std::chrono::seconds(300);
+    abortNext = true;
+    auto r2 = completer.complete(ctx);
+    CHECK(callCount == 2);               // it did attempt a refresh
+    CHECK(hasCompletion(r2, "firefox")); // and fell back to the stale entry, not empty
+}
+
+TEST_CASE("ScriptedCompleter.persistent_cache_promotes_L2_hit_without_fetch")
+{
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        return { .completions = { cc("vim") }, .errors = {} };
+    };
+
+    endo::InMemoryCompletionCache l2;
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    auto const clock = [&fakeNow] {
+        return fakeNow;
+    };
+
+    // First completer instance fetches once and populates L2.
+    {
+        endo::ScriptedCompleter completer(registry, callback, &l2, {}, clock);
+        auto ctx = makeContext("dnf install ", "", "dnf");
+        (void) completer.complete(ctx);
+        CHECK(callCount == 1);
+    }
+
+    // A fresh instance (new session, empty L1) served from L2 must not fetch again.
+    {
+        endo::ScriptedCompleter completer(registry, callback, &l2, {}, clock);
+        auto ctx = makeContext("dnf install ", "", "dnf");
+        auto results = completer.complete(ctx);
+        CHECK(callCount == 1); // L2 hit, no fetch
+        CHECK(hasCompletion(results, "vim"));
+    }
 }

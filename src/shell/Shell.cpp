@@ -2,6 +2,7 @@
 #include "Shell.hpp"
 #include <shell/TerminalCompletionNotifier.hpp>
 #include <shell/builtins/InlineCommandDescriptor.hpp>
+#include <shell/completion/CompletionCache.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/Prompt.hpp>
@@ -1100,11 +1101,24 @@ void Shell::loadCompleters()
     // executeCompleterFunction — only the interactive provider is skipped.
     if (completer && !_completerFunctions.commands().empty())
     {
+        // Persistent (L2) cache under the user's XDG cache directory, so scripted
+        // package lists (dnf/rpm) survive shell restarts. All I/O flows through the
+        // injected FileSystem. If the cache home can't be resolved, run without L2
+        // (in-memory L1 only) rather than failing completion setup.
+        if (_completionCacheConfig.persistentCacheEnabled)
+        {
+            if (auto const cacheHome = _env.cacheHome())
+                _completionCache =
+                    std::make_unique<FileSystemCompletionCache>(_fs, *cacheHome / "endo" / "completions");
+        }
+
         completer->addProvider(std::make_unique<ScriptedCompleter>(
             _completerFunctions,
             [this](std::string_view funcName, std::vector<std::string> const& args, std::string_view prefix) {
                 return executeCompleterFunction(funcName, args, prefix);
-            }));
+            },
+            _completionCache.get(),
+            _completionCacheConfig));
     }
 }
 
@@ -1159,7 +1173,7 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
 
     // Arm the cancellable substitution wait for the duration of this completion, so
     // any `$(...)` a completer runs (e.g. `$(dnf repoquery)`) can be aborted by
-    // Escape or the timeout instead of blocking the shell. A scope guard restores it
+    // Ctrl+C or the timeout instead of blocking the shell. A scope guard restores it
     // even if execute() throws (e.g. VM QuotaExceeded), so the flag never leaks into
     // subsequent interactive command execution; the saved value keeps nested
     // completion re-entry safe.
@@ -1167,6 +1181,11 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     ScopeGuard const cancellableRestore { [this, savedCancellable] {
         _completionWaitCancellable = savedCancellable;
     } };
+
+    // Reset the substitution outcome so a stale Aborted/TimedOut from a prior run
+    // cannot suppress caching of this one. awaitSubstitutionPipeline sets it if the
+    // wait is cancelled.
+    _lastCompletionOutcome = CompleterExecutionStatus::Ok;
 
     (void) execute(expr, bufferingReport);
 
@@ -1176,6 +1195,7 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     // Collect results from the bridge function
     CompleterExecutionResult result;
     result.completions = std::move(_collectedCompletions);
+    result.status = _lastCompletionOutcome;
 
     // Capture any compilation/link errors
     if (bufferingReport.hasMessages())
