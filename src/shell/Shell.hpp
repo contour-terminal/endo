@@ -160,6 +160,17 @@ class Shell final: public SignalCallback
         return _completerFunctions;
     }
 
+    /// @brief Wires up the interactive completion subsystem for tests.
+    ///
+    /// Ensures the @ref completer is created and its providers registered (as the
+    /// interactive REPL loop would), so a test can drive the full completion path via
+    /// `completer->complete(...)` without entering the REPL. No-op after the first call.
+    void ensureCompleterReadyForTest()
+    {
+        ensureInteractiveReady();
+        loadCompleters();
+    }
+
     /// @brief Called when the working directory changes, to load/unload directory configs.
     void onDirectoryChanged();
 

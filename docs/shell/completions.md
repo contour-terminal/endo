@@ -150,7 +150,10 @@ the same list -- plain strings are treated as description-less entries.
 !!! tip
     The `prefix` is used by endo's fuzzy matcher to filter and rank results. You do not
     need to filter by prefix yourself -- just return all candidates for the current
-    argument position and let endo handle the matching.
+    argument position and let endo handle the matching. Candidates that start with the
+    typed prefix are always ranked ahead of looser fuzzy (subsequence) matches, so a
+    large list -- e.g. every package name -- narrows to the expected prefix matches
+    first.
 
 ### Full Example
 

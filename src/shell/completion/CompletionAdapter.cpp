@@ -7,6 +7,25 @@
 namespace endo
 {
 
+namespace
+{
+    /// @brief Score floor added to prefix matches so they always outrank fuzzy-only
+    /// matches, regardless of the per-run/word-start bonuses fuzzy scoring accumulates.
+    ///
+    /// Without a tier separation, a scattered subsequence match against a long
+    /// hyphenated candidate can outscore a genuine prefix match: e.g. completing
+    /// `plasma-` against a package list, `perl-Lingua-Stem-Snowball-Da` matches the
+    /// subsequence p·l·a·s·m·a·- and earns enough consecutive/word-start bonus to rank
+    /// above `plasma-activities`. Users (and every other shell) expect prefix matches
+    /// first; fuzzy matches are a fallback for when few or no prefixes match. This tier
+    /// guarantees that ordering while leaving the intra-tier fuzzy ranking intact.
+    ///
+    /// The value dwarfs the largest reachable fuzzy bonus (base score plus
+    /// maxMatchPercentBonus + N*consecutiveBonus + N*wordStartBonus for any realistic
+    /// candidate length), so no fuzzy match can cross into the prefix tier.
+    constexpr int PrefixTierOffset = 100000;
+} // namespace
+
 std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandidate> const& candidates,
                                                    std::string_view prefix,
                                                    int baseScore)
@@ -45,7 +64,12 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
         {
             score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
             if (isPrefixMatch)
-                score += fuzzyConfig.prefixMatchBonus;
+            {
+                // Lift genuine prefix matches into a dedicated tier above every fuzzy
+                // match, so a scattered subsequence hit on a long candidate can never
+                // displace a shorter prefix match under the result cap.
+                score += fuzzyConfig.prefixMatchBonus + PrefixTierOffset;
+            }
         }
         else
         {

@@ -2673,6 +2673,63 @@ TEST_CASE("shell.completer.rpm_family_shared_helpers")
     CHECK(rpmQuery.errors.empty());
 }
 
+TEST_CASE("shell.completer.prefix_filters_scripted_package_list")
+{
+    // Regression: `dnf install plasma-<TAB>` surfaced completions that did NOT start
+    // with the typed prefix (e.g. "perl-Lingua-Stem-Snowball-Da"), and the real
+    // "plasma-*" packages were buried or dropped by the 50-result cap. Root cause: a
+    // scattered subsequence match (p·l·a·s·m·a·- inside a long hyphenated name) earned
+    // enough consecutive/word-start fuzzy bonus to OUTSCORE a genuine prefix match. We
+    // drive the full Completer path (not executeCompleterFunction, which bypasses
+    // scoring) with a fixed in-process package list so the assertion is deterministic
+    // and independent of the host's dnf database.
+    //
+    // pkgRegistry is declared before `shell` so it outlives the completer that stores
+    // it by reference (locals destruct in reverse declaration order).
+    endo::CompleterFunctionRegistry pkgRegistry;
+    pkgRegistry.registerFunction("pkgtool", "pkgtool_complete");
+
+    TestShell shell;
+    shell.shell.ensureCompleterReadyForTest();
+    REQUIRE(shell.shell.completer != nullptr);
+
+    // Register a completer that mirrors dnf.endo's shape: it ignores `prefix` and
+    // returns a large list. The NOISE entries are crafted to contain "plasma-" as a
+    // scattered subsequence (like the real "perl-Lingua-Stem-Snowball-Da"), so under
+    // the buggy scoring they would crowd out — and even rank above — the true prefix
+    // matches. The genuine PREFIX matches are few (only 5) so a broken cap/order would
+    // visibly drop them.
+    shell.shell.completer->addProvider(std::make_unique<endo::ScriptedCompleter>(
+        pkgRegistry,
+        [](std::string_view /*funcName*/,
+           std::vector<std::string> const& /*args*/,
+           std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+            std::vector<endo::CollectedCompletion> pkgs;
+            pkgs.reserve(2005);
+            // 2000 noise packages, each a subsequence match for "plasma-".
+            for (auto const i: std::views::iota(0, 2000))
+                pkgs.push_back({ .text = "perl-Plugin-Async-Metadata-" + std::to_string(i) });
+            // 5 genuine prefix matches.
+            for (auto const& name:
+                 { "plasma-desktop", "plasma-workspace", "plasma-nm", "plasma-pa", "plasma-systemmonitor" })
+                pkgs.push_back({ .text = name });
+            return { .completions = std::move(pkgs), .errors = {} };
+        }));
+
+    auto const input = std::string { "pkgtool install plasma-" };
+    auto const results = shell.shell.completer->complete(input, input.size());
+
+    INFO("result count: " << results.size());
+    if (!results.empty())
+        INFO("first result: " << results.front().text);
+    REQUIRE(results.size() >= 5);
+
+    // The five genuine prefix matches must occupy the top slots, ahead of every
+    // scattered fuzzy match.
+    for (auto const i: std::views::iota(0, 5))
+        CHECK(results[static_cast<size_t>(i)].text.starts_with("plasma-"));
+}
+
 // ============================================================================
 // Process Substitution
 // ============================================================================
