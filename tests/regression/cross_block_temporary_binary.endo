@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A temporary defined before a branch (?|) and used after it must survive.
+#   Regression: the target code generator discarded such cross-block temporaries at a
+#   basic-block boundary, so a chained binary like `a + b + (opt ?| d)` crashed codegen.
+#   Fixed by the reg2mem materialization pass.
+# expect: a-X
+
+let r = "a" + "-" + (head ["X"; "Y"] ?| "z")
+
+println r

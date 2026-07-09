@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Same reg2mem regression, but with the branchy sub-expression as a function
+#   argument inside a mapped lambda (exercises the CallInstr path, not just binary ops).
+# expect: 2
+
+let build n =
+    (string n) + "=" + (string (head ["v"] ?| ""))
+
+let acc = map build ["x"; "y"]
+
+println (length acc)

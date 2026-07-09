@@ -31,4 +31,12 @@ bool mergeSameBlocks(IRFunction* function);
  */
 bool eliminateUnusedBlocks(IRFunction* function);
 
+/**
+ * Promotes SSA values that are used outside their defining basic block into allocas
+ * (store after definition, reload at each using block). The target code generator only
+ * preserves allocas across block boundaries, so this is a required lowering step (not an
+ * optimization) and must run for every function before target code generation.
+ */
+bool materializeCrossBlockValues(IRFunction* function);
+
 } // namespace CoreVM::transform
