@@ -2730,6 +2730,31 @@ TEST_CASE("shell.completer.prefix_filters_scripted_package_list")
         CHECK(results[static_cast<size_t>(i)].text.starts_with("plasma-"));
 }
 
+TEST_CASE("shell.completer.loadCompleters_is_idempotent")
+{
+    // Regression: loadCompleters() unconditionally added a ScriptedCompleter provider and
+    // recreated the persistent cache each call. A second call (a re-run of interactive
+    // init, or ensureCompleterReadyForTest followed by another loadCompleters) added a
+    // duplicate provider — running the scripted completer twice. Registering a completer
+    // then readying twice must leave exactly one scripted provider.
+    TestShell shell;
+
+    // Register a scripted completer so the guarded provider-registration block runs.
+    shell(R"(
+        let demo_complete args prefix = ["alpha"; "beta"]
+        Completion.register "demozzz" demo_complete
+    )");
+    CHECK(shell.exitCode == 0);
+
+    shell.shell.ensureCompleterReadyForTest();
+    REQUIRE(shell.shell.completer != nullptr);
+    auto const countAfterFirst = shell.shell.completer->providerCount();
+
+    // A second ready/load must not add another ScriptedCompleter.
+    shell.shell.ensureCompleterReadyForTest();
+    CHECK(shell.shell.completer->providerCount() == countAfterFirst);
+}
+
 // ============================================================================
 // Process Substitution
 // ============================================================================

@@ -1099,8 +1099,15 @@ void Shell::loadCompleters()
     // is not (e.g. non-interactive use, or a test invoking completer functions
     // directly), the functions are still loaded above and remain callable via
     // executeCompleterFunction — only the interactive provider is skipped.
-    if (completer && !_completerFunctions.commands().empty())
+    //
+    // Register at most once: addProvider does not de-duplicate, so a second call (a
+    // re-run of interactive init, or a test's ensureCompleterReadyForTest followed by
+    // another loadCompleters) would otherwise add a duplicate ScriptedCompleter — running
+    // the scripted completer twice — and discard the existing _completionCache.
+    if (completer && !_scriptedCompleterRegistered && !_completerFunctions.commands().empty())
     {
+        _scriptedCompleterRegistered = true;
+
         // Persistent (L2) cache under the user's XDG cache directory, so scripted
         // package lists (dnf/rpm) survive shell restarts. All I/O flows through the
         // injected FileSystem. If the cache home can't be resolved, run without L2
@@ -1112,13 +1119,21 @@ void Shell::loadCompleters()
                     std::make_unique<FileSystemCompletionCache>(_fs, *cacheHome / "endo" / "completions");
         }
 
-        completer->addProvider(std::make_unique<ScriptedCompleter>(
+        auto scripted = std::make_unique<ScriptedCompleter>(
             _completerFunctions,
             [this](std::string_view funcName, std::vector<std::string> const& args, std::string_view prefix) {
                 return executeCompleterFunction(funcName, args, prefix);
             },
             _completionCache.get(),
-            _completionCacheConfig));
+            _completionCacheConfig);
+
+        // A cold fetch (no usable stale list) gets the tight cold budget; a refresh that
+        // can fall back to a stale list gets the larger overall budget. This flag is read
+        // in awaitSubstitutionPipeline when the completer's `$(...)` wait is bounded.
+        scripted->setPreFetchHook(
+            [this](bool hasStaleFallback) { _completionColdFetch = !hasStaleFallback; });
+
+        completer->addProvider(std::move(scripted));
     }
 }
 
@@ -1229,6 +1244,10 @@ void Shell::ensureInteractiveReady()
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);
     prompt.setFileSystem(&_fs);
+
+    // Re-stage keystrokes captured while a completion's subprocess ran (see
+    // awaitSubstitutionPipeline / takeCompletionPushback) so typed-ahead input is not lost.
+    prompt.setCompletionPushbackSource([this] { return takeCompletionPushback(); });
 }
 
 std::optional<std::string> Shell::invokePromptCallback(std::string const& functionName)

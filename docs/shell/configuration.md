@@ -244,12 +244,15 @@ is used instead. Aborted and timed-out fetches are never cached, so a cancelled
 completion does not suppress the next attempt.
 
 ```endo
-# Overall upper bound for a completion command (default: 3000 ms)
+# Budget for a completion fetch that has a still-usable cached list to fall back on
+# (a background refresh); waiting longer is cheap since a failure just serves the
+# cached data (default: 3000 ms).
 shell_completion_timeout <- 5000
 
-# Shorter budget for a cold/uncached fetch, so the first Tab stays snappy
-# (default: 1000 ms). The effective deadline is the smaller of the two positive
-# budgets; 0 disables that budget.
+# Tighter budget for a cold fetch with no cached fallback, so the first Tab stays
+# snappy (default: 1000 ms). A cold fetch uses this budget; a refresh with a stale
+# fallback uses shell_completion_timeout. 0 disables the chosen budget (falling back
+# to the other; both 0 → Ctrl+C only).
 shell_completion_cold_timeout <- 1500
 
 # Disable both timeouts — rely on Ctrl+C only

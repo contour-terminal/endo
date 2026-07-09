@@ -831,7 +831,8 @@ class Shell final: public SignalCallback
         SubstitutionCapture(SubstitutionCapture&& other) noexcept:
             fd(std::exchange(other.fd, InvalidHandle)),
             pipe(std::move(other.pipe)),
-            savedStdout(std::exchange(other.savedStdout, InvalidHandle))
+            savedStdout(std::exchange(other.savedStdout, InvalidHandle)),
+            aborted(std::exchange(other.aborted, false))
         {
         }
 
@@ -845,6 +846,7 @@ class Shell final: public SignalCallback
                 fd = std::exchange(other.fd, InvalidHandle);
                 pipe = std::move(other.pipe);
                 savedStdout = std::exchange(other.savedStdout, InvalidHandle);
+                aborted = std::exchange(other.aborted, false);
             }
             return *this;
         }
@@ -875,11 +877,40 @@ class Shell final: public SignalCallback
     std::chrono::milliseconds _completionTimeoutMs { 3000 };
 
     /// Shorter budget applied to a cold/uncached completer fetch so the first Tab of a
-    /// session stays snappy (fish caps this at ~1s). The effective completion-wait
-    /// deadline is the smaller of the two positive budgets (0 = that budget disabled).
+    /// session stays snappy (fish caps this at ~1s). Governs the fetch only when no
+    /// usable cached list exists (@ref _completionColdFetch); a refresh that has a stale
+    /// list to fall back on uses the larger @ref _completionTimeoutMs instead.
     /// Configurable via the `shell_completion_cold_timeout` property (ms).
     std::chrono::milliseconds _completionColdTimeoutMs { 1000 };
 
+    /// True while the in-flight completer fetch has no usable cached fallback (a cold
+    /// fetch), so @ref awaitSubstitutionPipeline applies the tighter cold budget. Set by
+    /// the ScriptedCompleter's pre-fetch hook (see loadCompleters); false for a refresh
+    /// that can fall back to a stale list, which is allowed the larger overall budget.
+    bool _completionColdFetch = true;
+
+    /// Guards @ref loadCompleters so the interactive ScriptedCompleter provider (and its
+    /// @ref _completionCache) are created exactly once, even if loadCompleters runs again.
+    bool _scriptedCompleterRegistered = false;
+
+    /// Typed-ahead bytes the completion abort-key watcher read off the TTY while a
+    /// tab-completion ran. Accumulated in @ref awaitSubstitutionPipeline and re-staged
+    /// into the terminal input by the prompt after the completion, so keystrokes typed
+    /// during a completion are not swallowed. Drained via @ref takeCompletionPushback.
+    std::string _completionPushbackBytes;
+
+  public:
+    /// @brief Takes and clears the typed-ahead bytes captured during the last completion.
+    ///
+    /// The prompt calls this after driving a completion and re-stages the returned bytes
+    /// into its terminal input (via @c TerminalInput::pushBack) so keystrokes the user
+    /// typed while the completion's subprocess ran are decoded as normal input instead of
+    /// being lost.
+    ///
+    /// @return The captured bytes (empty if none), leaving the buffer cleared.
+    [[nodiscard]] std::string takeCompletionPushback() { return std::exchange(_completionPushbackBytes, {}); }
+
+  private:
     /// Outcome of the most recent completer-driven command substitution wait.
     /// @ref awaitSubstitutionPipeline sets it to Aborted/TimedOut when the wait is
     /// cancelled; @ref executeCompleterFunction reads it (and resets it to Ok before

@@ -21,7 +21,6 @@
     #include <tui/runtime/TuiRuntime.hpp>
     #include <tui/runtime/WithTimeout.hpp>
 
-    #include <algorithm>
     #include <chrono>
     #include <csignal>
     #include <cstdint>
@@ -47,6 +46,13 @@ void Shell::builtinSubstStart(CoreVM::Params&)
     // substitutions like `$(echo $(rpm -qa))` correct: the inner capture is
     // popped on completion, restoring the outer capture untouched. The abort flag
     // lives on the capture, so it is per-substitution by construction.
+    //
+    // The capture stays on the stack even if sink creation below fails: the IR emits
+    // subst_start / command / subst_end unconditionally, so a start that pop_back()'d
+    // itself on failure would leave the matching subst_end operating on the OUTER
+    // capture — restoring the outer's saved stdout early and popping it. Instead we leave
+    // an un-redirected capture (fd/pipe unset) that subst_end reads as empty and pops as
+    // its own, keeping every start balanced with its end.
     auto& capture = _substitutionCaptures.emplace_back();
 
     // Capture into an anonymous temp file rather than a pipe: a regular file has
@@ -54,17 +60,21 @@ void Shell::builtinSubstStart(CoreVM::Params&)
     // matter how much they emit. A pipe-backed capture deadlocks at ~64KB because
     // the writer blocks while the shell has not yet drained the reader.
 #if !defined(_WIN32)
-    auto const tmpDir = []() -> std::string {
-        if (auto const* t = std::getenv("TMPDIR"); t != nullptr && *t != '\0')
-            return t;
+    // Resolve the temp directory through the injected environment provider (not raw
+    // getenv), so it honors a test's TestEnvironmentProvider and the shell's own env.
+    auto const tmpDir = [this]() -> std::string {
+        if (auto const t = _env.get("TMPDIR"); t && !t->empty())
+            return *t;
         return "/tmp";
     }();
     auto templ = tmpDir + "/endo-subst-XXXXXX";
     auto const fd = ::mkstemp(templ.data());
     if (fd < 0)
     {
+        // No writable temp dir (read-only/full /tmp, restrictive sandbox): leave the
+        // capture un-redirected. The command runs writing to the real stdout and the
+        // substitution yields empty, rather than corrupting the outer capture.
         error("Failed to create temporary file for command substitution: {}", std::strerror(errno));
-        _substitutionCaptures.pop_back();
         return;
     }
     // Unlink immediately: the fd keeps the file alive until it is closed, and no
@@ -81,8 +91,8 @@ void Shell::builtinSubstStart(CoreVM::Params&)
     auto pipeResult = createPipe();
     if (!pipeResult.has_value())
     {
+        // Leave the capture un-redirected (see the POSIX branch): subst_end pops its own.
         error("Failed to create pipe for command substitution: {}", toString(pipeResult.error()));
-        _substitutionCaptures.pop_back();
         return;
     }
     capture.pipe = std::move(pipeResult.value());
@@ -101,6 +111,23 @@ void Shell::builtinSubstEnd(CoreVM::Params& context)
     }
 
     auto& capture = _substitutionCaptures.back();
+
+    // A capture whose sink creation failed in subst_start never redirected stdout (fd
+    // and pipe both unset, savedStdout still InvalidHandle). Restoring from it would
+    // clobber the live defaultStdoutFd with InvalidHandle. Detect that case, yield empty,
+    // and pop this (our own) capture — leaving any outer capture's redirection intact.
+#if !defined(_WIN32)
+    bool const sinkCreated = capture.fd != InvalidHandle;
+#else
+    bool const sinkCreated = static_cast<bool>(capture.pipe);
+#endif
+    if (!sinkCreated)
+    {
+        _substitutionCaptures.pop_back();
+        context.setResult(std::string {});
+        return;
+    }
+
     _currentPipelineBuilder.defaultStdoutFd = capture.savedStdout;
 
     std::string output;
@@ -179,8 +206,14 @@ namespace
 
     /// Reactor task that resolves when the abort key (Ctrl+C, 0x03) is read from
     /// @p ttyFd. Used as a @c whenAny arm against the child wait so Ctrl+C cancels an
-    /// in-flight completion. The terminal is in raw mode; bytes read here are dropped
-    /// (acceptable during a modal, short-lived completion).
+    /// in-flight completion.
+    ///
+    /// The terminal is in raw mode, so any keystrokes the user types while the completion
+    /// runs are read here. Rather than drop them (which swallowed the user's typed-ahead
+    /// input), every non-abort byte is appended to @p pushbackOut so the caller can
+    /// re-stage it into the terminal input after the completion finishes. Bytes at and
+    /// after the abort byte in the triggering read are discarded (they belong to the
+    /// cancel, not to typed-ahead input).
     ///
     /// Only Ctrl+C aborts — deliberately NOT Escape. An Escape byte can be a genuine
     /// cancel, but it is also the first byte of every arrow/function-key escape
@@ -190,7 +223,12 @@ namespace
     /// pressed while a Tab-completion is genuinely running, and Ctrl+C is the
     /// conventional, race-free cancel. Throws @c OperationCancelled if the child wins
     /// the race first (its @c waitReadable is cancelled).
-    coro::Task<void> watchTtyForAbortKey(tui::runtime::TuiRuntime* runtime, NativeHandle ttyFd)
+    ///
+    /// @param pushbackOut Buffer receiving the non-abort bytes read here (must outlive
+    ///                    the task).
+    coro::Task<void> watchTtyForAbortKey(tui::runtime::TuiRuntime* runtime,
+                                         NativeHandle ttyFd,
+                                         std::string* pushbackOut)
     {
         while (true)
         {
@@ -200,9 +238,13 @@ namespace
             if (n <= 0)
                 continue;
             for (auto const i: std::views::iota(0uz, static_cast<std::size_t>(n)))
+            {
                 if (buffer.at(i) == 0x03)
-                    co_return; // Ctrl+C seen: win the race
-            // Other bytes (including ESC-prefixed cursor keys): dropped; keep watching.
+                    co_return; // Ctrl+C seen: win the race (bytes from here on are dropped)
+                // Typed-ahead byte (a character, or an ESC-prefixed cursor key): preserve
+                // it so it is not lost, to be re-fed to the line editor after completion.
+                pushbackOut->push_back(buffer.at(i));
+            }
         }
     }
 
@@ -220,16 +262,18 @@ namespace
     }
 
     /// Races the pipeline wait against the abort-key watcher.
+    /// @param pushbackOut Buffer receiving typed-ahead bytes read by the abort watcher.
     /// @return The winning arm's index: 0 if the children finished first, 1 if an
     ///         abort key won (the `whenAny` order below).
     coro::Task<std::size_t> raceChildrenVsAbort(tui::runtime::TuiRuntime* runtime,
                                                 platform::ProcessManager* pm,
                                                 std::vector<platform::ProcessId> ids,
                                                 NativeHandle ttyFd,
-                                                int* exitCodeOut)
+                                                int* exitCodeOut,
+                                                std::string* pushbackOut)
     {
         co_return co_await coro::whenAny(waitPipelineChildren(runtime, pm, ids, exitCodeOut),
-                                         watchTtyForAbortKey(runtime, ttyFd));
+                                         watchTtyForAbortKey(runtime, ttyFd, pushbackOut));
     }
 } // namespace
 
@@ -316,27 +360,37 @@ int Shell::awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, Process
     int childExitCode = _exitCode;
     Outcome outcome = Outcome::Exited;
 
-    // Effective deadline: the smaller of the two positive budgets (0 = that budget
-    // disabled). A completer subprocess only reaches this wait on a cold/stale fetch
-    // (fresh cache hits never invoke the completer), so the tighter cold-fetch budget
-    // is what keeps a first-Tab `$(dnf repoquery)` snappy; the overall timeout is the
-    // upper bound and dominates only if set below the cold budget. Both 0 → abort-key
-    // only. See shell_completion_timeout / shell_completion_cold_timeout.
+    // Effective deadline. A cold fetch (no usable cached list to fall back on) uses the
+    // tighter cold budget so a first-Tab `$(dnf repoquery)` stays snappy; a refresh that
+    // has a stale list to fall back on uses the larger overall budget, since waiting
+    // longer is cheap when a failure just serves the stale data. A 0 budget disables
+    // that budget; both 0 → abort-key only. This is what makes both knobs effective:
+    // previously the unconditional min() pinned every fetch to the cold budget, leaving
+    // shell_completion_timeout inert. See shell_completion_timeout /
+    // shell_completion_cold_timeout and ScriptedCompleter's pre-fetch hook.
     auto const effectiveTimeout = [this] {
         auto const overall = _completionTimeoutMs;
         auto const cold = _completionColdTimeoutMs;
-        if (overall.count() <= 0)
-            return cold;
-        if (cold.count() <= 0)
-            return overall;
-        return std::min(overall, cold);
+        auto const budget = _completionColdFetch ? cold : overall;
+        auto const other = _completionColdFetch ? overall : cold;
+        if (budget.count() > 0)
+            return budget;
+        // Chosen budget disabled: fall back to the other one (0 → abort-key only).
+        return other;
     }();
+
+    // Typed-ahead bytes the abort watcher reads off the TTY while the completion runs are
+    // accumulated here (not dropped) and re-staged into the terminal input after the wait,
+    // so the user's keystrokes during a completion are not lost.
+    std::string& pushback = _completionPushbackBytes;
 
     if (effectiveTimeout.count() > 0)
     {
         // Bound the child-vs-abort race by the timeout.
         auto const finished = runtime.blockOn(tui::runtime::withTimeout(
-            &runtime, raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode), effectiveTimeout));
+            &runtime,
+            raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode, &pushback),
+            effectiveTimeout));
         if (!finished.has_value())
             outcome = Outcome::TimedOut;
         else
@@ -345,12 +399,20 @@ int Shell::awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, Process
     else
     {
         // Timeout disabled (0): race only children vs the abort key.
-        auto const winner = runtime.blockOn(raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode));
+        auto const winner =
+            runtime.blockOn(raceChildrenVsAbort(&runtime, pm, pids, ttyFd, &childExitCode, &pushback));
         outcome = (winner == 0) ? Outcome::Exited : Outcome::Aborted;
     }
 
     if (outcome == Outcome::Exited)
     {
+        // A successful substitution clears any Aborted/TimedOut left by an EARLIER
+        // `$(...)` in the same completer body. Without this, a completer that runs two
+        // substitutions where the first times out but the second succeeds would keep the
+        // stale TimedOut status, and its usable final result would be wrongly treated as
+        // non-cacheable (forcing a re-fetch on every Tab). The status must reflect the
+        // outcome that actually produced the completions.
+        _lastCompletionOutcome = CompleterExecutionStatus::Ok;
         _exitCode = childExitCode;
         return _exitCode;
     }
