@@ -140,7 +140,10 @@ TEST_CASE("FilesystemImageProvider.relative_path_resolves_against_baseDir")
     auto const result = provider.prepare("img/logo.png", std::nullopt);
 
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().find("/base/dir/img/logo.png") != std::string::npos);
+    // The provider joins with the platform's preferred separator ('\' on Windows),
+    // so the expected path must be built the same way.
+    auto const expected = (std::filesystem::path("/base/dir") / "img/logo.png").string();
+    CHECK(result.error().find(expected) != std::string::npos);
 }
 
 TEST_CASE("FilesystemImageProvider.absolute_path_is_not_joined_to_baseDir")

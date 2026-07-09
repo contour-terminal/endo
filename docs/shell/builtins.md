@@ -354,15 +354,12 @@ cat [OPTIONS] [FILE...]
 ```
 
 **Description:** Reads files sequentially and writes their contents to standard output. If
-no files are given (or when FILE is `-`), reads from standard input. When output goes to a
-terminal, syntax highlighting is applied automatically based on the file name.
+no files are given (or when FILE is `-`), reads from standard input.
 
-Highlighting is supported for C/C++ (and C-family languages such as JavaScript, TypeScript,
-Rust, Go), Python, Bash, CMake, Markdown, JSON, YAML, x86 assembly, Git diffs, PowerShell
-(`.ps1`, `.psm1`, `.psd1`), Windows CMD/batch (`.cmd`, `.bat`), XML and XML-based dialects
-(`.xml`, `.props`, `.csproj`, `.targets`, `.vcxproj`, `.xaml`, `.svg`, …), INI (`.ini`), and
-Endo (`.endo`). A few well-known files are recognized by name rather than extension: `.clang-format`,
-`.clang-tidy`, and `.endo-format` are highlighted as YAML, and `.editorconfig` as INI.
+When the output goes to a terminal, `cat` renders rather than dumps: markdown files become
+formatted documents, image files become Sixel graphics, and everything else is
+syntax-highlighted. When the output is redirected or piped, the file's bytes are written
+verbatim, so `cat file > copy` and `cat file | grep x` behave exactly as they always have.
 
 **Options:**
 
@@ -375,7 +372,62 @@ Endo (`.endo`). A few well-known files are recognized by name rather than extens
 | `-T` | `--show-tabs` | Display TAB characters as `^I` |
 | `-A` | `--show-all` | Equivalent to `-ET` |
 | `-r` | `--range START..END` | Show only lines in the given range |
+| `-c` | `--columns N` | Target image width in terminal columns |
+| `-R` | `--rows N` | Target image height in terminal rows |
+| | `--indent N` | Left margin for rendered markdown, in columns (default 1) |
+| | `--raw` | Disable all rendering (markdown, images, highlighting) |
 | `-h` | `--help` | Display help and exit |
+
+### Markdown rendering
+
+`cat` on a `.md` or `.markdown` file renders the document:
+
+- **Tables** are drawn with box-drawing borders, honoring column alignment.
+- **Links** become clickable via OSC 8 hyperlinks. Only absolute URIs are hyperlinked;
+  relative paths (`LICENSE`) and fragments (`#install`) are shown as styled text, since a
+  terminal cannot resolve them. Autolinks (`<https://example.com>`, `<user@example.com>`)
+  are hyperlinked too, but bare URLs in prose are not.
+- **Titles** use DEC double-width and double-height line attributes: `#` headings are drawn
+  double-height, `##` double-width.
+- **Centered blocks** follow the HTML that GitHub honors: `<div align="center">`,
+  `<p align="center">`, `<h1 align="center">`…`<h6 align="center">`, and the legacy
+  `<center>`. `align="left"` and `align="right"` work as well. `<b>`/`<strong>`,
+  `<i>`/`<em>` and `<br>` are understood inside them.
+- **Inline HTML** `<a href="…">…</a>` renders as a hyperlink and `<img alt="…">` as its
+  alt text, anywhere in the document. HTML inside a code span or fenced block stays
+  literal.
+- **Images** embed as Sixel graphics (see below).
+
+Rendered documents carry a one-column left margin so the first word of each line does not
+sit against the terminal edge. `--indent N` changes it; `--indent 0` removes it. The margin
+is subtracted from the width available to content, so centering and table widths account
+for it. Under the double-width titles a single indent cell occupies two columns, since DEC
+line attributes widen every cell on the line.
+
+Rendering is suppressed by `--raw`, by redirecting or piping the output, and by any
+line-processing flag (`-n`, `-b`, `-s`, `-E`, `-T`, `-r`) — those ask for a literal view of
+the source text, which a rendered document cannot provide.
+
+### Inline images
+
+An image alone on its line — written as `![alt](logo.png)` or `<img src="logo.png">` — is
+decoded and drawn as a Sixel image. The source path is resolved relative to the **document**,
+not the working directory. An `<img width="N">` attribute sets the width in pixels, clamped
+to the terminal width; images are never scaled up beyond their natural size.
+
+Supported formats are exactly those `cat` accepts for image files: PNG, JPEG, GIF, BMP, TGA,
+PSD, HDR and PNM/PGM/PPM. **SVG and WebP are not supported** — the bundled decoder cannot
+read them, which matters because README badges are usually SVG. Animated GIFs show their
+first frame only.
+
+An image falls back to rendering its alt text when the terminal lacks Sixel support, when the
+source is remote (`https://…`, `data:…`), when the file is missing or undecodable, or when
+its format is unsupported. Images that share a line with other text, or that appear inside a
+table cell or list item, always render as alt text.
+
+Sixel support is detected once per session from the terminal's Primary Device Attributes
+(DA1) response. Set `ENDO_SIXEL=0` to disable inline images without disabling the rest of the
+markdown rendering, or `ENDO_SIXEL=1` to force them on.
 
 **Range syntax:**
 
@@ -386,15 +438,28 @@ Endo (`.endo`). A few well-known files are recognized by name rather than extens
 When `-n` or `-b` is combined with `--range`, line numbers reflect the original file
 positions (not re-numbered from 1).
 
+**Syntax highlighting** is supported for C/C++ (and C-family languages such as JavaScript,
+TypeScript, Rust, Go), Python, Bash, CMake, JSON, YAML, x86 assembly, Git diffs, PowerShell
+(`.ps1`, `.psm1`, `.psd1`), Windows CMD/batch (`.cmd`, `.bat`), XML and XML-based dialects
+(`.xml`, `.props`, `.csproj`, `.targets`, `.vcxproj`, `.xaml`, `.svg`, …), INI (`.ini`), and
+Endo (`.endo`). A few well-known files are recognized by name rather than extension:
+`.clang-format`, `.clang-tidy`, and `.endo-format` are highlighted as YAML, and
+`.editorconfig` as INI.
+
 **Examples:**
 
 ```endo
-cat README.md
+cat README.md                  # rendered: tables, links, titles, images
+cat --indent 4 README.md        # wider left margin
+cat --raw README.md            # the markdown source, verbatim
+cat README.md | less           # plain bytes, no escapes
 cat file1.txt file2.txt > combined.txt
 echo "hello" | cat
 cat -n script.sh
 cat --range 10..20 main.cpp
 cat -nr 5..15 data.txt
+cat logo.png                   # Sixel image
+cat -c 40 logo.png             # scaled to 40 columns wide
 ```
 
 ---
