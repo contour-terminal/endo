@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variables referenced only inside compound expressions (here list concatenation
+#   `@`) from within a function must also be captured. Same free-variable-collector gap as
+#   capture_in_fstring, exercised through a non-string node type.
+# expect: 3
+# mode: shell
+
+let prefix = ["a"]
+
+let combine () = prefix @ ["b"; "c"]
+
+println (length (combine ()))

@@ -1303,14 +1303,47 @@ std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
-    // Delegate AST analysis to the standalone utility
-    auto const freeNames = collectFreeVariableNames(
-        body,
-        boundNames,
-        [this](std::string const& name) { return lookupFSharpVariable(name) != nullptr; },
-        [this](std::string const& name) { return lookupFSharpFunction(name) != nullptr; });
+    auto const isInScope = [this](std::string const& name) {
+        return lookupFSharpVariable(name) != nullptr;
+    };
+    auto const isKnownFunction = [this](std::string const& name) {
+        return lookupFSharpFunction(name) != nullptr;
+    };
 
-    // Map returned names to their CoreVM storage values
+    // Direct free variables, plus the set of known functions this body references.
+    std::unordered_set<std::string> referencedFunctions;
+    auto freeNames =
+        collectFreeVariableNames(body, boundNames, isInScope, isKnownFunction, &referencedFunctions);
+
+    // Transitive captures: calling a closure lowers to passing that closure's captured
+    // variables as leading call arguments, so the caller must itself capture them to have
+    // them available in its own frame. Without this, the caller would try to load the
+    // callee's captures from another function's frame slots at runtime (an out-of-bounds
+    // LOAD). Expand over referenced known functions to a fixed point; the callee's own body
+    // is re-analyzed so this is independent of the order functions were compiled in.
+    std::unordered_set<std::string> visited;
+    std::vector<std::string> worklist(referencedFunctions.begin(), referencedFunctions.end());
+    while (!worklist.empty())
+    {
+        auto const fname = std::move(worklist.back());
+        worklist.pop_back();
+        if (!visited.insert(fname).second)
+            continue;
+        auto const it = _fsharpFunctions.find(fname);
+        if (it == _fsharpFunctions.end() || it->second.body == nullptr)
+            continue;
+
+        std::unordered_set<std::string> calleeReferences;
+        auto const calleeFree = collectFreeVariableNames(
+            it->second.body, it->second.parameters, isInScope, isKnownFunction, &calleeReferences);
+        for (auto const& name: calleeFree)
+            freeNames.insert(name);
+        for (auto const& callee: calleeReferences)
+            if (!visited.contains(callee))
+                worklist.push_back(callee);
+    }
+
+    // Map returned names to their CoreVM storage values in the current scope.
     std::unordered_map<std::string, CoreVM::Value*> freeVars;
     for (auto const& name: freeNames)
         if (auto* storage = lookupFSharpVariable(name))
@@ -6761,9 +6794,19 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Non-recursive: inline the function body with the piped value as argument
     pushFSharpScope();
 
-    // Re-bind captured variables from the closure
+    // Re-bind captured variables from the closure. When inlining inside another function,
+    // that enclosing function has itself (transitively) captured these names, so their live
+    // storage is the enclosing frame's capture slot — not the binding recorded at this
+    // function's definition site (which may live in an outer function's frame and would be
+    // an out-of-bounds load here). Prefer the in-scope storage, mirroring the compiled-call path.
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
+    {
+        CoreVM::Value* storage = capStorage;
+        if (_compilingFunction)
+            if (auto* inScope = lookupFSharpVariable(capName))
+                storage = inScope;
+        bindFSharpVariable(capName, storage, func->capturedMutables.contains(capName));
+    }
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -7959,9 +8002,19 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     pushFSharpScope();
 
-    // Re-bind captured variables from the closure
+    // Re-bind captured variables from the closure. When inlining inside another function,
+    // that enclosing function has itself (transitively) captured these names, so their live
+    // storage is the enclosing frame's capture slot — not the binding recorded at this
+    // function's definition site (which may live in an outer function's frame and would be
+    // an out-of-bounds load here). Prefer the in-scope storage, mirroring the compiled-call path.
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
+    {
+        CoreVM::Value* storage = capStorage;
+        if (_compilingFunction)
+            if (auto* inScope = lookupFSharpVariable(capName))
+                storage = inScope;
+        bindFSharpVariable(capName, storage, func->capturedMutables.contains(capName));
+    }
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
