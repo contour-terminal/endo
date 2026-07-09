@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <ranges>
 
 #include "CompleterFunctionRegistry.hpp"
 #include "CompletionCache.hpp"
@@ -422,6 +423,131 @@ TEST_CASE("ScriptedCompleter.aborted_fetch_falls_back_to_stale_cache")
     auto r2 = completer.complete(ctx);
     CHECK(callCount == 2);               // it did attempt a refresh
     CHECK(hasCompletion(r2, "firefox")); // and fell back to the stale entry, not empty
+}
+
+TEST_CASE("ScriptedCompleter.backward_clock_jump_does_not_pin_entry_as_fresh")
+{
+    // Regression: freshness used a raw `now - timestamp`, which goes negative when the
+    // wall clock steps backward (NTP correction, an L2 file from a machine whose clock
+    // ran ahead). A negative age slipped under every TTL, pinning a stale list as fresh
+    // forever. A future-stamped entry must NOT suppress a refetch.
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        return { .completions = { cc("firefox") }, .errors = {} };
+    };
+
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback, nullptr, {}, [&fakeNow] { return fakeNow; });
+
+    auto ctx = makeContext("dnf install ", "", "dnf");
+    (void) completer.complete(ctx); // caches at t=1'000'000
+    CHECK(callCount == 1);
+
+    // Wall clock jumps backward: the cached entry now appears to be in the future.
+    fakeNow -= std::chrono::seconds(10'000);
+    (void) completer.complete(ctx);
+    CHECK(callCount == 2); // must refetch, not serve the "永远新鲜" entry
+}
+
+TEST_CASE("ScriptedCompleter.fresh_ttl_above_hard_ttl_is_clamped")
+{
+    // Regression: with freshTtl configured larger than hardTtl, an entry older than
+    // hardTtl was still served as "fresh" (isFresh was checked before the hardTtl
+    // ceiling, and lookup applied no TTL). The fresh window must be clamped to hardTtl.
+    int callCount = 0;
+    auto callback = [&callCount](std::string_view /*funcName*/,
+                                 std::vector<std::string> const& /*args*/,
+                                 std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        ++callCount;
+        return { .completions = { cc("firefox") }, .errors = {} };
+    };
+
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    endo::ScriptedCompleterConfig config;
+    config.freshTtl = std::chrono::hours { 24 }; // > hardTtl (6h): misconfiguration
+    config.hardTtl = std::chrono::hours { 6 };
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback, nullptr, config, [&fakeNow] { return fakeNow; });
+
+    auto ctx = makeContext("dnf install ", "", "dnf");
+    (void) completer.complete(ctx);
+    CHECK(callCount == 1);
+
+    // 7h later: past hardTtl. Despite freshTtl=24h, this must trigger a refetch.
+    fakeNow += std::chrono::hours { 7 };
+    (void) completer.complete(ctx);
+    CHECK(callCount == 2);
+}
+
+TEST_CASE("ScriptedCompleter.L1_cache_is_bounded_when_all_entries_are_young")
+{
+    // Regression: the size cap only evicted entries older than hardTtl. A burst of many
+    // distinct completions all younger than 6h evicted nothing, so L1 grew without
+    // bound. Completing many distinct commands within the fresh window must keep the map
+    // bounded by evicting the oldest entries.
+    auto callback = [](std::string_view /*funcName*/,
+                       std::vector<std::string> const& args,
+                       std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        // Return a distinct result per distinct arg so each key caches separately.
+        return { .completions = { cc(args.empty() ? "x" : args[0]) }, .errors = {} };
+    };
+
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("tool", "tool_complete");
+    endo::ScriptedCompleter completer(registry, callback, nullptr, {}, [&fakeNow] { return fakeNow; });
+
+    // Complete 100 distinct arg positions, each a few seconds apart but all well within
+    // freshTtl/hardTtl. Without the oldest-eviction fix the L1 map would reach 100.
+    for (auto const i: std::views::iota(0, 100))
+    {
+        auto const arg = "pkg" + std::to_string(i);
+        auto ctx = makeContext("tool " + arg + " ", "", "tool");
+        (void) completer.complete(ctx);
+        fakeNow += std::chrono::seconds { 1 };
+    }
+
+    CHECK(completer.cacheSizeForTest() <= endo::ScriptedCompleter::maxCacheEntriesForTest());
+}
+
+TEST_CASE("ScriptedCompleter.prefetch_hook_reports_stale_fallback")
+{
+    // The pre-fetch hook tells the shell whether a usable stale entry exists, so it can
+    // pick the cold (no fallback) vs. overall (has fallback) fetch budget. A cold fetch
+    // reports false; a refresh past freshTtl but within hardTtl reports true.
+    auto callback = [](std::string_view /*funcName*/,
+                       std::vector<std::string> const& /*args*/,
+                       std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+        return { .completions = { cc("firefox") }, .errors = {} };
+    };
+
+    auto fakeNow = std::chrono::system_clock::time_point(std::chrono::seconds(1'000'000));
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("dnf", "dnf_complete");
+    endo::ScriptedCompleter completer(registry, callback, nullptr, {}, [&fakeNow] { return fakeNow; });
+
+    std::vector<bool> hadFallback;
+    completer.setPreFetchHook([&](bool hasStaleFallback) { hadFallback.push_back(hasStaleFallback); });
+
+    auto ctx = makeContext("dnf install ", "", "dnf");
+
+    // First fetch: cold, no fallback.
+    (void) completer.complete(ctx);
+    REQUIRE(hadFallback.size() == 1);
+    CHECK_FALSE(hadFallback[0]);
+
+    // Advance past freshTtl (250s) but within hardTtl (6h): a refresh with a stale
+    // fallback available.
+    fakeNow += std::chrono::seconds { 300 };
+    (void) completer.complete(ctx);
+    REQUIRE(hadFallback.size() == 2);
+    CHECK(hadFallback[1]);
 }
 
 TEST_CASE("ScriptedCompleter.persistent_cache_promotes_L2_hit_without_fetch")

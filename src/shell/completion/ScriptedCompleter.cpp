@@ -5,6 +5,9 @@
 
 #include <endo-language/ide/CompletionContext.hpp>
 
+#include <algorithm>
+#include <chrono>
+#include <ranges>
 #include <sstream>
 #include <utility>
 
@@ -15,6 +18,25 @@ namespace
 {
     /// Base fuzzy-scoring weight for scripted (enumerated data) completions.
     constexpr int ScriptedBaseScore = 60;
+
+    /// @brief Whether a cache entry of the given age still satisfies @p ttl.
+    ///
+    /// The timestamps come from a wall clock (@c system_clock, so the on-disk L2 cache
+    /// survives restarts), which is NOT monotonic: an NTP correction, a manual `date`, or
+    /// an L2 file written by a machine whose clock ran ahead can put @p timestamp in the
+    /// future, making a naive `now - timestamp` negative. A negative age would slip under
+    /// every TTL and pin a stale list as fresh indefinitely. We therefore treat a
+    /// future-stamped entry (negative age) as NOT satisfying any TTL: it forces a
+    /// refetch, while the raw age still lets the hard-TTL check keep it as a stale
+    /// fallback if that refetch fails.
+    ///
+    /// @param age The signed `now - timestamp`; may be negative under wall-clock skew.
+    /// @param ttl The window the entry must fall within.
+    /// @return True iff @p age is in the range [0, ttl).
+    bool withinTtl(std::chrono::system_clock::duration age, std::chrono::system_clock::duration ttl)
+    {
+        return age >= std::chrono::system_clock::duration::zero() && age < ttl;
+    }
 
     /// Converts cached completions into fuzzy-scoring candidates.
     std::vector<CompletionCandidate> toCandidates(std::vector<CollectedCompletion> const& results)
@@ -84,10 +106,24 @@ ScriptedCompleter::CacheEntry const& ScriptedCompleter::storeResult(
 {
     auto const now = _clock();
 
-    // Evict expired L1 entries when the map grows past its cap (keeps it bounded
-    // without a full LRU: anything older than hardTtl is dead weight anyway).
-    if (_cache.size() > MaxCacheEntries)
-        std::erase_if(_cache, [&](auto const& e) { return now - e.second.timestamp >= _config.hardTtl; });
+    // Keep the L1 map bounded. First drop anything past the hard TTL (dead weight). If
+    // that still leaves us over the cap — a burst of distinct completions all younger
+    // than hardTtl (6h) — evict the oldest entries by timestamp until we fit, so the map
+    // can never grow without bound (each entry can hold a hundreds-of-KB package list).
+    if (_cache.size() >= MaxCacheEntries)
+    {
+        std::erase_if(_cache,
+                      [&](auto const& e) { return !withinTtl(now - e.second.timestamp, _config.hardTtl); });
+
+        while (_cache.size() >= MaxCacheEntries)
+        {
+            auto const oldest =
+                std::ranges::min_element(_cache, {}, [](auto const& e) { return e.second.timestamp; });
+            if (oldest == _cache.end())
+                break;
+            _cache.erase(oldest);
+        }
+    }
 
     auto const [it, _] =
         _cache.insert_or_assign(key, CacheEntry { .results = std::move(results), .timestamp = now });
@@ -115,8 +151,15 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
 
     auto const now = _clock();
     auto const* const cached = lookup(cacheKey);
-    auto const withinHardTtl = cached && (now - cached->timestamp) < _config.hardTtl;
-    auto const isFresh = cached && (now - cached->timestamp) < _config.freshTtl;
+    // Clamp the fresh window to the hard ceiling: a misconfigured freshTtl > hardTtl must
+    // never let an entry past its staleness ceiling be served as fresh (which would also
+    // widen the wall-clock-skew damage hardTtl exists to bound). withinTtl rejects a
+    // negative age (future timestamp) so a backward clock jump forces a refetch instead
+    // of pinning a stale list as fresh.
+    auto const effectiveFreshTtl = std::min(_config.freshTtl, _config.hardTtl);
+    auto const age = cached ? now - cached->timestamp : std::chrono::system_clock::duration::zero();
+    auto const withinHardTtl = cached && withinTtl(age, _config.hardTtl);
+    auto const isFresh = cached && withinTtl(age, effectiveFreshTtl);
 
     // Ghost text (autosuggestion) must never shell out: it fires ~100ms after every
     // keystroke and the callback may run `$(dnf repoquery)` / `$(rpm -qa)`. Serve any
@@ -134,7 +177,10 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
 
     // Explicit Tab, cold or stale-or-expired: fetch. A stale-but-usable entry is our
     // fallback if the fetch yields nothing (aborted/timed out), so we never regress to
-    // an empty result when we already have data.
+    // an empty result when we already have data. Tell the shell whether that fallback
+    // exists so it can pick the cold vs. overall fetch budget.
+    if (_preFetchHook)
+        _preFetchHook(withinHardTtl);
     auto result = _callback(*funcName, args, context.prefix);
     _lastErrors = std::move(result.errors);
 

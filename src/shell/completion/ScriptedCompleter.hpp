@@ -115,9 +115,28 @@ class ScriptedCompleter: public CompletionProvider
 
     [[nodiscard]] bool isExclusiveFor(CompletionContext const& context) const override;
 
+    /// @brief Hook invoked immediately before the completer callback shells out.
+    ///
+    /// @param hasStaleFallback True when a still-usable (within hardTtl) cached entry
+    ///        exists, so the fetch is a background refresh whose failure is harmless
+    ///        (the stale list is served instead). False for a genuinely cold fetch with
+    ///        no fallback. The shell uses this to pick the fetch time budget: the tight
+    ///        cold budget for a cold fetch (keep the first Tab snappy), the larger
+    ///        overall budget for a refresh (we can afford to wait since we have data).
+    using PreFetchHook = std::function<void(bool hasStaleFallback)>;
+
+    /// @brief Sets the @ref PreFetchHook. Optional; unset means no notification.
+    void setPreFetchHook(PreFetchHook hook) { _preFetchHook = std::move(hook); }
+
     /// @brief Takes and clears any errors from the last completion execution.
     /// @return Formatted error messages from the last completer execution.
     [[nodiscard]] std::vector<std::string> takeLastErrors();
+
+    /// @brief Current number of in-memory (L1) cache entries. For tests/diagnostics.
+    [[nodiscard]] std::size_t cacheSizeForTest() const { return _cache.size(); }
+
+    /// @brief The L1 cache entry cap. For tests asserting the map stays bounded.
+    [[nodiscard]] static constexpr std::size_t maxCacheEntriesForTest() { return MaxCacheEntries; }
 
   private:
     CompleterFunctionRegistry const& _registry;
@@ -125,6 +144,7 @@ class ScriptedCompleter: public CompletionProvider
     CompletionCache const* _persistentCache;
     ScriptedCompleterConfig _config;
     std::function<std::chrono::system_clock::time_point()> _clock;
+    PreFetchHook _preFetchHook; ///< Optional; notified before a callback shell-out (see setPreFetchHook).
 
     /// One in-memory (L1) cache entry. Wall-clock timestamp so it shares one freshness
     /// rule with the persistent (L2) layer — no steady/wall clock mismatch.

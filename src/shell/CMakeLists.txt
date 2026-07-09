@@ -314,6 +314,7 @@ if(ENDO_TESTING)
         completion/CompleterFunctionRegistry_test.cpp
         completion/ScriptedCompleter_test.cpp
         completion/CompletionCache_test.cpp
+        completion/CompletionAdapter_test.cpp
         history/History_test.cpp
         history/PersistentHistory_test.cpp
         history/RequiredPaths_test.cpp
