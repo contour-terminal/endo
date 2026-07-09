@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/SgrBuilder.hpp>
 #include <tui/TerminalOutput.hpp>
+#include <tui/TerminalProtocols.hpp>
 
 #if defined(_WIN32)
 
@@ -449,13 +450,35 @@ bool TerminalOutput::supportsUnscroll() const noexcept
     return _unscrollSupported;
 }
 
+void TerminalOutput::beginHyperlink(std::string_view url)
+{
+    _buffer += protocols::buildHyperlinkOpen(url);
+}
+
+void TerminalOutput::endHyperlink()
+{
+    _buffer += protocols::HyperlinkClose;
+}
+
+void TerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
+{
+    beginHyperlink(url);
+    writeText(text, style);
+    endHyperlink();
+}
+
+void TerminalOutput::writeToDestination(std::string_view bytes)
+{
+    auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD written = 0;
+    WriteFile(hStdout, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr);
+}
+
 void TerminalOutput::flush()
 {
     if (!_buffer.empty())
     {
-        auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-        DWORD written = 0;
-        WriteFile(hStdout, _buffer.data(), static_cast<DWORD>(_buffer.size()), &written, nullptr);
+        writeToDestination(_buffer);
         _buffer.clear();
     }
 }

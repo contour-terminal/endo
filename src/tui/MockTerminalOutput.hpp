@@ -57,6 +57,9 @@ class MockTerminalOutput: public TerminalOutput
     void resetScrollRegion() override;
     void writeSixel(std::string_view sixelData) override;
     void copyToClipboard(std::string_view text) override;
+    void beginHyperlink(std::string_view url) override;
+    void endHyperlink() override;
+    void writeHyperlink(std::string_view text, std::string_view url, Style const& style) override;
     void unscroll(int n) override;
     [[nodiscard]] bool supportsUnscroll() const noexcept override;
     void flush() override;

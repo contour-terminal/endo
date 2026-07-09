@@ -2,8 +2,10 @@
 #pragma once
 
 #include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/MarkdownHtml.hpp>
 #include <tui/TerminalOutput.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -12,6 +14,8 @@
 
 namespace tui
 {
+
+class ImageProvider;
 
 /// @brief Visual style for table rendering.
 enum class TableRenderStyle : std::uint8_t
@@ -94,9 +98,31 @@ class MarkdownRenderer
     /// @param style The desired table render style.
     void setTableRenderStyle(TableRenderStyle style) noexcept;
 
+    /// @brief Sets a left margin, in cells, applied to every rendered line.
+    ///
+    /// A small indent separates the document from the terminal's left edge,
+    /// which makes the first word of each line easier to read. The indent is
+    /// subtracted from the width available to content, so centering and table
+    /// widths account for it.
+    ///
+    /// @param columns Indent width in cells; negative values are treated as zero.
+    void setIndent(int columns) noexcept;
+
     /// @brief Sets a per-cell style callback for custom table cell coloring.
     /// @param fn The callback, or nullptr to clear.
     void setCellStyleCallback(CellStyleFn fn);
+
+    /// @brief Injects the source of inline images, enabling Sixel embedding.
+    ///
+    /// When set and the provider reports Sixel support, a line consisting only of
+    /// an image (`![alt](path)` or `<img src="path">`) renders as a Sixel image.
+    /// Otherwise — and on any load, decode or encode failure — the alt text is
+    /// rendered instead. Images that share a line with other text always render
+    /// as alt text.
+    ///
+    /// @param provider Non-owning pointer that must outlive this renderer,
+    ///        or nullptr (the default) to disable image embedding.
+    void setImageProvider(ImageProvider* provider) noexcept;
 
     /// @brief Returns the default theme with sensible terminal colors.
     [[nodiscard]] static auto defaultTheme() -> MarkdownTheme;
@@ -110,6 +136,7 @@ class MarkdownRenderer
     bool _streaming = false;
     bool _fullWidthMode = false;
     int _maxWidth = 0; ///< Maximum width for table rendering (0 = unconstrained).
+    int _indent = 0;   ///< Left margin in cells applied to every rendered line.
     TableRenderStyle _tableRenderStyle = TableRenderStyle::Bordered; ///< Visual table style.
     CellStyleFn _cellStyleFn;                                        ///< Optional per-cell style callback.
     bool _inCodeBlock = false;
@@ -122,6 +149,63 @@ class MarkdownRenderer
     bool _inTable = false;                ///< Currently buffering table rows.
     std::vector<std::string> _tableLines; ///< Buffered table lines.
     bool _tableSeparatorSeen = false;     ///< Separator row detected in buffered lines.
+
+    ImageProvider* _imageProvider = nullptr; ///< Optional inline image source (nullptr disables).
+
+    /// @brief One open GitHub-style HTML alignment container (`<div>`, `<p>`, `<center>`).
+    struct AlignFrame
+    {
+        std::string tag; ///< Lowercased tag name, used to match the closing tag.
+        HtmlAlign align; ///< Alignment applied to content inside this container.
+    };
+
+    std::vector<AlignFrame> _alignStack; ///< Innermost container last; empty means left-aligned.
+
+    /// @brief Returns the alignment currently in effect (innermost container wins).
+    [[nodiscard]] auto currentAlign() const noexcept -> HtmlAlign;
+
+    /// @brief Returns the width available to content, i.e. the render width less the indent.
+    [[nodiscard]] auto effectiveWidth() const noexcept -> int;
+
+    /// @brief Writes the left margin. Call once at the start of every rendered line.
+    void writeIndent();
+
+    /// @brief Columns of leading space that align @p contentWidth within @p fieldWidth.
+    ///
+    /// Includes the indent, so a left-aligned line still starts at the margin.
+    ///
+    /// @param contentWidth Display width of the content.
+    /// @param fieldWidth Width of the field to align within.
+    /// @return The offset in cells, never less than the indent.
+    [[nodiscard]] auto alignOffset(int contentWidth, int fieldWidth) const noexcept -> int;
+
+    /// @brief Writes the leading spaces that align @p contentWidth within @p fieldWidth.
+    /// @param contentWidth Display width of the content about to be written.
+    /// @param fieldWidth Width of the field to align within.
+    void writeAlignPadding(int contentWidth, int fieldWidth);
+
+    /// @brief Handles a line that opens, closes, or wholly contains an HTML block tag.
+    /// @param line The trimmed source line.
+    /// @return true when the line was consumed as HTML.
+    auto handleHtmlBlockLine(std::string_view line) -> bool;
+
+    /// @brief Renders the inner content of an HTML block, splitting on `<br>`.
+    /// @param content The inner text (may contain inline HTML and markdown).
+    /// @param headingLevel 1-6 to render as a heading, 0 for a paragraph.
+    void renderHtmlContent(std::string_view content, int headingLevel);
+
+    /// @brief Renders a standalone image as Sixel, or its alt text on any failure.
+    /// @param alt The image's alt text.
+    /// @param src The image source as written in the document.
+    /// @param widthPx Explicit pixel width from an HTML `width=` attribute, if any.
+    void renderBlockImage(std::string_view alt, std::string_view src, std::optional<int> widthPx);
+
+    /// @brief Renders an image's alt text as an aligned paragraph.
+    ///
+    /// The single fallback sink for every image failure, so the emitted bytes do
+    /// not depend on which failure occurred.
+    /// @param alt The alt text (may be empty).
+    void renderImageAltText(std::string_view alt);
 
     /// @brief Renders a single line of markdown (not inside a code block).
     void renderLine(std::string_view line);

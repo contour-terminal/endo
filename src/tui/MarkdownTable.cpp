@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/MarkdownHtml.hpp>
 #include <tui/MarkdownInline.hpp>
 #include <tui/MarkdownTable.hpp>
 #include <tui/Unicode.hpp>
@@ -418,25 +419,58 @@ auto stripInlineMarkdown(std::string_view text) -> std::string
             }
         }
 
-        // Link: [text](url)
-        if (text[pos] == '[')
+        // Link [text](url) or image ![alt](src) — bracket-depth aware so that the
+        // badge idiom [![alt](badge.svg)](target) reduces to its alt text.
+        if (text[pos] == '[' || text[pos] == '!')
         {
-            auto const endBracket = text.find(']', pos + 1);
-            if (endBracket != std::string_view::npos && endBracket + 1 < text.size()
-                && text[endBracket + 1] == '(')
+            if (auto const span = findLinkSpan(text, pos))
             {
-                auto const endParen = text.find(')', endBracket + 2);
-                if (endParen != std::string_view::npos)
+                // Recursion reduces a nested image label to its alt text, so the
+                // badge idiom [![alt](badge.svg)](target) measures as "alt".
+                result.append(stripInlineMarkdown(span->label));
+                pos = span->endPos;
+                continue;
+            }
+        }
+
+        // Inline HTML anchors/images and CommonMark autolinks — must mirror
+        // MarkdownRenderer::renderInline(), or measured and rendered widths
+        // disagree and table borders misalign.
+        if (text[pos] == '<')
+        {
+            if (auto const tag = parseHtmlTag(text, pos); tag && !tag->isClosing)
+            {
+                if (tag->name == "a")
                 {
-                    result.append(text.substr(pos + 1, endBracket - pos - 1));
-                    pos = endParen + 1;
+                    auto const close = findCaseInsensitive(text.substr(tag->endPos), "</a>");
+                    if (htmlAttr(tag->attrs, "href") && close != std::string_view::npos)
+                    {
+                        result.append(stripInlineMarkdown(text.substr(tag->endPos, close)));
+                        pos = tag->endPos + close + 4;
+                        continue;
+                    }
+                }
+                else if (tag->name == "img")
+                {
+                    result.append(htmlAttr(tag->attrs, "alt").value_or(std::string_view {}));
+                    pos = tag->endPos;
+                    continue;
+                }
+            }
+
+            if (auto const close = text.find('>', pos + 1); close != std::string_view::npos)
+            {
+                if (auto const inner = text.substr(pos + 1, close - pos - 1); isAutolinkTarget(inner))
+                {
+                    result.append(inner);
+                    pos = close + 1;
                     continue;
                 }
             }
         }
 
         // Regular character — find the next special character
-        auto const nextSpecial = text.find_first_of("`*_[", pos + 1);
+        auto const nextSpecial = text.find_first_of("`*_[!<", pos + 1);
         auto const end = (nextSpecial != std::string_view::npos) ? nextSpecial : text.size();
         result.append(text.substr(pos, end - pos));
         pos = end;

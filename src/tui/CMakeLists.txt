@@ -13,11 +13,13 @@ add_library(tui
     GenericSyntaxHighlighter.cpp
     HoverState.cpp
     ImageLoader.cpp
+    ImageProvider.cpp
     QuestionComponent.cpp
     InputField.cpp
     KeyBindings.cpp
     List.cpp
     LogPanel.cpp
+    MarkdownHtml.cpp
     MarkdownRenderer.cpp
     MarkdownTable.cpp
     MockTerminalOutput.cpp
@@ -99,6 +101,9 @@ if(ENDO_TESTING)
         FuzzyMatch_test.cpp
         MarkdownTable_test.cpp
         MarkdownRenderer_test.cpp
+        MarkdownImage_test.cpp
+        MarkdownHtml_test.cpp
+        TerminalProtocols_test.cpp
         QuestionComponent_test.cpp
         StyledText_test.cpp
         TreeTableView_test.cpp

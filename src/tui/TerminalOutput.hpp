@@ -263,6 +263,22 @@ class TerminalOutput
     /// @param text The text to copy to the clipboard.
     virtual void copyToClipboard(std::string_view text);
 
+    /// @brief Opens an OSC 8 hyperlink; text written until endHyperlink() is clickable.
+    ///
+    /// Terminals without OSC 8 support ignore the sequence, so no capability
+    /// probe is required.
+    /// @param url The link target. Should be an absolute URI.
+    virtual void beginHyperlink(std::string_view url);
+
+    /// @brief Closes the hyperlink opened by beginHyperlink().
+    virtual void endHyperlink();
+
+    /// @brief Writes styled text wrapped in an OSC 8 hyperlink.
+    /// @param text The visible label.
+    /// @param url The link target.
+    /// @param style Styling applied to the label.
+    virtual void writeHyperlink(std::string_view text, std::string_view url, Style const& style = {});
+
     /// @brief Unscrolls (restores) lines from the scrollback buffer.
     ///
     /// Uses the Kitty unscroll extension (CSI Ps + T) to restore content
@@ -323,6 +339,17 @@ class TerminalOutput
         _inlineRoomReserved = 0;
         return room;
     }
+
+  protected:
+    /// @brief Writes fully composed output bytes to the destination.
+    ///
+    /// The default destination is the process's standard output. Subclasses
+    /// override this to retarget the stream (e.g. to an arbitrary file
+    /// descriptor, or to a capture buffer in tests) without reimplementing
+    /// any of the escape-sequence composition above.
+    ///
+    /// @param bytes The buffered bytes to emit.
+    virtual void writeToDestination(std::string_view bytes);
 
   private:
     std::string _buffer; ///< Output buffer for batching writes.

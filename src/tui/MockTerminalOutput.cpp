@@ -258,6 +258,23 @@ bool MockTerminalOutput::supportsUnscroll() const noexcept
     return false;
 }
 
+void MockTerminalOutput::beginHyperlink([[maybe_unused]] std::string_view url)
+{
+    // No-op: hyperlink framing occupies no cells.
+}
+
+void MockTerminalOutput::endHyperlink()
+{
+    // No-op: hyperlink framing occupies no cells.
+}
+
+void MockTerminalOutput::writeHyperlink(std::string_view text,
+                                        [[maybe_unused]] std::string_view url,
+                                        Style const& style)
+{
+    writeText(text, style);
+}
+
 void MockTerminalOutput::flush()
 {
     ++_flushCount;
