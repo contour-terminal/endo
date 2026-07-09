@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/builtins/CatRenderMode.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
@@ -12,6 +13,7 @@
 
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
+#include <tui/ImageProvider.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/Sixel.hpp>
 #include <tui/TerminalOutput.hpp>
@@ -267,6 +269,41 @@ std::pair<std::string, int> interruptibleReadAll(endo::NativeHandle fd)
     return { std::move(data), exitCode };
 }
 
+/// @brief A TerminalOutput that writes to a caller-supplied file descriptor.
+///
+/// tui::TerminalOutput composes escape sequences into an internal buffer and, by
+/// default, flushes them to standard output. Retargeting the sink lets `cat`
+/// render to whatever descriptor the shell's redirection model handed it.
+class FdTerminalOutput final: public tui::TerminalOutput
+{
+  public:
+    /// @param fd The descriptor to write to.
+    /// @param columns Terminal width in cells.
+    /// @param rows Terminal height in cells.
+    FdTerminalOutput(endo::NativeHandle fd, int columns, int rows) noexcept:
+        _fd(fd), _columns(columns), _rows(rows)
+    {
+    }
+
+    [[nodiscard]] auto columns() const noexcept -> int override { return _columns; }
+
+    [[nodiscard]] auto rows() const noexcept -> int override { return _rows; }
+
+    /// Dimensions come from the shell's injected TTY, not from an ioctl on stdout.
+    void updateDimensions() override {}
+
+  protected:
+    void writeToDestination(std::string_view bytes) override
+    {
+        [[maybe_unused]] auto const written = endo::platformWrite(_fd, bytes.data(), bytes.size());
+    }
+
+  private:
+    endo::NativeHandle _fd;
+    int _columns;
+    int _rows;
+};
+
 } // namespace
 
 namespace endo
@@ -286,6 +323,45 @@ int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownCo
     }
     [[maybe_unused]] auto written = platformWrite(outputFd, markdownContent.data(), markdownContent.size());
     written = platformWrite(outputFd, "\n", 1);
+    return 0;
+}
+
+int Shell::renderMarkdownDocument(NativeHandle outputFd,
+                                  std::string_view markdownContent,
+                                  std::filesystem::path const& baseDir,
+                                  int indent)
+{
+    // Fallback cell metrics for terminals that do not report pixel dimensions.
+    static constexpr auto FallbackCellWidthPx = 8;
+    static constexpr auto FallbackCellHeightPx = 16;
+    static constexpr auto FallbackColumns = 80;
+    static constexpr auto FallbackRows = 24;
+
+    auto const size = _tty.getSize();
+    auto const columns = size.has_value() && size->cols > 0 ? int { size->cols } : FallbackColumns;
+    auto const rows = size.has_value() && size->rows > 0 ? int { size->rows } : FallbackRows;
+    auto const cellWidthPx = size.has_value() && size->xpixel > 0 && size->cols > 0
+                                 ? size->xpixel / size->cols
+                                 : FallbackCellWidthPx;
+    auto const cellHeightPx = size.has_value() && size->ypixel > 0 && size->rows > 0
+                                  ? size->ypixel / size->rows
+                                  : FallbackCellHeightPx;
+
+    auto output = FdTerminalOutput(outputFd, columns, rows);
+    auto imageProvider =
+        tui::FilesystemImageProvider(tui::ImageRenderConfig { .baseDir = baseDir,
+                                                              .cellWidthPx = cellWidthPx,
+                                                              .cellHeightPx = cellHeightPx,
+                                                              .maxColumns = columns - indent },
+                                     [this] { return _sixelCapability->supportsSixel(); });
+
+    auto renderer = tui::MarkdownRenderer(output);
+    renderer.setMaxWidth(columns);
+    renderer.setIndent(indent);
+    renderer.setFullWidthMode(true); // double-width/height H1 and H2 titles
+    renderer.setImageProvider(&imageProvider);
+    renderer.render(markdownContent);
+    output.flush();
     return 0;
 }
 
@@ -419,6 +495,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     bool rangeSpecified = false;
     std::optional<int> imageColumns;
     std::optional<int> imageRows;
+    auto markdownIndent = DefaultMarkdownIndent;
     std::vector<std::string> files;
 
     for (size_t i = 0; i < catArgs.size(); ++i)
@@ -523,6 +600,33 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 return 1;
             }
             imageRows = value;
+            continue;
+        }
+        if (arg == "--indent" || arg.starts_with("--indent="))
+        {
+            std::string_view indentValue;
+            if (arg == "--indent")
+            {
+                if (i + 1 >= catArgs.size())
+                {
+                    error("cat: --indent requires a value");
+                    return 1;
+                }
+                indentValue = catArgs[++i];
+            }
+            else
+            {
+                indentValue = arg.substr(9); // skip "--indent="
+            }
+            int value = 0;
+            auto const [ptr, ec] =
+                std::from_chars(indentValue.data(), indentValue.data() + indentValue.size(), value);
+            if (ec != std::errc {} || ptr != indentValue.data() + indentValue.size() || value < 0)
+            {
+                error("cat: --indent: invalid value '{}'", indentValue);
+                return 1;
+            }
+            markdownIndent = value;
             continue;
         }
         if (arg == "--range" || arg.starts_with("--range="))
@@ -690,8 +794,20 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             "| `-r`, `--range START..END` | Show only lines in the given range |\n"
             "| `-c`, `--columns N` | Target image width in terminal columns |\n"
             "| `-R`, `--rows N` | Target image height in terminal rows |\n"
-            "| `--raw` | Disable inline image rendering |\n"
-            "| `-h`, `--help` | Display this help |\n");
+            "| `--indent N` | Left margin for rendered markdown, in columns (default 1) |\n"
+            "| `--raw` | Disable all rendering (markdown, images, highlighting) |\n"
+            "| `-h`, `--help` | Display this help |\n"
+            "\n"
+            "## Rendering\n"
+            "\n"
+            "On a terminal, markdown files render as formatted documents: tables get\n"
+            "borders, links become clickable (OSC 8), titles use double-width and\n"
+            "double-height characters, and local images embed as Sixel graphics when the\n"
+            "terminal supports them.\n"
+            "\n"
+            "Rendering is suppressed when the output is redirected or piped, when `--raw`\n"
+            "is given, or when a line-processing flag such as `-n` asks for the source\n"
+            "text. Set `ENDO_SIXEL=0` to disable inline images while keeping the rest.\n");
     }
 
     // Detect whether output goes to a TTY for syntax highlighting
@@ -703,7 +819,8 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     auto processContent = [&](std::string const& content, tui::LanguageId language) {
         auto highlightState = tui::HighlightState::Normal;
         auto const& theme = tui::currentTheme();
-        auto const highlight = outputIsTty && language != tui::LanguageId::None;
+        // Highlighting is a rendering, so --raw suppresses it too.
+        auto const highlight = shouldHighlightCatOutput(outputIsTty, rawMode, language);
         int physicalLineNumber = 0;
 
         std::string line;
@@ -856,10 +973,17 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         }
         else
         {
-            // Check for image file rendering via sixel
             auto const ext = std::filesystem::path(file).extension().string();
-            auto const forceImage = imageColumns.has_value() || imageRows.has_value();
-            if (tui::isImageExtension(ext) && (outputIsTty || forceImage) && !rawMode)
+            auto const renderContext =
+                CatRenderContext { .rawMode = rawMode,
+                                   .outputIsTty = outputIsTty,
+                                   .hasProcessingFlags = hasProcessingFlags,
+                                   .isImageExt = tui::isImageExtension(ext),
+                                   .forceImage = imageColumns.has_value() || imageRows.has_value(),
+                                   .language = tui::detectLanguageFromPath(file) };
+            auto const renderMode = chooseCatRenderMode(renderContext);
+
+            if (renderMode == CatRenderMode::SixelImage)
             {
                 auto imageResult = tui::loadImage(file);
                 if (!imageResult.has_value())
@@ -964,8 +1088,19 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 }
             }
 
-            auto const language = tui::detectLanguageFromPath(file);
-            processContent(content, language);
+            if (renderMode == CatRenderMode::Markdown)
+            {
+                [[maybe_unused]] auto const rendered = renderMarkdownDocument(
+                    outputFd, content, std::filesystem::path(file).parent_path(), markdownIndent);
+            }
+            else if (renderMode == CatRenderMode::Raw)
+            {
+                writeOutput(content);
+            }
+            else
+            {
+                processContent(content, renderContext.language);
+            }
         }
     }
 

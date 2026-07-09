@@ -5,6 +5,7 @@
 #include <shell/ui/SyntaxHighlighter.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/TerminalProtocols.hpp>
 #include <tui/Theme.hpp>
 
 #include <cstdlib>
@@ -182,7 +183,7 @@ class HelpBuilder
 
         // OSC 8 hyperlink open (terminal-only, independent of color)
         if (_useHyperlinks)
-            _out += std::format("\033]8;;{}\033\\", url);
+            _out += tui::protocols::buildHyperlinkOpen(url);
 
         if (_useColor)
         {
@@ -197,13 +198,13 @@ class HelpBuilder
 
         // OSC 8 hyperlink close
         if (_useHyperlinks)
-            _out += "\033]8;;\033\\";
+            _out += tui::protocols::HyperlinkClose;
 
         _out += "  ";
 
         // Show the URL text as well (hyperlinked when on a terminal)
         if (_useHyperlinks)
-            _out += std::format("\033]8;;{}\033\\", url);
+            _out += tui::protocols::buildHyperlinkOpen(url);
 
         if (_useColor)
         {
@@ -217,7 +218,7 @@ class HelpBuilder
         }
 
         if (_useHyperlinks)
-            _out += "\033]8;;\033\\";
+            _out += tui::protocols::HyperlinkClose;
 
         _out += '\n';
     }

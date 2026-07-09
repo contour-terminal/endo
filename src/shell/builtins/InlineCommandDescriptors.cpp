@@ -19,6 +19,20 @@ static constexpr InlineOptionDef EchoOptions[] = {
     { .shortFlag = "-e", .longFlag = {},    .description = "Enable interpretation of backslash escapes" },
 };
 
+static constexpr InlineOptionDef CatOptions[] = {
+    { .shortFlag = "-n", .longFlag = "--number",          .description = "Number all output lines" },
+    { .shortFlag = "-b", .longFlag = "--number-nonblank", .description = "Number non-blank output lines (overrides -n)" },
+    { .shortFlag = "-s", .longFlag = "--squeeze-blank",   .description = "Suppress repeated empty output lines" },
+    { .shortFlag = "-E", .longFlag = "--show-ends",       .description = "Display $ at end of each line" },
+    { .shortFlag = "-T", .longFlag = "--show-tabs",       .description = "Display TAB characters as ^I" },
+    { .shortFlag = "-A", .longFlag = "--show-all",        .description = "Equivalent to -ET" },
+    { .shortFlag = "-r", .longFlag = "--range",           .description = "Show only lines in the given START..END range", .takesValue = true },
+    { .shortFlag = "-c", .longFlag = "--columns",         .description = "Target image width in terminal columns", .takesValue = true },
+    { .shortFlag = "-R", .longFlag = "--rows",            .description = "Target image height in terminal rows", .takesValue = true },
+    { .shortFlag = {},   .longFlag = "--indent",          .description = "Left margin for rendered markdown, in columns (default 1)", .takesValue = true },
+    { .shortFlag = {},   .longFlag = "--raw",             .description = "Disable all rendering (markdown, images, highlighting)" },
+};
+
 static constexpr InlineOptionDef RmOptions[] = {
     { .shortFlag = "-r", .longFlag = "--recursive", .description = "Remove directories and their contents recursively" },
     { .shortFlag = "-f", .longFlag = "--force",     .description = "Ignore nonexistent files, never prompt" },
@@ -198,7 +212,7 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .noStdinFn = &Shell::executeInlineCal },
         { .name = "cat",       .briefDescription = "Concatenate and display files.",
           .usageLine = "cat [OPTIONS] [FILE...]",
-          .options = {}, .acceptsFileArgs = true, .fileArgsRepeatable = true,
+          .options = CatOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineCat },
         { .name = "cp",        .briefDescription = "Copy files and directories.",
           .usageLine = "cp [OPTIONS] SOURCE... DEST",

@@ -170,6 +170,7 @@ add_library(endo-shell STATIC
     # Help
     HelpPrinter.hpp
     HelpPrinter.cpp
+    SixelCapability.cpp
 
     # Structured Commands
     commands/StructuredCommand.hpp
@@ -288,6 +289,7 @@ if(ENDO_TESTING)
         Shell_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
+        builtins/CatRenderMode_test.cpp
         commands/FindExpression_test.cpp
         commands/GrepCommand_test.cpp
         commands/TimeoutCommand_test.cpp
