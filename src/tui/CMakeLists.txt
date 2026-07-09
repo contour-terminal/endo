@@ -101,6 +101,7 @@ if(ENDO_TESTING)
         MarkdownRenderer_test.cpp
         QuestionComponent_test.cpp
         StyledText_test.cpp
+        TerminalInput_test.cpp
         TreeTableView_test.cpp
         Unicode_test.cpp
         VtParser_test.cpp

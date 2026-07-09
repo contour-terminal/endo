@@ -64,6 +64,16 @@ class Prompt
     /// @param callback The idle callback, or an empty function to clear it.
     void setOnIdle(std::function<void()> callback);
 
+    /// @brief Injects a source of typed-ahead bytes captured during a completion.
+    ///
+    /// A tab-completion may block on a subprocess (e.g. `$(dnf repoquery)`); keystrokes
+    /// the user types meanwhile are read off the TTY by the completion's abort-key watcher
+    /// (out of band from this prompt's input). After each event that may have run a
+    /// completion, @ref read calls this source and re-stages any returned bytes into the
+    /// terminal input, so those keystrokes are decoded as normal input instead of lost.
+    /// @param source Returns and clears the captured bytes, or an empty function to clear.
+    void setCompletionPushbackSource(std::function<std::string()> source);
+
     /// @brief Sets the prompt string displayed before user input.
     /// @param promptStr The prompt string.
     void setPrompt(std::string_view promptStr);
@@ -213,6 +223,7 @@ class Prompt
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
     bool _displayDrewCurrentState = false; ///< True when display() already drew the current state.
     std::function<void()> _onIdle;         ///< Invoked on each idle wake during read() (see setOnIdle).
+    std::function<std::string()> _completionPushbackSource; ///< Typed-ahead bytes captured during completion.
 
     /// Dynamic-field resolver cached before `_promptComponent` is created (the Shell
     /// installs it from its constructor, which runs before `initialize()`). It is

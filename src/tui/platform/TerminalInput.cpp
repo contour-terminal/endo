@@ -5,6 +5,7 @@
 
 #include <array>
 #include <string_view>
+#include <utility>
 
 #include <sys/ioctl.h>
 
@@ -118,6 +119,14 @@ auto TerminalInput::resizeNativeHandle() const noexcept -> endo::platform::Nativ
 auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
 {
     auto events = std::vector<InputEvent> {};
+
+    // Return any re-staged (pushed-back) events first, so bytes read out-of-band during a
+    // completion are delivered ahead of newly-typed input, in order.
+    if (!_pendingEvents.empty())
+    {
+        events = std::exchange(_pendingEvents, {});
+    }
+
     auto buf = std::array<char, 512> {};
     auto const n = safeRead(_fd, buf.data(), buf.size());
     if (n > 0)
@@ -127,6 +136,15 @@ auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
             events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
     }
     return events;
+}
+
+void TerminalInput::pushBack(std::string_view bytes)
+{
+    if (bytes.empty())
+        return;
+    auto parsed = _parser.feed(bytes);
+    _pendingEvents.insert(
+        _pendingEvents.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
 }
 
 auto TerminalInput::drainResize() -> std::optional<ResizeEvent>
