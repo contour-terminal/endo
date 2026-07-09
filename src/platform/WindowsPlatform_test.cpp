@@ -13,6 +13,7 @@
 #include <platform/PathUtils.hpp>
 #include <platform/Types.hpp>
 #include <platform/UserPaths.hpp>
+#include <platform/testing/TestEnvironmentProvider.hpp>
 #include <testing/EnvHelper.hpp>
 
 #if defined(_WIN32)
@@ -226,56 +227,29 @@ TEST_CASE("configHome.falls_back_to_home_dot_config", "[platform]")
         endo::testing::unsetTestEnv("HOME");
 }
 
+// cacheHome() is provided by the injected EnvironmentProvider (the production path); the
+// old free platform::cacheHome() duplicate was removed. These exercise the same XDG
+// resolution through a fully in-memory TestEnvironmentProvider — no process-env mutation.
+
 TEST_CASE("cacheHome.returns_XDG_CACHE_HOME_when_set", "[platform]")
 {
-    auto const* prevXdg = std::getenv("XDG_CACHE_HOME");
-    auto const savedXdg = prevXdg ? std::string(prevXdg) : std::string {};
-    auto const hadXdg = prevXdg != nullptr;
+    endo::platform::TestEnvironmentProvider env;
+    env.set("XDG_CACHE_HOME", "/tmp/test_xdg_cache");
 
-    endo::testing::setTestEnv("XDG_CACHE_HOME", "/tmp/test_xdg_cache");
-    auto const cache = cacheHome();
+    auto const cache = env.cacheHome();
     REQUIRE(cache.has_value());
     CHECK(*cache == std::filesystem::path("/tmp/test_xdg_cache"));
-
-    if (hadXdg)
-        endo::testing::setTestEnv("XDG_CACHE_HOME", savedXdg.c_str());
-    else
-        endo::testing::unsetTestEnv("XDG_CACHE_HOME");
 }
 
 TEST_CASE("cacheHome.falls_back_to_home_dot_cache", "[platform]")
 {
-    auto const* prevXdg = std::getenv("XDG_CACHE_HOME");
-    auto const savedXdg = prevXdg ? std::string(prevXdg) : std::string {};
-    auto const hadXdg = prevXdg != nullptr;
+    endo::platform::TestEnvironmentProvider env;
+    // Neither XDG_CACHE_HOME nor LOCALAPPDATA set: fall back to $HOME/.cache.
+    env.set("HOME", "/tmp/test_home");
 
-    auto const* prevLocalAppData = std::getenv("LOCALAPPDATA");
-    auto const savedLocalAppData = prevLocalAppData ? std::string(prevLocalAppData) : std::string {};
-    auto const hadLocalAppData = prevLocalAppData != nullptr;
-
-    auto const* prevHome = std::getenv("HOME");
-    auto const savedHome = prevHome ? std::string(prevHome) : std::string {};
-    auto const hadHome = prevHome != nullptr;
-
-    endo::testing::unsetTestEnv("XDG_CACHE_HOME");
-    endo::testing::unsetTestEnv("LOCALAPPDATA");
-    endo::testing::setTestEnv("HOME", "/tmp/test_home");
-    auto const cache = cacheHome();
+    auto const cache = env.cacheHome();
     REQUIRE(cache.has_value());
     CHECK(*cache == std::filesystem::path("/tmp/test_home/.cache"));
-
-    if (hadXdg)
-        endo::testing::setTestEnv("XDG_CACHE_HOME", savedXdg.c_str());
-    else
-        endo::testing::unsetTestEnv("XDG_CACHE_HOME");
-    if (hadLocalAppData)
-        endo::testing::setTestEnv("LOCALAPPDATA", savedLocalAppData.c_str());
-    else
-        endo::testing::unsetTestEnv("LOCALAPPDATA");
-    if (hadHome)
-        endo::testing::setTestEnv("HOME", savedHome.c_str());
-    else
-        endo::testing::unsetTestEnv("HOME");
 }
 
 TEST_CASE("platformRead.returns_zero_on_closed_pipe_eof", "[platform]")

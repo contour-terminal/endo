@@ -60,7 +60,7 @@ class NativeFileSystem final: public FileSystem
         std::filesystem::path const& path, std::filesystem::perms perms) const override;
 
     [[nodiscard]] std::expected<std::filesystem::path, std::string> createTempFile(
-        std::string_view prefix) const override;
+        std::string_view prefix, std::filesystem::path const& directory = {}) const override;
 };
 
 } // namespace endo::platform

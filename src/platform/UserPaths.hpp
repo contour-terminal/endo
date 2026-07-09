@@ -39,23 +39,7 @@ namespace endo::platform
     return std::nullopt;
 }
 
-/// @brief Returns the user's cache base directory.
-///
-/// On Unix: $XDG_CACHE_HOME, or ~/.cache if not set.
-/// On Windows: $LOCALAPPDATA (typically ~/AppData/Local), which is the
-/// machine-local (non-roaming) counterpart to $APPDATA — the right home for
-/// regenerable cache data.
-///
-/// @return The cache directory path, or std::nullopt if it cannot be determined.
-[[nodiscard]] inline auto cacheHome() -> std::optional<std::filesystem::path>
-{
-    if (auto const* xdg = std::getenv("XDG_CACHE_HOME"); xdg && *xdg != '\0')
-        return std::filesystem::path(xdg);
-    if (auto const* localAppData = std::getenv("LOCALAPPDATA"); localAppData && *localAppData != '\0')
-        return std::filesystem::path(localAppData);
-    if (auto home = homeDirectory())
-        return *home / ".cache";
-    return std::nullopt;
-}
+// Note: the cache base directory is resolved via EnvironmentProvider::cacheHome() (the
+// injected, testable path). A duplicate free cacheHome() here was unused and removed.
 
 } // namespace endo::platform

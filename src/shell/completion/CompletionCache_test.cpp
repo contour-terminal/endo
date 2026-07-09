@@ -68,6 +68,28 @@ TEST_CASE("FileSystemCompletionCache.round_trip_through_filesystem")
     CHECK(loaded->timestamp == fixedTime());
 }
 
+TEST_CASE("FileSystemCompletionCache.store_survives_cross_device_temp_and_cache")
+{
+    // Regression: store() published via a temp file in the system temp dir (/tmp) then
+    // renamed it into the cache dir (~/.cache). On the common layout where /tmp (tmpfs)
+    // and $HOME are separate mounts, that rename fails with EXDEV and the persistent
+    // cache silently never populates. Model the two mounts and require store() to still
+    // land the entry — which only holds if the temp file is created inside the cache dir.
+    InMemoryFileSystem fs;
+    fs.addMount("/tmp");  // tmpfs
+    fs.addMount("/home"); // real disk
+    FileSystemCompletionCache cache(fs, "/home/user/.cache/endo/completions");
+
+    CachedCompletions entry { .results = { cc("plasma-desktop"), cc("plasma-nm") },
+                              .timestamp = fixedTime() };
+    cache.store("dnf\0install"s, entry);
+
+    auto const loaded = cache.load("dnf\0install"s);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->results.size() == 2);
+    CHECK(loaded->results[0].text == "plasma-desktop");
+}
+
 TEST_CASE("FileSystemCompletionCache.empty_result_set_round_trips")
 {
     InMemoryFileSystem fs;

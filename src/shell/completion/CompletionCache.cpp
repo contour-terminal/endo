@@ -172,7 +172,11 @@ void FileSystemCompletionCache::store(std::string_view key, CachedCompletions co
 
     // Atomic publish: write to a temp file then rename over the target, so a reader
     // never sees a half-written entry and a concurrent writer is last-writer-wins.
-    auto const tmp = _fs.createTempFile("endo-completion-cache");
+    // The temp file must live in _cacheDir (not the system temp dir): rename is only
+    // atomic — and only succeeds without a copy — within one filesystem, and /tmp is
+    // commonly a separate mount (tmpfs) from ~/.cache, which would fail with EXDEV and
+    // silently leave the persistent cache empty.
+    auto const tmp = _fs.createTempFile("endo-completion-cache", _cacheDir);
     if (!tmp)
         return;
     if (auto const written = _fs.writeFile(*tmp, serialized); !written)
