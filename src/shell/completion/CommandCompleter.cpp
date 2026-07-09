@@ -52,11 +52,14 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
                                                        .kind = CompletionKind::Command });
     }
 
-    // Apply fuzzy scoring: builtins at higher base score
-    auto results = applyFuzzyScoring(builtins, prefix, 100);
+    // Additive prefix ranking (not tiered): the history-recency bonus applied below must
+    // be able to promote a frequently-used fuzzy/subsequence match above a never-used
+    // prefix match. A tier offset would swamp that bonus and pin every prefix match on
+    // top regardless of use, degrading command ranking.
+    auto results = applyFuzzyScoring(builtins, prefix, 100, PrefixRanking::Additive);
 
     // Apply fuzzy scoring: PATH commands at lower base score, merge in
-    auto pathResults = applyFuzzyScoring(pathCandidates, prefix, 50);
+    auto pathResults = applyFuzzyScoring(pathCandidates, prefix, 50, PrefixRanking::Additive);
     for (auto& item: pathResults)
     {
         auto isDuplicate = false;

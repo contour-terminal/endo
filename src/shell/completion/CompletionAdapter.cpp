@@ -28,7 +28,8 @@ namespace
 
 std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandidate> const& candidates,
                                                    std::string_view prefix,
-                                                   int baseScore)
+                                                   int baseScore,
+                                                   PrefixRanking prefixRanking)
 {
     std::vector<tui::CompletionItem> results;
 
@@ -65,10 +66,14 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
             score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
             if (isPrefixMatch)
             {
-                // Lift genuine prefix matches into a dedicated tier above every fuzzy
-                // match, so a scattered subsequence hit on a long candidate can never
-                // displace a shorter prefix match under the result cap.
-                score += fuzzyConfig.prefixMatchBonus + PrefixTierOffset;
+                score += fuzzyConfig.prefixMatchBonus;
+                // Tiered ranking lifts genuine prefix matches above every fuzzy match, so
+                // a scattered subsequence hit on a long candidate can never displace a
+                // shorter prefix match under the result cap. Additive ranking omits the
+                // tier so a caller's own post-hoc bonus (e.g. history recency) can still
+                // reorder prefix and fuzzy matches relative to each other.
+                if (prefixRanking == PrefixRanking::Tiered)
+                    score += PrefixTierOffset;
             }
         }
         else
