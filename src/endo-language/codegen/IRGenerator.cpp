@@ -6700,6 +6700,23 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 reportTypeError("Json has no member '{}'", std::string_view(fieldAccess->fieldName));
                 return;
             }
+            if (modIdent->name == "Path")
+            {
+                static std::unordered_map<std::string_view, std::string_view> const pathPipeMethods = {
+                    { "dirname", "path_dirname" },
+                    { "basename", "path_basename" },
+                    { "normalize", "path_normalize" },
+                    { "isAbsolute", "path_is_absolute" },
+                };
+                if (auto const it = pathPipeMethods.find(fieldAccess->fieldName); it != pathPipeMethods.end())
+                {
+                    if (tryGenerateNativeCall(std::string(it->second), { value }))
+                        return;
+                }
+                reportTypeError("Path has no member '{}' usable in a pipeline",
+                                std::string_view(fieldAccess->fieldName));
+                return;
+            }
         }
         reportTypeError("Pipeline function must be an identifier, lambda, or partial application");
         return;
@@ -7091,6 +7108,49 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                         annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
                         return;
                     }
+                }
+            }
+
+            // Path module dispatch (lexical path operations)
+            if (modIdent->name == "Path")
+            {
+                if (method == "join" && argExprs.size() == 2)
+                {
+                    auto* baseArg = codegen(argExprs[0]);
+                    auto* tailArg = codegen(argExprs[1]);
+                    if (baseArg && tailArg)
+                    {
+                        if (tryGenerateNativeCall("path_join", { baseArg, tailArg }))
+                            return;
+                    }
+                }
+                else if ((method == "dirname" || method == "basename" || method == "normalize")
+                         && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        // method is guaranteed to be dirname/basename/normalize by the
+                        // enclosing condition, and each maps to the path_<method> builtin.
+                        auto const vmName = "path_" + method;
+                        if (tryGenerateNativeCall(vmName, { pathArg }))
+                            return;
+                    }
+                }
+                else if (method == "isAbsolute" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("path_is_absolute", { pathArg }))
+                            return;
+                    }
+                }
+                else
+                {
+                    reportTypeError("Path.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
                 }
             }
 
@@ -10697,10 +10757,27 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     {
         if (modIdent->name == "Path")
         {
-            if (node.fieldName == "temporary_directory")
+            static std::unordered_map<std::string_view, std::string_view> const pathNullaryMembers = {
+                { "temporary_directory", "path_temporary_directory" },
+                { "separator", "path_separator" },
+                { "delimiter", "path_delimiter" },
+            };
+            if (auto const it = pathNullaryMembers.find(node.fieldName); it != pathNullaryMembers.end())
             {
-                tryGenerateNativeCall("path_temporary_directory", {});
+                tryGenerateNativeCall(std::string(it->second), {});
                 return;
+            }
+            static constexpr std::string_view PathMethods[] = {
+                "join", "dirname", "basename", "normalize", "isAbsolute",
+            };
+            for (auto const& m: PathMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    // Path.xxx requires arguments — handled in ApplicationExpr.
+                    reportTypeError("Path.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
             }
             reportTypeError("Path has no member '{}'", std::string_view(node.fieldName));
             return;

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.separator is a single-character platform directory separator
+# expect: 1
+
+println (string_length Path.separator)

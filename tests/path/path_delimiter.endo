@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.delimiter is a single-character platform PATH-list separator
+# expect: 1
+
+println (string_length Path.delimiter)

@@ -323,8 +323,9 @@ void randRange(CoreVM::Params& args);
 // ---------------------------------------------------------------------------
 
 /// json_query(path, json) -> list<string>: Extracts values from a JSON string using a dotted path.
-/// Path syntax: `.key` accesses an object property, `[]` iterates array elements.
-/// Returns an empty list on parse error or missing key.
+/// Path syntax: `.key` accesses an object property, `[]` iterates all array elements, and
+/// `[N]` accesses a single array element by zero-based index.
+/// Returns an empty list on parse error, missing key, or out-of-range index.
 void jsonQuery(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
@@ -364,6 +365,29 @@ void fileDelete(CoreVM::Params& args);
 
 /// path_temporary_directory() -> string: Returns the platform's temporary directory path.
 void pathTemporaryDirectory(CoreVM::Params& args);
+
+/// path_join(a, b) -> string: Joins two path segments with the platform-native separator.
+/// If `b` is absolute, it replaces `a` (matching std::filesystem::path semantics).
+void pathJoin(CoreVM::Params& args);
+
+/// path_dirname(p) -> string: Returns the parent-directory portion of a path (may be empty).
+void pathDirname(CoreVM::Params& args);
+
+/// path_basename(p) -> string: Returns the final component (file name) of a path.
+void pathBasename(CoreVM::Params& args);
+
+/// path_normalize(p) -> string: Lexically collapses `.`/`..` and normalizes separators to the
+/// platform-native form. Purely lexical — does not touch the filesystem.
+void pathNormalize(CoreVM::Params& args);
+
+/// path_is_absolute(p) -> bool: Returns true if the path is absolute.
+void pathIsAbsolute(CoreVM::Params& args);
+
+/// path_separator() -> string: The platform's directory separator (`\` on Windows, `/` elsewhere).
+void pathSeparator(CoreVM::Params& args);
+
+/// path_delimiter() -> string: The platform's PATH-list separator (`;` on Windows, `:` elsewhere).
+void pathDelimiter(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
 // Process signal operations

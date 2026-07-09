@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.basename returns the final path component
+# expect: c.txt
+
+println (Path.basename "a/b/c.txt")

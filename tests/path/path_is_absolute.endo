@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.isAbsolute is false for a relative path
+# expect: false
+
+println (Path.isAbsolute "relative/path")

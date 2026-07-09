@@ -54,6 +54,52 @@ void pathTemporaryDirectory(CoreVM::Params& args)
     args.setResult(args.caller()->newString(std::filesystem::temp_directory_path().string()));
 }
 
+void pathJoin(CoreVM::Params& args)
+{
+    auto const base = std::filesystem::path(std::string(args.getString(1)));
+    auto const tail = std::filesystem::path(std::string(args.getString(2)));
+    args.setResult(args.caller()->newString((base / tail).string()));
+}
+
+void pathDirname(CoreVM::Params& args)
+{
+    auto const p = std::filesystem::path(std::string(args.getString(1)));
+    args.setResult(args.caller()->newString(p.parent_path().string()));
+}
+
+void pathBasename(CoreVM::Params& args)
+{
+    auto const p = std::filesystem::path(std::string(args.getString(1)));
+    args.setResult(args.caller()->newString(p.filename().string()));
+}
+
+void pathNormalize(CoreVM::Params& args)
+{
+    auto p = std::filesystem::path(std::string(args.getString(1)));
+    args.setResult(args.caller()->newString(p.lexically_normal().make_preferred().string()));
+}
+
+void pathIsAbsolute(CoreVM::Params& args)
+{
+    auto const p = std::filesystem::path(std::string(args.getString(1)));
+    args.setResult(static_cast<CoreVM::CoreNumber>(p.is_absolute() ? 1 : 0));
+}
+
+void pathSeparator(CoreVM::Params& args)
+{
+    auto const sep = std::string(1, static_cast<char>(std::filesystem::path::preferred_separator));
+    args.setResult(args.caller()->newString(sep));
+}
+
+void pathDelimiter(CoreVM::Params& args)
+{
+#if defined(_WIN32)
+    args.setResult(args.caller()->newString(std::string(";")));
+#else
+    args.setResult(args.caller()->newString(std::string(":")));
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Value-to-string conversion
 // ---------------------------------------------------------------------------
@@ -1298,11 +1344,13 @@ namespace
     {
         enum class Kind : uint8_t
         {
-            Key,
-            Array,
+            Key,   ///< `.name` — access an object property by name.
+            Array, ///< `[]` — iterate over all elements of an array.
+            Index, ///< `[N]` — access a single array element by zero-based index.
         };
         Kind kind;
-        std::string key;
+        std::string key;  ///< Property name for Kind::Key.
+        size_t index = 0; ///< Element index for Kind::Index.
     };
 
     std::vector<JsonPathSegment> parseJsonPath(std::string_view path)
@@ -1326,6 +1374,24 @@ namespace
             {
                 segments.push_back({ .kind = JsonPathSegment::Kind::Array, .key = {} });
                 i += 2;
+            }
+            else if (path[i] == '[' && i + 1 < path.size() && path[i + 1] >= '0' && path[i + 1] <= '9')
+            {
+                // `[N]` — indexed array element access.
+                ++i; // consume '['
+                size_t value = 0;
+                while (i < path.size() && path[i] >= '0' && path[i] <= '9')
+                {
+                    value = (value * 10) + static_cast<size_t>(path[i] - '0');
+                    ++i;
+                }
+                if (i < path.size() && path[i] == ']')
+                {
+                    segments.push_back({ .kind = JsonPathSegment::Kind::Index, .key = {}, .index = value });
+                    ++i; // consume ']'
+                }
+                // A malformed `[N` without a closing bracket is silently ignored,
+                // matching the tolerant behaviour of the rest of the parser.
             }
             else
             {
@@ -1368,6 +1434,11 @@ namespace
                 for (auto const& elem: node)
                     walkJson(elem, segments, index + 1, results);
             }
+        }
+        else if (seg.kind == JsonPathSegment::Kind::Index)
+        {
+            if (node.is_array() && seg.index < node.size())
+                walkJson(node[seg.index], segments, index + 1, results);
         }
     }
 

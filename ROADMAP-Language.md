@@ -217,7 +217,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `nth`, `last` — indexed list access returning `option<T>`
 - [x] `replicate` — create list of N copies of a value
 - [x] `fetch` — HTTP GET request, returns `result<str, str>`
-- [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration); returns `list<string>`
+- [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration, `[N]` for indexed element access); returns `list<string>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
 - [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
@@ -226,7 +226,9 @@ This document tracks the implementation status of F# language features as define
 - [x] `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll` — file I/O operations
 - [x] `File.size`, `File.exists`, `File.delete` — file metadata and management
 - [x] `Path.temporary_directory` — cross-platform temporary directory path
-- [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
+- [x] `Path.join`, `Path.dirname`, `Path.basename`, `Path.normalize`, `Path.isAbsolute` — lexical path operations (platform-native separators)
+- [x] `Path.separator`, `Path.delimiter` — platform directory / `PATH`-list separators
+- [ ] `Path.extension` — file extension extraction
 
 ## Shell Integration
 
