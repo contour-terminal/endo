@@ -100,6 +100,8 @@ add_library(endo-shell STATIC
     completion/CompleterFunctionRegistry.hpp
     completion/ScriptedCompleter.hpp
     completion/ScriptedCompleter.cpp
+    completion/CompletionCache.hpp
+    completion/CompletionCache.cpp
     completion/DirconfigSpec.hpp
     completion/DirconfigSpec.cpp
     completion/HistorySpec.hpp
@@ -139,6 +141,13 @@ add_library(endo-shell STATIC
     # Directory Configuration
     DirectoryConfig.hpp
     DirectoryConfig.cpp
+
+    # Async process wait + completion notification
+    AsyncProcessWait.hpp
+    AsyncProcessWait.cpp
+    CompletionNotifier.hpp
+    TerminalCompletionNotifier.hpp
+    TerminalCompletionNotifier.cpp
 
     # Builtins
     builtins/InlineCommandDescriptor.hpp
@@ -284,6 +293,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-shell
         test_main.cpp
         Shell_test.cpp
+        AsyncProcessWait_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
         commands/FindExpression_test.cpp
@@ -303,6 +313,8 @@ if(ENDO_TESTING)
         completion/CommandSpecCompleter_test.cpp
         completion/CompleterFunctionRegistry_test.cpp
         completion/ScriptedCompleter_test.cpp
+        completion/CompletionCache_test.cpp
+        completion/CompletionAdapter_test.cpp
         history/History_test.cpp
         history/PersistentHistory_test.cpp
         history/RequiredPaths_test.cpp

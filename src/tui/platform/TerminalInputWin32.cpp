@@ -8,6 +8,7 @@
 
     #include <array>
     #include <string_view>
+    #include <utility>
 
     #include <windows.h>
 
@@ -128,6 +129,11 @@ auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
 {
     auto events = std::vector<InputEvent> {};
 
+    // Return any re-staged (pushed-back) events first, so bytes read out-of-band during a
+    // completion are delivered ahead of newly-typed input, in order.
+    if (!_pendingEvents.empty())
+        events = std::exchange(_pendingEvents, {});
+
     // Process console input records
     DWORD numEvents = 0;
     if (!GetNumberOfConsoleInputEvents(_hStdin, &numEvents) || numEvents == 0)
@@ -180,6 +186,15 @@ auto TerminalInput::readReadyInput() -> std::vector<InputEvent>
 auto TerminalInput::parserTimeout() -> std::vector<InputEvent>
 {
     return _parser.timeout();
+}
+
+void TerminalInput::pushBack(std::string_view bytes)
+{
+    if (bytes.empty())
+        return;
+    auto parsed = _parser.feed(bytes);
+    _pendingEvents.insert(
+        _pendingEvents.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
 }
 
 void TerminalInput::notifyResize(int /*cols*/, int /*rows*/)

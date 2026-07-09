@@ -1067,6 +1067,48 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
+    // Time budget (ms) for a cancellable tab-completion command substitution before
+    // it is auto-aborted; 0 disables the timeout (Escape/Ctrl+C only). Set in
+    // init.endo, e.g. `shell_completion_timeout <- 5000`.
+    _runtime.registerProperty("shell_completion_timeout", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(_completionTimeoutMs.count()));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            _completionTimeoutMs = std::chrono::milliseconds { std::max(int64_t { 0 }, args.getInt(1)) };
+        });
+
+    // Shorter budget (ms) for a cold/uncached completer fetch, so the first Tab of a
+    // session stays snappy. The effective completion-wait deadline is the smaller of
+    // this and `shell_completion_timeout` (0 = this budget disabled).
+    _runtime.registerProperty("shell_completion_cold_timeout", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(_completionColdTimeoutMs.count()));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            _completionColdTimeoutMs = std::chrono::milliseconds { std::max(int64_t { 0 }, args.getInt(1)) };
+        });
+
+    // Fresh window (seconds) before a scripted completion is re-fetched. Within it the
+    // cached package list is served as-is. Read when the completer is built, so set it
+    // in init.endo (loaded before completers), e.g. `shell_completion_cache_ttl <- 600`.
+    _runtime.registerProperty("shell_completion_cache_ttl", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(_completionCacheConfig.freshTtl.count()));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            _completionCacheConfig.freshTtl = std::chrono::seconds { std::max(int64_t { 0 }, args.getInt(1)) };
+        });
+
+    // Kill switch for the persistent (on-disk) completion cache. When false, only the
+    // in-memory per-session cache is used. Read when the completer is built, so set it in
+    // init.endo (loaded before completers) to disable the on-disk layer entirely.
+    _runtime.registerProperty("shell_completion_cache_enabled", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_completionCacheConfig.persistentCacheEnabled); })
+        .onSet([this](CoreVM::Params& args) {
+            _completionCacheConfig.persistentCacheEnabled = args.getBool(1);
+        });
+
     _runtime.registerProperty("shell_ls_icons", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_lsIcons); })
         .onSet([this](CoreVM::Params& args) { _lsIcons = args.getBool(1); });

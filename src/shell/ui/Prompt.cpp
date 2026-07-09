@@ -233,7 +233,18 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
             if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(ev))
                 needsRedraw = true;
 
-            switch (_promptComponent->processInput(ev))
+            auto const action = _promptComponent->processInput(ev);
+
+            // processInput may have driven a tab-completion that blocked on a subprocess;
+            // any keystrokes the user typed meanwhile were captured out of band. Re-stage
+            // them into the terminal input so they are decoded as normal input next loop.
+            if (_completionPushbackSource)
+            {
+                if (auto pending = _completionPushbackSource(); !pending.empty())
+                    _terminal.input().pushBack(pending);
+            }
+
+            switch (action)
             {
                 case PromptComponent::Action::Submit: {
                     // Redraw to clear ghost text before moving cursor
@@ -365,6 +376,11 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
 void Prompt::setOnIdle(std::function<void()> callback)
 {
     _onIdle = std::move(callback);
+}
+
+void Prompt::setCompletionPushbackSource(std::function<std::string()> source)
+{
+    _completionPushbackSource = std::move(source);
 }
 
 void Prompt::setPrompt(std::string_view promptStr)

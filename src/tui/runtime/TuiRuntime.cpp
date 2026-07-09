@@ -74,8 +74,7 @@ void TuiRuntime::requeueForCancellation(std::coroutine_handle<> waiter)
         return;
 
     // If parked as an fd waiter, drop and detach its registration so the stale
-    // entry cannot also fire. A timer-parked handle has no index here; its heap
-    // entry is left in place and skipped later (the handle will be done by then).
+    // entry cannot also fire.
     for (auto it = _fdWaiters.begin(); it != _fdWaiters.end(); ++it)
     {
         if (it->second == waiter)
@@ -86,9 +85,26 @@ void TuiRuntime::requeueForCancellation(std::coroutine_handle<> waiter)
         }
     }
 
-    // Re-queue once. drainReadyQueue skips already-done handles, and a later stale
-    // timer fire will see done() and skip it, so a single push is safe.
-    _ready.push_back(waiter);
+    // If parked on a timer, null its heap entry so it is never dereferenced later.
+    // Relying on a stale fire seeing handle.done() is unsafe: when the cancelled
+    // flow is a whenAny loser, its frame is *destroyed* (not merely done) once it
+    // unwinds, so a lingering entry would call done() on freed memory.
+    // fireExpiredTimers guards `entry.handle && ...`, so a nulled entry is skipped.
+    for (auto& entry: _timers)
+    {
+        if (entry.handle == waiter)
+        {
+            entry.handle = {};
+            break;
+        }
+    }
+
+    // Re-queue exactly once. If the timer already fired the handle into the ready
+    // queue before this cancellation (so the handle is queued but not yet resumed),
+    // pushing again would resume — and destroy — the frame twice. Guard against
+    // that: only push if the handle is not already pending.
+    if (std::ranges::find(_ready, waiter) == _ready.end())
+        _ready.push_back(waiter);
 }
 
 void TuiRuntime::wakeFdWaiters(std::vector<FdToken> const& tokens)

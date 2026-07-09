@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Shared completion helpers for the RPM-family package managers (rpm, dnf, dnf5).
+# The underscore prefix makes this file load first (completers load in alphabetical
+# order), so the functions and tables defined here are available to dnf.endo,
+# dnf5.endo, and rpm.endo — the same convention _ssh_hosts.endo uses for ssh/scp.
+
+# Installed-package names, from the local rpmdb (fast, offline — no metadata
+# refresh). Shared by rpm, dnf, and dnf5; a change to the query format (e.g. adding
+# epoch/arch) is made once here instead of in three completers.
+let rpm_installed_packages _ =
+    $(rpm -qa --qf "%{NAME}\n") |> split "\n" |> filter (_ != "")
+
+# `dnf clean` / `dnf5 clean` targets. Identical between DNF 4 and dnf5.
+let rpm_clean_targets = [
+    Completion.described "all" "Remove all cached data";
+    Completion.described "metadata" "Remove repository metadata";
+    Completion.described "packages" "Remove cached packages";
+    Completion.described "dbcache" "Remove cached database files";
+    Completion.described "expire-cache" "Mark the metadata cache expired"
+]
+
+# `dnf group` / `dnf5 group` subcommands. Identical between DNF 4 and dnf5.
+let rpm_group_subcommands = [
+    Completion.described "install" "Install a group";
+    Completion.described "remove" "Remove a group";
+    Completion.described "upgrade" "Upgrade a group";
+    Completion.described "list" "List groups"; Completion.described "info" "Show group info"
+]
+
+# `dnf module` / `dnf5 module` subcommands. Identical between DNF 4 and dnf5.
+let rpm_module_subcommands = [
+    Completion.described "enable" "Enable a module stream";
+    Completion.described "disable" "Disable a module";
+    Completion.described "install" "Install a module profile";
+    Completion.described "remove" "Remove a module profile";
+    Completion.described "reset" "Reset a module to the default state";
+    Completion.described "list" "List modules"; Completion.described "info" "Show module info"
+]
+
+# `dnf history` subcommands common to DNF 4 and dnf5. dnf5 adds `store` on top of
+# these (appended in dnf5.endo), so the shared set stays the DNF 4 baseline.
+let rpm_history_subcommands = [
+    Completion.described "list" "List transactions";
+    Completion.described "info" "Show transaction details";
+    Completion.described "undo" "Undo a transaction";
+    Completion.described "redo" "Repeat a transaction";
+    Completion.described "rollback" "Roll back to a transaction"
+]

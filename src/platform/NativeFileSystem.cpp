@@ -368,9 +368,12 @@ std::expected<void, std::string> NativeFileSystem::setPermissions(fs::path const
     return {};
 }
 
-std::expected<fs::path, std::string> NativeFileSystem::createTempFile(std::string_view prefix) const
+std::expected<fs::path, std::string> NativeFileSystem::createTempFile(std::string_view prefix,
+                                                                      fs::path const& directory) const
 {
-    auto const tmpDir = fs::temp_directory_path();
+    // Default to the system temp dir; an explicit directory lets a caller place the
+    // temp file on the same filesystem as its eventual rename target (avoids EXDEV).
+    auto const tmpDir = directory.empty() ? fs::temp_directory_path() : directory;
     auto const pattern = std::format("{}{}_XXXXXX", tmpDir.string() + "/", prefix);
     auto templateStr = std::string(pattern);
 

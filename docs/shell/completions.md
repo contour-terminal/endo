@@ -150,7 +150,10 @@ the same list -- plain strings are treated as description-less entries.
 !!! tip
     The `prefix` is used by endo's fuzzy matcher to filter and rank results. You do not
     need to filter by prefix yourself -- just return all candidates for the current
-    argument position and let endo handle the matching.
+    argument position and let endo handle the matching. Candidates that start with the
+    typed prefix are always ranked ahead of looser fuzzy (subsequence) matches, so a
+    large list -- e.g. every package name -- narrows to the expected prefix matches
+    first.
 
 ### Full Example
 
@@ -193,9 +196,11 @@ Key patterns used here:
 - **`match args with`** dispatches on the tokens already typed, determining what to
   complete next (subcommand, option, or dynamic value).
 - **`when startsWith "-" prefix`** guards detect when the user is typing an option flag.
-- **`$(command)` substitution** fetches dynamic values at completion time. Results are
-  cached for 2 seconds to avoid repeated subprocess calls while the user navigates the
-  menu.
+- **`$(command)` substitution** fetches dynamic values at completion time. Fetches
+  run only on an explicit **Tab** (never for inline ghost text), and their results are
+  cached — in memory for the session and on disk under `~/.cache/endo/completions/` —
+  so repeated Tabs, further typing, and later sessions do not re-run the subprocess.
+  See [Completion Timeout and Caching](configuration.md#completion-timeout-and-caching).
 - **`Completion.described`** provides short help text for each entry.
 - **Returning `[]`** signals that no completions are available, which falls back to file
   path completion.
@@ -264,12 +269,20 @@ useful for showing man-page excerpts, usage examples, or extended documentation.
 | Tab / Down | Select next item |
 | Up | Select previous item |
 | Enter | Accept selected completion |
-| Escape | Dismiss popup |
+| Escape | Dismiss the completion popup |
 | Page Down | Jump down one page |
 | Page Up | Jump up one page |
 
 As you continue typing, the menu filters in real-time using fuzzy matching. Items that no
 longer match are removed and scores are recalculated.
+
+When a completer runs a slow external command (for example querying packages), the
+lookup is bounded by `shell_completion_timeout` / `shell_completion_cold_timeout` and
+can be cancelled at any time by pressing **Ctrl+C**, so a hung completion never blocks
+the shell. Its result is also cached (in memory and on disk), so it runs at most once
+per list rather than on every keystroke. See
+[Completion Timeout and Caching](configuration.md#completion-timeout-and-caching) to
+configure it.
 
 ## Bundled Completers
 
@@ -286,5 +299,8 @@ Endo ships with completers for the following commands:
 | `glab` | `glab.endo` | Full subcommand tree for GitLab CLI, with alias resolution |
 | `flatpak` | `flatpak.endo` | Subcommands, dynamic app/remote listing |
 | `claude` | `claude.endo` | Subcommands, model names, permission modes, output formats |
+| `dnf` | `dnf.endo` | DNF 4 subcommands/options, installed (`rpm -qa`) and available (`dnf repoquery -C`) package names |
+| `dnf5` | `dnf5.endo` | DNF 5 subcommands/options, installed and available package names |
+| `rpm` | `rpm.endo` | Mode/query options, installed package names in query/erase/verify modes |
 
 These serve as good reference implementations when writing your own completers.

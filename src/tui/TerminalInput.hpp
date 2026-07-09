@@ -78,8 +78,21 @@ class TerminalInput
     [[nodiscard]] auto resizeNativeHandle() const noexcept -> endo::platform::NativeHandle;
 
     /// @brief Reads and parses input currently ready on the input handle (non-blocking).
-    /// @return Parsed events (may be empty if no decodable input was ready).
+    /// @return Parsed events (may be empty if no decodable input was ready). Any events
+    ///         previously staged via @ref pushBack are returned first, ahead of live input.
     [[nodiscard]] auto readReadyInput() -> std::vector<InputEvent>;
+
+    /// @brief Re-stages raw input bytes that were read off the input handle out-of-band
+    ///        (e.g. by the completion abort-key watcher) so they are not lost.
+    ///
+    /// The bytes are fed through the same VT parser as live input, and the resulting
+    /// events are queued to be returned by the next @ref readReadyInput ahead of newly
+    /// read input — preserving both decode correctness (the parser is stateful, so a
+    /// multi-byte escape sequence spanning this pushback and later live input is still
+    /// reassembled) and arrival order.
+    ///
+    /// @param bytes The raw bytes to re-stage (as read from the terminal).
+    void pushBack(std::string_view bytes);
 
     /// @brief Drains a pending resize notification and queries the new size.
     /// @return The resize event if one was pending, else std::nullopt.
@@ -123,6 +136,9 @@ class TerminalInput
 
   private:
     VtParser _parser;
+    /// Events re-staged via @ref pushBack, returned by @ref readReadyInput before live
+    /// input. Empty in the common case (no out-of-band read occurred).
+    std::vector<InputEvent> _pendingEvents;
     bool _rawMode = false;
     bool _suspended = false;         ///< True when suspended for external command execution.
     bool _anyMotionTracking = false; ///< True when any-motion tracking (mode 1003) should be enabled.

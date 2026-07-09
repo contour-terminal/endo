@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Completer for rpm, the RPM package manager. Unlike dnf, rpm is option-driven:
+# the mode (query/install/erase/verify/...) is selected by a flag rather than a
+# subcommand. We complete options always, and complete installed package names
+# when a query/erase/verify mode is active and a package (not a file) is the
+# operand. Install/upgrade/freshen and `-p` take .rpm file paths, so those fall
+# back to file-path completion (return []).
+
+# Installed-package names come from the shared `rpm_installed_packages` helper in
+# _rpm_common.endo (loaded first).
+
+# True if any element of `args` equals one of the given flags.
+let rpm_has_flag flags args =
+    exists (fun a -> exists (a == _) flags) args
+
+let rpm_complete args prefix =
+    let options = [
+        Completion.described "-q" "Query mode"; Completion.described "--query" "Query mode";
+        Completion.described "-i" "Install package(s)";
+        Completion.described "--install" "Install package(s)";
+        Completion.described "-U" "Upgrade package(s)";
+        Completion.described "--upgrade" "Upgrade package(s)";
+        Completion.described "-F" "Freshen (upgrade if installed)";
+        Completion.described "--freshen" "Freshen (upgrade if installed)";
+        Completion.described "-e" "Erase (uninstall) package(s)";
+        Completion.described "--erase" "Erase (uninstall) package(s)";
+        Completion.described "-V" "Verify package(s)";
+        Completion.described "--verify" "Verify package(s)";
+        Completion.described "-a" "Query/verify all packages";
+        Completion.described "--all" "Query/verify all packages";
+        Completion.described "-f" "Query/verify package owning a file";
+        Completion.described "--file" "Query/verify package owning a file";
+        Completion.described "--path" "Query/verify package owning a path";
+        Completion.described "-g" "Query/verify packages in a group";
+        Completion.described "--group" "Query/verify packages in a group";
+        Completion.described "-p" "Query/verify a package file";
+        Completion.described "--package" "Query/verify a package file";
+        Completion.described "--triggeredby" "Query packages triggered by a package";
+        Completion.described "--whatprovides" "Query packages providing a dependency";
+        Completion.described "--whatrequires" "Query packages requiring a dependency";
+        Completion.described "--whatconflicts" "Query packages conflicting with a dependency";
+        Completion.described "--whatobsoletes" "Query packages obsoleting a dependency";
+        Completion.described "--whatrecommends" "Query packages recommending a dependency";
+        Completion.described "--whatsuggests" "Query packages suggesting a dependency";
+        Completion.described "--whatsupplements" "Query packages supplementing a dependency";
+        Completion.described "--whatenhances" "Query packages enhancing a dependency";
+        Completion.described "-l" "List files in package";
+        Completion.described "--list" "List files in package";
+        Completion.described "-c" "Only include configuration files";
+        Completion.described "--configfiles" "Only include configuration files";
+        Completion.described "-d" "Only include documentation files";
+        Completion.described "--docfiles" "Only include documentation files";
+        Completion.described "-L" "Only include license files";
+        Completion.described "--licensefiles" "Only include license files";
+        Completion.described "-s" "Display the state of listed files";
+        Completion.described "--state" "Display the state of listed files";
+        Completion.described "--dump" "Dump basic file information";
+        Completion.described "--queryformat" "Use the given query format";
+        Completion.described "--qf" "Use the given query format";
+        Completion.described "--scripts" "List install/erase scriptlets";
+        Completion.described "--changelog" "Show package changelog";
+        Completion.described "--provides" "List capabilities the package provides";
+        Completion.described "--requires" "List capabilities the package requires";
+        Completion.described "--conflicts" "List capabilities the package conflicts with";
+        Completion.described "--obsoletes" "List packages this package obsoletes";
+        Completion.described "--recommends" "List capabilities recommended";
+        Completion.described "--suggests" "List capabilities suggested";
+        Completion.described "--supplements" "List capabilities supplemented";
+        Completion.described "--enhances" "List capabilities enhanced";
+        Completion.described "--nodeps" "Do not verify package dependencies";
+        Completion.described "--noscripts" "Do not execute scriptlets";
+        Completion.described "--notriggers" "Do not execute triggered scriptlets";
+        Completion.described "--nodigest" "Do not verify package digest(s)";
+        Completion.described "--nosignature" "Do not verify package signature(s)";
+        Completion.described "--force" "Short hand for --replacepkgs --replacefiles";
+        Completion.described "--replacepkgs" "Reinstall if already present";
+        Completion.described "--replacefiles" "Ignore file conflicts between packages";
+        Completion.described "--oldpackage" "Allow downgrade on upgrade";
+        Completion.described "--excludedocs" "Do not install documentation";
+        Completion.described "--justdb" "Update the database only";
+        Completion.described "--test" "Check whether it would work, don't act";
+        Completion.described "-h" "Print hash marks during install";
+        Completion.described "--hash" "Print hash marks during install";
+        Completion.described "--percent" "Print percentages during install";
+        Completion.described "-v" "Verbose output";
+        Completion.described "--verbose" "Verbose output";
+        Completion.described "--quiet" "Less detailed output";
+        Completion.described "--version" "Print the rpm version";
+        Completion.described "-r" "Use ROOT as the top level directory";
+        Completion.described "--root" "Use ROOT as the top level directory";
+        Completion.described "--dbpath" "Use the database in DIRECTORY";
+        Completion.described "--rcfile" "Read config from FILE(s)";
+        Completion.described "--macros" "Read macros from FILE(s)";
+        Completion.described "-D" "Define a macro";
+        Completion.described "--define" "Define a macro";
+        Completion.described "-E" "Print the expansion of EXPR";
+        Completion.described "--eval" "Print the expansion of EXPR";
+        Completion.described "--target" "Specify the target platform";
+        Completion.described "--querytags" "Display known query tags";
+        Completion.described "--showrc" "Display the final rpmrc configuration"
+    ]
+    # Modes that operate on installed packages by name.
+    let query_mode = rpm_has_flag ["-q"; "--query"] args
+    let erase_mode = rpm_has_flag ["-e"; "--erase"] args
+    let verify_mode = rpm_has_flag ["-V"; "--verify"] args
+    # Operands that change the meaning away from "installed package name".
+    let file_operand = rpm_has_flag ["-p"; "--package"; "-f"; "--file"; "--path"; "-a"; "--all"] args
+    let installs_files = rpm_has_flag ["-i"; "--install"; "-U"; "--upgrade"; "-F"; "--freshen"] args
+    match prefix with
+    | _ when startsWith "-" prefix -> options
+    | _ when installs_files -> []
+    | _ when file_operand -> []
+    | _ when query_mode || erase_mode || verify_mode -> rpm_installed_packages ()
+    | _ -> options
+
+Completion.register "rpm" rpm_complete

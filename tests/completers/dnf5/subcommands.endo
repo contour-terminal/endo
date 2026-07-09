@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: dnf5 completer: subcommand completion
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/dnf5.endo
+# expect-expr: _ |> contains "install"
+# expect-expr: _ |> contains "remove"
+# expect-expr: _ |> contains "upgrade"
+# expect-expr: _ |> contains "distro-sync"
+# expect-expr: _ |> contains "downgrade"
+# expect-expr: _ |> contains "reinstall"
+# expect-expr: _ |> contains "autoremove"
+# expect-expr: _ |> contains "check-upgrade"
+# expect-expr: _ |> contains "leaves"
+# expect-expr: _ |> contains "repoquery"
+# expect-expr: _ |> contains "advisory"
+# expect-expr: _ |> contains "system-upgrade"
+
+let _ = dnf5_complete [] "" |> each println

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/TerminalCompletionNotifier.hpp>
 #include <shell/builtins/InlineCommandDescriptor.hpp>
+#include <shell/completion/CompletionCache.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/RequiredPaths.hpp>
 #include <shell/ui/Prompt.hpp>
@@ -547,12 +549,10 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
 
 void Shell::SubstitutionCapture::clear()
 {
+    platformClose(fd);
+    fd = InvalidHandle;
     pipe.reset();
-    if (savedStdout != InvalidHandle)
-    {
-        savedStdout = InvalidHandle;
-    }
-    output.clear();
+    savedStdout = InvalidHandle;
 }
 
 // ========================================================================
@@ -635,6 +635,10 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
+
+    // Default completion notifier writes a terminal notice; tests/embedders can
+    // swap it via setCompletionNotifier (e.g. NullCompletionNotifier).
+    _completionNotifier = std::make_unique<TerminalCompletionNotifier>(_tty);
 
     // SHELL must be a fully-qualified path (not a bare name): programs such as
     // sudo-rs' `sudo -s` read SHELL and refuse to spawn it unless it resolves to
@@ -1090,14 +1094,46 @@ void Shell::loadCompleters()
     loadDir(ENDO_COMPLETERS_DIR);
 #endif
 
-    // Register the ScriptedCompleter provider if any completers were loaded
-    if (!_completerFunctions.commands().empty())
+    // Register the ScriptedCompleter provider if any completers were loaded. The
+    // completer subsystem only exists once interactive mode is initialized; when it
+    // is not (e.g. non-interactive use, or a test invoking completer functions
+    // directly), the functions are still loaded above and remain callable via
+    // executeCompleterFunction — only the interactive provider is skipped.
+    //
+    // Register at most once: addProvider does not de-duplicate, so a second call (a
+    // re-run of interactive init, or a test's ensureCompleterReadyForTest followed by
+    // another loadCompleters) would otherwise add a duplicate ScriptedCompleter — running
+    // the scripted completer twice — and discard the existing _completionCache.
+    if (completer && !_scriptedCompleterRegistered && !_completerFunctions.commands().empty())
     {
-        completer->addProvider(std::make_unique<ScriptedCompleter>(
+        _scriptedCompleterRegistered = true;
+
+        // Persistent (L2) cache under the user's XDG cache directory, so scripted
+        // package lists (dnf/rpm) survive shell restarts. All I/O flows through the
+        // injected FileSystem. If the cache home can't be resolved, run without L2
+        // (in-memory L1 only) rather than failing completion setup.
+        if (_completionCacheConfig.persistentCacheEnabled)
+        {
+            if (auto const cacheHome = _env.cacheHome())
+                _completionCache =
+                    std::make_unique<FileSystemCompletionCache>(_fs, *cacheHome / "endo" / "completions");
+        }
+
+        auto scripted = std::make_unique<ScriptedCompleter>(
             _completerFunctions,
             [this](std::string_view funcName, std::vector<std::string> const& args, std::string_view prefix) {
                 return executeCompleterFunction(funcName, args, prefix);
-            }));
+            },
+            _completionCache.get(),
+            _completionCacheConfig);
+
+        // A cold fetch (no usable stale list) gets the tight cold budget; a refresh that
+        // can fall back to a stale list gets the larger overall budget. This flag is read
+        // in awaitSubstitutionPipeline when the completer's `$(...)` wait is bounded.
+        scripted->setPreFetchHook(
+            [this](bool hasStaleFallback) { _completionColdFetch = !hasStaleFallback; });
+
+        completer->addProvider(std::move(scripted));
     }
 }
 
@@ -1149,13 +1185,32 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     auto const savedUnusedDetection = _unusedValueDetection;
     ++_configScriptDepth;
     _unusedValueDetection = false;
+
+    // Arm the cancellable substitution wait for the duration of this completion, so
+    // any `$(...)` a completer runs (e.g. `$(dnf repoquery)`) can be aborted by
+    // Ctrl+C or the timeout instead of blocking the shell. A scope guard restores it
+    // even if execute() throws (e.g. VM QuotaExceeded), so the flag never leaks into
+    // subsequent interactive command execution; the saved value keeps nested
+    // completion re-entry safe.
+    bool const savedCancellable = std::exchange(_completionWaitCancellable, true);
+    ScopeGuard const cancellableRestore { [this, savedCancellable] {
+        _completionWaitCancellable = savedCancellable;
+    } };
+
+    // Reset the substitution outcome so a stale Aborted/TimedOut from a prior run
+    // cannot suppress caching of this one. awaitSubstitutionPipeline sets it if the
+    // wait is cancelled.
+    _lastCompletionOutcome = CompleterExecutionStatus::Ok;
+
     (void) execute(expr, bufferingReport);
+
     --_configScriptDepth;
     _unusedValueDetection = savedUnusedDetection;
 
     // Collect results from the bridge function
     CompleterExecutionResult result;
     result.completions = std::move(_collectedCompletions);
+    result.status = _lastCompletionOutcome;
 
     // Capture any compilation/link errors
     if (bufferingReport.hasMessages())
@@ -1166,6 +1221,11 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     }
 
     return result;
+}
+
+void Shell::setCompletionNotifier(std::unique_ptr<CompletionNotifier> notifier) noexcept
+{
+    _completionNotifier = notifier ? std::move(notifier) : std::make_unique<NullCompletionNotifier>();
 }
 
 void Shell::ensureInteractiveReady()
@@ -1184,6 +1244,10 @@ void Shell::ensureInteractiveReady()
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);
     prompt.setFileSystem(&_fs);
+
+    // Re-stage keystrokes captured while a completion's subprocess ran (see
+    // awaitSubstitutionPipeline / takeCompletionPushback) so typed-ahead input is not lost.
+    prompt.setCompletionPushbackSource([this] { return takeCompletionPushback(); });
 }
 
 std::optional<std::string> Shell::invokePromptCallback(std::string const& functionName)

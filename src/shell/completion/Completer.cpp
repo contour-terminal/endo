@@ -83,7 +83,11 @@ std::optional<std::string> Completer::suggest(std::string_view input, size_t cur
     if (input.empty())
         return std::nullopt;
 
-    auto const ctx = analyzeContext(input, cursorPosition);
+    auto ctx = analyzeContext(input, cursorPosition);
+    // Ghost text is speculative and fires ~100ms after every keystroke; mark it so
+    // providers that shell out (e.g. ScriptedCompleter's dnf/rpm package queries)
+    // serve cached data only and never spawn a subprocess on the typing hot path.
+    ctx.intent = CompletionIntent::Autosuggest;
 
     // Phase 1: Full-line prefix matching (fish-style).
     // Query Command-capable providers for entries matching the entire input line.

@@ -153,8 +153,20 @@ class FileSystem
         std::filesystem::path const& path, std::filesystem::perms perms) const = 0;
 
     // Temp files
+    /// Creates a uniquely-named empty temporary file.
+    ///
+    /// @param prefix    Filename prefix for the generated name.
+    /// @param directory Directory to create the file in. When empty (the default) the
+    ///                  system temp directory is used. Pass the eventual destination's
+    ///                  directory when the temp file will be atomically @ref rename'd
+    ///                  into place: a rename only succeeds without a copy when source and
+    ///                  destination share a filesystem, and the system temp dir (e.g.
+    ///                  `/tmp` on tmpfs) is frequently on a different mount than the
+    ///                  target (e.g. `~/.cache`), which would make the rename fail with
+    ///                  @c EXDEV.
+    /// @return The path to the created file, or an error string on failure.
     [[nodiscard]] virtual std::expected<std::filesystem::path, std::string> createTempFile(
-        std::string_view prefix) const = 0;
+        std::string_view prefix, std::filesystem::path const& directory = {}) const = 0;
 };
 
 } // namespace endo::platform

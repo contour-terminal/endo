@@ -13,6 +13,7 @@
 #include <platform/PathUtils.hpp>
 #include <platform/Types.hpp>
 #include <platform/UserPaths.hpp>
+#include <platform/testing/TestEnvironmentProvider.hpp>
 #include <testing/EnvHelper.hpp>
 
 #if defined(_WIN32)
@@ -224,6 +225,31 @@ TEST_CASE("configHome.falls_back_to_home_dot_config", "[platform]")
         endo::testing::setTestEnv("HOME", savedHome.c_str());
     else
         endo::testing::unsetTestEnv("HOME");
+}
+
+// cacheHome() is provided by the injected EnvironmentProvider (the production path); the
+// old free platform::cacheHome() duplicate was removed. These exercise the same XDG
+// resolution through a fully in-memory TestEnvironmentProvider — no process-env mutation.
+
+TEST_CASE("cacheHome.returns_XDG_CACHE_HOME_when_set", "[platform]")
+{
+    endo::platform::TestEnvironmentProvider env;
+    env.set("XDG_CACHE_HOME", "/tmp/test_xdg_cache");
+
+    auto const cache = env.cacheHome();
+    REQUIRE(cache.has_value());
+    CHECK(*cache == std::filesystem::path("/tmp/test_xdg_cache"));
+}
+
+TEST_CASE("cacheHome.falls_back_to_home_dot_cache", "[platform]")
+{
+    endo::platform::TestEnvironmentProvider env;
+    // Neither XDG_CACHE_HOME nor LOCALAPPDATA set: fall back to $HOME/.cache.
+    env.set("HOME", "/tmp/test_home");
+
+    auto const cache = env.cacheHome();
+    REQUIRE(cache.has_value());
+    CHECK(*cache == std::filesystem::path("/tmp/test_home/.cache"));
 }
 
 TEST_CASE("platformRead.returns_zero_on_closed_pipe_eof", "[platform]")

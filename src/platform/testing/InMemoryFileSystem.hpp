@@ -97,7 +97,7 @@ class InMemoryFileSystem final: public FileSystem
 
     // Temp files
     [[nodiscard]] std::expected<std::filesystem::path, std::string> createTempFile(
-        std::string_view prefix) const override;
+        std::string_view prefix, std::filesystem::path const& directory = {}) const override;
 
     // --- Test helpers ---
 
@@ -122,15 +122,27 @@ class InMemoryFileSystem final: public FileSystem
     /// Deny all access to a path (simulate EACCES / EPERM).
     void denyAccess(std::filesystem::path const& path);
 
+    /// Declares @p root the prefix of a distinct filesystem mount, so a @ref rename
+    /// whose source and destination straddle this boundary fails with a cross-device
+    /// (EXDEV) error — modeling e.g. `/tmp` on tmpfs versus `$HOME` on a real disk.
+    /// Paths under no registered mount are treated as one default mount. Add mounts to
+    /// reproduce cross-device behavior that a single flat in-memory tree cannot.
+    void addMount(std::filesystem::path const& root);
+
   private:
     [[nodiscard]] std::string normalize(std::filesystem::path const& path) const;
     void ensureParentDirectories(std::filesystem::path const& path) const;
+
+    /// @brief Identifies which registered mount @p key belongs to (its longest matching
+    ///        mount root), or an empty string for the default mount.
+    [[nodiscard]] std::string mountOf(std::string const& key) const;
 
     mutable std::map<std::string, std::string> _files;                  ///< path -> content
     mutable std::set<std::string> _directories;                         ///< known directories
     mutable std::map<std::string, std::string> _symlinks;               ///< path -> target
     mutable std::map<std::string, std::filesystem::perms> _permissions; ///< path -> permissions
     std::set<std::string> _deniedPaths;                                 ///< paths that simulate EACCES
+    std::set<std::string> _mounts;                                      ///< distinct-mount roots (EXDEV sim)
     std::filesystem::path _currentPath = "/";
     mutable int _tempCounter = 0;
 };

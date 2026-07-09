@@ -21,6 +21,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
@@ -40,6 +41,7 @@ struct AgentRunOptions;
 } // namespace endo::agent
 #endif
 
+#include <shell/CompletionNotifier.hpp>
 #include <shell/DirectoryConfig.hpp>
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/CompleterFunctionRegistry.hpp>
@@ -158,6 +160,17 @@ class Shell final: public SignalCallback
         return _completerFunctions;
     }
 
+    /// @brief Wires up the interactive completion subsystem for tests.
+    ///
+    /// Ensures the @ref completer is created and its providers registered (as the
+    /// interactive REPL loop would), so a test can drive the full completion path via
+    /// `completer->complete(...)` without entering the REPL. No-op after the first call.
+    void ensureCompleterReadyForTest()
+    {
+        ensureInteractiveReady();
+        loadCompleters();
+    }
+
     /// @brief Called when the working directory changes, to load/unload directory configs.
     void onDirectoryChanged();
 
@@ -274,6 +287,11 @@ class Shell final: public SignalCallback
     /// @brief Looks up an inline builtin by name (binary search on sorted table).
     /// @return Pointer to the descriptor, or nullptr if not found.
     [[nodiscard]] static InlineCommandDescriptor const* findInlineBuiltin(std::string_view name);
+
+    /// @brief Injects the notifier used to surface completion abort/timeout notices.
+    /// @param notifier The notifier to use (ownership transferred). A null argument
+    ///        restores the default no-op behaviour.
+    void setCompletionNotifier(std::unique_ptr<CompletionNotifier> notifier) noexcept;
 
   private:
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
@@ -467,6 +485,38 @@ class Shell final: public SignalCallback
     // --- Substitution builtins (builtins/Substitution.cpp) ---
     void builtinSubstStart(CoreVM::Params& context);
     void builtinSubstEnd(CoreVM::Params& context);
+
+#if !defined(_WIN32)
+    /// @brief Waits for a finished foreground pipeline, choosing the blocking or the
+    /// cancellable path. Shared by the piped-command builtins.
+    ///
+    /// When a tab-completion is running (@ref _completionWaitCancellable) the wait
+    /// runs through @ref awaitSubstitutionPipeline so a slow/hung completer command
+    /// can be aborted; otherwise it performs the normal blocking foreground wait —
+    /// handing the terminal to the pipeline's group, waiting each process with
+    /// `WUNTRACED`, restoring terminal control, and registering a stopped pipeline as
+    /// a job. Sets @ref _exitCode to the last process's exit code.
+    /// @param pids The pipeline's process ids, in spawn order.
+    /// @param pgid The pipeline's process-group id.
+    /// @param command The display string for the job table (on Ctrl+Z).
+    void waitForPipeline(std::vector<ProcessId> const& pids, ProcessId pgid, std::string const& command);
+
+    /// @brief Waits for a completion substitution's pipeline through a nested
+    /// reactor that races the children against a timeout and an abort key.
+    ///
+    /// Used instead of the blocking foreground wait while a tab-completion runs
+    /// (@ref _completionWaitCancellable), so a slow or hung completer command
+    /// (`$(dnf repoquery)`, `$(rpm -qa)`) can be aborted by Escape/Ctrl+C or by the
+    /// @ref _completionTimeoutMs deadline. On abort/timeout it kills the process
+    /// group, marks the active capture aborted, and notifies via
+    /// @ref _completionNotifier. Deliberately does NOT hand the terminal to the
+    /// child (no `setForegroundPgrp`), so the abort-key watcher owns the TTY.
+    /// @param pids The pipeline's process ids, in spawn order.
+    /// @param pgid The pipeline's process-group id (killed on abort/timeout).
+    /// @return The exit code of the last process, or an abort code on cancellation.
+    [[nodiscard]] int awaitSubstitutionPipeline(std::vector<ProcessId> const& pids, ProcessId pgid);
+#endif
+
     void builtinProcSubstFork(CoreVM::Params& context);
     void builtinProcSubstExit(CoreVM::Params& context);
     void builtinProcSubstGetPath(CoreVM::Params& context);
@@ -623,6 +673,16 @@ class Shell final: public SignalCallback
     std::vector<CollectedCompletion> _collectedCompletions;    ///< Buffer for __collect_completions bridge
     std::unique_ptr<DirectoryConfigManager> _dirConfigManager; ///< Per-directory config manager
 
+    /// Persistent (L2) completion cache, owned here and injected into the
+    /// ScriptedCompleter so scripted package lists survive shell restarts. Created in
+    /// @ref loadCompleters under the user's XDG cache directory.
+    std::unique_ptr<CompletionCache> _completionCache;
+
+    /// Tunables fed into the ScriptedCompleter at construction. Overridable from
+    /// init.endo (loaded before @ref loadCompleters) via the `shell_completion_cache_*`
+    /// properties, so the values are read once when the completer is built.
+    ScriptedCompleterConfig _completionCacheConfig;
+
     ProcessManager& _processManager;
 
     std::unique_ptr<CoreVM::Program> _currentProgram;
@@ -726,16 +786,142 @@ class Shell final: public SignalCallback
 
     RedirectState _redirectState;
 
+    /// State for capturing the output of a command substitution (`$(...)`).
+    ///
+    /// On POSIX the capture sink is a regular (anonymous, unlinked) temp file
+    /// rather than a pipe: a temp file has no fixed kernel buffer, so writing to it
+    /// never blocks regardless of how much the captured command(s) emit. This
+    /// sidesteps the pipe-buffer deadlock a pipe-backed capture hits at ~64KB — for
+    /// in-process builtins (which write synchronously on the one thread) as well as
+    /// external processes — without needing a concurrent drain. The bytes are read
+    /// back from @ref fd at subst_end.
+    ///
+    /// On Windows the sink stays a @ref Pipe (the prior behavior); a temp-file sink
+    /// there would need extra handle-inheritance plumbing, and the >64KB deadlock
+    /// this guards against is the POSIX path that blocks completion of e.g.
+    /// `$(dnf repoquery)`.
+    // Note: @ref fd is a raw NativeHandle closed via the noexcept @ref platformClose
+    // rather than a crispy::file_descriptor RAII wrapper. The wrapper's close()
+    // throws std::system_error on failure, which is unsafe here: this destructor
+    // runs during std::vector reallocation and stack unwinding, where a throwing
+    // close would call std::terminate. The hand-rolled move-and-null below keeps the
+    // fd handling noexcept.
     struct SubstitutionCapture
     {
-        std::unique_ptr<Pipe> pipe;
-        NativeHandle savedStdout = InvalidHandle;
-        std::string output;
+        NativeHandle fd = InvalidHandle;          ///< POSIX: temp-file fd used as the capture sink.
+        std::unique_ptr<Pipe> pipe;               ///< Windows: pipe used as the capture sink.
+        NativeHandle savedStdout = InvalidHandle; ///< Pipeline stdout fd to restore at subst_end.
+        bool aborted = false; ///< Set if this substitution was aborted/timed out, so subst_end
+                              ///< returns an empty capture instead of the killed child's partial
+                              ///< output. Per-capture (on the stack) so a nested abort never
+                              ///< blanks an unrelated outer capture.
 
+        SubstitutionCapture() = default;
+
+        /// Closes the temp-file @ref fd so it is not leaked. The @ref pipe closes
+        /// itself via its own destructor. This runs whenever the capture is popped
+        /// from the owning stack (e.g. when a nested substitution completes), so
+        /// every `$(...)` releases its capture sink instead of leaking one fd.
+        ~SubstitutionCapture() { clear(); }
+
+        /// Move-constructs by transferring ownership and nulling @p other's @ref fd,
+        /// so the moved-from object's destructor does not close the fd this object
+        /// now owns (which would be a double-close). Needed because the owning
+        /// stack (`std::vector`) may move elements when it reallocates.
+        SubstitutionCapture(SubstitutionCapture&& other) noexcept:
+            fd(std::exchange(other.fd, InvalidHandle)),
+            pipe(std::move(other.pipe)),
+            savedStdout(std::exchange(other.savedStdout, InvalidHandle)),
+            aborted(std::exchange(other.aborted, false))
+        {
+        }
+
+        /// Move-assigns by first releasing this object's own resources, then taking
+        /// ownership of @p other's and nulling its @ref fd (see the move ctor).
+        SubstitutionCapture& operator=(SubstitutionCapture&& other) noexcept
+        {
+            if (this != &other)
+            {
+                clear();
+                fd = std::exchange(other.fd, InvalidHandle);
+                pipe = std::move(other.pipe);
+                savedStdout = std::exchange(other.savedStdout, InvalidHandle);
+                aborted = std::exchange(other.aborted, false);
+            }
+            return *this;
+        }
+
+        SubstitutionCapture(SubstitutionCapture const&) = delete;
+        SubstitutionCapture& operator=(SubstitutionCapture const&) = delete;
+
+        /// Closes the temp-file @ref fd (if open) and the @ref pipe, and resets
+        /// @ref savedStdout. Safe to call more than once.
         void clear();
     };
 
-    std::optional<SubstitutionCapture> _substitutionCapture;
+    /// Stack of active command-substitution captures. A stack (rather than a single
+    /// slot) is required for nested substitutions such as `$(echo $(rpm -qa))`: the
+    /// inner `$(...)` pushes its own capture and pops it on completion, leaving the
+    /// outer capture's fd and saved stdout intact.
+    std::vector<SubstitutionCapture> _substitutionCaptures;
+
+    /// When true, command-substitution pipeline waits route through the async,
+    /// cancellable path (@ref awaitSubstitutionPipeline) instead of a blocking
+    /// `waitpid`. Armed only while a tab-completion runs (around the `execute()` in
+    /// @ref executeCompleterFunction), so interactive command execution keeps the
+    /// existing blocking wait and its SIGINT-to-child semantics.
+    bool _completionWaitCancellable = false;
+
+    /// Time budget for a cancellable completion wait; 0 disables the timeout (abort
+    /// key only). Configurable via the `shell_completion_timeout` property (ms).
+    std::chrono::milliseconds _completionTimeoutMs { 3000 };
+
+    /// Shorter budget applied to a cold/uncached completer fetch so the first Tab of a
+    /// session stays snappy (fish caps this at ~1s). Governs the fetch only when no
+    /// usable cached list exists (@ref _completionColdFetch); a refresh that has a stale
+    /// list to fall back on uses the larger @ref _completionTimeoutMs instead.
+    /// Configurable via the `shell_completion_cold_timeout` property (ms).
+    std::chrono::milliseconds _completionColdTimeoutMs { 1000 };
+
+    /// True while the in-flight completer fetch has no usable cached fallback (a cold
+    /// fetch), so @ref awaitSubstitutionPipeline applies the tighter cold budget. Set by
+    /// the ScriptedCompleter's pre-fetch hook (see loadCompleters); false for a refresh
+    /// that can fall back to a stale list, which is allowed the larger overall budget.
+    bool _completionColdFetch = true;
+
+    /// Guards @ref loadCompleters so the interactive ScriptedCompleter provider (and its
+    /// @ref _completionCache) are created exactly once, even if loadCompleters runs again.
+    bool _scriptedCompleterRegistered = false;
+
+    /// Typed-ahead bytes the completion abort-key watcher read off the TTY while a
+    /// tab-completion ran. Accumulated in @ref awaitSubstitutionPipeline and re-staged
+    /// into the terminal input by the prompt after the completion, so keystrokes typed
+    /// during a completion are not swallowed. Drained via @ref takeCompletionPushback.
+    std::string _completionPushbackBytes;
+
+  public:
+    /// @brief Takes and clears the typed-ahead bytes captured during the last completion.
+    ///
+    /// The prompt calls this after driving a completion and re-stages the returned bytes
+    /// into its terminal input (via @c TerminalInput::pushBack) so keystrokes the user
+    /// typed while the completion's subprocess ran are decoded as normal input instead of
+    /// being lost.
+    ///
+    /// @return The captured bytes (empty if none), leaving the buffer cleared.
+    [[nodiscard]] std::string takeCompletionPushback() { return std::exchange(_completionPushbackBytes, {}); }
+
+  private:
+    /// Outcome of the most recent completer-driven command substitution wait.
+    /// @ref awaitSubstitutionPipeline sets it to Aborted/TimedOut when the wait is
+    /// cancelled; @ref executeCompleterFunction reads it (and resets it to Ok before
+    /// each run) so an aborted completion's empty result is not cached. Read via an
+    /// explicit flag rather than sniffing the 130 exit code, which a completer's own
+    /// `$(...)` could legitimately produce.
+    CompleterExecutionStatus _lastCompletionOutcome = CompleterExecutionStatus::Ok;
+
+    /// Sink for completion abort/timeout notices. Defaults to a terminal notifier;
+    /// swappable via @ref setCompletionNotifier (e.g. to a no-op in tests).
+    std::unique_ptr<CompletionNotifier> _completionNotifier;
 
     std::vector<std::unique_ptr<Pipe>> _processSubstitutionPipes;
     std::string _procSubstFdPath;

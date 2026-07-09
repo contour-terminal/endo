@@ -1,0 +1,136 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Completer for dnf5 (the C++ rewrite of DNF, Fedora's package manager).
+# Completes subcommands, global options, per-subcommand options, and package
+# names. Installed-package names come from `rpm -qa` (fast, offline); available
+# package names come from `dnf5 repoquery` (may refresh metadata).
+
+# Installed-package names come from the shared `rpm_installed_packages` helper in
+# _rpm_common.endo (loaded first). Available package names come from `dnf5
+# repoquery` below.
+#
+# Available package names. Uses `-C` (cacheonly) so completion never blocks on a
+# metadata refresh/download; run `dnf5 makecache` to update the cache.
+let dnf5_available_packages _ =
+    $(dnf5 -q -C repoquery --queryformat "%{name}\n")
+        |> split "\n"
+        |> filter (_ != "")
+
+let dnf5_complete args prefix =
+    let subcommands = [
+        Completion.described "install" "Install software";
+        Completion.described "upgrade" "Upgrade software";
+        Completion.described "remove" "Remove (uninstall) software";
+        Completion.described "distro-sync" "Sync installed software to latest available";
+        Completion.described "downgrade" "Downgrade software";
+        Completion.described "reinstall" "Reinstall software";
+        Completion.described "debuginfo-install" "Install debuginfo packages";
+        Completion.described "swap" "Remove one package and install another";
+        Completion.described "mark" "Change the reason of an installed package";
+        Completion.described "autoremove" "Remove unneeded dependency packages";
+        Completion.described "provides" "Find what package provides a value";
+        Completion.described "replay" "Replay a stored transaction";
+        Completion.described "check-upgrade" "Check for available package upgrades";
+        Completion.described "check" "Check for problems in the packagedb";
+        Completion.described "do" "Do transaction";
+        Completion.described "leaves" "List installed packages not required by others";
+        Completion.described "repoquery" "Search packages matching criteria";
+        Completion.described "search" "Search for software matching strings";
+        Completion.described "list" "List packages";
+        Completion.described "info" "List packages with additional details";
+        Completion.described "group" "Manage comps groups";
+        Completion.described "environment" "Manage comps environments";
+        Completion.described "module" "Manage modules";
+        Completion.described "history" "Manage transaction history";
+        Completion.described "repo" "Manage repositories";
+        Completion.described "advisory" "Manage advisories";
+        Completion.described "versionlock" "Manage versionlock configuration";
+        Completion.described "system-upgrade" "Prepare system for release upgrade";
+        Completion.described "offline-distrosync" "Store offline distro-sync transaction";
+        Completion.described "offline-upgrade" "Store offline upgrade transaction";
+        Completion.described "offline" "Manage offline transactions";
+        Completion.described "config-manager" "Manage configuration";
+        Completion.described "clean" "Remove or expire cached data";
+        Completion.described "download" "Download software to the current directory";
+        Completion.described "makecache" "Generate the metadata cache";
+        Completion.described "builddep" "Install build dependencies";
+        Completion.described "changelog" "Show package changelogs";
+        Completion.described "copr" "Manage Copr repositories";
+        Completion.described "needs-restarting" "Check if services need restarting";
+        Completion.described "repoclosure" "List unresolved dependencies";
+        Completion.described "repomanage" "Manage a directory of rpm packages";
+        Completion.described "reposync" "Synchronize a remote repository locally";
+        Completion.described "check-update" "Alias for check-upgrade";
+        Completion.described "updateinfo" "Alias for advisory";
+        Completion.described "repolist" "Alias for repo list";
+        Completion.described "repoinfo" "Alias for repo info"
+    ]
+    let global_options = [
+        Completion.described "-h" "Print help"; Completion.described "--help" "Print help";
+        Completion.described "-c" "Configuration file location";
+        Completion.described "--config" "Configuration file location";
+        Completion.described "-q" "Show just the relevant content";
+        Completion.described "--quiet" "Show just the relevant content";
+        Completion.described "-C" "Run entirely from system cache";
+        Completion.described "--cacheonly" "Run entirely from system cache";
+        Completion.described "--color" "Control whether color is used";
+        Completion.described "--refresh" "Force refreshing metadata first";
+        Completion.described "--repofrompath" "Create a repository from id and path";
+        Completion.described "--setopt" "Set arbitrary config and repo options";
+        Completion.described "--setvar" "Set an arbitrary variable";
+        Completion.described "-y" "Automatically answer yes";
+        Completion.described "--assumeyes" "Automatically answer yes";
+        Completion.described "--assumeno" "Automatically answer no";
+        Completion.described "--best" "Try the best available package versions";
+        Completion.described "--no-best" "Do not limit to the best candidate";
+        Completion.described "--nobest" "Do not limit to the best candidate";
+        Completion.described "--no-docs" "Don't install documentation files";
+        Completion.described "--nodocs" "Don't install documentation files";
+        Completion.described "-x" "Exclude packages by name or glob";
+        Completion.described "--exclude" "Exclude packages by name or glob";
+        Completion.described "--enable-repo" "Enable additional repositories";
+        Completion.described "--enablerepo" "Enable additional repositories";
+        Completion.described "--disable-repo" "Disable repositories";
+        Completion.described "--disablerepo" "Disable repositories";
+        Completion.described "--repo" "Enable just specific repositories";
+        Completion.described "--no-gpgchecks" "Disable OpenPGP signature checking";
+        Completion.described "--no-plugins" "Disable all libdnf5 plugins";
+        Completion.described "--enable-plugin" "Enable libdnf5 plugins by name";
+        Completion.described "--disable-plugin" "Disable libdnf5 plugins by name";
+        Completion.described "--comment" "Add a comment to the transaction";
+        Completion.described "--installroot" "Set install root";
+        Completion.described "--use-host-config" "Use host config in the installroot";
+        Completion.described "--releasever" "Override $releasever";
+        Completion.described "--releasever-major" "Override $releasever_major";
+        Completion.described "--releasever-minor" "Override $releasever_minor";
+        Completion.described "--show-new-leaves" "Show newly installed leaf packages";
+        Completion.described "--debugsolver" "Dump detailed solving results";
+        Completion.described "--dump-main-config" "Print main configuration values";
+        Completion.described "--dump-repo-config" "Print repository configuration values";
+        Completion.described "--dump-variables" "Print variable values";
+        Completion.described "--version" "Show DNF5 version and exit";
+        Completion.described "--forcearch" "Force the use of a different architecture";
+        Completion.described "--skip-file-locks" "Skip acquiring file locks"
+    ]
+    # clean/group/module subcommand tables are shared with DNF 4 via
+    # _rpm_common.endo. dnf5's history adds `store` on top of the shared baseline.
+    let history_subcommands = rpm_history_subcommands
+        @ [Completion.described "store" "Store a transaction to a directory"]
+    let repo_subcommands = [
+        Completion.described "list" "List repositories";
+        Completion.described "info" "Show repository details"
+    ]
+    match args with
+    | [] when startsWith "-" prefix -> global_options
+    | [] -> subcommands
+    | ["clean"] -> rpm_clean_targets
+    | ["group"] -> rpm_group_subcommands
+    | ["module"] -> rpm_module_subcommands
+    | ["history"] -> history_subcommands
+    | ["repo"] -> repo_subcommands
+    | ["install"] | ["search"] | ["download"] | ["builddep"] | ["changelog"] | ["info"] | ["provides"] | ["repoquery"] -> dnf5_available_packages ()
+    | ["remove"] | ["upgrade"] | ["downgrade"] | ["reinstall"] | ["distro-sync"] | ["autoremove"] | ["mark"] | ["swap"] | ["debuginfo-install"] -> rpm_installed_packages ()
+    | _ when startsWith "-" prefix -> global_options
+    | _ -> []
+
+Completion.register "dnf5" dnf5_complete

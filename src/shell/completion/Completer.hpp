@@ -55,6 +55,10 @@ class Completer
     /// @param provider The provider to add.
     void addProvider(std::unique_ptr<CompletionProvider> provider);
 
+    /// @brief Number of registered providers. For tests/diagnostics (e.g. asserting a
+    ///        provider is not registered twice).
+    [[nodiscard]] std::size_t providerCount() const { return _providers.size(); }
+
     /// @brief Gets all completions for the current input state.
     /// @param input The input line.
     /// @param cursorPosition The cursor byte offset.

@@ -4,10 +4,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ranges>
 #include <string_view>
 #include <thread>
 
@@ -18,6 +20,7 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
+#include <shell/CompletionNotifier.hpp>
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/completion/LetBindingCompleter.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
@@ -33,6 +36,10 @@ using crispy::escape;
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
+
+#if !defined(_WIN32)
+    #include <sys/resource.h>
+#endif
 
 namespace
 {
@@ -2537,11 +2544,215 @@ TEST_CASE("shell.subst.with_variable")
     CHECK(escape(shell("echo $(echo $MSG)").output()) == escape("hello\n"));
 }
 
+#if !defined(_WIN32)
+TEST_CASE("shell.subst.large_output_no_deadlock")
+{
+    // Regression: capturing output larger than the kernel pipe buffer (~64KB)
+    // must not deadlock. A pipe-backed capture blocked the writer in write() while
+    // the shell had not yet drained the reader; the POSIX temp-file-backed capture
+    // has no fixed buffer, so it never blocks. We capture `cat` (a builtin) of a
+    // ~256KB file — well over the ~64KB pipe buffer — into a let binding (no
+    // pipeline involved) and assert the captured length; reaching the assertion
+    // proves no deadlock.
+    //
+    // POSIX-only: the temp-file capture is the POSIX path. Windows keeps the prior
+    // pipe-backed capture (which retains the historical >64KB limitation), so this
+    // regression does not apply there.
+    auto const path = std::filesystem::temp_directory_path() / "endo_test_large_capture.txt";
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        std::string const line(255, 'x');
+        for ([[maybe_unused]] auto const i: std::views::iota(0, 1024)) // 1024 * 256 = 256 KiB
+            out << line << '\n';
+    }
+
+    TestShell shell;
+    // Capture into a binding, then print its length via F# string length. No
+    // pipeline, no external command — just the substitution capture path.
+    auto const out =
+        std::string(shell("let captured = $(cat " + path.string() + ")\nprintln captured.length").output());
+    std::filesystem::remove(path);
+    // 256 KiB minus the single trailing newline trimmed by command substitution.
+    CHECK(out.find("262143") != std::string::npos);
+}
+#endif
+
 TEST_CASE("shell.subst.in_pipeline")
 {
     // Command substitution as part of a pipeline
     TestShell shell;
     CHECK(escape(shell("echo $(echo hello) | cat").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.nested")
+{
+    // Nested command substitution: the inner $(...) must not clobber the outer
+    // capture's state. Regression for the single-slot capture that lost the outer
+    // fd / saved stdout when the inner substitution pushed. `echo` here is the
+    // shell builtin, so both substitutions capture in-process.
+    TestShell shell;
+    CHECK(escape(shell("echo $(echo $(echo hello))").output()) == escape("hello\n"));
+}
+
+#if !defined(_WIN32)
+TEST_CASE("shell.subst.no_fd_leak")
+{
+    // Regression: each $(...) opened an mkstemp temp file whose fd was never
+    // closed, so after enough substitutions the process ran out of descriptors and
+    // every further substitution silently returned empty. Lower the fd soft limit
+    // so exhaustion would trigger within a few iterations, then run many
+    // substitutions and assert every one still captures — proving the fd is
+    // released each time.
+    rlimit original {};
+    REQUIRE(::getrlimit(RLIMIT_NOFILE, &original) == 0);
+    rlimit limited = original;
+    limited.rlim_cur = 64; // well below the iteration count below
+    REQUIRE(::setrlimit(RLIMIT_NOFILE, &limited) == 0);
+
+    TestShell shell;
+    bool allCaptured = true;
+    for ([[maybe_unused]] auto const i: std::views::iota(0, 256))
+    {
+        auto const out = std::string(shell("println $(echo ok)").output());
+        if (out.find("ok") == std::string::npos)
+        {
+            allCaptured = false;
+            break;
+        }
+    }
+
+    // Restore before asserting so a failure does not leave the limit clamped.
+    ::setrlimit(RLIMIT_NOFILE, &original);
+    CHECK(allCaptured);
+}
+#endif
+
+// ============================================================================
+// Package-manager completers (shared _rpm_common.endo helpers)
+// ============================================================================
+
+namespace
+{
+/// @brief True if any completion in @p result has the given insert text.
+bool hasCompletionText(endo::CompleterExecutionResult const& result, std::string_view text)
+{
+    return std::ranges::any_of(result.completions, [text](auto const& c) { return c.text == text; });
+}
+} // namespace
+
+TEST_CASE("shell.completer.rpm_family_shared_helpers")
+{
+    // End-to-end check that the dnf/dnf5/rpm completers resolve the shared symbols
+    // defined in _rpm_common.endo (which loads first thanks to its `_` prefix).
+    // Exercises the real completer files via the live completion path, so an
+    // "undefined function" regression in the shared-helper refactor would fail here.
+    TestShell shell;
+    shell.shell.loadCompleters();
+
+    // `dnf clean <TAB>` resolves rpm_clean_targets from the shared file.
+    auto const dnfClean = shell.shell.executeCompleterFunction("dnf_complete", { "clean" }, "");
+    CHECK(dnfClean.errors.empty());
+    CHECK(hasCompletionText(dnfClean, "metadata"));
+    CHECK(hasCompletionText(dnfClean, "expire-cache"));
+
+    // `dnf5 clean <TAB>` resolves the same shared rpm_clean_targets.
+    auto const dnf5Clean = shell.shell.executeCompleterFunction("dnf5_complete", { "clean" }, "");
+    CHECK(dnf5Clean.errors.empty());
+    CHECK(hasCompletionText(dnf5Clean, "metadata"));
+
+    // dnf5 history = shared baseline (rpm_history_subcommands) plus the dnf5-only
+    // `store`; the shared entries must still be present after the `@` append.
+    auto const dnf5History = shell.shell.executeCompleterFunction("dnf5_complete", { "history" }, "");
+    CHECK(dnf5History.errors.empty());
+    CHECK(hasCompletionText(dnf5History, "rollback")); // from shared baseline
+    CHECK(hasCompletionText(dnf5History, "store"));    // dnf5-only addition
+
+    // `rpm -q <pkg-prefix>` uses the shared rpm_installed_packages helper; the
+    // function must at least resolve (no compile error) even if no package matches.
+    auto const rpmQuery = shell.shell.executeCompleterFunction("rpm_complete", { "-q" }, "");
+    CHECK(rpmQuery.errors.empty());
+}
+
+TEST_CASE("shell.completer.prefix_filters_scripted_package_list")
+{
+    // Regression: `dnf install plasma-<TAB>` surfaced completions that did NOT start
+    // with the typed prefix (e.g. "perl-Lingua-Stem-Snowball-Da"), and the real
+    // "plasma-*" packages were buried or dropped by the 50-result cap. Root cause: a
+    // scattered subsequence match (p·l·a·s·m·a·- inside a long hyphenated name) earned
+    // enough consecutive/word-start fuzzy bonus to OUTSCORE a genuine prefix match. We
+    // drive the full Completer path (not executeCompleterFunction, which bypasses
+    // scoring) with a fixed in-process package list so the assertion is deterministic
+    // and independent of the host's dnf database.
+    //
+    // pkgRegistry is declared before `shell` so it outlives the completer that stores
+    // it by reference (locals destruct in reverse declaration order).
+    endo::CompleterFunctionRegistry pkgRegistry;
+    pkgRegistry.registerFunction("pkgtool", "pkgtool_complete");
+
+    TestShell shell;
+    shell.shell.ensureCompleterReadyForTest();
+    REQUIRE(shell.shell.completer != nullptr);
+
+    // Register a completer that mirrors dnf.endo's shape: it ignores `prefix` and
+    // returns a large list. The NOISE entries are crafted to contain "plasma-" as a
+    // scattered subsequence (like the real "perl-Lingua-Stem-Snowball-Da"), so under
+    // the buggy scoring they would crowd out — and even rank above — the true prefix
+    // matches. The genuine PREFIX matches are few (only 5) so a broken cap/order would
+    // visibly drop them.
+    shell.shell.completer->addProvider(std::make_unique<endo::ScriptedCompleter>(
+        pkgRegistry,
+        [](std::string_view /*funcName*/,
+           std::vector<std::string> const& /*args*/,
+           std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
+            std::vector<endo::CollectedCompletion> pkgs;
+            pkgs.reserve(2005);
+            // 2000 noise packages, each a subsequence match for "plasma-".
+            for (auto const i: std::views::iota(0, 2000))
+                pkgs.push_back({ .text = "perl-Plugin-Async-Metadata-" + std::to_string(i) });
+            // 5 genuine prefix matches.
+            for (auto const& name:
+                 { "plasma-desktop", "plasma-workspace", "plasma-nm", "plasma-pa", "plasma-systemmonitor" })
+                pkgs.push_back({ .text = name });
+            return { .completions = std::move(pkgs), .errors = {} };
+        }));
+
+    auto const input = std::string { "pkgtool install plasma-" };
+    auto const results = shell.shell.completer->complete(input, input.size());
+
+    INFO("result count: " << results.size());
+    if (!results.empty())
+        INFO("first result: " << results.front().text);
+    REQUIRE(results.size() >= 5);
+
+    // The five genuine prefix matches must occupy the top slots, ahead of every
+    // scattered fuzzy match.
+    for (auto const i: std::views::iota(0, 5))
+        CHECK(results[static_cast<size_t>(i)].text.starts_with("plasma-"));
+}
+
+TEST_CASE("shell.completer.loadCompleters_is_idempotent")
+{
+    // Regression: loadCompleters() unconditionally added a ScriptedCompleter provider and
+    // recreated the persistent cache each call. A second call (a re-run of interactive
+    // init, or ensureCompleterReadyForTest followed by another loadCompleters) added a
+    // duplicate provider — running the scripted completer twice. Registering a completer
+    // then readying twice must leave exactly one scripted provider.
+    TestShell shell;
+
+    // Register a scripted completer so the guarded provider-registration block runs.
+    shell(R"(
+        let demo_complete args prefix = ["alpha"; "beta"]
+        Completion.register "demozzz" demo_complete
+    )");
+    CHECK(shell.exitCode == 0);
+
+    shell.shell.ensureCompleterReadyForTest();
+    REQUIRE(shell.shell.completer != nullptr);
+    auto const countAfterFirst = shell.shell.completer->providerCount();
+
+    // A second ready/load must not add another ScriptedCompleter.
+    shell.shell.ensureCompleterReadyForTest();
+    CHECK(shell.shell.completer->providerCount() == countAfterFirst);
 }
 
 // ============================================================================
@@ -5142,6 +5353,65 @@ TEST_CASE("shell.completion.executeCompleterFunction_options")
     CHECK(hasResult(result.completions, "--help"));
 }
 
+#if !defined(_WIN32)
+namespace
+{
+/// Records the last completion notification for assertions.
+struct RecordingCompletionNotifier final: endo::CompletionNotifier
+{
+    std::optional<endo::NotificationKind> lastKind;
+    int count = 0;
+
+    void notify(endo::NotificationKind kind, std::string_view /*message*/) override
+    {
+        lastKind = kind;
+        ++count;
+    }
+};
+} // namespace
+
+TEST_CASE("shell.completion.slow_substitution_does_not_hang")
+{
+    // End-to-end guarantee: a completer that runs a long-blocking external
+    // `$(/usr/bin/sleep 30)` must NOT hang the shell — with a short completion
+    // timeout, executeCompleterFunction returns far sooner than the 30s sleep.
+    //
+    // This asserts only the platform-independent property (no hang). The precise
+    // timeout → abort → notify sequence is proven deterministically, without real
+    // processes or wall-clock timing, in AsyncProcessWait_test.cpp; here the exact
+    // outcome depends on how the runner's spawn/PTY behaves, so the notifier kind is
+    // only checked opportunistically (if it fired at all, it must be a timeout).
+    TestShell ts;
+
+    auto owned = std::make_unique<RecordingCompletionNotifier>();
+    auto* const notifier = owned.get(); // borrowed for assertions after the move
+    ts.shell.setCompletionNotifier(std::move(owned));
+
+    // Short timeout so the test is fast; the completer sleeps far longer.
+    ts("shell_completion_timeout <- 300");
+    CHECK(ts.exitCode == 0);
+
+    // Full path so `sleep` is spawned as a real external process rather than the
+    // in-process `sleep` inline builtin — the async wait only governs externals.
+    ts(R"(
+        let slow_complete args prefix = [$(/usr/bin/sleep 30)]
+        Completion.register "slowcmd" slow_complete
+    )");
+    CHECK(ts.exitCode == 0);
+
+    auto const start = std::chrono::steady_clock::now();
+    auto const result = ts.shell.executeCompleterFunction("slow_complete", {}, "");
+    auto const elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+
+    // The core guarantee: returned well before the 30s sleep would have elapsed.
+    CHECK(elapsed < std::chrono::seconds { 10 });
+    // If a notice was surfaced, it must be the timeout (never a spurious abort).
+    if (notifier->lastKind.has_value())
+        CHECK(*notifier->lastKind == endo::NotificationKind::TimedOut);
+}
+#endif
+
 TEST_CASE("shell.completion.Completion_register_populates_registry")
 {
     TestShell ts;
@@ -5185,7 +5455,9 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer = std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    // No need to construct the interactive `completer` here: loadCompleters() loads
+    // the completer functions into the registry regardless, and only skips
+    // registering the interactive provider when the completer subsystem is absent.
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();

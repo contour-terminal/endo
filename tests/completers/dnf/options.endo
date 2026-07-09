@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: dnf completer: global option completion with dash prefix
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/dnf.endo
+# expect-expr: _ |> contains "-y"
+# expect-expr: _ |> contains "--assumeyes"
+# expect-expr: _ |> contains "--enablerepo"
+# expect-expr: _ |> contains "--disablerepo"
+# expect-expr: _ |> contains "--exclude"
+# expect-expr: _ |> contains "--best"
+# expect-expr: _ |> contains "--allowerasing"
+# expect-expr: _ |> contains "--skip-broken"
+# expect-expr: _ |> contains "--security"
+# expect-expr: _ |> contains "--setopt"
+
+let _ = dnf_complete [] "-" |> each println

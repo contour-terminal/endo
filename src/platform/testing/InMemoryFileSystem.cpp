@@ -388,6 +388,13 @@ std::expected<void, std::string> InMemoryFileSystem::rename(std::filesystem::pat
     auto const srcKey = normalize(from);
     auto const dstKey = normalize(to);
 
+    // Simulate a cross-device rename (EXDEV) when source and destination live on
+    // different registered mounts. std::filesystem::rename surfaces this as an error;
+    // callers that need atomic publish must place the temp file on the target's mount.
+    if (mountOf(srcKey) != mountOf(dstKey))
+        return std::unexpected(
+            std::format("Cannot rename '{}' to '{}': Invalid cross-device link", srcKey, dstKey));
+
     if (auto const it = _files.find(srcKey); it != _files.end())
     {
         ensureParentDirectories(to);
@@ -598,9 +605,10 @@ std::expected<void, std::string> InMemoryFileSystem::setPermissions(std::filesys
 }
 
 std::expected<std::filesystem::path, std::string> InMemoryFileSystem::createTempFile(
-    std::string_view prefix) const
+    std::string_view prefix, std::filesystem::path const& directory) const
 {
-    auto const name = std::format("/tmp/{}_{}", prefix, ++_tempCounter);
+    auto const dir = directory.empty() ? std::filesystem::path { "/tmp" } : directory;
+    auto const name = std::format("{}/{}_{}", dir.string(), prefix, ++_tempCounter);
     _files[name] = {};
     ensureParentDirectories(std::filesystem::path(name));
     return std::filesystem::path(name);
@@ -653,6 +661,25 @@ void InMemoryFileSystem::denyAccess(std::filesystem::path const& path)
 {
     _deniedPaths.insert(normalize(path));
     _permissions[normalize(path)] = std::filesystem::perms::none;
+}
+
+void InMemoryFileSystem::addMount(std::filesystem::path const& root)
+{
+    _mounts.insert(normalize(root));
+}
+
+std::string InMemoryFileSystem::mountOf(std::string const& key) const
+{
+    // The longest registered mount root that is a path-prefix of key wins; a key under
+    // no registered mount belongs to the default (empty-string) mount.
+    std::string best;
+    for (auto const& mount: _mounts)
+    {
+        auto const prefix = mount.ends_with('/') ? mount : mount + "/";
+        if ((key == mount || key.starts_with(prefix)) && mount.size() > best.size())
+            best = mount;
+    }
+    return best;
 }
 
 } // namespace endo::platform::testing

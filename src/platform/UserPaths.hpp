@@ -39,4 +39,7 @@ namespace endo::platform
     return std::nullopt;
 }
 
+// Note: the cache base directory is resolved via EnvironmentProvider::cacheHome() (the
+// injected, testable path). A duplicate free cacheHome() here was unused and removed.
+
 } // namespace endo::platform

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rpm completer: with no mode flag, falls back to offering options
+# source-file: data/completers/_rpm_common.endo
+# source-file: data/completers/rpm.endo
+# expect-expr: _ |> contains "--query"
+# expect-expr: _ |> contains "--install"
+
+let _ = rpm_complete [] "" |> each println
