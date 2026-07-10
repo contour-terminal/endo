@@ -94,19 +94,21 @@ known at runtime from an F# expression (a variable, `which`, or a pattern match)
 ### 10.3 String Interpolation
 
 ```endo
-# Variable interpolation
-let name = "World"
+# Variable interpolation — $VAR and ${VAR} read ENVIRONMENT variables.
+# Use `let export` (or an already-exported name) to make a value visible here;
+# a plain `let` binding is not exported and does not interpolate.
+let export name = "World"
 echo "Hello, $name"               # Hello, World
 echo "Path: ${HOME}/docs"         # Path: /home/user/docs
 
-# Expression interpolation
+# Arithmetic and command substitution
 echo "Sum: $((1 + 2 * 3))"        # Sum: 7
 echo "Files: $(ls | wc -l)"       # Files: 42
-echo "Upper: ${name |> toUpper}"  # Upper: WORLD
 
-# Nested interpolation
-let user = "alice"
-echo "Home: ${getenv "HOME_$user"}"
+# F# expression interpolation — $"...{expr}..." evaluates an F# expression and
+# sees F# let bindings. This (not ${...}) is how you transform a value.
+let title = "world"
+println $"Upper: {title |> toUpper}"   # Upper: WORLD
 
 # Escape to prevent interpolation
 echo "Literal \$name"             # Literal $name
