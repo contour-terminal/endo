@@ -37,6 +37,12 @@ of        as        global    lazy
 *)
 ```
 
+> **Note:** `//` starts a C-style comment wherever it appears, including at the start
+> of a command word. A UNC path written with a leading `//` (e.g.
+> `//server/share/tool.exe`) is therefore consumed as a comment unless it is quoted.
+> Quote such paths in command position: `& "//server/share/tool.exe"`. See
+> [Command Execution → Quoting the Program Path](command-execution.md#quoting-the-program-path).
+
 #### Formatter directives
 
 `endo format` recognizes two directive comments that disable and re-enable

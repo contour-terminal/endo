@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
+#include <CoreVM/transform/Passes.hpp>
 #include <CoreVM/util.hpp>
 #include <CoreVM/util/assert.hpp>
 
@@ -74,6 +75,12 @@ std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
 
 void TargetCodeGenerator::generate(IRFunction* function)
 {
+    // Required lowering step, done here so it applies to every code-generation path
+    // (shell, test harness, LSP, DAP, …): promote SSA values that live across
+    // basic-block boundaries into allocas, the only form preserved across blocks by the
+    // stack-based lowering below. Must run before the alloca-indexing pass.
+    transform::materializeCrossBlockValues(function);
+
     // explicitely forward-declare function, so we can use its ID internally.
     _functionId = _cp.makeFunction(function);
 

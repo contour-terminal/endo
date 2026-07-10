@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A double-quoted program path with spaces and '!' parses as a single program token
+# mode: parse-only
+
+& "X:/Workspace/!Programme/CLI-Tools/tool.exe" --help

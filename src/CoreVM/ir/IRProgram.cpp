@@ -18,6 +18,17 @@ IRProgram::IRProgram(): _trueLiteral(true, "trueLiteral"), _falseLiteral(false, 
 
 IRProgram::~IRProgram()
 {
+    // Detach every instruction from its operands before destroying any of them. A Value's
+    // destructor asserts it has no remaining uses, but instructions are stored front-to-back
+    // per block, so an alloca (at the front) is otherwise destroyed while the loads that
+    // reference it (later, and possibly in other functions — e.g. capture-forwarding loads of
+    // a global binding) are still alive. Clearing all use/def links up front makes teardown
+    // order-independent.
+    for (auto const& function: _functions)
+        for (BasicBlock* bb: function->basicBlocks())
+            for (Instr* instr: bb->instructions())
+                instr->clearOperands();
+
     // first reset all standard functions and *then* the global-scope initialization function
     // in order to not cause confusion upon resource release
     {

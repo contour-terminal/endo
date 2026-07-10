@@ -895,7 +895,13 @@ void SourceFormatter::visit(ast::HereString const& node)
 void SourceFormatter::visit(ast::ProgramCall const& node)
 {
     emitLeadingComments(node);
-    emit(node.program);
+    // A quoted program name is carried by programExpr (a quoted LiteralExpr or an
+    // interpolated ConcatExpr), which re-emits its surrounding quotes and so round
+    // trips exactly. Tilde and bare-word programs keep emitting the raw `program`.
+    if (node.quotedProgram && node.programExpr)
+        node.programExpr->accept(*this);
+    else
+        emit(node.program);
 
     for (auto const& param: node.parameters)
     {

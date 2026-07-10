@@ -217,7 +217,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `nth`, `last` — indexed list access returning `option<T>`
 - [x] `replicate` — create list of N copies of a value
 - [x] `fetch` — HTTP GET request, returns `result<str, str>`
-- [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration); returns `list<string>`
+- [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration, `[N]` for indexed element access); returns `list<string>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
 - [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
@@ -226,7 +226,9 @@ This document tracks the implementation status of F# language features as define
 - [x] `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll` — file I/O operations
 - [x] `File.size`, `File.exists`, `File.delete` — file metadata and management
 - [x] `Path.temporary_directory` — cross-platform temporary directory path
-- [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
+- [x] `Path.join`, `Path.dirname`, `Path.basename`, `Path.normalize`, `Path.isAbsolute` — lexical path operations (platform-native separators)
+- [x] `Path.separator`, `Path.delimiter` — platform directory / `PATH`-list separators
+- [ ] `Path.extension` — file extension extraction
 
 ## Shell Integration
 
@@ -245,6 +247,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Fix `exec` with pattern-matched tuple variables: `ensureString()` bypasses `convertToString` N2S corruption for Object/Void-typed strings from `ObjGetSlot`
 - [x] Fix `TuplePattern` with `ConstructorPattern` sub-patterns: create scrutinee storage allocas so `ConstructorPattern` can reload across block boundaries
 - [x] Shell word splitting: adjacent tokens without whitespace form a single word (e.g., `echo $LINES:$COLUMNS` outputs `35:127` not `35 : 127`)
+- [x] Quoted program paths: `& "X:/Program Files/!Tools/tool.exe"` accepts a double/single-quoted program name (with `$`-interpolation) so paths with spaces, `!`, or a `//` UNC prefix run; Windows drive-letter and UNC paths normalized for resolution
 
 ## Completion System
 
@@ -259,6 +262,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `collectRecordInfo()` extracts record types and variable-type associations from source for LSP
 - [x] Record-aware hover: hovering over record variable shows detected type name (e.g., `Person`) and type definition
 - [x] Standard library function autocompletion: 40 functions (type conversion, string ops, list ops, HOFs, transforms, env/system) in both shell prompt and LSP
+- [x] Auto-quoting on insertion: completions containing spaces or shell-reserved characters are wrapped in double quotes (directories keep the quote open; escapes inside an already-open quote) so the result stays a single token
 
 ## Modules & Imports
 

@@ -60,22 +60,55 @@ process (cat config.txt)
 analyze (git diff HEAD~1)
 ```
 
+### Quoting the Program Path
+
+The program name in command position is normally a bare word. If the path contains
+characters that would otherwise split it into several tokens — spaces, `!`, `$`, or a
+leading `//` (a UNC path, whose unquoted `//` starts a C-style comment) — wrap it in
+quotes. This is most common on Windows with drive-letter and UNC paths:
+
+<!-- endo-no-check -->
+```endo
+# Drive-letter path with a space and a '!'
+& "X:/Program Files/!Tools/tool.exe" --help
+
+# UNC path — must be quoted, since an unquoted // starts a comment
+& "//server/share/tools/tool.exe" --help
+
+# Double quotes interpolate exactly like a quoted argument. `$VAR` reads an
+# environment variable, so export it (or use one already in the environment):
+let export dir = "X:/Program Files/!Tools"
+& "$dir/tool.exe" --help
+
+# Single quotes are literal (no interpolation):
+& 'X:/Program Files/!Tools/tool.exe' --help
+```
+
+Arguments after the program are quoted the same way. For a program path that is only
+known at runtime from an F# expression (a variable, `which`, or a pattern match), use
+[`exec`](#107-dynamic-command-execution-exec) instead.
+
+> **Tip:** interactive TAB-completion inserts these quotes for you — completing a path
+> that contains a space or other special character produces an already-quoted token.
+
 ### 10.3 String Interpolation
 
 ```endo
-# Variable interpolation
-let name = "World"
+# Variable interpolation — $VAR and ${VAR} read ENVIRONMENT variables.
+# Use `let export` (or an already-exported name) to make a value visible here;
+# a plain `let` binding is not exported and does not interpolate.
+let export name = "World"
 echo "Hello, $name"               # Hello, World
 echo "Path: ${HOME}/docs"         # Path: /home/user/docs
 
-# Expression interpolation
+# Arithmetic and command substitution
 echo "Sum: $((1 + 2 * 3))"        # Sum: 7
 echo "Files: $(ls | wc -l)"       # Files: 42
-echo "Upper: ${name |> toUpper}"  # Upper: WORLD
 
-# Nested interpolation
-let user = "alice"
-echo "Home: ${getenv "HOME_$user"}"
+# F# expression interpolation — $"...{expr}..." evaluates an F# expression and
+# sees F# let bindings. This (not ${...}) is how you transform a value.
+let title = "world"
+println $"Upper: {title |> toUpper}"   # Upper: WORLD
 
 # Escape to prevent interpolation
 echo "Literal \$name"             # Literal $name

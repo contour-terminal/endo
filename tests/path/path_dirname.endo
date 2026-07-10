@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.dirname returns the parent-directory portion
+# expect: a/b
+
+println (Path.dirname "a/b/c")

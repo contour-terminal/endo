@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A variable referenced only inside an interpolated string, from within a
+#   function, must be detected as a free variable and captured by that function. Regression:
+#   the free-variable collector did not descend into FStringExpr, so the closure never
+#   captured the binding and loaded it from another function's frame slot at runtime
+#   (out-of-bounds LOAD -> crash).
+# expect: inner sees hello
+# mode: shell
+
+let cfg = "hello"
+
+let inner () = println $"inner sees {cfg}"
+
+inner ()

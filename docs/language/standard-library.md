@@ -1617,8 +1617,14 @@ On parse error or missing key, returns an empty list.
 
 **Path syntax:**
 - `.key` — access an object property
-- `[]` — iterate array elements
+- `[]` — iterate all array elements
+- `[N]` — access a single array element by zero-based index
 - Chained: `.key1[].key2` — access `key1` (array), iterate elements, access `key2` from each
+
+Use `[N]` to address one specific element (e.g. `.items[0].name`). Unlike `[]`, which
+flattens and skips missing keys — so parallel arrays misalign — `[N]` isolates a single
+object, letting you read its fields independently. An out-of-range index yields an empty
+list.
 
 ```endo
 let json = "{\"name\": \"hello\"}"
@@ -1629,6 +1635,14 @@ r |> each println
 ```endo
 let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
 let r = Json.query ".items[].name" json
+r |> each println
+```
+
+Indexed access selects a single element:
+
+```endo
+let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
+let r = Json.query ".items[1].name" json
 r |> each println
 ```
 
@@ -1694,7 +1708,9 @@ s |> toList |> println
 
 ## 15.25 Path
 
-The `Path` module provides cross-platform filesystem path utilities.
+The `Path` module provides cross-platform filesystem path utilities. The join/dirname/
+basename/normalize/isAbsolute operations are purely lexical (they do not touch the
+filesystem) and use the platform-native separator (`\` on Windows, `/` elsewhere).
 
 #### `Path.temporary_directory`
 
@@ -1705,6 +1721,77 @@ Returns the platform's temporary directory path (e.g. `/tmp` on Linux, `C:\Users
 ```endo
 let tmp = Path.temporary_directory
 println tmp
+```
+
+#### `Path.join`
+
+**Signature:** `Path.join a b -> str`
+
+Joins two path segments with the platform-native separator. If `b` is absolute it
+replaces `a` (matching typical `Path.Combine`/`os.path.join` semantics).
+
+```endo
+println (Path.basename (Path.join "src" "main.endo"))   # => main.endo
+```
+
+#### `Path.dirname`
+
+**Signature:** `Path.dirname p -> str`
+
+Returns the parent-directory portion of a path (empty for a bare file name).
+
+```endo
+println (Path.dirname "a/b/c")   # => a/b
+```
+
+#### `Path.basename`
+
+**Signature:** `Path.basename p -> str`
+
+Returns the final component (file name) of a path.
+
+```endo
+println (Path.basename "a/b/c.txt")   # => c.txt
+```
+
+#### `Path.normalize`
+
+**Signature:** `Path.normalize p -> str`
+
+Lexically collapses `.` and `..` segments and normalizes separators to the platform-native
+form. Does not touch the filesystem.
+
+```endo
+println (Path.basename (Path.normalize "a/b/../c"))   # => c
+```
+
+#### `Path.isAbsolute`
+
+**Signature:** `Path.isAbsolute p -> bool`
+
+Returns `true` if the path is absolute.
+
+```endo
+println (Path.isAbsolute "relative/path")   # => false
+```
+
+#### `Path.separator`
+
+**Signature:** `Path.separator -> str`
+
+The platform's directory separator (`\` on Windows, `/` elsewhere).
+
+#### `Path.delimiter`
+
+**Signature:** `Path.delimiter -> str`
+
+The platform's `PATH`-list separator (`;` on Windows, `:` elsewhere) — useful when
+prepending to `$PATH`.
+
+<!-- endo-no-check -->
+```endo
+let sep = Path.delimiter
+let export PATH = "/opt/mytool/bin" + sep + (env "PATH" ?| "")
 ```
 
 ## 15.26 File I/O

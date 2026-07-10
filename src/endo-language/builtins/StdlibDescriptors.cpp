@@ -62,6 +62,7 @@ static constexpr ParamDescriptor CompletionDetailedParams[] = { { .name="text", 
 static constexpr ParamDescriptor FileOpenParams[] = { { .name="path", .type=LT::String }, { .name="mode", .type=LT::String } };
 static constexpr ParamDescriptor FdNumberParam[] = { { .name="fd", .type=LT::Number } };
 static constexpr ParamDescriptor PathStringParam[] = { { .name="path", .type=LT::String } };
+static constexpr ParamDescriptor PathJoinParams[] = { { .name="base", .type=LT::String }, { .name="tail", .type=LT::String } };
 static constexpr ParamDescriptor FileWriteParams[] = { { .name="path", .type=LT::String }, { .name="content", .type=LT::String } };
 
 // Process signal params
@@ -415,6 +416,23 @@ static const std::array descriptors = {
 
     // Path operations
     StdlibDescriptor { .userFacingName="", .vmName="path_temporary_directory", .returnType=LT::String, .params={}, .sharedImpl=&builtins::pathTemporaryDirectory, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="path_join", .returnType=LT::String, .params=PathJoinParams, .sharedImpl=&builtins::pathJoin,
+        .description="Path.join a b -> string",
+        .detail="**Path.join** `a b -> string`\n\nJoins two path segments with the platform-native separator. If **b** is absolute, it replaces **a**." },
+    StdlibDescriptor { .userFacingName="", .vmName="path_dirname", .returnType=LT::String, .params=PathStringParam, .sharedImpl=&builtins::pathDirname,
+        .description="Path.dirname p -> string",
+        .detail="**Path.dirname** `p -> string`\n\nReturns the parent-directory portion of path **p**." },
+    StdlibDescriptor { .userFacingName="", .vmName="path_basename", .returnType=LT::String, .params=PathStringParam, .sharedImpl=&builtins::pathBasename,
+        .description="Path.basename p -> string",
+        .detail="**Path.basename** `p -> string`\n\nReturns the final component (file name) of path **p**." },
+    StdlibDescriptor { .userFacingName="", .vmName="path_normalize", .returnType=LT::String, .params=PathStringParam, .sharedImpl=&builtins::pathNormalize,
+        .description="Path.normalize p -> string",
+        .detail="**Path.normalize** `p -> string`\n\nLexically collapses `.`/`..` segments and normalizes separators. Does not touch the filesystem." },
+    StdlibDescriptor { .userFacingName="", .vmName="path_is_absolute", .returnType=LT::Boolean, .params=PathStringParam, .sharedImpl=&builtins::pathIsAbsolute,
+        .description="Path.isAbsolute p -> bool",
+        .detail="**Path.isAbsolute** `p -> bool`\n\nReturns true if path **p** is absolute." },
+    StdlibDescriptor { .userFacingName="", .vmName="path_separator", .returnType=LT::String, .params={}, .sharedImpl=&builtins::pathSeparator, .description="", .detail="" },
+    StdlibDescriptor { .userFacingName="", .vmName="path_delimiter", .returnType=LT::String, .params={}, .sharedImpl=&builtins::pathDelimiter, .description="", .detail="" },
 
     // File I/O operations
     StdlibDescriptor { .userFacingName="", .vmName="file_open", .returnType=LT::Number, .params=FileOpenParams, .sharedImpl=&builtins::fileOpen, .description="", .detail="" },

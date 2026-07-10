@@ -27,11 +27,15 @@ using FunctionQuery = std::function<bool(std::string const&)>;
 /// @param boundNames   Names already bound (e.g., function parameters).
 /// @param isInScope    Returns true if a name is accessible in the current variable scope.
 /// @param isKnownFunction Returns true if a name is a registered function definition.
+/// @param referencedFunctions  When non-null, receives the names of every referenced known
+///        function. Callers use this to compute transitive captures: a function that calls a
+///        closure must itself capture that closure's free variables in order to forward them.
 /// @return Set of free variable names found in @p body.
 [[nodiscard]] std::unordered_set<std::string> collectFreeVariableNames(
     ast::Expr const* body,
     std::vector<std::string> const& boundNames,
     ScopeQuery const& isInScope,
-    FunctionQuery const& isKnownFunction);
+    FunctionQuery const& isKnownFunction,
+    std::unordered_set<std::string>* referencedFunctions = nullptr);
 
 } // namespace endo

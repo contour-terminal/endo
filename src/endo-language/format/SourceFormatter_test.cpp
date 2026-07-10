@@ -89,6 +89,19 @@ TEST_CASE("SourceFormatter.simple_echo", "[format]")
     CHECK(result == "echo hello world\n");
 }
 
+TEST_CASE("SourceFormatter.shell_command_quoted_program", "[format]")
+{
+    // A quoted program path round-trips with quotes preserved (would otherwise
+    // split into multiple tokens).
+    CHECK(SourceFormatter::format("& \"X:/Program Files/tool.exe\" --help")
+          == "& \"X:/Program Files/tool.exe\" --help\n");
+}
+
+TEST_CASE("SourceFormatter.shell_command_quoted_program_interpolated", "[format]")
+{
+    CHECK(SourceFormatter::format("& \"$dir/tool.exe\" --help") == "& \"$dir/tool.exe\" --help\n");
+}
+
 TEST_CASE("SourceFormatter.let_binding_simple", "[format]")
 {
     auto const result = SourceFormatter::format("let x = 42");

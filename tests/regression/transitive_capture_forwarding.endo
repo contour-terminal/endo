@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A function that calls a closure must transitively capture that closure's own
+#   captured variables, because calling a closure lowers to passing its captures as leading
+#   arguments. Regression: the caller did not capture them and forwarded them from an outer
+#   function's frame at runtime (out-of-bounds LOAD -> crash). Here `dispatch` calls `emit`,
+#   which captures `banner`, but `dispatch` never references `banner` itself.
+# expect: [banner] a
+# expect: [banner] b
+# mode: shell
+
+let banner = "[banner]"
+
+let emit label = println $"{banner} {label}"
+
+let dispatch which =
+    if which == "a" then emit "a"
+    else emit "b"
+
+dispatch "a"
+dispatch "b"

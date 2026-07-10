@@ -116,3 +116,54 @@ TEST_CASE("Json.query.list_append_pattern")
         results |> each println
     )") == "a\nb\nc\n");
 }
+
+TEST_CASE("Json.query.indexed_element")
+{
+    // [N] selects a single array element by zero-based index, so a specific object's
+    // fields can be read even when sibling objects omit those keys (unlike [] which
+    // flattens and skips missing keys, misaligning parallel arrays).
+    CHECK(executeSourceAndGetOutput(R"(
+        let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"},{\"name\":\"gamma\"}]}"
+        let r = Json.query ".items[1].name" json
+        r |> each println
+    )") == "beta\n");
+}
+
+TEST_CASE("Json.query.indexed_first_and_last")
+{
+    CHECK(executeSourceAndGetOutput(R"(
+        let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
+        let r = Json.query ".items[0].name" json @ Json.query ".items[1].name" json
+        r |> each println
+    )") == "alpha\nbeta\n");
+}
+
+TEST_CASE("Json.query.indexed_out_of_range_is_empty")
+{
+    auto output = executeSourceAndGetOutput(R"(
+        let json = "{\"items\":[{\"name\":\"alpha\"}]}"
+        let r = Json.query ".items[5].name" json
+        r |> each println
+    )");
+    CHECK(output.empty());
+}
+
+TEST_CASE("Json.query.indexed_scalar_value")
+{
+    // A path landing on a single scalar yields a one-element list.
+    CHECK(executeSourceAndGetOutput(R"(
+        let json = "{\"xs\":[10,20,30]}"
+        let r = Json.query ".xs[2]" json
+        r |> each println
+    )") == "30\n");
+}
+
+TEST_CASE("Json.query.indexed_on_non_array_is_empty")
+{
+    auto output = executeSourceAndGetOutput(R"(
+        let json = "{\"obj\":{\"a\":1}}"
+        let r = Json.query ".obj[0]" json
+        r |> each println
+    )");
+    CHECK(output.empty());
+}

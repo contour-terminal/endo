@@ -14,6 +14,14 @@
 namespace endo
 {
 
+/// Characters that terminate a bare (unquoted) word in shell tokenization mode.
+///
+/// A word containing any of these code points cannot be written unquoted without
+/// splitting into multiple tokens, so it must be quoted to survive as a single
+/// shell token. This is the single source of truth shared by the lexer (word
+/// tokenization) and the shell-quoting helpers (see needsShellQuoting).
+inline constexpr std::u32string_view ShellReservedSymbols = U"|<>()!$'\"\t\r\n ;`";
+
 enum class Token // NOLINT(performance-enum-size)
 {
     Invalid,

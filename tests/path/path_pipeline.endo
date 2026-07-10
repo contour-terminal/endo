@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Path.dirname works as a pipeline stage
+# expect: a/b
+
+println ("a/b/c.txt" |> Path.dirname)

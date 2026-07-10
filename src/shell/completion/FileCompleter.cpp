@@ -201,45 +201,6 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
     return std::filesystem::path(result);
 }
 
-std::string FileCompleter::escapeForShell(std::string_view path)
-{
-    std::string result;
-    result.reserve(path.size());
-
-    for (char ch: path)
-    {
-        switch (ch)
-        {
-            case ' ':
-            case '\\':
-            case '\'':
-            case '"':
-            case '`':
-            case '$':
-            case '!':
-            case '&':
-            case '|':
-            case ';':
-            case '(':
-            case ')':
-            case '<':
-            case '>':
-            case '*':
-            case '?':
-            case '[':
-            case ']':
-            case '#':
-            case '~':
-                result += '\\';
-                result += ch;
-                break;
-            default: result += ch; break;
-        }
-    }
-
-    return result;
-}
-
 bool FileCompleter::isHidden(std::string_view name)
 {
     return !name.empty() && name[0] == '.';

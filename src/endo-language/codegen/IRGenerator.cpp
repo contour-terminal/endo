@@ -1303,14 +1303,47 @@ std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
-    // Delegate AST analysis to the standalone utility
-    auto const freeNames = collectFreeVariableNames(
-        body,
-        boundNames,
-        [this](std::string const& name) { return lookupFSharpVariable(name) != nullptr; },
-        [this](std::string const& name) { return lookupFSharpFunction(name) != nullptr; });
+    auto const isInScope = [this](std::string const& name) {
+        return lookupFSharpVariable(name) != nullptr;
+    };
+    auto const isKnownFunction = [this](std::string const& name) {
+        return lookupFSharpFunction(name) != nullptr;
+    };
 
-    // Map returned names to their CoreVM storage values
+    // Direct free variables, plus the set of known functions this body references.
+    std::unordered_set<std::string> referencedFunctions;
+    auto freeNames =
+        collectFreeVariableNames(body, boundNames, isInScope, isKnownFunction, &referencedFunctions);
+
+    // Transitive captures: calling a closure lowers to passing that closure's captured
+    // variables as leading call arguments, so the caller must itself capture them to have
+    // them available in its own frame. Without this, the caller would try to load the
+    // callee's captures from another function's frame slots at runtime (an out-of-bounds
+    // LOAD). Expand over referenced known functions to a fixed point; the callee's own body
+    // is re-analyzed so this is independent of the order functions were compiled in.
+    std::unordered_set<std::string> visited;
+    std::vector<std::string> worklist(referencedFunctions.begin(), referencedFunctions.end());
+    while (!worklist.empty())
+    {
+        auto const fname = std::move(worklist.back());
+        worklist.pop_back();
+        if (!visited.insert(fname).second)
+            continue;
+        auto const it = _fsharpFunctions.find(fname);
+        if (it == _fsharpFunctions.end() || it->second.body == nullptr)
+            continue;
+
+        std::unordered_set<std::string> calleeReferences;
+        auto const calleeFree = collectFreeVariableNames(
+            it->second.body, it->second.parameters, isInScope, isKnownFunction, &calleeReferences);
+        for (auto const& name: calleeFree)
+            freeNames.insert(name);
+        for (auto const& callee: calleeReferences)
+            if (!visited.contains(callee))
+                worklist.push_back(callee);
+    }
+
+    // Map returned names to their CoreVM storage values in the current scope.
     std::unordered_map<std::string, CoreVM::Value*> freeVars;
     for (auto const& name: freeNames)
         if (auto* storage = lookupFSharpVariable(name))
@@ -6667,6 +6700,23 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 reportTypeError("Json has no member '{}'", std::string_view(fieldAccess->fieldName));
                 return;
             }
+            if (modIdent->name == "Path")
+            {
+                static std::unordered_map<std::string_view, std::string_view> const pathPipeMethods = {
+                    { "dirname", "path_dirname" },
+                    { "basename", "path_basename" },
+                    { "normalize", "path_normalize" },
+                    { "isAbsolute", "path_is_absolute" },
+                };
+                if (auto const it = pathPipeMethods.find(fieldAccess->fieldName); it != pathPipeMethods.end())
+                {
+                    if (tryGenerateNativeCall(std::string(it->second), { value }))
+                        return;
+                }
+                reportTypeError("Path has no member '{}' usable in a pipeline",
+                                std::string_view(fieldAccess->fieldName));
+                return;
+            }
         }
         reportTypeError("Pipeline function must be an identifier, lambda, or partial application");
         return;
@@ -6761,9 +6811,19 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Non-recursive: inline the function body with the piped value as argument
     pushFSharpScope();
 
-    // Re-bind captured variables from the closure
+    // Re-bind captured variables from the closure. When inlining inside another function,
+    // that enclosing function has itself (transitively) captured these names, so their live
+    // storage is the enclosing frame's capture slot — not the binding recorded at this
+    // function's definition site (which may live in an outer function's frame and would be
+    // an out-of-bounds load here). Prefer the in-scope storage, mirroring the compiled-call path.
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
+    {
+        CoreVM::Value* storage = capStorage;
+        if (_compilingFunction)
+            if (auto* inScope = lookupFSharpVariable(capName))
+                storage = inScope;
+        bindFSharpVariable(capName, storage, func->capturedMutables.contains(capName));
+    }
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -7048,6 +7108,49 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                         annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
                         return;
                     }
+                }
+            }
+
+            // Path module dispatch (lexical path operations)
+            if (modIdent->name == "Path")
+            {
+                if (method == "join" && argExprs.size() == 2)
+                {
+                    auto* baseArg = codegen(argExprs[0]);
+                    auto* tailArg = codegen(argExprs[1]);
+                    if (baseArg && tailArg)
+                    {
+                        if (tryGenerateNativeCall("path_join", { baseArg, tailArg }))
+                            return;
+                    }
+                }
+                else if ((method == "dirname" || method == "basename" || method == "normalize")
+                         && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        // method is guaranteed to be dirname/basename/normalize by the
+                        // enclosing condition, and each maps to the path_<method> builtin.
+                        auto const vmName = "path_" + method;
+                        if (tryGenerateNativeCall(vmName, { pathArg }))
+                            return;
+                    }
+                }
+                else if (method == "isAbsolute" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("path_is_absolute", { pathArg }))
+                            return;
+                    }
+                }
+                else
+                {
+                    reportTypeError("Path.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
                 }
             }
 
@@ -7959,9 +8062,19 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     pushFSharpScope();
 
-    // Re-bind captured variables from the closure
+    // Re-bind captured variables from the closure. When inlining inside another function,
+    // that enclosing function has itself (transitively) captured these names, so their live
+    // storage is the enclosing frame's capture slot — not the binding recorded at this
+    // function's definition site (which may live in an outer function's frame and would be
+    // an out-of-bounds load here). Prefer the in-scope storage, mirroring the compiled-call path.
     for (auto const& [capName, capStorage]: func->capturedBindings)
-        bindFSharpVariable(capName, capStorage, func->capturedMutables.contains(capName));
+    {
+        CoreVM::Value* storage = capStorage;
+        if (_compilingFunction)
+            if (auto* inScope = lookupFSharpVariable(capName))
+                storage = inScope;
+        bindFSharpVariable(capName, storage, func->capturedMutables.contains(capName));
+    }
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
@@ -10644,10 +10757,27 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     {
         if (modIdent->name == "Path")
         {
-            if (node.fieldName == "temporary_directory")
+            static std::unordered_map<std::string_view, std::string_view> const pathNullaryMembers = {
+                { "temporary_directory", "path_temporary_directory" },
+                { "separator", "path_separator" },
+                { "delimiter", "path_delimiter" },
+            };
+            if (auto const it = pathNullaryMembers.find(node.fieldName); it != pathNullaryMembers.end())
             {
-                tryGenerateNativeCall("path_temporary_directory", {});
+                tryGenerateNativeCall(std::string(it->second), {});
                 return;
+            }
+            static constexpr std::string_view PathMethods[] = {
+                "join", "dirname", "basename", "normalize", "isAbsolute",
+            };
+            for (auto const& m: PathMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    // Path.xxx requires arguments — handled in ApplicationExpr.
+                    reportTypeError("Path.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
             }
             reportTypeError("Path has no member '{}'", std::string_view(node.fieldName));
             return;

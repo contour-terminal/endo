@@ -26,8 +26,7 @@ $ gi<Tab>
 ### File Path Completion
 
 Anywhere an argument is expected, endo completes file and directory paths. Tilde expansion
-(`~`, `~user`) works transparently, and special characters in filenames are escaped
-automatically.
+(`~`, `~user`) works transparently.
 
 ```
 $ cat ~/Doc<Tab>
@@ -35,6 +34,24 @@ $ cat ~/Doc<Tab>
 ```
 
 Directories are shown with a trailing `/` to distinguish them from files.
+
+#### Automatic quoting
+
+When a completed path contains characters that would otherwise split it into several
+tokens — a space, `!`, `$`, a leading `//` (UNC), and so on — endo inserts it **wrapped in
+double quotes** so it stays a single argument (or program name):
+
+```
+$ cat X:/Program<Tab>
+  cat "X:/Program Files/
+```
+
+A directory completion leaves the quote open so the next **Tab** continues inside it; a
+file (final) completion closes the quote. If you are already inside an open quote when you
+press **Tab**, endo escapes the inserted text for that quote instead of opening a new one.
+This is the same quoting you would write by hand to run a program at such a path, e.g.
+`& "X:/Program Files/tool.exe"` (see
+[Command Execution → Quoting the Program Path](../language/command-execution.md#quoting-the-program-path)).
 
 ### Variable Completion
 

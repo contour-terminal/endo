@@ -491,6 +491,13 @@ std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::stri
 #endif
     )
     {
+#if defined(_WIN32)
+        // Normalize separators to the native form so forward-slash drive-letter
+        // and UNC paths (e.g. "X:/dir/tool.exe", "//server/share/tool.exe") that a
+        // user may quote resolve reliably via GetFileAttributesW and, once
+        // resolved, spawn via CreateProcessW.
+        programPath.make_preferred();
+#endif
         // Native programs must be executable. Endo scripts are run in-process
         // (see ProcessExecution.cpp) and therefore carry no execute bit, so accept
         // an existing .endo regular file or symlink even when it is not executable.

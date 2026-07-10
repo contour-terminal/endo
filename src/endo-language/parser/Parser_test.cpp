@@ -1326,6 +1326,34 @@ TEST_CASE("Parser.FSharp.shell_command_with_shell_pipe")
           == "let lines = & cat file.txt | grep pattern");
 }
 
+TEST_CASE("Parser.FSharp.shell_command_quoted_program")
+{
+    // A double-quoted program path (with spaces) is accepted in command position
+    // and round-trips with its quotes preserved.
+    CHECK(parseAndPrintAST("let r = & \"X:/Program Files/tool.exe\" --help")
+          == "let r = & \"X:/Program Files/tool.exe\" --help");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_quoted_program_bang")
+{
+    // The '!' inside quotes is a literal, not the word-terminating Not operator.
+    CHECK(parseAndPrintAST("let r = & \"X:/Workspace/!Programme/tool.exe\" --help")
+          == "let r = & \"X:/Workspace/!Programme/tool.exe\" --help");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_quoted_program_unc")
+{
+    // A quoted UNC path is not mistaken for a '//' C-style comment.
+    CHECK(parseAndPrintAST("let r = & \"//server/share/tool.exe\" --help")
+          == "let r = & \"//server/share/tool.exe\" --help");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_quoted_program_interpolated")
+{
+    // $-interpolation is supported in a quoted program name, like in arguments.
+    CHECK(parseAndPrintAST("let r = & \"$dir/tool.exe\" --help") == "let r = & \"$dir/tool.exe\" --help");
+}
+
 // ============================================================================
 // Option/Result Expression Tests
 // ============================================================================

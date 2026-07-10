@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: A double-quoted program path supports $-interpolation, like a quoted argument
+# mode: parse-only
+
+let dir = "X:/Workspace/!Programme/CLI-Tools"
+
+& "$dir/tool.exe" --help

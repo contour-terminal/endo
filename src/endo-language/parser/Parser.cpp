@@ -1397,6 +1397,7 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
 
     std::unique_ptr<ast::Expr> progExpr;
     std::string program;
+    bool quotedProgram = false;
     if (_lexer.currentToken() == Token::Tilde)
     {
         // Tilde-prefixed program name: ~/bin/foo, ~user/bin/bar
@@ -1405,6 +1406,19 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
         if (!program.starts_with('~'))
             program = "~" + program;
         progExpr = parseTildeExpansion();
+    }
+    else if (_lexer.currentToken() == Token::DblQuoteStart)
+    {
+        // Double-quoted program name: & "X:/path with spaces/tool.exe" args…
+        // Parse it with the same machinery as a quoted argument so spaces,
+        // reserved characters (e.g. '!'), and $-interpolation are handled. The
+        // resulting expression drives execution (programExpr); `program` keeps a
+        // best-effort display string for diagnostics (empty for interpolated
+        // paths, whose value is only known at runtime).
+        quotedProgram = true;
+        progExpr = parseCompoundParameter();
+        if (auto const* literal = dynamic_cast<ast::LiteralExpr const*>(progExpr.get()))
+            program = literal->value;
     }
     else
     {
@@ -1611,6 +1625,7 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
                                                      std::move(hereDocuments),
                                                      std::move(hereStrings));
     result->programExpr = std::move(progExpr);
+    result->quotedProgram = quotedProgram;
     result->programLocation = programLocation;
     return result;
 }

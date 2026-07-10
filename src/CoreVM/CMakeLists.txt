@@ -27,6 +27,7 @@ target_sources(CoreVM PRIVATE
     ir/Value.cpp
     transform/EmptyBlockElimination.cpp
     transform/InstructionElimination.cpp
+    transform/MaterializeCrossBlockValues.cpp
     transform/MergeBlockPass.cpp
     transform/UnusedBlockPass.cpp
     util/Cidr.cpp
