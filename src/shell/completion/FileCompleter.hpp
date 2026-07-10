@@ -26,9 +26,6 @@ class FileCompleter: public CompletionProvider
 
     [[nodiscard]] int priority() const override { return 50; }
 
-    /// @brief Escapes special characters for shell.
-    [[nodiscard]] static std::string escapeForShell(std::string_view path);
-
   private:
     EnvironmentProvider const& _env;
 

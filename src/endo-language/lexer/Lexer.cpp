@@ -771,7 +771,7 @@ Token Lexer::finalizeNumberOrShellWord()
     // In shell mode, check if the character after the number continues a word
     // (e.g., git SHA "3a4b5c6" or filename "3.txt")
     using namespace std::string_view_literals;
-    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`"sv;
+    auto constexpr ReservedSymbols = ShellReservedSymbols;
     if (!eof() && ReservedSymbols.find(_currentChar) == std::u32string_view::npos)
     {
         while (!eof() && ReservedSymbols.find(_currentChar) == std::u32string_view::npos)
@@ -822,7 +822,7 @@ Token Lexer::consumeIdentifier(Token token)
     // Note: ~ is NOT reserved to allow mid-word tilde (e.g., HEAD~2 in git).
     //       Tilde expansion (~, ~/foo, ~user) still works because nextToken()'s
     //       `case '~': return consumeTilde()` fires when ~ starts a new token.
-    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`"sv;
+    auto constexpr ReservedSymbols = ShellReservedSymbols;
     // In arithmetic context, operators are also reserved to allow expressions like 1+2
     auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:"sv;
     // In F# expression context, brackets and operators are reserved

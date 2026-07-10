@@ -138,6 +138,34 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     fs::remove_all(base);
 }
 
+TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
+{
+    // Completing a path whose value contains a space must insert it wrapped in a
+    // double quote so it stays a single argument. A directory candidate leaves the
+    // quote open so completion can continue inside it.
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_prompt_quote_space";
+    fs::remove_all(base);
+    fs::create_directories(base / "space dir");
+
+    endo::InMemoryHistory history;
+    endo::TestEnvironment env;
+    endo::FSharpPersistentState fsharpState;
+    endo::Completer completer(env, history, fsharpState);
+
+    auto const typed = "cd " + endo::platform::normalizePath((base / "space").string());
+    auto const expected = "cd \"" + endo::platform::canonicalCasePath(base) + "/space dir/";
+
+    auto comp = PromptComponent();
+    comp.setCompleter(&completer);
+    comp.inputField().setText(typed);
+
+    (void) comp.processInput(tabEvent());
+    CHECK(comp.text() == expected);
+
+    fs::remove_all(base);
+}
+
 TEST_CASE("PromptComponent.ctrl_d_after_timeout_shows_hint_again", "[prompt]")
 {
     auto comp = PromptComponent();

@@ -7,6 +7,7 @@
 #include <shell/ui/SourceOffsetUtils.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/util/CommandResolver.hpp>
+#include <shell/util/ShellQuoting.hpp>
 
 #include <endo-language/ide/HoverProvider.hpp>
 
@@ -995,7 +996,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         {
             case tui::FuzzyPickerAction::Accepted:
                 if (auto const* selected = _fuzzyFileFinder.selectedItem())
-                    insertCompletion(FileCompleter::escapeForShell(*selected));
+                    insertCompletion(*selected);
                 _fuzzyFileFinder.hide();
                 return Action::Changed;
             case tui::FuzzyPickerAction::Dismissed: return Action::Changed;
@@ -1571,12 +1572,18 @@ void PromptComponent::insertCompletion(std::string_view text)
 
     // Calculate how much text to replace (the prefix being completed)
     auto const prefixLen = ctx.prefix.size();
+    auto const prefixStart = cursor - prefixLen;
+
+    // Auto-quote so the inserted value stays a single shell token. A directory
+    // candidate (trailing '/') is left with its quote open so the next TAB
+    // continues completing inside the same quote; a final candidate closes it.
+    auto const insertion = quoteCompletionValue(text, prefixStart > 0 ? inputText[prefixStart - 1] : '\0');
 
     // Build new buffer: text before prefix + completion + text after cursor
     std::string newBuffer;
-    newBuffer.reserve(inputText.size() - prefixLen + text.size());
-    newBuffer.append(inputText.substr(0, cursor - prefixLen));
-    newBuffer.append(text);
+    newBuffer.reserve(inputText.size() - prefixLen + insertion.size());
+    newBuffer.append(inputText.substr(0, prefixStart));
+    newBuffer.append(insertion);
     newBuffer.append(inputText.substr(cursor));
 
     // Update the input field

@@ -135,6 +135,8 @@ add_library(endo-shell STATIC
     util/GlobMatcher.cpp
     util/Suggestions.hpp
     util/Suggestions.cpp
+    util/ShellQuoting.hpp
+    util/ShellQuoting.cpp
 
     # Directory Configuration
     DirectoryConfig.hpp
@@ -310,6 +312,7 @@ if(ENDO_TESTING)
         output/OutputParser_test.cpp
         util/CommandResolver_test.cpp
         util/Suggestions_test.cpp
+        util/ShellQuoting_test.cpp
         ui/RichConsoleReport_test.cpp
         ui/SyntaxHighlighter_test.cpp
     )

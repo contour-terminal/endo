@@ -262,6 +262,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `collectRecordInfo()` extracts record types and variable-type associations from source for LSP
 - [x] Record-aware hover: hovering over record variable shows detected type name (e.g., `Person`) and type definition
 - [x] Standard library function autocompletion: 40 functions (type conversion, string ops, list ops, HOFs, transforms, env/system) in both shell prompt and LSP
+- [x] Auto-quoting on insertion: completions containing spaces or shell-reserved characters are wrapped in double quotes (directories keep the quote open; escapes inside an already-open quote) so the result stays a single token
 
 ## Modules & Imports
 
