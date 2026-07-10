@@ -60,6 +60,37 @@ process (cat config.txt)
 analyze (git diff HEAD~1)
 ```
 
+### Quoting the Program Path
+
+The program name in command position is normally a bare word. If the path contains
+characters that would otherwise split it into several tokens — spaces, `!`, `$`, or a
+leading `//` (a UNC path, whose unquoted `//` starts a C-style comment) — wrap it in
+quotes. This is most common on Windows with drive-letter and UNC paths:
+
+<!-- endo-no-check -->
+```endo
+# Drive-letter path with a space and a '!'
+& "X:/Program Files/!Tools/tool.exe" --help
+
+# UNC path — must be quoted, since an unquoted // starts a comment
+& "//server/share/tools/tool.exe" --help
+
+# Double quotes interpolate exactly like a quoted argument. `$VAR` reads an
+# environment variable, so export it (or use one already in the environment):
+let export dir = "X:/Program Files/!Tools"
+& "$dir/tool.exe" --help
+
+# Single quotes are literal (no interpolation):
+& 'X:/Program Files/!Tools/tool.exe' --help
+```
+
+Arguments after the program are quoted the same way. For a program path that is only
+known at runtime from an F# expression (a variable, `which`, or a pattern match), use
+[`exec`](#107-dynamic-command-execution-exec) instead.
+
+> **Tip:** interactive TAB-completion inserts these quotes for you — completing a path
+> that contains a space or other special character produces an already-quoted token.
+
 ### 10.3 String Interpolation
 
 ```endo

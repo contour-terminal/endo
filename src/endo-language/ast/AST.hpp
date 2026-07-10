@@ -581,11 +581,14 @@ struct BuiltinWhichStmt final: public Statement
 /// It is a path to an executable, followed by arguments, with optional redirects.
 struct ProgramCall final: public Statement
 {
-    std::string program;                                ///< Program name or path (raw display string)
-    std::unique_ptr<Expr> programExpr;                  ///< Runtime program name expression (tilde expansion)
-    std::optional<SourceLocationRange> programLocation; ///< Source location of the program name token
-    std::vector<std::unique_ptr<Expr>> parameters;      ///< Command arguments
-    std::vector<std::unique_ptr<InputRedirect>> inputRedirects;   ///< Input redirects (< FILE)
+    std::string program; ///< Program name or path (raw display string)
+    std::unique_ptr<Expr>
+        programExpr;            ///< Runtime program name expression (tilde expansion / quoted program path)
+    bool quotedProgram = false; ///< True when the program name came from a quoted string; format via
+                                ///< programExpr, not the raw `program` string
+    std::optional<SourceLocationRange> programLocation;         ///< Source location of the program name token
+    std::vector<std::unique_ptr<Expr>> parameters;              ///< Command arguments
+    std::vector<std::unique_ptr<InputRedirect>> inputRedirects; ///< Input redirects (< FILE)
     std::vector<std::unique_ptr<OutputRedirect>> outputRedirects; ///< Output redirects (> FILE, >> FILE, >&)
     std::vector<std::unique_ptr<HereDocument>> hereDocuments;     ///< Here-documents (<<EOF)
     std::vector<std::unique_ptr<HereString>> hereStrings;         ///< Here-strings (<<<)
@@ -978,10 +981,7 @@ struct LetBindingStmt final: public Statement
     [[nodiscard]] bool isRecursive() const noexcept { return recursion == Recursion::Recursive; }
 
     /// Is this a passthrough function?
-    [[nodiscard]] bool isPassthrough() const noexcept
-    {
-        return captureMode == ShellCaptureMode::Passthrough;
-    }
+    [[nodiscard]] bool isPassthrough() const noexcept { return captureMode == ShellCaptureMode::Passthrough; }
 
     /// Is this a function definition (has parameters)?
     [[nodiscard]] bool isFunction() const noexcept { return !parameters.empty(); }
@@ -1261,8 +1261,8 @@ enum class ApplicationOrigin : uint8_t
 
 struct ApplicationExpr final: public Expr
 {
-    std::unique_ptr<Expr> function;         ///< Function being applied
-    std::unique_ptr<Expr> argument;         ///< Argument being passed
+    std::unique_ptr<Expr> function;                         ///< Function being applied
+    std::unique_ptr<Expr> argument;                         ///< Argument being passed
     ApplicationOrigin origin = ApplicationOrigin::Explicit; ///< How this application was formed
 
     ApplicationExpr(std::unique_ptr<Expr> func, std::unique_ptr<Expr> arg):

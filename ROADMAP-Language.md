@@ -247,6 +247,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Fix `exec` with pattern-matched tuple variables: `ensureString()` bypasses `convertToString` N2S corruption for Object/Void-typed strings from `ObjGetSlot`
 - [x] Fix `TuplePattern` with `ConstructorPattern` sub-patterns: create scrutinee storage allocas so `ConstructorPattern` can reload across block boundaries
 - [x] Shell word splitting: adjacent tokens without whitespace form a single word (e.g., `echo $LINES:$COLUMNS` outputs `35:127` not `35 : 127`)
+- [x] Quoted program paths: `& "X:/Program Files/!Tools/tool.exe"` accepts a double/single-quoted program name (with `$`-interpolation) so paths with spaces, `!`, or a `//` UNC prefix run; Windows drive-letter and UNC paths normalized for resolution
 
 ## Completion System
 

@@ -69,7 +69,13 @@ void ASTPrinter::visit(HereString const& node)
 
 void ASTPrinter::visit(ProgramCall const& node)
 {
-    _result += std::format("{}", node.program);
+    // A quoted program name is carried by programExpr (a quoted LiteralExpr or an
+    // interpolated ConcatExpr), which re-emits its surrounding quotes; tilde and
+    // bare-word programs print the raw `program` string.
+    if (node.quotedProgram && node.programExpr)
+        node.programExpr->accept(*this);
+    else
+        _result += std::format("{}", node.program);
 
     for (auto const& param: node.parameters)
     {
