@@ -68,6 +68,18 @@ endif()
 enable_sanitizers(CoreVM)
 enable_clang_tidy(CoreVM)
 
+# WebAssembly compilation backend (requires system binaryen; see FindBinaryen.cmake)
+if(ENDO_HAS_WASM)
+    add_library(CoreVM-wasm STATIC
+        wasm/WasmCodeGenerator.cpp
+        wasm/WasmFunctionLowerer.cpp
+    )
+    target_link_libraries(CoreVM-wasm PUBLIC CoreVM PRIVATE Binaryen::Binaryen)
+    target_compile_definitions(CoreVM-wasm INTERFACE ENDO_HAS_WASM=1)
+    enable_sanitizers(CoreVM-wasm)
+    enable_clang_tidy(CoreVM-wasm)
+endif()
+
 # Tests
 if(ENDO_TESTING)
     add_executable(test-corevm
@@ -79,6 +91,10 @@ if(ENDO_TESTING)
         vm/Runner_test.cpp
     )
     target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
+    if(ENDO_HAS_WASM)
+        target_sources(test-corevm PRIVATE wasm/WasmCodeGenerator_test.cpp)
+        target_link_libraries(test-corevm CoreVM-wasm Binaryen::Binaryen)
+    endif()
     add_test(NAME test-corevm COMMAND test-corevm)
     enable_sanitizers(test-corevm)
     enable_clang_tidy(test-corevm)

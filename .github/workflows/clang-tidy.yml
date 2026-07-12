@@ -44,6 +44,9 @@ jobs:
         # libssl-dev backs the TLS transport in the vendored net library.
         sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }} libssl-dev
 
+    - name: Install binaryen (WASM backend headers)
+      run: sudo apt-get install -y binaryen
+
     - name: Setup clang-tidy problem matcher
       run: echo "::add-matcher::.github/clang-tidy-matcher.json"
 
@@ -66,11 +69,21 @@ jobs:
           echo "::error::clang-tidy-diff.py not found"
           exit 1
         fi
+        # The WASM backend is optional: when the runner's binaryen is missing
+        # or too old, its sources are not in the compile database and would be
+        # mis-analyzed against the wrong headers — exclude them (they are
+        # tidied by any build whose binaryen enables the backend).
+        WASM_EXCLUDES=()
+        if ! grep -sq "CoreVM/wasm/WasmCodeGenerator.cpp" build/compile_commands.json; then
+          echo "WASM backend disabled at configure time; skipping src/CoreVM/wasm in clang-tidy"
+          WASM_EXCLUDES=(':!src/CoreVM/wasm/*' ':!src/endo-language/CompileToWasm.hpp')
+        fi
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
             ':!src/crispy/*' ':!src/vtparser/*' ':!src/coro/*' ':!src/net/*' \
             ':!src/shell/platform/Windows*' \
             ':!src/endo-language/wasm_bridge.cpp' \
+            "${WASM_EXCLUDES[@]}" \
           | python3 "$CLANG_TIDY_DIFF" \
               -p1 \
               -path build \

@@ -94,6 +94,7 @@ endif()
 
 
 option(ENDO_ENABLE_AGENT "Build with AI agent support (LLM providers, agent mode, MCP)" ON)
+option(ENDO_ENABLE_WASM "Build the WebAssembly compilation backend (requires binaryen) [default: ON]" ON)
 
 if(NOT DEFINED ENDO_TRACE_VM)
     option(ENDO_TRACE_VM "Enables debug output" OFF)
@@ -146,6 +147,17 @@ include(ClangTidy)
 
 if(NOT EMSCRIPTEN)
     check_static_system_requirements()
+endif()
+
+# WebAssembly compilation backend: requires the system binaryen library.
+# Disabled under Emscripten (no cross-compiled binaryen) and under static
+# linking (binaryen ships as a shared library only).
+set(ENDO_HAS_WASM OFF)
+if(ENDO_ENABLE_WASM AND NOT EMSCRIPTEN AND NOT ENABLE_STATIC_LINKING)
+    find_package(Binaryen)
+    if(Binaryen_FOUND)
+        set(ENDO_HAS_WASM ON)
+    endif()
 endif()
 
 if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
@@ -223,6 +235,7 @@ message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
 message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
 message(STATUS "Testing             ${ENDO_TESTING}")
 message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
+message(STATUS "WASM backend        ${ENDO_HAS_WASM}")
 message(STATUS "Built in crashdump  ${ENDO_BUILTIN_CRARHDUMP}")
 if(NOT EMSCRIPTEN)
     message(STATUS "Address Sanitizer   ${ENABLE_ASAN}")
