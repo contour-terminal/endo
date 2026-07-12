@@ -436,19 +436,61 @@ void WasmFunctionLowerer::visit(CallInstr& instr)
 
 void WasmFunctionLowerer::visit(FunctionCallInstr& instr)
 {
-    unsupported(instr, "user-defined function calls");
+    if (instr.callee()->empty())
+    {
+        unsupported(instr, "calling a function without a compiled body");
+        return;
+    }
+    auto args = std::vector<BinaryenExpressionRef> {};
+    args.reserve(instr.operands().size());
+    for (auto* operand: instr.operands())
+        args.push_back(asI64(emitValue(operand)));
+    auto* call = BinaryenCall(_module,
+                              mangledName(instr.callee()->name()).c_str(),
+                              args.data(),
+                              static_cast<BinaryenIndex>(args.size()),
+                              BinaryenTypeInt64());
+    setResult(instr, call, ResultMode::Ordered);
 }
 
 void WasmFunctionLowerer::visit(FunctionRetInstr& instr)
 {
-    unsupported(instr, "returning from user-defined functions");
-    pushStatement(BinaryenUnreachable(_module));
+    auto* result = instr.result() != nullptr ? asI64(emitValue(instr.result())) : zeroI64();
+    pushStatement(BinaryenReturn(_module, result));
 }
 
 void WasmFunctionLowerer::visit(TailCallInstr& instr)
 {
-    unsupported(instr, "tail calls");
-    pushStatement(BinaryenUnreachable(_module));
+    if (instr.callee()->empty())
+    {
+        unsupported(instr, "tail-calling a function without a compiled body");
+        pushStatement(BinaryenUnreachable(_module));
+        return;
+    }
+    auto args = std::vector<BinaryenExpressionRef> {};
+    args.reserve(instr.operands().size());
+    for (auto* operand: instr.operands())
+        args.push_back(asI64(emitValue(operand)));
+    auto const callee = mangledName(instr.callee()->name());
+    if (_options.tailCalls)
+    {
+        pushStatement(BinaryenReturnCall(_module,
+                                         callee.c_str(),
+                                         args.data(),
+                                         static_cast<BinaryenIndex>(args.size()),
+                                         BinaryenTypeInt64()));
+    }
+    else
+    {
+        // Portable fallback for runtimes without the tail-call proposal;
+        // deep recursion may exhaust the value stack here.
+        auto* call = BinaryenCall(_module,
+                                  callee.c_str(),
+                                  args.data(),
+                                  static_cast<BinaryenIndex>(args.size()),
+                                  BinaryenTypeInt64());
+        pushStatement(BinaryenReturn(_module, call));
+    }
 }
 
 void WasmFunctionLowerer::visit(IndirectCallInstr& instr)

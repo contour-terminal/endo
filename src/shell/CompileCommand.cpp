@@ -46,26 +46,6 @@ namespace
         return content;
     }
 
-    /// Runs the same semantics-preserving IR cleanup passes as Shell::execute.
-    /// The WASM path always runs them: cross-block value materialization
-    /// benefits from empty-block and unused-instruction elimination.
-    void optimizeIR(CoreVM::IRProgram& program)
-    {
-        CoreVM::PassManager pm;
-
-        // clang-format off
-        pm.registerPass("eliminate-empty-blocks", &CoreVM::transform::emptyBlockElimination);
-        pm.registerPass("eliminate-linear-br", &CoreVM::transform::eliminateLinearBr);
-        pm.registerPass("eliminate-unused-blocks", &CoreVM::transform::eliminateUnusedBlocks);
-        pm.registerPass("eliminate-unused-instr", &CoreVM::transform::eliminateUnusedInstr);
-        pm.registerPass("fold-constant-condbr", &CoreVM::transform::foldConstantCondBr);
-        pm.registerPass("rewrite-br-to-exit", &CoreVM::transform::rewriteBrToExit);
-        pm.registerPass("rewrite-cond-br-to-same-branches", &CoreVM::transform::rewriteCondBrToSameBranches);
-        // clang-format on
-
-        pm.run(&program);
-    }
-
     /// Writes the compiled module to the output file (binary or text).
     bool writeOutput(std::string_view outputFile, CoreVM::wasm::WasmOutput const& output, bool asText)
     {
@@ -109,11 +89,14 @@ int runCompileCommand(CompileOptions const& options)
     registerStubRuntime(runtime);
 
     auto report = CoreVM::diagnostics::ConsoleReport {};
+    // NOTE: The CoreVM IR-level optimization passes (PassManager) are not run
+    // here: they verify() the IR after each change, and the frontend routinely
+    // emits blocks that fail verification (e.g. unterminated match merge
+    // blocks after fully-returning arms) yet execute fine. -O optimization
+    // happens at the WASM module level via binaryen instead.
     auto irProgram = compileToIR(std::move(*source), runtime, report, options.scriptFile);
     if (!irProgram)
         return EXIT_FAILURE;
-
-    optimizeIR(*irProgram);
 
     auto provider = CoreVM::wasm::WasmRuntime {};
     auto generator = CoreVM::wasm::WasmCodeGenerator(provider,
