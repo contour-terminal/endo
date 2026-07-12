@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <memory>
 #include <string_view>
 #include <thread>
 
@@ -58,6 +59,8 @@ struct TestShell
         if (auto const* pathext = std::getenv("PATHEXT"))
             env.set("PATHEXT", pathext);
 #endif
+        // Never probe the real terminal for Sixel support from a test.
+        shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
     }
 
     TestShell& operator()(std::string_view cmd)
@@ -5222,4 +5225,194 @@ TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
     auto const it =
         std::ranges::find_if(result.completions, [](auto const& c) { return c.text == "--help"; });
     CHECK(it->description == "Show help");
+}
+
+// ============================================================================
+// cat: markdown rendering wiring
+//
+// TestPTY is a real PTY on POSIX, so isTerminal() is true and `cat` takes the
+// rendering path. WindowsTestPTY uses pipes and reports false, so the rendered
+// assertions are POSIX-only; the plain-output assertions hold everywhere.
+// Escape-level rendering semantics are covered in src/tui/MarkdownRenderer_test.cpp.
+// ============================================================================
+
+namespace
+{
+/// @brief Writes @p content to a uniquely named file and returns its path.
+auto writeMarkdownFixture(std::string_view name, std::string_view content) -> std::filesystem::path
+{
+    namespace fs = std::filesystem;
+    auto const dir = fs::temp_directory_path() / "endo_cat_markdown";
+    fs::create_directories(dir);
+    auto const path = dir / name;
+    auto stream = std::ofstream(path, std::ios::binary);
+    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    return path;
+}
+
+constexpr auto MarkdownFixture = "# Title\n\nSee [Docs](https://endo-lang.org/).\n"sv;
+} // namespace
+
+TEST_CASE("shell.builtin.cat_markdown_renders_on_tty")
+{
+    auto const path = writeMarkdownFixture("render.md", MarkdownFixture);
+
+    TestShell shell;
+    shell(std::format("cat {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+#if !defined(_WIN32)
+    // OSC-8 hyperlink around the link label.
+    CHECK(output.find("\033]8;;https://endo-lang.org/\033\\") != std::string::npos);
+    // Double-height title (DECDHL top/bottom halves).
+    CHECK(output.find("\033#3") != std::string::npos);
+    CHECK(output.find("\033#4") != std::string::npos);
+    // The markdown source markers are consumed by the renderer.
+    CHECK(output.find("# Title") == std::string::npos);
+    CHECK(output.find("[Docs](") == std::string::npos);
+#endif
+    CHECK(output.find("Title") != std::string::npos);
+    CHECK(output.find("Docs") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_markdown_is_indented_by_default")
+{
+    auto const path = writeMarkdownFixture("indent_default.md", "Hello\n"sv);
+
+    TestShell shell;
+    shell(std::format("cat {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+#if !defined(_WIN32)
+    CHECK(output.find(" Hello") != std::string::npos);
+#endif
+}
+
+TEST_CASE("shell.builtin.cat_markdown_indent_flag_overrides_the_default")
+{
+    auto const path = writeMarkdownFixture("indent_flag.md", "Hello\n"sv);
+
+    TestShell shell;
+    shell(std::format("cat --indent 5 {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+#if !defined(_WIN32)
+    CHECK(output.find("     Hello") != std::string::npos);
+#endif
+}
+
+TEST_CASE("shell.builtin.cat_markdown_indent_zero_hugs_the_left_edge")
+{
+    auto const path = writeMarkdownFixture("indent_zero.md", "Hello\n"sv);
+
+    TestShell shell;
+    shell(std::format("cat --indent=0 {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+#if !defined(_WIN32)
+    CHECK(output.find(" Hello") == std::string::npos);
+    CHECK(output.find("Hello") != std::string::npos);
+#endif
+}
+
+TEST_CASE("shell.builtin.cat_indent_rejects_invalid_values")
+{
+    auto const path = writeMarkdownFixture("indent_bad.md", "Hello\n"sv);
+
+    TestShell bad;
+    bad(std::format("cat --indent abc {}", path.string()));
+    CHECK(bad.exitCode == 1);
+
+    TestShell negative;
+    negative(std::format("cat --indent -1 {}", path.string()));
+    CHECK(negative.exitCode == 1);
+
+    TestShell missing;
+    missing("cat --indent");
+    CHECK(missing.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cat_indent_does_not_affect_raw_output")
+{
+    auto const path = writeMarkdownFixture("indent_raw.md", "Hello\n"sv);
+
+    TestShell shell;
+    shell(std::format("cat --raw --indent 5 {}", path.string()));
+
+    CHECK(shell.exitCode == 0);
+    CHECK(std::string(shell.output()) == "Hello\n");
+}
+
+TEST_CASE("shell.builtin.cat_markdown_raw_flag_emits_source_bytes")
+{
+    auto const path = writeMarkdownFixture("raw.md", MarkdownFixture);
+
+    TestShell shell;
+    shell(std::format("cat --raw {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find('\033') == std::string::npos); // no escapes at all
+    CHECK(output.find("# Title") != std::string::npos);
+    CHECK(output.find("[Docs](https://endo-lang.org/)") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_markdown_piped_is_not_rendered")
+{
+    auto const path = writeMarkdownFixture("piped.md", MarkdownFixture);
+
+    // The first `cat` writes into a pipe, so its output handle is not a terminal.
+    TestShell shell;
+    shell(std::format("cat {} | cat", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("\033]8;;") == std::string::npos);
+    CHECK(output.find("# Title") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_markdown_number_flag_shows_source")
+{
+    auto const path = writeMarkdownFixture("numbered.md", MarkdownFixture);
+
+    // -n asks for a literal view of the source, so rendering is suppressed.
+    TestShell shell;
+    shell(std::format("cat -n {}", path.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("\033]8;;") == std::string::npos);
+    CHECK(output.find("# Title") != std::string::npos);
+    CHECK(output.find("1\t") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
+{
+    namespace fs = std::filesystem;
+    auto const path = writeMarkdownFixture("redirect.md", MarkdownFixture);
+    auto const target = path.parent_path() / "redirect.out";
+    fs::remove(target);
+
+    TestShell shell;
+    shell(std::format("cat {} > {}", path.string(), target.string()));
+    CHECK(shell.exitCode == 0);
+
+    auto stream = std::ifstream(target, std::ios::binary);
+    auto const written = std::string(std::istreambuf_iterator<char>(stream), {});
+    CHECK(written == std::string(MarkdownFixture));
+}
+
+TEST_CASE("shell.builtin.cat_non_markdown_is_unaffected")
+{
+    auto const path = writeMarkdownFixture("plain.txt", "hello world\n"sv);
+
+    TestShell shell;
+    shell(std::format("cat {}", path.string()));
+
+    CHECK(shell.exitCode == 0);
+    CHECK(std::string(shell.output()).find("hello world") != std::string::npos);
 }

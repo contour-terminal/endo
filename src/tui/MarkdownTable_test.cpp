@@ -414,3 +414,52 @@ TEST_CASE("MarkdownTable.computeColumnWidths.strips_markdown")
     CHECK(widths[0] == 6); // "Header" = 6 (not "**Header**" = 10)
     CHECK(widths[1] == 5); // "Plain" = 5
 }
+
+// ============================================================================
+// stripInlineMarkdown must match what MarkdownRenderer::renderInline() draws,
+// or column widths are computed from text that is never displayed.
+// ============================================================================
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.badge_reduces_to_alt_text")
+{
+    CHECK(stripInlineMarkdown("[![Linux](badge.svg)](https://ci)") == "Linux");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.image_reduces_to_alt_text")
+{
+    CHECK(stripInlineMarkdown("![alt](x.png)") == "alt");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.autolink_drops_angle_brackets")
+{
+    CHECK(stripInlineMarkdown("<https://x.com>") == "https://x.com");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.html_anchor_reduces_to_label")
+{
+    CHECK(stripInlineMarkdown(R"(<a href="https://y.com">Y</a>)") == "Y");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.html_img_reduces_to_alt")
+{
+    CHECK(stripInlineMarkdown(R"(<img src="x.png" alt="pic">)") == "pic");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.lone_angle_bracket_preserved")
+{
+    CHECK(stripInlineMarkdown("a < b") == "a < b");
+}
+
+TEST_CASE("MarkdownTable.inlineDisplayWidth.matches_rendered_width_for_links")
+{
+    // Regression: the autolink used to measure 15 (with brackets) but render 13.
+    CHECK(inlineDisplayWidth("<https://x.com>") == 13);
+    CHECK(inlineDisplayWidth(R"(<a href="https://y.com">Y</a>)") == 1);
+    CHECK(inlineDisplayWidth("[![Linux](badge.svg)](https://ci)") == 5);
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.link_title_is_not_displayed")
+{
+    CHECK(stripInlineMarkdown(R"([Docs](https://x.com "Title"))") == "Docs");
+    CHECK(stripInlineMarkdown(R"(![alt](x.png "Title"))") == "alt");
+}

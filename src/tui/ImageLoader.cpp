@@ -52,11 +52,13 @@ auto resizeImage(OwnedImage const& image, int targetWidth, int targetHeight) -> 
     if (targetWidth <= 0 && targetHeight <= 0)
         return std::unexpected(std::string("At least one target dimension must be positive"));
 
-    // Auto-compute missing dimension preserving aspect ratio
+    // Auto-compute missing dimension preserving aspect ratio. Extreme aspect
+    // ratios (e.g. a 64x1 banner scaled to 32px wide) round the computed
+    // dimension down to zero, so clamp it to a single pixel.
     if (targetWidth <= 0)
-        targetWidth = image.width * targetHeight / image.height;
+        targetWidth = std::max(1, image.width * targetHeight / image.height);
     else if (targetHeight <= 0)
-        targetHeight = image.height * targetWidth / image.width;
+        targetHeight = std::max(1, image.height * targetWidth / image.width);
 
     if (targetWidth <= 0 || targetHeight <= 0)
         return std::unexpected(std::string("Computed target dimensions are invalid"));

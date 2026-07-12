@@ -4,6 +4,7 @@
 /// @file TerminalProtocols.hpp
 /// @brief Terminal protocol escape sequence constants shared between platform implementations.
 
+#include <string>
 #include <string_view>
 
 namespace tui::protocols
@@ -66,5 +67,65 @@ constexpr auto DisableFocusTracking = "\033[?1004l"sv; ///< Disable focus in/out
 // preserving full modifier fidelity that is lost in standard VT translation.
 constexpr auto EnableWin32InputMode = "\033[?9001h"sv;  ///< Enable win32-input-mode.
 constexpr auto DisableWin32InputMode = "\033[?9001l"sv; ///< Disable win32-input-mode.
+
+// Primary Device Attributes (DA1): CSI c
+// Response: CSI ? 6x ; p1 ; p2 ; ... c  — parameter 4 advertises Sixel graphics.
+constexpr auto QueryPrimaryDeviceAttributes = "\033[c"sv; ///< Request DA1 (feature list).
+
+// OSC 8 hyperlinks: OSC 8 ; params ; URI ST ... OSC 8 ; ; ST
+constexpr auto HyperlinkOpenPrefix = "\033]8;;"sv;  ///< Precedes the URI of an OSC 8 hyperlink.
+constexpr auto StringTerminator = "\033\\"sv;       ///< ST, terminating an OSC/DCS string.
+constexpr auto HyperlinkClose = "\033]8;;\033\\"sv; ///< Closes the current OSC 8 hyperlink.
+
+/// @brief Builds the OSC 8 sequence that opens a hyperlink to @p url.
+///
+/// Shared by the platform TerminalOutput implementations and HelpPrinter so the
+/// escape is spelled in exactly one place.
+///
+/// @param url The link target.
+/// @return The complete opening sequence.
+[[nodiscard]] inline auto buildHyperlinkOpen(std::string_view url) -> std::string
+{
+    auto result = std::string { HyperlinkOpenPrefix };
+    result.append(url);
+    result.append(StringTerminator);
+    return result;
+}
+
+/// @brief Parses a DA1 response and reports whether it advertises Sixel graphics.
+///
+/// Accepts the canonical form `ESC [ ? p1 ; p2 ; ... c` (and the 0x9B single-byte
+/// CSI variant), scanning the semicolon-separated parameters for the value 4.
+/// Anything unparseable — empty, truncated, or garbage — reports false.
+///
+/// @param response The raw bytes read back from the terminal.
+/// @return true when parameter 4 is present.
+[[nodiscard]] inline auto parseSixelFromDeviceAttributes(std::string_view response) -> bool
+{
+    auto start = std::string_view::npos;
+    if (auto const escForm = response.find("\033[?"); escForm != std::string_view::npos)
+        start = escForm + 3;
+    else if (auto const csiForm = response.find("\x9B?"); csiForm != std::string_view::npos)
+        start = csiForm + 2;
+    else
+        return false;
+
+    auto const end = response.find('c', start);
+    if (end == std::string_view::npos)
+        return false;
+
+    auto params = response.substr(start, end - start);
+    while (!params.empty())
+    {
+        auto const semi = params.find(';');
+        auto const token = params.substr(0, semi);
+        if (token == "4")
+            return true;
+        if (semi == std::string_view::npos)
+            break;
+        params.remove_prefix(semi + 1);
+    }
+    return false;
+}
 
 } // namespace tui::protocols

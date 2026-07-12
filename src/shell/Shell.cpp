@@ -621,10 +621,16 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env): Shell(tty, env, NativeFileSyst
 {
 }
 
+void Shell::setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider)
+{
+    _sixelCapability = std::move(provider);
+}
+
 Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
     _fs { fs },
     _env { env },
     _tty { tty },
+    _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
     _processManager {
 #if defined(_WIN32)
         WindowsProcessManager::instance()

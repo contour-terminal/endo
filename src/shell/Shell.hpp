@@ -41,6 +41,7 @@ struct AgentRunOptions;
 #endif
 
 #include <shell/DirectoryConfig.hpp>
+#include <shell/SixelCapability.hpp>
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/CompleterFunctionRegistry.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
@@ -88,6 +89,12 @@ class Shell final: public SignalCallback
 
     Shell(TTY& tty, EnvironmentProvider& env);
     Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs);
+
+    /// @brief Replaces the Sixel capability provider.
+    ///
+    /// Lets tests force Sixel on or off without a terminal probe.
+    /// @param provider The replacement provider; must not be null.
+    void setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider);
 
     [[nodiscard]] EnvironmentProvider& environment() noexcept;
     [[nodiscard]] EnvironmentProvider const& environment() const noexcept;
@@ -529,6 +536,22 @@ class Shell final: public SignalCallback
     /// @return Always 0.
     [[nodiscard]] static int renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent);
 
+    /// @brief Renders a markdown document to a terminal file descriptor.
+    ///
+    /// Unlike renderMarkdownHelp(), this targets an arbitrary descriptor and
+    /// enables document features: double-width/height titles and inline Sixel
+    /// images resolved relative to the document.
+    ///
+    /// @param outputFd Terminal file descriptor to write to.
+    /// @param markdownContent The document text.
+    /// @param baseDir Directory the document lives in; relative image paths resolve here.
+    /// @param indent Left margin in columns applied to every rendered line.
+    /// @return Always 0.
+    [[nodiscard]] int renderMarkdownDocument(NativeHandle outputFd,
+                                             std::string_view markdownContent,
+                                             std::filesystem::path const& baseDir,
+                                             int indent);
+
     // --- Output builtins (builtins/Output.cpp) ---
     void builtinPrint(CoreVM::Params& context);
     void builtinPrintln(CoreVM::Params& context);
@@ -617,6 +640,7 @@ class Shell final: public SignalCallback
     CoreVM::diagnostics::BufferedReport _moduleReport; ///< Diagnostics report for module loading
     EnvironmentProvider& _env;
     TTY& _tty;
+    std::unique_ptr<SixelCapabilityProvider> _sixelCapability; ///< Terminal Sixel support (lazy, cached).
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
     CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/SgrBuilder.hpp>
 #include <tui/TerminalOutput.hpp>
+#include <tui/TerminalProtocols.hpp>
 #include <tui/platform/PosixIO.hpp>
 
 #include <array>
@@ -448,11 +449,33 @@ bool TerminalOutput::supportsUnscroll() const noexcept
     return _unscrollSupported;
 }
 
+void TerminalOutput::beginHyperlink(std::string_view url)
+{
+    _buffer += protocols::buildHyperlinkOpen(url);
+}
+
+void TerminalOutput::endHyperlink()
+{
+    _buffer += protocols::HyperlinkClose;
+}
+
+void TerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
+{
+    beginHyperlink(url);
+    writeText(text, style);
+    endHyperlink();
+}
+
+void TerminalOutput::writeToDestination(std::string_view bytes)
+{
+    safeWrite(STDOUT_FILENO, bytes.data(), bytes.size());
+}
+
 void TerminalOutput::flush()
 {
     if (!_buffer.empty())
     {
-        safeWrite(STDOUT_FILENO, _buffer.data(), _buffer.size());
+        writeToDestination(_buffer);
         _buffer.clear();
     }
 }

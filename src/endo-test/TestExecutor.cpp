@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <memory>
 
 #include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
@@ -624,6 +625,9 @@ TestResult TestExecutor::run(TestFile const& testFile)
             env.set("PWD", initialCwd);
 
             Shell shell(pty, env, fs);
+            // Never probe the test PTY for Sixel support: the DA1 query would
+            // leak escape bytes into the captured output and stall on timeout.
+            shell.setSixelCapability(std::make_unique<StaticSixelCapability>(false));
             shell.addModuleSearchPath("/test");
 
             // Execute the test source through the shell
