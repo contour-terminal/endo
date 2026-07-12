@@ -16,10 +16,14 @@ namespace CoreVM::wasm
 /// Special-cased lowerings that do not map 1:1 to a runtime helper call.
 enum class BuiltinInlineOp : uint8_t
 {
-    None,          ///< Not inline: call the runtime helper.
-    ProcExit,      ///< Call WASI proc_exit with the (wrapped) i32 argument.
-    SetExitStatus, ///< Store the argument into the exit-status global.
-    Ignore,        ///< Emit nothing (e.g. GC write barriers).
+    None,           ///< Not inline: call the runtime helper.
+    ProcExit,       ///< Call WASI proc_exit with the (wrapped) i32 argument.
+    SetExitStatus,  ///< Store the argument into the exit-status global.
+    Ignore,         ///< Emit nothing (e.g. GC write barriers).
+    ObjectToString, ///< Value-to-string with compile-time type dispatch: statically
+                    ///< Number/Boolean-typed arguments use the integer formatter,
+                    ///< String-typed pass through, and only dynamically typed
+                    ///< values go through the runtime classifier.
 };
 
 /// One row of the builtin mapping table.

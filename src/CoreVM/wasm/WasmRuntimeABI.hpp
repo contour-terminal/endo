@@ -162,6 +162,8 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     return def.result ? toBinaryenType(*def.result) : BinaryenTypeNone();
 }
 
+class WasmStringTable;
+
 /// Dependency-injection seam between the code generator and the WASM-side
 /// runtime: the generator lowers user code and records which runtime helpers
 /// it referenced; the provider then materializes those helpers into the module.
@@ -173,11 +175,15 @@ class WasmRuntimeProvider
     /// Materializes all used runtime helpers into the module.
     ///
     /// Called once per module, after all user code has been lowered and
-    /// before validation.
+    /// before the memory layout is finalized (providers may intern further
+    /// strings, e.g. diagnostic messages).
     ///
     /// @param module      the module under construction
     /// @param usedHelpers helpers referenced by the generated code
-    virtual void provide(BinaryenModuleRef module, std::set<RuntimeHelperDef const*> const& usedHelpers) = 0;
+    /// @param strings     the module's string constant table
+    virtual void provide(BinaryenModuleRef module,
+                         std::set<RuntimeHelperDef const*> const& usedHelpers,
+                         WasmStringTable& strings) = 0;
 };
 
 /// Declares every used helper as a function import from module "endo".
@@ -188,7 +194,9 @@ class WasmRuntimeProvider
 class ImportOnlyRuntimeProvider final: public WasmRuntimeProvider
 {
   public:
-    void provide(BinaryenModuleRef module, std::set<RuntimeHelperDef const*> const& usedHelpers) override
+    void provide(BinaryenModuleRef module,
+                 std::set<RuntimeHelperDef const*> const& usedHelpers,
+                 WasmStringTable& /*strings*/) override
     {
         for (auto const* helper: usedHelpers)
         {

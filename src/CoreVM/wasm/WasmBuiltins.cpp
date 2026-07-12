@@ -13,6 +13,12 @@ namespace
     /// runtime helpers come into existence.
     constexpr auto WasmBuiltins = std::to_array<WasmBuiltinDescriptor>({
         { .signature = "exit(I)V", .inlineOp = BuiltinInlineOp::ProcExit },
+        { .signature = "setvar.exitstatus(I)V", .inlineOp = BuiltinInlineOp::SetExitStatus },
+        { .signature = "ref_write_barrier(I)V", .inlineOp = BuiltinInlineOp::Ignore },
+        { .signature = "print(S)V", .runtimeHelper = "endo_print" },
+        { .signature = "println(S)V", .runtimeHelper = "endo_println" },
+        { .signature = "object_to_string(I)S", .inlineOp = BuiltinInlineOp::ObjectToString },
+        { .signature = "list_to_string(I)S", .runtimeHelper = "endo_list_to_string" },
     });
 } // namespace
 

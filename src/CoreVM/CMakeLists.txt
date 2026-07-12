@@ -75,6 +75,8 @@ if(ENDO_HAS_WASM)
         wasm/WasmFunctionLowerer.cpp
         wasm/WasmOpTables.cpp
         wasm/WasmBuiltins.cpp
+        wasm/WasmStringTable.cpp
+        wasm/WasmRuntime.cpp
     )
     target_link_libraries(CoreVM-wasm PUBLIC CoreVM PRIVATE Binaryen::Binaryen)
     target_compile_definitions(CoreVM-wasm INTERFACE ENDO_HAS_WASM=1)

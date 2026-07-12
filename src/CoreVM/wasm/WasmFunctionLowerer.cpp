@@ -17,8 +17,13 @@ namespace CoreVM::wasm
 WasmFunctionLowerer::WasmFunctionLowerer(BinaryenModuleRef module,
                                          WasmOptions const& options,
                                          diagnostics::Report& report,
-                                         std::set<RuntimeHelperDef const*>& usedHelpers):
-    _module { module }, _options { options }, _report { report }, _usedHelpers { usedHelpers }
+                                         std::set<RuntimeHelperDef const*>& usedHelpers,
+                                         WasmStringTable& strings):
+    _module { module },
+    _options { options },
+    _report { report },
+    _usedHelpers { usedHelpers },
+    _strings { strings }
 {
 }
 
@@ -128,6 +133,10 @@ BinaryenExpressionRef WasmFunctionLowerer::emitValue(Value* value)
 
     if (auto* constFloat = dynamic_cast<ConstantFloat*>(value))
         return BinaryenConst(_module, BinaryenLiteralFloat64(constFloat->get()));
+
+    if (auto* constString = dynamic_cast<ConstantString*>(value))
+        return BinaryenConst(_module,
+                             BinaryenLiteralInt64(static_cast<int64_t>(_strings.intern(constString->get()))));
 
     if (auto* alloca = dynamic_cast<AllocaInstr*>(value))
     {
@@ -399,6 +408,22 @@ void WasmFunctionLowerer::visit(CallInstr& instr)
             mapDummyResultForUses();
             return;
         case BuiltinInlineOp::Ignore: mapDummyResultForUses(); return;
+        case BuiltinInlineOp::ObjectToString: {
+            // Prefer compile-time type dispatch over the runtime pointer/number
+            // classifier: it is both faster and immune to value aliasing.
+            auto* argument = instr.operands().size() > 1 ? instr.operand(1) : nullptr;
+            auto const argumentType = argument != nullptr ? argument->type() : LiteralType::Void;
+            if (argumentType == LiteralType::String)
+            {
+                setResult(instr, args.empty() ? zeroI64() : args[0], ResultMode::Pure);
+                return;
+            }
+            auto const* helper = (argumentType == LiteralType::Number || argumentType == LiteralType::Boolean)
+                                     ? "endo_i64_to_str"
+                                     : "endo_object_to_string";
+            setResult(instr, callRuntime(helper, args), ResultMode::Ordered);
+            return;
+        }
         case BuiltinInlineOp::None: break;
     }
 
@@ -463,8 +488,14 @@ void WasmFunctionLowerer::visit(BrInstr& instr)
 void WasmFunctionLowerer::visit(RetInstr& instr)
 {
     // RetInstr terminates the *program* (VM: EXIT), not the current function.
+    // Shell semantics (Shell::execute): an exit status set during execution
+    // wins; otherwise the EXIT operand collapses to 1 (non-zero) or 0.
     auto* code = instr.operands().empty() ? zeroI64() : asI64(emitValue(instr.operand(0)));
-    auto exitCode = std::array { BinaryenUnary(_module, BinaryenWrapInt64(), code) };
+    auto const statusName = std::string(layout::ExitStatusGlobal);
+    auto* status = BinaryenGlobalGet(_module, statusName.c_str(), BinaryenTypeInt32());
+    auto* statusAgain = BinaryenGlobalGet(_module, statusName.c_str(), BinaryenTypeInt32());
+    auto* operandNonZero = BinaryenBinary(_module, BinaryenNeInt64(), code, zeroI64());
+    auto exitCode = std::array { BinaryenSelect(_module, status, statusAgain, operandNonZero) };
     pushStatement(BinaryenCall(_module,
                                "proc_exit",
                                exitCode.data(),

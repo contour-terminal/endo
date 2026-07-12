@@ -12,7 +12,7 @@
     #include <CoreVM/CoreVM.hpp>
     #include <CoreVM/transform/Passes.hpp>
     #include <CoreVM/wasm/WasmCodeGenerator.hpp>
-    #include <CoreVM/wasm/WasmRuntimeABI.hpp>
+    #include <CoreVM/wasm/WasmRuntime.hpp>
 
     #include <expected>
     #include <filesystem>
@@ -115,7 +115,7 @@ int runCompileCommand(CompileOptions const& options)
 
     optimizeIR(*irProgram);
 
-    auto provider = CoreVM::wasm::ImportOnlyRuntimeProvider {};
+    auto provider = CoreVM::wasm::WasmRuntime {};
     auto generator = CoreVM::wasm::WasmCodeGenerator(provider,
                                                      CoreVM::wasm::WasmOptions {
                                                          .optimize = options.optimize,

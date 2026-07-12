@@ -5,6 +5,7 @@
 #include <CoreVM/ir/Instructions.hpp>
 #include <CoreVM/wasm/WasmCodeGenerator.hpp>
 #include <CoreVM/wasm/WasmRuntimeABI.hpp>
+#include <CoreVM/wasm/WasmStringTable.hpp>
 
 #include <cstdint>
 #include <set>
@@ -50,7 +51,8 @@ class WasmFunctionLowerer final: public InstructionVisitor
     WasmFunctionLowerer(BinaryenModuleRef module,
                         WasmOptions const& options,
                         diagnostics::Report& report,
-                        std::set<RuntimeHelperDef const*>& usedHelpers);
+                        std::set<RuntimeHelperDef const*>& usedHelpers,
+                        WasmStringTable& strings);
 
     /// Lowers @p function and adds it to the module.
     void lower(IRFunction* function);
@@ -297,6 +299,7 @@ class WasmFunctionLowerer final: public InstructionVisitor
     WasmOptions const& _options;
     diagnostics::Report& _report;
     std::set<RuntimeHelperDef const*>& _usedHelpers;
+    WasmStringTable& _strings;
 
     IRFunction* _function = nullptr;
     BasicBlock* _currentBlock = nullptr;
