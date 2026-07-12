@@ -167,6 +167,10 @@ add_library(endo-shell STATIC
     FormatCommand.hpp
     FormatCommand.cpp
 
+    # Compile-to-WebAssembly (self-gated on ENDO_HAS_WASM)
+    CompileCommand.hpp
+    CompileCommand.cpp
+
     # Help
     HelpPrinter.hpp
     HelpPrinter.cpp
@@ -233,6 +237,10 @@ else()
 endif()
 
 target_link_libraries(endo-shell PUBLIC endo-platform net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+if(ENDO_HAS_WASM)
+    # Brings in the ENDO_HAS_WASM=1 compile definition (INTERFACE) and binaryen.
+    target_link_libraries(endo-shell PUBLIC CoreVM-wasm)
+endif()
 if(ENDO_ENABLE_AGENT)
     target_sources(endo-shell PRIVATE AgentModeSession.cpp)
     target_link_libraries(endo-shell PUBLIC endo-agent)

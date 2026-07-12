@@ -296,6 +296,9 @@ void printHelp()
     h.option("-h, --help", "Show this help message and exit");
     h.option("-v, --version", "Show version information and exit");
     h.option("-c COMMAND", "Execute COMMAND and exit");
+    h.option("-o, --output FILE", "Compile SCRIPT to WebAssembly (.wasm) or text format (.wat)");
+    h.option("-O", "Optimize the compiled WebAssembly output");
+    h.option("--wasm-no-tail-call", "Compile tail calls as plain calls (older WASM runtimes)");
     h.option("--check", "Compile without executing (syntax and semantic check)");
     h.option("--unused-detection", "Enable unused-value detection for F# bindings");
     h.option("--lsp", "Launch Language Server Protocol server");
@@ -346,6 +349,9 @@ void printHelp()
     h.example("Sort and filter a list:", "endo -c '[3; 1; 4; 1; 5] |> sort |> filter (_ > 2) |> println'");
     h.blank();
     h.example("Execute a script with arguments:", "endo script.endo arg1 arg2");
+    h.blank();
+    h.example("Compile a script to WebAssembly and run it:",
+              "endo -o script.wasm script.endo && wasmtime script.wasm");
 
     // Learn More
     h.header("LEARN MORE");

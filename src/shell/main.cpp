@@ -28,6 +28,7 @@
 #endif
 #include <shell/EndoVersion.hpp>
 
+#include "CompileCommand.hpp"
 #include "FormatCommand.hpp"
 #include "HelpPrinter.hpp"
 #include "Shell.hpp"
@@ -78,6 +79,9 @@ struct ParsedArgs
     std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
     std::vector<std::string_view> modulePaths; ///< Additional module search paths (--module-path).
     bool noProfile = false;                    ///< Skip loading init.endo profile.
+    std::string_view outputFile;               ///< -o/--output: compile to .wasm/.wat instead of executing.
+    bool optimizeOutput = false;               ///< -O: optimize the compiled output module.
+    bool wasmNoTailCall = false;               ///< Lower tail calls as plain calls (older WASM runtimes).
 };
 
 /// Tries to extract the value for a long option.
@@ -170,6 +174,22 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (auto val = consumeOptionValue(arg, "--module-path", i, args))
         {
             result.modulePaths.emplace_back(*val);
+        }
+        else if (auto val = consumeOptionValue(arg, "-o", i, args))
+        {
+            result.outputFile = *val;
+        }
+        else if (auto val = consumeOptionValue(arg, "--output", i, args))
+        {
+            result.outputFile = *val;
+        }
+        else if (arg == "-O")
+        {
+            result.optimizeOutput = true;
+        }
+        else if (arg == "--wasm-no-tail-call")
+        {
+            result.wasmNoTailCall = true;
         }
         else if (arg == "-c" && i + 1 < args.size())
         {
@@ -388,6 +408,22 @@ int main(int argc, char const* argv[])
     {
         std::print(stderr, "endo: --check requires -c <command> or a script file\n");
         return EXIT_FAILURE;
+    }
+
+    // Handle -o FILE: compile the script to WebAssembly instead of executing it
+    if (!parsed.outputFile.empty())
+    {
+        if (parsed.scriptFile.empty())
+        {
+            std::print(stderr, "endo: -o requires a script file to compile\n");
+            return EXIT_FAILURE;
+        }
+        return endo::compile::runCompileCommand({
+            .scriptFile = parsed.scriptFile,
+            .outputFile = parsed.outputFile,
+            .optimize = parsed.optimizeOutput,
+            .tailCalls = !parsed.wasmNoTailCall,
+        });
     }
 
     auto shell = endo::Shell {};
