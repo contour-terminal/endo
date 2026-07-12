@@ -272,6 +272,12 @@ class WasmFunctionLowerer final: public InstructionVisitor
     [[nodiscard]] BinaryenExpressionRef callRuntime(std::string_view helperName,
                                                     std::span<BinaryenExpressionRef const> args);
 
+    /// A fresh i64 zero constant.
+    [[nodiscard]] BinaryenExpressionRef zeroI64();
+
+    /// Lowers a raw-value comparison (VCmp*): compares the canonical i64 forms.
+    void lowerValueCompare(Instr& instr, BinaryenOp compareOp);
+
     /// Coerces an expression to the canonical i64 representation.
     [[nodiscard]] BinaryenExpressionRef asI64(BinaryenExpressionRef expr);
     /// Coerces an expression to f64 (bit-cast from the canonical i64 form).

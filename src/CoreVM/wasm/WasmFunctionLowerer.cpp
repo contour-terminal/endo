@@ -3,10 +3,13 @@
 #include <CoreVM/ir/IRProgram.hpp>
 #include <CoreVM/transform/Passes.hpp>
 #include <CoreVM/vm/NativeCallback.hpp>
+#include <CoreVM/wasm/WasmBuiltins.hpp>
 #include <CoreVM/wasm/WasmFunctionLowerer.hpp>
+#include <CoreVM/wasm/WasmOpTables.hpp>
 
 #include <array>
 #include <format>
+#include <ranges>
 
 namespace CoreVM::wasm
 {
@@ -225,6 +228,18 @@ BinaryenExpressionRef WasmFunctionLowerer::callRuntime(std::string_view helperNa
                         binaryenResultType(*helper));
 }
 
+BinaryenExpressionRef WasmFunctionLowerer::zeroI64()
+{
+    return BinaryenConst(_module, BinaryenLiteralInt64(0));
+}
+
+void WasmFunctionLowerer::lowerValueCompare(Instr& instr, BinaryenOp compareOp)
+{
+    auto* lhs = asI64(emitValue(instr.operand(0)));
+    auto* rhs = asI64(emitValue(instr.operand(1)));
+    setResult(instr, BinaryenBinary(_module, compareOp, lhs, rhs), ResultMode::Pure);
+}
+
 BinaryenExpressionRef WasmFunctionLowerer::asI64(BinaryenExpressionRef expr)
 {
     auto const type = BinaryenExpressionGetType(expr);
@@ -341,7 +356,57 @@ void WasmFunctionLowerer::visit(PhiNode& instr)
 
 void WasmFunctionLowerer::visit(CallInstr& instr)
 {
-    unsupported(instr, std::format("builtin '{}'", instr.callee()->signature().to_s()));
+    auto const signature = instr.callee()->signature().to_s();
+    auto const* builtin = findWasmBuiltin(signature);
+    if (builtin == nullptr)
+    {
+        unsupported(instr, std::format("builtin '{}'", signature));
+        return;
+    }
+
+    // Operand 0 is the callee; the arguments follow.
+    auto args = std::vector<BinaryenExpressionRef> {};
+    args.reserve(instr.operands().size() - 1);
+    for (auto* operand: instr.operands() | std::views::drop(1))
+        args.push_back(asI64(emitValue(operand)));
+
+    // Inline lowerings produce no meaningful value; IR may still reference the
+    // call result (e.g. as an if-arm value), so map a dummy for those uses.
+    auto const mapDummyResultForUses = [&]() {
+        if (instr.isUsed())
+            setResult(instr, zeroI64(), ResultMode::Pure);
+    };
+
+    switch (builtin->inlineOp)
+    {
+        case BuiltinInlineOp::ProcExit: {
+            auto exitCode = std::array { BinaryenUnary(
+                _module, BinaryenWrapInt64(), args.empty() ? zeroI64() : args[0]) };
+            pushStatement(BinaryenCall(_module,
+                                       "proc_exit",
+                                       exitCode.data(),
+                                       static_cast<BinaryenIndex>(exitCode.size()),
+                                       BinaryenTypeNone()));
+            pushStatement(BinaryenUnreachable(_module));
+            mapDummyResultForUses();
+            return;
+        }
+        case BuiltinInlineOp::SetExitStatus:
+            pushStatement(BinaryenGlobalSet(
+                _module,
+                std::string(layout::ExitStatusGlobal).c_str(),
+                BinaryenUnary(_module, BinaryenWrapInt64(), args.empty() ? zeroI64() : args[0])));
+            mapDummyResultForUses();
+            return;
+        case BuiltinInlineOp::Ignore: mapDummyResultForUses(); return;
+        case BuiltinInlineOp::None: break;
+    }
+
+    auto* result = callRuntime(builtin->runtimeHelper, args);
+    if (instr.callee()->signature().returnType() == LiteralType::Void)
+        pushStatement(result);
+    else
+        setResult(instr, result, ResultMode::Ordered);
 }
 
 void WasmFunctionLowerer::visit(FunctionCallInstr& instr)
@@ -398,8 +463,7 @@ void WasmFunctionLowerer::visit(BrInstr& instr)
 void WasmFunctionLowerer::visit(RetInstr& instr)
 {
     // RetInstr terminates the *program* (VM: EXIT), not the current function.
-    auto* code = instr.operands().empty() ? BinaryenConst(_module, BinaryenLiteralInt64(0))
-                                          : asI64(emitValue(instr.operand(0)));
+    auto* code = instr.operands().empty() ? zeroI64() : asI64(emitValue(instr.operand(0)));
     auto exitCode = std::array { BinaryenUnary(_module, BinaryenWrapInt64(), code) };
     pushStatement(BinaryenCall(_module,
                                "proc_exit",
@@ -420,12 +484,81 @@ void WasmFunctionLowerer::visit(MatchInstr& instr)
 
 void WasmFunctionLowerer::lowerUnaryOp(Instr& instr, UnaryOperator op)
 {
-    unsupported(instr, std::format("operator '{}'", cstr(op)));
+    auto const& lowering = unaryOpLowering(op);
+    auto const coerce = [&](BinaryenExpressionRef expr) {
+        return lowering.floatOperand ? asF64(expr) : asI64(expr);
+    };
+
+    switch (lowering.kind)
+    {
+        case UnaryOpLowering::Kind::DirectOp:
+            setResult(instr,
+                      BinaryenUnary(_module, lowering.op(), coerce(emitValue(instr.operand(0)))),
+                      ResultMode::Pure);
+            return;
+        case UnaryOpLowering::Kind::SubFromZero:
+            setResult(
+                instr,
+                BinaryenBinary(_module, BinaryenSubInt64(), zeroI64(), asI64(emitValue(instr.operand(0)))),
+                ResultMode::Pure);
+            return;
+        case UnaryOpLowering::Kind::XorImmediate:
+            setResult(instr,
+                      BinaryenBinary(_module,
+                                     BinaryenXorInt64(),
+                                     asI64(emitValue(instr.operand(0))),
+                                     BinaryenConst(_module, BinaryenLiteralInt64(lowering.immediate))),
+                      ResultMode::Pure);
+            return;
+        case UnaryOpLowering::Kind::HelperCall: {
+            auto args = std::array { coerce(emitValue(instr.operand(0))) };
+            setResult(instr, callRuntime(lowering.helper, args), ResultMode::Ordered);
+            return;
+        }
+        case UnaryOpLowering::Kind::HelperIsZero: {
+            auto args = std::array { coerce(emitValue(instr.operand(0))) };
+            setResult(instr,
+                      BinaryenUnary(_module, BinaryenEqZInt64(), callRuntime(lowering.helper, args)),
+                      ResultMode::Ordered);
+            return;
+        }
+        case UnaryOpLowering::Kind::Unsupported: break;
+    }
+    unsupported(instr, std::format("operator '{}' ({})", cstr(op), lowering.unsupportedWhat));
 }
 
 void WasmFunctionLowerer::lowerBinaryOp(Instr& instr, BinaryOperator op)
 {
-    unsupported(instr, std::format("operator '{}'", cstr(op)));
+    auto const& lowering = binaryOpLowering(op);
+    auto const coerce = [&](BinaryenExpressionRef expr) {
+        return lowering.floatOperands ? asF64(expr) : asI64(expr);
+    };
+
+    switch (lowering.kind)
+    {
+        case BinaryOpLowering::Kind::DirectOp: {
+            auto* lhs = coerce(emitValue(instr.operand(0)));
+            auto* rhs = coerce(emitValue(instr.operand(1)));
+            setResult(instr, BinaryenBinary(_module, lowering.op(), lhs, rhs), ResultMode::Pure);
+            return;
+        }
+        case BinaryOpLowering::Kind::HelperCall: {
+            auto args =
+                std::array { coerce(emitValue(instr.operand(0))), coerce(emitValue(instr.operand(1))) };
+            setResult(instr, callRuntime(lowering.helper, args), ResultMode::Ordered);
+            return;
+        }
+        case BinaryOpLowering::Kind::HelperCmp0: {
+            auto args =
+                std::array { coerce(emitValue(instr.operand(0))), coerce(emitValue(instr.operand(1))) };
+            setResult(instr,
+                      BinaryenBinary(_module, lowering.op(), callRuntime(lowering.helper, args), zeroI64()),
+                      ResultMode::Ordered);
+            return;
+        }
+        case BinaryOpLowering::Kind::Unsupported: break;
+    }
+    unsupported(instr, std::format("operator '{}' ({})", cstr(op), lowering.unsupportedWhat));
 }
 
 // }}}
@@ -490,36 +623,36 @@ void WasmFunctionLowerer::visit(ObjIsTypeInstr& instr)
 }
 
 // }}}
-// {{{ dynamic value comparison
+// {{{ dynamic value comparison (raw canonical i64 values, mirroring the VM)
 
 void WasmFunctionLowerer::visit(VCmpEQInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenEqInt64());
 }
 
 void WasmFunctionLowerer::visit(VCmpNEInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenNeInt64());
 }
 
 void WasmFunctionLowerer::visit(VCmpLTInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenLtSInt64());
 }
 
 void WasmFunctionLowerer::visit(VCmpLEInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenLeSInt64());
 }
 
 void WasmFunctionLowerer::visit(VCmpGTInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenGtSInt64());
 }
 
 void WasmFunctionLowerer::visit(VCmpGEInstr& instr)
 {
-    unsupported(instr, "dynamic value comparison");
+    lowerValueCompare(instr, BinaryenGeSInt64());
 }
 
 // }}}
