@@ -163,6 +163,8 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                     result.mode = TestMode::Structured;
                 else if (modeStr == "shell")
                     result.mode = TestMode::Shell;
+                else if (modeStr == "wasm")
+                    result.mode = TestMode::Wasm;
                 else
                     result.mode = TestMode::Execute;
                 continue;

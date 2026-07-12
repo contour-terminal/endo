@@ -10,6 +10,36 @@ endo -o hello.wasm hello.endo     # Compile to WebAssembly
 endo -o hello.wat hello.endo      # Compile to WebAssembly Text format (for debugging)
 ```
 
+## Implementation Status
+
+The first iteration of the backend is implemented in `src/CoreVM/wasm/`
+(user docs: `docs/shell/wasm-compilation.md`). Deviations from the original
+plan below:
+
+- **System binaryen via `cmake/FindBinaryen.cmake`** instead of FetchContent
+  (the C API, `binaryen-c.h`); the backend is gated on `ENDO_HAS_WASM` and
+  auto-disabled without binaryen, under Emscripten, and for static builds.
+- Naming follows the Handler→Function rename: the generator consumes
+  `IRFunction`s; the frontend's entry function is `@main`.
+- The `-O0/-Os/-O2` levels collapsed into a single `-O` (binaryen `-O2`).
+- Compiled modules run in the terminal via **wasmtime** (WASI Preview 1);
+  a browser/portable import mode has not been started.
+
+Landed (milestones W1–W3 plus the WASI core of W4): CLI `-o .wasm/.wat` and
+`-O`, uniform-i64 codegen over the relooper, integer/float/boolean/string
+operations with VM semantics, casts, user functions with `return_call` tail
+calls, Option/Result/tuples/lists with pattern matching and VM-identical
+display formatting, the list builtins (length/head/tail/nth/isEmpty/`@`),
+print/println/exit/exit-status via WASI, collected compile-time diagnostics
+for unsupported constructs, Catch2 unit tests, and `# mode: wasm` E2E tests
+in `tests/wasm/` (differential against the VM, skipped without wasmtime).
+
+Not yet implemented (clean compile errors): shell command execution, file
+I/O, regex, closures as first-class values (IndirectCall), lazy sequences,
+env access, `rand`, sort/distinct/sortBy/groupBy natives, most string_*
+natives (split/join/replace/repeat/case-conversion/codepoints), record field
+display, browser import mode, and source maps.
+
 ## Design Goals
 
 1. **Dual-mode support:**
@@ -551,39 +581,40 @@ src/CoreVM/wasm/
 ## Milestones
 
 ### Milestone W1: Basic WASM Generation
-- [ ] Phase 1: CLI and binaryen integration
-- [ ] Phase 2.1-2.2: Arithmetic and comparison operations
-- [ ] Generate valid WASM for simple arithmetic expressions
+- [x] Phase 1: CLI and binaryen integration
+- [x] Phase 2.1-2.2: Arithmetic and comparison operations
+- [x] Generate valid WASM for simple arithmetic expressions
 
-**Target:** `let x = 1 + 2 * 3` compiles to valid WASM
+**Target:** `let x = 1 + 2 * 3` compiles to valid WASM ✓
 
 ### Milestone W2: Control Flow and Functions
-- [ ] Phase 2.3: Control flow structuring
-- [ ] Phase 3.1-3.2: Memory layout and strings
-- [ ] Support if/else, while loops, function definitions
+- [x] Phase 2.3: Control flow structuring (binaryen relooper)
+- [x] Phase 3.1-3.2: Memory layout and strings
+- [x] Support if/else, recursion, function definitions
 
-**Target:** FizzBuzz compiles to WASM
+**Target:** FizzBuzz compiles to WASM ✓ (VM-identical output)
 
 ### Milestone W3: Full Language Support
-- [ ] Phase 3.3: Runtime support functions
-- [ ] String operations, regex (if feasible)
-- [ ] All F# expression features
+- [x] Phase 3.3: Runtime support functions
+- [x] String operations (regex: clean compile error)
+- [x] Core F# expression features (Option/Result/tuples/lists, pattern
+      matching, HOF pipelines; closures and lazy sequences still error)
 
-**Target:** All pure-computation Endo features work
+**Target:** Pure-computation Endo features work (see status section for gaps)
 
 ### Milestone W4: WASI Integration
-- [ ] Phase 4: WASI imports
+- [x] Phase 4: WASI imports (fd_write, proc_exit; exit-status semantics)
 - [ ] Phase 5: Process execution (limited)
-- [ ] Environment variables, file I/O, exit codes
+- [ ] Environment variables, file I/O
 
-**Target:** Simple shell scripts work in wasmtime
+**Target:** Simple shell scripts work in wasmtime (pure-computation scripts do)
 
 ### Milestone W5: Production Ready
-- [ ] Phase 6: Optimizations
-- [ ] Phase 7: Comprehensive testing
-- [ ] Documentation and examples
+- [x] Phase 6: Optimizations (-O via binaryen)
+- [x] Phase 7: Testing (unit tests + differential E2E in tests/wasm/)
+- [x] Documentation (docs/shell/wasm-compilation.md)
 
-**Target:** Production-quality WASM output
+**Target:** Production-quality WASM output for the supported subset ✓
 
 ---
 

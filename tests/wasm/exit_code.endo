@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Explicit exit code propagates through proc_exit
+# mode: wasm
+# expect-exit: 42
+
+let x = 40
+
+let y = 2
+
+let z = x + y
+
+exit z

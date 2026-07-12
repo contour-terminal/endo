@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lazy evaluation cannot compile to WASM yet
+# mode: wasm
+# expect-error: not supported
+
+let x = lazy 42
+
+println (force x)

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float arithmetic and %g-style formatting
+# mode: wasm
+# expect: 3.14
+# expect: 6.28
+# expect: 2.5
+# expect: 0.001
+# expect: 123457
+
+let a = 3.14
+
+print a
+println ""
+print (a * 2.0)
+println ""
+print (10.0 / 4.0)
+println ""
+print 0.001
+println ""
+print 123456.7
+println ""

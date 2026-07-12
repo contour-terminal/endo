@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match on string values compares by content
+# mode: wasm
+# expect: h
+
+let s = "hello"
+
+match s with
+| "world" -> println "w"
+| "hello" -> println "h"
+| _ -> println "other"

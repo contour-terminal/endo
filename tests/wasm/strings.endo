@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String concatenation, comparison and interpolation
+# mode: wasm
+# expect: hello world
+# expect: eq-ok
+# expect: lt-ok
+# expect: n is 42
+
+let a = "hello"
+
+let b = "world"
+
+println (a + " " + b)
+if a == "hello" then println "eq-ok"
+else println "eq-bad"
+if a < b then println "lt-ok"
+else println "lt-bad"
+
+let n = 42
+
+println $"n is {n}"

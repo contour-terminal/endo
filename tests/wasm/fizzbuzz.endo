@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FizzBuzz produces VM-identical output under wasmtime
+# mode: wasm
+# expect: 1
+# expect: 2
+# expect: Fizz
+# expect: 4
+# expect: Buzz
+# expect: Fizz
+# expect: 7
+# expect: 8
+# expect: Fizz
+# expect: Buzz
+# expect: 11
+# expect: Fizz
+# expect: 13
+# expect: 14
+# expect: FizzBuzz
+
+let word (n: int): string =
+    if n % 15 == 0 then
+        "FizzBuzz"
+    elif n % 3 == 0 then
+        "Fizz"
+    elif n % 5 == 0 then "Buzz"
+    else $"{n}"
+
+let rec fizz (n: int) (stop: int): int =
+    if n > stop then
+        0
+    else
+        println (word n)
+        fizz (n + 1) stop
+
+fizz 1 15

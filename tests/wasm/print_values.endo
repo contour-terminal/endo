@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Printing numbers, strings and negative values
+# mode: wasm
+# expect: 42
+# expect: hello
+# expect: -7
+
+print 42
+println ""
+println "hello"
+
+let n = 0 - 7
+
+print n
+println ""

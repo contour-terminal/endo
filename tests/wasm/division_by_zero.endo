@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Division by zero is a runtime error with exit code 1
+# mode: wasm
+# expect-exit: 1
+
+let a = 10
+
+let b = 0
+
+let c = a / b
+
+print c

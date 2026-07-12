@@ -16,6 +16,11 @@ if(ENDO_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/../endo-language/TestHelper.cpp
     )
     target_link_libraries(endo-test PRIVATE endo endo-platform endo-shell CoreVM crispy::core)
+    if(ENDO_HAS_WASM)
+        # Brings in the ENDO_HAS_WASM=1 compile definition (INTERFACE) and the
+        # WASM backend used by `# mode: wasm` tests.
+        target_link_libraries(endo-test PRIVATE CoreVM-wasm)
+    endif()
     target_include_directories(endo-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_compile_definitions(endo-test PRIVATE
         ENDO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests"
