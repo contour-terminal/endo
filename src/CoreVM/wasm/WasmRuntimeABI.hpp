@@ -126,6 +126,13 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     { .name = "endo_str_to_f64", .params = detail::I64x1, .result = ValType::F64 },
     // objects
     { .name = "endo_obj_alloc", .params = detail::I64x2, .result = ValType::I64 },
+    // lists
+    { .name = "endo_list_length", .params = detail::I64x1, .result = ValType::I64 },
+    { .name = "endo_list_is_empty", .params = detail::I64x1, .result = ValType::I64 },
+    { .name = "endo_list_head", .params = detail::I64x1, .result = ValType::I64 },
+    { .name = "endo_list_tail", .params = detail::I64x1, .result = ValType::I64 },
+    { .name = "endo_list_nth", .params = detail::I64x2, .result = ValType::I64 },
+    { .name = "endo_list_concat", .params = detail::I64x2, .result = ValType::I64 },
     // value formatting (composite display)
     { .name = "endo_object_to_string", .params = detail::I64x1, .result = ValType::I64 },
     { .name = "endo_list_to_string", .params = detail::I64x1, .result = ValType::I64 },
@@ -133,6 +140,7 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     // I/O
     { .name = "endo_print", .params = detail::I64x1, .result = std::nullopt },
     { .name = "endo_println", .params = detail::I64x1, .result = std::nullopt },
+    { .name = "endo_display_result", .params = detail::I64x1, .result = std::nullopt },
     { .name = "endo_panic", .params = detail::I64x1, .result = std::nullopt, .noReturn = true },
 });
 

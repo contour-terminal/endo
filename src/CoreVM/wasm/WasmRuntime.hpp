@@ -72,6 +72,19 @@ class WasmRuntime final: public WasmRuntimeProvider
     void buildResultStr();
     void buildTuple2Str();
     void buildTuple3Str();
+    void buildDisplayResult();
+    void buildCons();
+    void buildSome();
+    void buildListLength();
+    void buildListIsEmpty();
+    void buildListHead();
+    void buildListTail();
+    void buildListNth();
+    void buildListConcat();
+    void buildF64Rem();
+    void buildF64Pow();
+    void buildStrToF64();
+    void buildF64ToStrG();
 
     BinaryenModuleRef _module = nullptr;
     WasmStringTable* _strings = nullptr;

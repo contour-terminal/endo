@@ -262,6 +262,19 @@ void WasmRuntime::require(std::string_view name)
         { "endo_result_str", &WasmRuntime::buildResultStr },
         { "endo_tuple2_str", &WasmRuntime::buildTuple2Str },
         { "endo_tuple3_str", &WasmRuntime::buildTuple3Str },
+        { "endo_display_result", &WasmRuntime::buildDisplayResult },
+        { "endo_cons", &WasmRuntime::buildCons },
+        { "endo_some", &WasmRuntime::buildSome },
+        { "endo_list_length", &WasmRuntime::buildListLength },
+        { "endo_list_is_empty", &WasmRuntime::buildListIsEmpty },
+        { "endo_list_head", &WasmRuntime::buildListHead },
+        { "endo_list_tail", &WasmRuntime::buildListTail },
+        { "endo_list_nth", &WasmRuntime::buildListNth },
+        { "endo_list_concat", &WasmRuntime::buildListConcat },
+        { "endo_f64_rem", &WasmRuntime::buildF64Rem },
+        { "endo_f64_pow", &WasmRuntime::buildF64Pow },
+        { "endo_str_to_f64", &WasmRuntime::buildStrToF64 },
+        { "endo_f64_to_str_g", &WasmRuntime::buildF64ToStrG },
     };
 
     if (auto const it = builders.find(name); it != builders.end())
@@ -1300,6 +1313,564 @@ void WasmRuntime::buildTuple3Str()
     });
 
     e.addFunction("endo_tuple3_str", { I64() }, I64(), { I32(), I64() }, body);
+}
+
+// endo_display_result(v: i64) — println of the recursively formatted value.
+void WasmRuntime::buildDisplayResult()
+{
+    require("endo_value_to_str");
+    require("endo_println");
+    auto e = Emit { _module };
+    auto* body = e.callVoid("endo_println", { e.call("endo_value_to_str", { e.get64(0) }, I64()) });
+    e.addFunction("endo_display_result", { I64() }, BinaryenTypeNone(), {}, body);
+}
+
+// endo_cons(head: i64, tail: i64, elemType: i64) -> i64 — allocates one
+// List cons cell (typeId 5, tag 1; slots: head, tail, element type).
+void WasmRuntime::buildCons()
+{
+    require("endo_obj_alloc");
+    auto e = Emit { _module };
+
+    // params: 0=head, 1=tail, 2=elemType; locals: 3=p
+    auto* body = e.block({
+        e.set(3, e.wrap(e.call("endo_obj_alloc", { e.i64(TypeIdList), e.i64(3) }, I64()))),
+        e.store8(e.get32(3), e.i32(1), layout::TagOffset),
+        e.store64(e.get32(3), e.get64(0), layout::HeaderSize),
+        e.store64(e.get32(3), e.get64(1), layout::HeaderSize + layout::SlotSize),
+        e.store64(e.get32(3), e.get64(2), layout::HeaderSize + (2 * layout::SlotSize)),
+        e.ret(e.extendU(e.get32(3))),
+    });
+
+    e.addFunction("endo_cons", { I64(), I64(), I64() }, I64(), { I32() }, body);
+}
+
+// endo_some(value: i64, innerType: i64) -> i64 — allocates Some(value)
+// (Option typeId 1, tag 1; slots: value, inner type).
+void WasmRuntime::buildSome()
+{
+    require("endo_obj_alloc");
+    auto e = Emit { _module };
+
+    // params: 0=value, 1=innerType; locals: 2=p
+    auto* body = e.block({
+        e.set(2, e.wrap(e.call("endo_obj_alloc", { e.i64(TypeIdOption), e.i64(2) }, I64()))),
+        e.store8(e.get32(2), e.i32(1), layout::TagOffset),
+        e.store64(e.get32(2), e.get64(0), layout::HeaderSize),
+        e.store64(e.get32(2), e.get64(1), layout::HeaderSize + layout::SlotSize),
+        e.ret(e.extendU(e.get32(2))),
+    });
+
+    e.addFunction("endo_some", { I64(), I64() }, I64(), { I32() }, body);
+}
+
+namespace
+{
+    /// Condition: local #index holds a pointer to a Cons cell (non-null, tag 1).
+    BinaryenExpressionRef isConsCell(Emit const& e, BinaryenIndex index)
+    {
+        return e.bin(BinaryenAndInt32(),
+                     e.bin(BinaryenNeInt32(), e.get32(index), e.i32(0)),
+                     e.bin(BinaryenEqInt32(), e.load8u(e.get32(index), layout::TagOffset), e.i32(1)));
+    }
+} // namespace
+
+// endo_list_length(list: i64) -> i64
+void WasmRuntime::buildListLength()
+{
+    auto e = Emit { _module };
+
+    // params: 0=list; locals: 1=cur i32, 2=count i64
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        e.block({ e.loop("walk",
+                         e.block({
+                             e.brIf("walk.done", e.un(BinaryenEqZInt32(), isConsCell(e, 1))),
+                             e.set(2, e.bin(BinaryenAddInt64(), e.get64(2), e.i64(1))),
+                             e.set(1, e.wrap(e.load64(e.get32(1), layout::HeaderSize + layout::SlotSize))),
+                             e.br("walk"),
+                         })) },
+                "walk.done"),
+        e.ret(e.get64(2)),
+    });
+
+    e.addFunction("endo_list_length", { I64() }, I64(), { I32(), I64() }, body);
+}
+
+// endo_list_is_empty(list: i64) -> i64 — true for null or Nil.
+void WasmRuntime::buildListIsEmpty()
+{
+    auto e = Emit { _module };
+    // params: 0=list; locals: 1=p
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        e.ret(e.extendU(e.un(BinaryenEqZInt32(), isConsCell(e, 1)))),
+    });
+    e.addFunction("endo_list_is_empty", { I64() }, I64(), { I32() }, body);
+}
+
+// endo_list_head(list: i64) -> i64 — Some(head) or None.
+void WasmRuntime::buildListHead()
+{
+    require("endo_obj_alloc");
+    require("endo_some");
+    auto e = Emit { _module };
+
+    // params: 0=list; locals: 1=p
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        // empty: a fresh Option cell with tag 0 (zeroed slots) is None
+        e.ifThen(e.un(BinaryenEqZInt32(), isConsCell(e, 1)),
+                 e.ret(e.call("endo_obj_alloc", { e.i64(TypeIdOption), e.i64(2) }, I64()))),
+        e.ret(e.call("endo_some",
+                     { e.load64(e.get32(1), layout::HeaderSize),
+                       e.load64(e.get32(1), layout::HeaderSize + (2 * layout::SlotSize)) },
+                     I64())),
+    });
+
+    e.addFunction("endo_list_head", { I64() }, I64(), { I32() }, body);
+}
+
+// endo_list_tail(list: i64) -> i64 — the tail list, or Nil for empty input.
+void WasmRuntime::buildListTail()
+{
+    require("endo_obj_alloc");
+    auto e = Emit { _module };
+
+    // params: 0=list; locals: 1=p
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        // empty: a fresh List cell with tag 0 (zeroed slots) is Nil
+        e.ifThen(e.un(BinaryenEqZInt32(), isConsCell(e, 1)),
+                 e.ret(e.call("endo_obj_alloc", { e.i64(TypeIdList), e.i64(3) }, I64()))),
+        e.ret(e.load64(e.get32(1), layout::HeaderSize + layout::SlotSize)),
+    });
+
+    e.addFunction("endo_list_tail", { I64() }, I64(), { I32() }, body);
+}
+
+// endo_list_nth(index: i64, list: i64) -> i64 — Some(element) or None.
+// (Argument order matches the VM callback: index first.)
+void WasmRuntime::buildListNth()
+{
+    require("endo_obj_alloc");
+    require("endo_some");
+    auto e = Emit { _module };
+
+    // params: 0=index, 1=list; locals: 2=cur i32, 3=i i64
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(1))),
+        e.block({ e.loop("walk",
+                         e.block({
+                             e.brIf("walk.done", e.un(BinaryenEqZInt32(), isConsCell(e, 2))),
+                             e.brIf("walk.done", e.bin(BinaryenGeSInt64(), e.get64(3), e.get64(0))),
+                             e.set(2, e.wrap(e.load64(e.get32(2), layout::HeaderSize + layout::SlotSize))),
+                             e.set(3, e.bin(BinaryenAddInt64(), e.get64(3), e.i64(1))),
+                             e.br("walk"),
+                         })) },
+                "walk.done"),
+        e.ifThen(
+            e.bin(BinaryenAndInt32(), isConsCell(e, 2), e.bin(BinaryenEqInt64(), e.get64(3), e.get64(0))),
+            e.ret(e.call("endo_some",
+                         { e.load64(e.get32(2), layout::HeaderSize),
+                           e.load64(e.get32(2), layout::HeaderSize + (2 * layout::SlotSize)) },
+                         I64()))),
+        e.ret(e.call("endo_obj_alloc", { e.i64(TypeIdOption), e.i64(2) }, I64())),
+    });
+
+    e.addFunction("endo_list_nth", { I64(), I64() }, I64(), { I32(), I64() }, body);
+}
+
+// endo_list_concat(left: i64, right: i64) -> i64 — copies the left list's
+// cells in front of the right list (recursively; depth = |left|).
+void WasmRuntime::buildListConcat()
+{
+    require("endo_cons");
+    auto e = Emit { _module };
+
+    // params: 0=left, 1=right; locals: 2=p
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.ifThen(e.un(BinaryenEqZInt32(), isConsCell(e, 2)), e.ret(e.get64(1))),
+        e.ret(e.call("endo_cons",
+                     { e.load64(e.get32(2), layout::HeaderSize),
+                       e.call("endo_list_concat",
+                              { e.load64(e.get32(2), layout::HeaderSize + layout::SlotSize), e.get64(1) },
+                              I64()),
+                       e.load64(e.get32(2), layout::HeaderSize + (2 * layout::SlotSize)) },
+                     I64())),
+    });
+
+    e.addFunction("endo_list_concat", { I64(), I64() }, I64(), { I32() }, body);
+}
+
+// endo_f64_rem(a, b) -> f64 — a - trunc(a/b)*b. Matches std::fmod for
+// typical magnitudes; extreme a/b ratios may differ in the last ulp
+// (documented deviation). fmod(x, 0) yields nan as in the VM.
+void WasmRuntime::buildF64Rem()
+{
+    auto e = Emit { _module };
+    auto* body =
+        e.ret(e.bin(BinaryenSubFloat64(),
+                    e.getF64(0),
+                    e.bin(BinaryenMulFloat64(),
+                          e.un(BinaryenTruncFloat64(), e.bin(BinaryenDivFloat64(), e.getF64(0), e.getF64(1))),
+                          e.getF64(1))));
+    e.addFunction(
+        "endo_f64_rem", { BinaryenTypeFloat64(), BinaryenTypeFloat64() }, BinaryenTypeFloat64(), {}, body);
+}
+
+// endo_f64_pow(base, exp) -> f64 — square-and-multiply for integral
+// exponents (negative via reciprocal); non-integral exponents are a
+// runtime error (no exp/log in this runtime yet).
+void WasmRuntime::buildF64Pow()
+{
+    require("endo_panic");
+    auto e = Emit { _module };
+    auto const nonIntegral =
+        static_cast<int64_t>(_strings->intern("float ** with a non-integer exponent is not supported"));
+
+    // params: 0=base f64, 1=exp f64; locals: 2=n i64, 3=result f64, 4=b f64
+    auto* body = e.block({
+        e.set(2, e.un(BinaryenTruncSatSFloat64ToInt64(), e.getF64(1))),
+        e.ifThen(e.bin(BinaryenNeFloat64(), e.un(BinaryenConvertSInt64ToFloat64(), e.get64(2)), e.getF64(1)),
+                 e.callVoid("endo_panic", { e.i64(nonIntegral) })),
+        e.set(4, e.getF64(0)),
+        e.ifThen(e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(0)),
+                 e.block({
+                     e.set(4, e.bin(BinaryenDivFloat64(), e.f64(1.0), e.getF64(4))),
+                     e.set(2, e.bin(BinaryenSubInt64(), e.i64(0), e.get64(2))),
+                 })),
+        e.set(3, e.f64(1.0)),
+        e.block({ e.loop("pow",
+                         e.block({
+                             e.brIf("pow.done", e.un(BinaryenEqZInt64(), e.get64(2))),
+                             e.ifThen(e.wrap(e.bin(BinaryenAndInt64(), e.get64(2), e.i64(1))),
+                                      e.set(3, e.bin(BinaryenMulFloat64(), e.getF64(3), e.getF64(4)))),
+                             e.set(4, e.bin(BinaryenMulFloat64(), e.getF64(4), e.getF64(4))),
+                             e.set(2, e.bin(BinaryenShrUInt64(), e.get64(2), e.i64(1))),
+                             e.br("pow"),
+                         })) },
+                "pow.done"),
+        e.ret(e.getF64(3)),
+    });
+
+    e.addFunction("endo_f64_pow",
+                  { BinaryenTypeFloat64(), BinaryenTypeFloat64() },
+                  BinaryenTypeFloat64(),
+                  { I64(), BinaryenTypeFloat64(), BinaryenTypeFloat64() },
+                  body);
+}
+
+// endo_str_to_f64(s: i64) -> f64 — parses [+-]?digits[.digits][e[+-]digits];
+// anything unparsable yields 0.0 (matching the VM's catch -> 0.0).
+void WasmRuntime::buildStrToF64()
+{
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=s
+    // locals: 1=p i32, 2=len i32, 3=i i32, 4=c i32, 5=neg i32,
+    //         6=acc f64, 7=scale f64, 8=expNeg i32, 9=exp i64
+    auto const currentChar = [&]() {
+        return e.load8u(
+            e.bin(BinaryenAddInt32(), e.bin(BinaryenAddInt32(), e.get32(1), e.i32(headerSize)), e.get32(3)));
+    };
+    auto const atEnd = [&]() {
+        return e.bin(BinaryenGeUInt32(), e.get32(3), e.get32(2));
+    };
+    auto const advance = [&]() {
+        return e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1)));
+    };
+    auto const isDigit = [&]() {
+        return e.bin(BinaryenAndInt32(),
+                     e.bin(BinaryenGeUInt32(), e.get32(4), e.i32('0')),
+                     e.bin(BinaryenLeUInt32(), e.get32(4), e.i32('9')));
+    };
+    auto const digitF64 = [&]() {
+        return e.un(BinaryenConvertSInt32ToFloat64(), e.bin(BinaryenSubInt32(), e.get32(4), e.i32('0')));
+    };
+
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        e.set(2, e.load32(e.get32(1), layout::LengthOffset)),
+        // optional sign
+        e.ifThen(e.un(BinaryenEqZInt32(), atEnd()),
+                 e.block({
+                     e.set(4, currentChar()),
+                     e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('-')),
+                              e.block({ e.set(5, e.i32(1)), advance() })),
+                     e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('+')), advance()),
+                 })),
+        // integer digits
+        e.block({ e.loop("ipart",
+                         e.block({
+                             e.brIf("ipart.done", atEnd()),
+                             e.set(4, currentChar()),
+                             e.brIf("ipart.done", e.un(BinaryenEqZInt32(), isDigit())),
+                             e.set(6,
+                                   e.bin(BinaryenAddFloat64(),
+                                         e.bin(BinaryenMulFloat64(), e.getF64(6), e.f64(10.0)),
+                                         digitF64())),
+                             advance(),
+                             e.br("ipart"),
+                         })) },
+                "ipart.done"),
+        // fraction
+        e.set(7, e.f64(1.0)),
+        e.ifThen(e.bin(BinaryenAndInt32(),
+                       e.un(BinaryenEqZInt32(), atEnd()),
+                       e.bin(BinaryenEqInt32(), currentChar(), e.i32('.'))),
+                 e.block({
+                     advance(),
+                     e.block({ e.loop("frac",
+                                      e.block({
+                                          e.brIf("frac.done", atEnd()),
+                                          e.set(4, currentChar()),
+                                          e.brIf("frac.done", e.un(BinaryenEqZInt32(), isDigit())),
+                                          e.set(7, e.bin(BinaryenDivFloat64(), e.getF64(7), e.f64(10.0))),
+                                          e.set(6,
+                                                e.bin(BinaryenAddFloat64(),
+                                                      e.getF64(6),
+                                                      e.bin(BinaryenMulFloat64(), digitF64(), e.getF64(7)))),
+                                          advance(),
+                                          e.br("frac"),
+                                      })) },
+                             "frac.done"),
+                 })),
+        // exponent
+        e.ifThen(
+            e.bin(BinaryenAndInt32(),
+                  e.un(BinaryenEqZInt32(), atEnd()),
+                  e.bin(BinaryenOrInt32(),
+                        e.bin(BinaryenEqInt32(), currentChar(), e.i32('e')),
+                        e.bin(BinaryenEqInt32(), currentChar(), e.i32('E')))),
+            e.block({
+                advance(),
+                e.ifThen(e.un(BinaryenEqZInt32(), atEnd()),
+                         e.block({
+                             e.set(4, currentChar()),
+                             e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('-')),
+                                      e.block({ e.set(8, e.i32(1)), advance() })),
+                             e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('+')), advance()),
+                         })),
+                e.block(
+                    { e.loop("edig",
+                             e.block({
+                                 e.brIf("edig.done", atEnd()),
+                                 e.set(4, currentChar()),
+                                 e.brIf("edig.done", e.un(BinaryenEqZInt32(), isDigit())),
+                                 e.set(9,
+                                       e.bin(BinaryenAddInt64(),
+                                             e.bin(BinaryenMulInt64(), e.get64(9), e.i64(10)),
+                                             e.extendU(e.bin(BinaryenSubInt32(), e.get32(4), e.i32('0'))))),
+                                 advance(),
+                                 e.br("edig"),
+                             })) },
+                    "edig.done"),
+                e.block(
+                    { e.loop("escale",
+                             e.block({
+                                 e.brIf("escale.done", e.un(BinaryenEqZInt64(), e.get64(9))),
+                                 e.set(6,
+                                       BinaryenSelect(_module,
+                                                      e.get32(8),
+                                                      e.bin(BinaryenDivFloat64(), e.getF64(6), e.f64(10.0)),
+                                                      e.bin(BinaryenMulFloat64(), e.getF64(6), e.f64(10.0)))),
+                                 e.set(9, e.bin(BinaryenSubInt64(), e.get64(9), e.i64(1))),
+                                 e.br("escale"),
+                             })) },
+                    "escale.done"),
+            })),
+        e.ifThen(e.get32(5), e.set(6, e.un(BinaryenNegFloat64(), e.getF64(6)))),
+        e.ret(e.getF64(6)),
+    });
+
+    e.addFunction(
+        "endo_str_to_f64",
+        { I64() },
+        BinaryenTypeFloat64(),
+        { I32(), I32(), I32(), I32(), I32(), BinaryenTypeFloat64(), BinaryenTypeFloat64(), I32(), I64() },
+        body);
+}
+
+// endo_f64_to_str_g(f: f64) -> i64 — printf %g-style formatting at 6
+// significant digits (fixed notation for exponents in [-4, 6), scientific
+// otherwise, trailing zeros stripped), approximating std::format("{:g}").
+void WasmRuntime::buildF64ToStrG()
+{
+    require("endo_i64_to_str");
+    require("endo_str_concat");
+    require("endo_str_slice");
+    auto e = Emit { _module };
+    auto const nan = static_cast<int64_t>(_strings->intern("nan"));
+    auto const inf = static_cast<int64_t>(_strings->intern("inf"));
+    auto const negInf = static_cast<int64_t>(_strings->intern("-inf"));
+    auto const zero = static_cast<int64_t>(_strings->intern("0"));
+    auto const minus = static_cast<int64_t>(_strings->intern("-"));
+    auto const dot = static_cast<int64_t>(_strings->intern("."));
+    auto const zeroDot = static_cast<int64_t>(_strings->intern("0."));
+    auto const zeroDigit = static_cast<int64_t>(_strings->intern("0"));
+    auto const expPlus = static_cast<int64_t>(_strings->intern("e+"));
+    auto const expMinus = static_cast<int64_t>(_strings->intern("e-"));
+    auto const infinity = std::numeric_limits<double>::infinity();
+
+    // params: 0=f
+    // locals: 1=a f64, 2=e10 i64, 3=m i64 (6 significant digits),
+    //         4=mStr i64, 5=result i64, 6=keep i32, 7=mPtr i32, 8=k i64
+    auto const concat = [&](BinaryenExpressionRef a, BinaryenExpressionRef b) {
+        return e.call("endo_str_concat", { a, b }, I64());
+    };
+
+    // Trims trailing '0' bytes of the digit substring mStr[start .. start+keep):
+    // local 8 holds the (runtime) start offset, local 6 the length to keep.
+    auto trimLabelCounter = 0;
+    auto const trimLoop = [&]() {
+        auto const loopLabel = "trim" + std::to_string(trimLabelCounter);
+        auto const doneLabel = "trim.done" + std::to_string(trimLabelCounter);
+        ++trimLabelCounter;
+        auto const lastByte = [&]() {
+            return e.load8u(e.bin(
+                BinaryenAddInt32(),
+                e.bin(BinaryenAddInt32(),
+                      e.bin(BinaryenAddInt32(), e.get32(7), e.i32(static_cast<int32_t>(layout::HeaderSize))),
+                      e.wrap(e.get64(8))),
+                e.bin(BinaryenSubInt32(), e.get32(6), e.i32(1))));
+        };
+        return e.block(
+            { e.loop(loopLabel.c_str(),
+                     e.block({
+                         e.brIf(doneLabel.c_str(), e.bin(BinaryenLeSInt32(), e.get32(6), e.i32(0))),
+                         e.brIf(doneLabel.c_str(), e.bin(BinaryenNeInt32(), lastByte(), e.i32('0'))),
+                         e.set(6, e.bin(BinaryenSubInt32(), e.get32(6), e.i32(1))),
+                         e.br(loopLabel.c_str()),
+                     })) },
+            doneLabel.c_str());
+    };
+
+    auto* body = e.block({
+        e.ifThen(e.bin(BinaryenNeFloat64(), e.getF64(0), e.getF64(0)), e.ret(e.i64(nan))),
+        e.ifThen(e.bin(BinaryenEqFloat64(), e.getF64(0), e.f64(infinity)), e.ret(e.i64(inf))),
+        e.ifThen(e.bin(BinaryenEqFloat64(), e.getF64(0), e.f64(-infinity)), e.ret(e.i64(negInf))),
+        e.ifThen(e.bin(BinaryenEqFloat64(), e.getF64(0), e.f64(0.0)), e.ret(e.i64(zero))),
+        e.set(1, e.un(BinaryenAbsFloat64(), e.getF64(0))),
+        // normalize a into [1, 10) tracking the decimal exponent
+        e.block({ e.loop("normdown",
+                         e.block({
+                             e.brIf("normdown.done", e.bin(BinaryenLtFloat64(), e.getF64(1), e.f64(10.0))),
+                             e.set(1, e.bin(BinaryenDivFloat64(), e.getF64(1), e.f64(10.0))),
+                             e.set(2, e.bin(BinaryenAddInt64(), e.get64(2), e.i64(1))),
+                             e.br("normdown"),
+                         })) },
+                "normdown.done"),
+        e.block({ e.loop("normup",
+                         e.block({
+                             e.brIf("normup.done", e.bin(BinaryenGeFloat64(), e.getF64(1), e.f64(1.0))),
+                             e.set(1, e.bin(BinaryenMulFloat64(), e.getF64(1), e.f64(10.0))),
+                             e.set(2, e.bin(BinaryenSubInt64(), e.get64(2), e.i64(1))),
+                             e.br("normup"),
+                         })) },
+                "normup.done"),
+        // m = round(a * 1e5): six significant digits in [100000, 1000000]
+        e.set(3,
+              e.un(BinaryenTruncSatSFloat64ToInt64(),
+                   e.bin(BinaryenAddFloat64(),
+                         e.bin(BinaryenMulFloat64(), e.getF64(1), e.f64(100'000.0)),
+                         e.f64(0.5)))),
+        e.ifThen(e.bin(BinaryenGeSInt64(), e.get64(3), e.i64(1'000'000)),
+                 e.block({
+                     e.set(3, e.i64(100'000)),
+                     e.set(2, e.bin(BinaryenAddInt64(), e.get64(2), e.i64(1))),
+                 })),
+        e.set(4, e.call("endo_i64_to_str", { e.get64(3) }, I64())),
+        e.set(7, e.wrap(e.get64(4))),
+        // fixed notation for -4 <= e10 < 6, scientific otherwise
+        e.ifElse(
+            e.bin(BinaryenAndInt32(),
+                  e.bin(BinaryenGeSInt64(), e.get64(2), e.i64(-4)),
+                  e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(6))),
+            e.block({
+                e.ifElse(
+                    e.bin(BinaryenGeSInt64(), e.get64(2), e.i64(0)),
+                    e.block({
+                        // DDD.DDD — integer part is the first e10+1 digits
+                        e.set(
+                            5,
+                            e.call("endo_str_slice",
+                                   { e.get64(4), e.i64(0), e.bin(BinaryenAddInt64(), e.get64(2), e.i64(1)) },
+                                   I64())),
+                        // fraction: remaining digits, trailing zeros stripped
+                        e.set(6, e.wrap(e.bin(BinaryenSubInt64(), e.i64(5), e.get64(2)))),
+                        e.set(8, e.bin(BinaryenAddInt64(), e.get64(2), e.i64(1))), // frac start
+                        trimLoop(),
+                        e.ifThen(e.bin(BinaryenGtSInt32(), e.get32(6), e.i32(0)),
+                                 e.block({
+                                     e.set(5, concat(e.get64(5), e.i64(dot))),
+                                     e.set(5,
+                                           concat(e.get64(5),
+                                                  e.call("endo_str_slice",
+                                                         { e.get64(4), e.get64(8), e.extendU(e.get32(6)) },
+                                                         I64()))),
+                                 })),
+                    }),
+                    e.block({
+                        // 0.000DDDDDD — leading zeros then all six digits
+                        e.set(5, e.i64(zeroDot)),
+                        e.set(8, e.bin(BinaryenSubInt64(), e.i64(-1), e.get64(2))), // zeros to insert
+                        e.block({ e.loop("zeros",
+                                         e.block({
+                                             e.brIf("zeros.done", e.un(BinaryenEqZInt64(), e.get64(8))),
+                                             e.set(5, concat(e.get64(5), e.i64(zeroDigit))),
+                                             e.set(8, e.bin(BinaryenSubInt64(), e.get64(8), e.i64(1))),
+                                             e.br("zeros"),
+                                         })) },
+                                "zeros.done"),
+                        e.set(6, e.i32(6)), // local 8 is 0 after the zeros loop
+                        trimLoop(),
+                        e.set(5,
+                              concat(e.get64(5),
+                                     e.call("endo_str_slice",
+                                            { e.get64(4), e.i64(0), e.extendU(e.get32(6)) },
+                                            I64()))),
+                    })),
+            }),
+            e.block({
+                // scientific: D[.DDDDD]e±XX
+                e.set(5, e.call("endo_str_slice", { e.get64(4), e.i64(0), e.i64(1) }, I64())),
+                e.set(6, e.i32(5)),
+                e.set(8, e.i64(1)),
+                trimLoop(),
+                e.ifThen(e.bin(BinaryenGtSInt32(), e.get32(6), e.i32(0)),
+                         e.block({
+                             e.set(5, concat(e.get64(5), e.i64(dot))),
+                             e.set(5,
+                                   concat(e.get64(5),
+                                          e.call("endo_str_slice",
+                                                 { e.get64(4), e.i64(1), e.extendU(e.get32(6)) },
+                                                 I64()))),
+                         })),
+                e.set(5,
+                      concat(e.get64(5),
+                             BinaryenSelect(_module,
+                                            e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(0)),
+                                            e.i64(expMinus),
+                                            e.i64(expPlus)))),
+                e.ifThen(e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(0)),
+                         e.set(2, e.bin(BinaryenSubInt64(), e.i64(0), e.get64(2)))),
+                e.ifThen(e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(10)),
+                         e.set(5, concat(e.get64(5), e.i64(zeroDigit)))),
+                e.set(5, concat(e.get64(5), e.call("endo_i64_to_str", { e.get64(2) }, I64()))),
+            })),
+        e.ifThen(e.bin(BinaryenLtFloat64(), e.getF64(0), e.f64(0.0)),
+                 e.set(5, concat(e.i64(minus), e.get64(5)))),
+        e.ret(e.get64(5)),
+    });
+
+    e.addFunction("endo_f64_to_str_g",
+                  { BinaryenTypeFloat64() },
+                  I64(),
+                  { BinaryenTypeFloat64(), I64(), I64(), I64(), I64(), I32(), I32(), I64() },
+                  body);
 }
 
 } // namespace CoreVM::wasm

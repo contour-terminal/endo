@@ -19,6 +19,13 @@ namespace
         { .signature = "println(S)V", .runtimeHelper = "endo_println" },
         { .signature = "object_to_string(I)S", .inlineOp = BuiltinInlineOp::ObjectToString },
         { .signature = "list_to_string(I)S", .runtimeHelper = "endo_list_to_string" },
+        { .signature = "display_result(I)V", .runtimeHelper = "endo_display_result" },
+        { .signature = "list_length(I)I", .runtimeHelper = "endo_list_length" },
+        { .signature = "list_isEmpty(I)B", .runtimeHelper = "endo_list_is_empty" },
+        { .signature = "list_head(I)I", .runtimeHelper = "endo_list_head" },
+        { .signature = "list_tail(I)I", .runtimeHelper = "endo_list_tail" },
+        { .signature = "list_nth(II)I", .runtimeHelper = "endo_list_nth" },
+        { .signature = "list_concat(II)I", .runtimeHelper = "endo_list_concat" },
     });
 } // namespace
 

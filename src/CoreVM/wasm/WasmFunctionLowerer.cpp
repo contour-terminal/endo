@@ -417,8 +417,11 @@ void WasmFunctionLowerer::visit(CallInstr& instr)
             return;
         case BuiltinInlineOp::Ignore: mapDummyResultForUses(); return;
         case BuiltinInlineOp::ObjectToString: {
-            // Prefer compile-time type dispatch over the runtime pointer/number
-            // classifier: it is both faster and immune to value aliasing.
+            // Compile-time dispatch where the value is unambiguous; everything
+            // else goes through the runtime pointer/number classifier. Note
+            // that a Number-typed argument may still be an object pointer
+            // (native callbacks return object pointers as Number), so only
+            // constants and statically String/Boolean-typed values short-cut.
             auto* argument = instr.operands().size() > 1 ? instr.operand(1) : nullptr;
             auto const argumentType = argument != nullptr ? argument->type() : LiteralType::Void;
             if (argumentType == LiteralType::String)
@@ -426,7 +429,9 @@ void WasmFunctionLowerer::visit(CallInstr& instr)
                 setResult(instr, args.empty() ? zeroI64() : args[0], ResultMode::Pure);
                 return;
             }
-            auto const* helper = (argumentType == LiteralType::Number || argumentType == LiteralType::Boolean)
+            auto const isConstantNumeric = dynamic_cast<ConstantInt*>(argument) != nullptr
+                                           || dynamic_cast<ConstantBoolean*>(argument) != nullptr;
+            auto const* helper = (isConstantNumeric || argumentType == LiteralType::Boolean)
                                      ? "endo_i64_to_str"
                                      : "endo_object_to_string";
             setResult(instr, callRuntime(helper, args), ResultMode::Ordered);
