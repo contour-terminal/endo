@@ -208,6 +208,15 @@ void WasmRuntime::require(std::string_view name)
         { "endo_i64_div", &WasmRuntime::buildI64Div },
         { "endo_i64_rem", &WasmRuntime::buildI64Rem },
         { "endo_i64_pow", &WasmRuntime::buildI64Pow },
+        { "endo_mem_eq", &WasmRuntime::buildMemEq },
+        { "endo_str_concat", &WasmRuntime::buildStrConcat },
+        { "endo_str_len", &WasmRuntime::buildStrLen },
+        { "endo_str_eq", &WasmRuntime::buildStrEq },
+        { "endo_str_cmp", &WasmRuntime::buildStrCmp },
+        { "endo_str_starts_with", &WasmRuntime::buildStrStartsWith },
+        { "endo_str_ends_with", &WasmRuntime::buildStrEndsWith },
+        { "endo_str_contains", &WasmRuntime::buildStrContains },
+        { "endo_str_to_i64", &WasmRuntime::buildStrToI64 },
     };
 
     if (auto const it = builders.find(name); it != builders.end())
@@ -561,6 +570,295 @@ void WasmRuntime::buildI64Pow()
     });
 
     e.addFunction("endo_i64_pow", { I64(), I64() }, I64(), { I64() }, body);
+}
+
+// endo_mem_eq(a: i32, b: i32, n: i32) -> i32 — byte-wise memory equality.
+void WasmRuntime::buildMemEq()
+{
+    auto e = Emit { _module };
+
+    // params: 0=a, 1=b, 2=n; locals: 3=i
+    auto* body =
+        e.block({ e.loop("cmp",
+                         e.block({
+                             e.ifThen(e.bin(BinaryenGeUInt32(), e.get32(3), e.get32(2)), e.ret(e.i32(1))),
+                             e.ifThen(e.bin(BinaryenNeInt32(),
+                                            e.load8u(e.bin(BinaryenAddInt32(), e.get32(0), e.get32(3))),
+                                            e.load8u(e.bin(BinaryenAddInt32(), e.get32(1), e.get32(3)))),
+                                      e.ret(e.i32(0))),
+                             e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1))),
+                             e.br("cmp"),
+                         })) });
+
+    e.addFunction("endo_mem_eq", { I32(), I32(), I32() }, I32(), { I32() }, body);
+}
+
+// endo_str_concat(a: i64, b: i64) -> i64
+void WasmRuntime::buildStrConcat()
+{
+    require("endo_str_alloc");
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=a, 1=b; locals: 2=pa, 3=pb, 4=la, 5=lb, 6=p
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.set(4, e.load32(e.get32(2), layout::LengthOffset)),
+        e.set(5, e.load32(e.get32(3), layout::LengthOffset)),
+        e.set(6, e.call("endo_str_alloc", { e.bin(BinaryenAddInt32(), e.get32(4), e.get32(5)) }, I32())),
+        BinaryenMemoryCopy(_module,
+                           e.bin(BinaryenAddInt32(), e.get32(6), e.i32(headerSize)),
+                           e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                           e.get32(4),
+                           "0",
+                           "0"),
+        BinaryenMemoryCopy(
+            _module,
+            e.bin(BinaryenAddInt32(), e.bin(BinaryenAddInt32(), e.get32(6), e.i32(headerSize)), e.get32(4)),
+            e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+            e.get32(5),
+            "0",
+            "0"),
+        e.ret(e.extendU(e.get32(6))),
+    });
+
+    e.addFunction("endo_str_concat", { I64(), I64() }, I64(), { I32(), I32(), I32(), I32(), I32() }, body);
+}
+
+// endo_str_len(s: i64) -> i64
+void WasmRuntime::buildStrLen()
+{
+    auto e = Emit { _module };
+    auto* body = e.ret(e.extendU(e.load32(e.wrap(e.get64(0)), layout::LengthOffset)));
+    e.addFunction("endo_str_len", { I64() }, I64(), {}, body);
+}
+
+// endo_str_eq(a: i64, b: i64) -> i64 — content equality (0/1).
+void WasmRuntime::buildStrEq()
+{
+    require("endo_mem_eq");
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=a, 1=b; locals: 2=pa, 3=pb, 4=la
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.ifThen(e.bin(BinaryenEqInt32(), e.get32(2), e.get32(3)), e.ret(e.i64(1))),
+        e.set(4, e.load32(e.get32(2), layout::LengthOffset)),
+        e.ifThen(e.bin(BinaryenNeInt32(), e.get32(4), e.load32(e.get32(3), layout::LengthOffset)),
+                 e.ret(e.i64(0))),
+        e.ret(e.extendU(e.call("endo_mem_eq",
+                               { e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                                 e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+                                 e.get32(4) },
+                               I32()))),
+    });
+
+    e.addFunction("endo_str_eq", { I64(), I64() }, I64(), { I32(), I32(), I32() }, body);
+}
+
+// endo_str_cmp(a: i64, b: i64) -> i64 — three-way lexicographic byte order
+// with length tie-break (std::string ordering).
+void WasmRuntime::buildStrCmp()
+{
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=a, 1=b; locals: 2=pa, 3=pb, 4=la, 5=lb, 6=n, 7=i, 8=ca, 9=cb
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.set(4, e.load32(e.get32(2), layout::LengthOffset)),
+        e.set(5, e.load32(e.get32(3), layout::LengthOffset)),
+        e.set(6,
+              BinaryenSelect(
+                  _module, e.bin(BinaryenLtUInt32(), e.get32(4), e.get32(5)), e.get32(4), e.get32(5))),
+        e.block({ e.loop("cmp",
+                         e.block({
+                             e.brIf("cmp.done", e.bin(BinaryenGeUInt32(), e.get32(7), e.get32(6))),
+                             e.set(8,
+                                   e.load8u(e.bin(BinaryenAddInt32(),
+                                                  e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                                                  e.get32(7)))),
+                             e.set(9,
+                                   e.load8u(e.bin(BinaryenAddInt32(),
+                                                  e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+                                                  e.get32(7)))),
+                             e.ifThen(e.bin(BinaryenLtUInt32(), e.get32(8), e.get32(9)), e.ret(e.i64(-1))),
+                             e.ifThen(e.bin(BinaryenGtUInt32(), e.get32(8), e.get32(9)), e.ret(e.i64(1))),
+                             e.set(7, e.bin(BinaryenAddInt32(), e.get32(7), e.i32(1))),
+                             e.br("cmp"),
+                         })) },
+                "cmp.done"),
+        e.ifThen(e.bin(BinaryenLtUInt32(), e.get32(4), e.get32(5)), e.ret(e.i64(-1))),
+        e.ifThen(e.bin(BinaryenGtUInt32(), e.get32(4), e.get32(5)), e.ret(e.i64(1))),
+        e.ret(e.i64(0)),
+    });
+
+    e.addFunction("endo_str_cmp",
+                  { I64(), I64() },
+                  I64(),
+                  { I32(), I32(), I32(), I32(), I32(), I32(), I32(), I32() },
+                  body);
+}
+
+// endo_str_starts_with(s: i64, prefix: i64) -> i64
+void WasmRuntime::buildStrStartsWith()
+{
+    require("endo_mem_eq");
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=s, 1=prefix; locals: 2=ps, 3=pp, 4=lp
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.set(4, e.load32(e.get32(3), layout::LengthOffset)),
+        e.ifThen(e.bin(BinaryenGtUInt32(), e.get32(4), e.load32(e.get32(2), layout::LengthOffset)),
+                 e.ret(e.i64(0))),
+        e.ret(e.extendU(e.call("endo_mem_eq",
+                               { e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                                 e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+                                 e.get32(4) },
+                               I32()))),
+    });
+
+    e.addFunction("endo_str_starts_with", { I64(), I64() }, I64(), { I32(), I32(), I32() }, body);
+}
+
+// endo_str_ends_with(s: i64, suffix: i64) -> i64
+void WasmRuntime::buildStrEndsWith()
+{
+    require("endo_mem_eq");
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=s, 1=suffix; locals: 2=ps, 3=pq, 4=lq, 5=ls
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.set(4, e.load32(e.get32(3), layout::LengthOffset)),
+        e.set(5, e.load32(e.get32(2), layout::LengthOffset)),
+        e.ifThen(e.bin(BinaryenGtUInt32(), e.get32(4), e.get32(5)), e.ret(e.i64(0))),
+        e.ret(e.extendU(e.call("endo_mem_eq",
+                               { e.bin(BinaryenSubInt32(),
+                                       e.bin(BinaryenAddInt32(),
+                                             e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                                             e.get32(5)),
+                                       e.get32(4)),
+                                 e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+                                 e.get32(4) },
+                               I32()))),
+    });
+
+    e.addFunction("endo_str_ends_with", { I64(), I64() }, I64(), { I32(), I32(), I32(), I32() }, body);
+}
+
+// endo_str_contains(s: i64, needle: i64) -> i64 — naive substring search.
+void WasmRuntime::buildStrContains()
+{
+    require("endo_mem_eq");
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=s, 1=needle; locals: 2=ps, 3=pn, 4=ls, 5=ln, 6=start
+    auto* body = e.block({
+        e.set(2, e.wrap(e.get64(0))),
+        e.set(3, e.wrap(e.get64(1))),
+        e.set(4, e.load32(e.get32(2), layout::LengthOffset)),
+        e.set(5, e.load32(e.get32(3), layout::LengthOffset)),
+        e.ifThen(e.un(BinaryenEqZInt32(), e.get32(5)), e.ret(e.i64(1))),
+        e.ifThen(e.bin(BinaryenGtUInt32(), e.get32(5), e.get32(4)), e.ret(e.i64(0))),
+        e.block({ e.loop("scan",
+                         e.block({
+                             e.brIf("scan.done",
+                                    e.bin(BinaryenGtUInt32(),
+                                          e.bin(BinaryenAddInt32(), e.get32(6), e.get32(5)),
+                                          e.get32(4))),
+                             e.ifThen(e.call("endo_mem_eq",
+                                             { e.bin(BinaryenAddInt32(),
+                                                     e.bin(BinaryenAddInt32(), e.get32(2), e.i32(headerSize)),
+                                                     e.get32(6)),
+                                               e.bin(BinaryenAddInt32(), e.get32(3), e.i32(headerSize)),
+                                               e.get32(5) },
+                                             I32()),
+                                      e.ret(e.i64(1))),
+                             e.set(6, e.bin(BinaryenAddInt32(), e.get32(6), e.i32(1))),
+                             e.br("scan"),
+                         })) },
+                "scan.done"),
+        e.ret(e.i64(0)),
+    });
+
+    e.addFunction("endo_str_contains", { I64(), I64() }, I64(), { I32(), I32(), I32(), I32(), I32() }, body);
+}
+
+// endo_str_to_i64(s: i64) -> i64 — permissive decimal parse: optional
+// leading whitespace and sign, digits until the first non-digit, else 0.
+void WasmRuntime::buildStrToI64()
+{
+    auto e = Emit { _module };
+    auto const headerSize = static_cast<int32_t>(layout::HeaderSize);
+
+    // params: 0=s; locals: 1=p, 2=len, 3=i, 4=c, 5=neg, 6=acc(i64)
+    auto const currentChar = [&]() {
+        return e.load8u(
+            e.bin(BinaryenAddInt32(), e.bin(BinaryenAddInt32(), e.get32(1), e.i32(headerSize)), e.get32(3)));
+    };
+    auto const atEnd = [&]() {
+        return e.bin(BinaryenGeUInt32(), e.get32(3), e.get32(2));
+    };
+
+    auto* body = e.block({
+        e.set(1, e.wrap(e.get64(0))),
+        e.set(2, e.load32(e.get32(1), layout::LengthOffset)),
+        // skip leading spaces and tabs
+        e.block({ e.loop("ws",
+                         e.block({
+                             e.brIf("ws.done", atEnd()),
+                             e.set(4, currentChar()),
+                             e.brIf("ws.done",
+                                    e.bin(BinaryenAndInt32(),
+                                          e.bin(BinaryenNeInt32(), e.get32(4), e.i32(' ')),
+                                          e.bin(BinaryenNeInt32(), e.get32(4), e.i32('\t')))),
+                             e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1))),
+                             e.br("ws"),
+                         })) },
+                "ws.done"),
+        // optional sign
+        e.ifThen(e.un(BinaryenEqZInt32(), atEnd()),
+                 e.block({
+                     e.set(4, currentChar()),
+                     e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('-')),
+                              e.block({
+                                  e.set(5, e.i32(1)),
+                                  e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1))),
+                              })),
+                     e.ifThen(e.bin(BinaryenEqInt32(), e.get32(4), e.i32('+')),
+                              e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1)))),
+                 })),
+        // digits
+        e.block({ e.loop("digits",
+                         e.block({
+                             e.brIf("digits.done", atEnd()),
+                             e.set(4, currentChar()),
+                             e.brIf("digits.done", e.bin(BinaryenLtUInt32(), e.get32(4), e.i32('0'))),
+                             e.brIf("digits.done", e.bin(BinaryenGtUInt32(), e.get32(4), e.i32('9'))),
+                             e.set(6,
+                                   e.bin(BinaryenAddInt64(),
+                                         e.bin(BinaryenMulInt64(), e.get64(6), e.i64(10)),
+                                         e.extendU(e.bin(BinaryenSubInt32(), e.get32(4), e.i32('0'))))),
+                             e.set(3, e.bin(BinaryenAddInt32(), e.get32(3), e.i32(1))),
+                             e.br("digits"),
+                         })) },
+                "digits.done"),
+        e.ifThen(e.get32(5), e.set(6, e.bin(BinaryenSubInt64(), e.i64(0), e.get64(6)))),
+        e.ret(e.get64(6)),
+    });
+
+    e.addFunction("endo_str_to_i64", { I64() }, I64(), { I32(), I32(), I32(), I32(), I32(), I64() }, body);
 }
 
 } // namespace CoreVM::wasm

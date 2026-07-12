@@ -639,7 +639,95 @@ void WasmFunctionLowerer::lowerBinaryOp(Instr& instr, BinaryOperator op)
 
 void WasmFunctionLowerer::visit(CastInstr& instr)
 {
-    unsupported(instr, "type conversion");
+    auto const targetType = instr.type();
+    auto const sourceType = instr.source()->type();
+
+    // Same-type casts are aliases.
+    if (targetType == sourceType)
+    {
+        setResult(instr, emitValue(instr.source()), ResultMode::Pure);
+        return;
+    }
+
+    /// How one (target, source) conversion pair lowers.
+    struct CastRule
+    {
+        enum class Kind : uint8_t
+        {
+            HelperI64, ///< Runtime helper taking the canonical i64 form.
+            HelperF64, ///< Runtime helper taking the f64 view.
+            TruncSat,  ///< f64 -> i64 (non-trapping saturating truncation).
+            Convert,   ///< i64 -> f64 numeric conversion.
+        };
+        Kind kind;
+        std::string_view helper;
+    };
+
+    using Kind = CastRule::Kind;
+
+    // Mirrors TargetCodeGenerator's cast matrix: dynamic types (Void/Object)
+    // are treated as numbers at runtime.
+    static auto const matrix = std::unordered_map<LiteralType, std::unordered_map<LiteralType, CastRule>> {
+        { LiteralType::String,
+          {
+              { LiteralType::Number, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
+              { LiteralType::Boolean, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
+              { LiteralType::Void, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
+              { LiteralType::Object, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
+              { LiteralType::Float, { .kind = Kind::HelperF64, .helper = "endo_f64_to_str_g" } },
+          } },
+        { LiteralType::Number,
+          {
+              { LiteralType::String, { .kind = Kind::HelperI64, .helper = "endo_str_to_i64" } },
+              { LiteralType::Float, { .kind = Kind::TruncSat } },
+          } },
+        { LiteralType::Float,
+          {
+              { LiteralType::Number, { .kind = Kind::Convert } },
+              { LiteralType::Void, { .kind = Kind::Convert } },
+              { LiteralType::Object, { .kind = Kind::Convert } },
+              { LiteralType::String, { .kind = Kind::HelperI64, .helper = "endo_str_to_f64" } },
+          } },
+    };
+
+    auto const targetIt = matrix.find(targetType);
+    auto const* rule = [&]() -> CastRule const* {
+        if (targetIt == matrix.end())
+            return nullptr;
+        auto const sourceIt = targetIt->second.find(sourceType);
+        return sourceIt != targetIt->second.end() ? &sourceIt->second : nullptr;
+    }();
+    if (rule == nullptr)
+    {
+        unsupported(instr, std::format("conversion from {} to {}", tos(sourceType), tos(targetType)));
+        return;
+    }
+
+    switch (rule->kind)
+    {
+        case Kind::HelperI64: {
+            auto args = std::array { asI64(emitValue(instr.source())) };
+            setResult(instr, callRuntime(rule->helper, args), ResultMode::Ordered);
+            return;
+        }
+        case Kind::HelperF64: {
+            auto args = std::array { asF64(emitValue(instr.source())) };
+            setResult(instr, callRuntime(rule->helper, args), ResultMode::Ordered);
+            return;
+        }
+        case Kind::TruncSat:
+            setResult(
+                instr,
+                BinaryenUnary(_module, BinaryenTruncSatSFloat64ToInt64(), asF64(emitValue(instr.source()))),
+                ResultMode::Pure);
+            return;
+        case Kind::Convert:
+            setResult(
+                instr,
+                BinaryenUnary(_module, BinaryenConvertSInt64ToFloat64(), asI64(emitValue(instr.source()))),
+                ResultMode::Pure);
+            return;
+    }
 }
 
 void WasmFunctionLowerer::visit(RegExpGroupInstr& instr)

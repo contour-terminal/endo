@@ -40,7 +40,10 @@ namespace
             { BinaryOperator::BXor, { .kind = BKind::DirectOp, .op = &BinaryenXorInt64 } },
             // string
             { BinaryOperator::SAdd, { .kind = BKind::HelperCall, .helper = "endo_str_concat" } },
-            { BinaryOperator::SSubStr, { .kind = BKind::HelperCall, .helper = "endo_str_substr" } },
+            // SSubStrInstr is never emitted by the frontend (no IRBuilder factory), and
+            // its two operands do not match the VM's three-operand SSUBSTR semantics.
+            { BinaryOperator::SSubStr,
+              { .kind = BKind::Unsupported, .unsupportedWhat = "substring extraction" } },
             { BinaryOperator::SCmpEQ, { .kind = BKind::HelperCall, .helper = "endo_str_eq" } },
             { BinaryOperator::SCmpNE,
               { .kind = BKind::HelperCmp0, .op = &BinaryenEqInt64, .helper = "endo_str_eq" } },

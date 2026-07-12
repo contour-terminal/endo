@@ -53,6 +53,15 @@ class WasmRuntime final: public WasmRuntimeProvider
     void buildI64Div();
     void buildI64Rem();
     void buildI64Pow();
+    void buildMemEq();
+    void buildStrConcat();
+    void buildStrLen();
+    void buildStrEq();
+    void buildStrCmp();
+    void buildStrStartsWith();
+    void buildStrEndsWith();
+    void buildStrContains();
+    void buildStrToI64();
 
     BinaryenModuleRef _module = nullptr;
     WasmStringTable* _strings = nullptr;
