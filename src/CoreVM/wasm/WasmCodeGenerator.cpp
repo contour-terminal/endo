@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/ir/IRProgram.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
 #include <CoreVM/wasm/WasmCodeGenerator.hpp>
 #include <CoreVM/wasm/WasmFunctionLowerer.hpp>
 #include <CoreVM/wasm/WasmRuntimeABI.hpp>
@@ -68,6 +69,39 @@ namespace
                                    BinaryenTypeNone());
         BinaryenAddFunction(module, "_start", BinaryenTypeNone(), BinaryenTypeNone(), nullptr, 0, body);
         BinaryenAddFunctionExport(module, "_start", "_start");
+    }
+
+    /// Builds the object typeId -> slot count map from the builtin type
+    /// registry plus the program's custom product/sum types, mirroring
+    /// TargetCodeGenerator's type registration.
+    std::unordered_map<int64_t, int64_t> collectSlotCounts(IRProgram& program)
+    {
+        auto registry = TypeRegistry {};
+        for (auto const& customType: program.customProductTypes())
+        {
+            auto type = std::make_unique<TypeDescriptor>();
+            type->kind = TypeKind::Product;
+            type->id = customType.assignedId;
+            type->name = customType.name;
+            type->fields = customType.fields;
+            type->slotCount = customType.slotCount > 0 ? customType.slotCount
+                                                       : static_cast<uint16_t>(customType.fields.size());
+            registry.registerProductType(std::move(type));
+        }
+        for (auto const& customType: program.customSumTypes())
+        {
+            auto type = std::make_unique<TypeDescriptor>();
+            type->kind = TypeKind::Sum;
+            type->id = customType.assignedId;
+            type->name = customType.name;
+            type->variants = customType.variants;
+            registry.registerSumType(std::move(type));
+        }
+
+        auto slotCounts = std::unordered_map<int64_t, int64_t> {};
+        for (auto const& type: registry.allTypes())
+            slotCounts[type->id] = type->slotCount;
+        return slotCounts;
     }
 
     /// Finalizes the linear memory: one active data segment holding the
@@ -139,11 +173,12 @@ std::optional<WasmOutput> WasmCodeGenerator::generate(IRProgram* program, diagno
 
     auto strings = WasmStringTable {};
     auto usedHelpers = std::set<RuntimeHelperDef const*> {};
+    auto const slotCounts = collectSlotCounts(*program);
     for (IRFunction* function: program->functions())
     {
         if (function->empty())
             continue;
-        WasmFunctionLowerer lowerer(module, _options, report, usedHelpers, strings);
+        WasmFunctionLowerer lowerer(module, _options, report, usedHelpers, strings, slotCounts);
         lowerer.lower(function);
     }
 

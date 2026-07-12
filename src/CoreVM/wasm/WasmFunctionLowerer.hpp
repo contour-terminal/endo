@@ -52,7 +52,8 @@ class WasmFunctionLowerer final: public InstructionVisitor
                         WasmOptions const& options,
                         diagnostics::Report& report,
                         std::set<RuntimeHelperDef const*>& usedHelpers,
-                        WasmStringTable& strings);
+                        WasmStringTable& strings,
+                        std::unordered_map<int64_t, int64_t> const& slotCounts);
 
     /// Lowers @p function and adds it to the module.
     void lower(IRFunction* function);
@@ -237,9 +238,11 @@ class WasmFunctionLowerer final: public InstructionVisitor
     /// while visiting terminators and applied to the relooper afterwards.
     struct PendingBranch
     {
-        BasicBlock* from;
-        BasicBlock* to;
-        Value* condition; ///< nullptr for the unconditional/default edge.
+        BasicBlock* from = nullptr;
+        BasicBlock* to = nullptr;
+        Value* condition = nullptr;               ///< nullptr for the unconditional/default edge.
+        Constant* caseLabel = nullptr;            ///< MatchInstr case: compare condition against this.
+        MatchClass matchClass = MatchClass::Same; ///< MatchInstr case: comparison kind.
     };
 
     /// A value pinned into a scratch local.
@@ -277,6 +280,18 @@ class WasmFunctionLowerer final: public InstructionVisitor
     /// A fresh i64 zero constant.
     [[nodiscard]] BinaryenExpressionRef zeroI64();
 
+    /// Pins an object operand into a fresh i64 scratch local and returns its
+    /// index, so the pointer can be used for a store and aliased as a result.
+    [[nodiscard]] uint32_t pinObjectOperand(Value* object);
+
+    /// The wrapped i32 pointer view of a pinned object local.
+    [[nodiscard]] BinaryenExpressionRef pinnedPointer(uint32_t localIndex);
+
+    /// Builds the i32 condition for one MatchInstr case edge.
+    [[nodiscard]] BinaryenExpressionRef matchCaseCondition(Value* scrutinee,
+                                                           Constant& caseLabel,
+                                                           MatchClass matchClass);
+
     /// Lowers a raw-value comparison (VCmp*): compares the canonical i64 forms.
     void lowerValueCompare(Instr& instr, BinaryenOp compareOp);
 
@@ -300,6 +315,7 @@ class WasmFunctionLowerer final: public InstructionVisitor
     diagnostics::Report& _report;
     std::set<RuntimeHelperDef const*>& _usedHelpers;
     WasmStringTable& _strings;
+    std::unordered_map<int64_t, int64_t> const& _slotCounts; ///< Object typeId -> slot count.
 
     IRFunction* _function = nullptr;
     BasicBlock* _currentBlock = nullptr;

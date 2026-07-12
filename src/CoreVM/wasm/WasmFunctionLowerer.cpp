@@ -18,12 +18,14 @@ WasmFunctionLowerer::WasmFunctionLowerer(BinaryenModuleRef module,
                                          WasmOptions const& options,
                                          diagnostics::Report& report,
                                          std::set<RuntimeHelperDef const*>& usedHelpers,
-                                         WasmStringTable& strings):
+                                         WasmStringTable& strings,
+                                         std::unordered_map<int64_t, int64_t> const& slotCounts):
     _module { module },
     _options { options },
     _report { report },
     _usedHelpers { usedHelpers },
-    _strings { strings }
+    _strings { strings },
+    _slotCounts { slotCounts }
 {
 }
 
@@ -64,7 +66,13 @@ void WasmFunctionLowerer::lower(IRFunction* function)
 
     for (auto const& branch: _pendingBranches)
     {
-        auto* condition = branch.condition != nullptr ? asCond(emitValue(branch.condition)) : nullptr;
+        auto* condition = [&]() -> BinaryenExpressionRef {
+            if (branch.condition == nullptr)
+                return nullptr;
+            if (branch.caseLabel != nullptr)
+                return matchCaseCondition(branch.condition, *branch.caseLabel, branch.matchClass);
+            return asCond(emitValue(branch.condition));
+        }();
         RelooperAddBranch(_relooperBlocks[branch.from], _relooperBlocks[branch.to], condition, nullptr);
     }
 
@@ -548,8 +556,61 @@ void WasmFunctionLowerer::visit(RetInstr& instr)
 
 void WasmFunctionLowerer::visit(MatchInstr& instr)
 {
-    unsupported(instr, "match dispatch");
-    pushStatement(BinaryenUnreachable(_module));
+    if (instr.op() == MatchClass::RegExp)
+    {
+        unsupported(instr, "regular expression matching");
+        pushStatement(BinaryenUnreachable(_module));
+        return;
+    }
+    if (instr.elseBlock() == nullptr)
+    {
+        internalError("match dispatch without an else block");
+        pushStatement(BinaryenUnreachable(_module));
+        return;
+    }
+
+    pinValue(instr.condition());
+    // Relooper evaluates branch conditions in insertion order, giving
+    // first-match case semantics.
+    for (auto const& [label, block]: instr.cases())
+        _pendingBranches.push_back(PendingBranch { .from = _currentBlock,
+                                                   .to = block,
+                                                   .condition = instr.condition(),
+                                                   .caseLabel = label,
+                                                   .matchClass = instr.op() });
+    _pendingBranches.push_back(
+        PendingBranch { .from = _currentBlock, .to = instr.elseBlock(), .condition = nullptr });
+}
+
+BinaryenExpressionRef WasmFunctionLowerer::matchCaseCondition(Value* scrutinee,
+                                                              Constant& caseLabel,
+                                                              MatchClass matchClass)
+{
+    auto* lhs = emitValue(scrutinee);
+    auto* rhs = emitValue(&caseLabel);
+    switch (matchClass)
+    {
+        case MatchClass::Same:
+            // String labels compare by content (the VM keys its match tables
+            // by string value, not by interned pointer identity).
+            if (dynamic_cast<ConstantString*>(&caseLabel) != nullptr)
+            {
+                auto args = std::array { asI64(lhs), asI64(rhs) };
+                return asCond(callRuntime("endo_str_eq", args));
+            }
+            return BinaryenBinary(_module, BinaryenEqInt64(), asI64(lhs), asI64(rhs));
+        case MatchClass::Head: {
+            auto args = std::array { asI64(lhs), asI64(rhs) };
+            return asCond(callRuntime("endo_str_starts_with", args));
+        }
+        case MatchClass::Tail: {
+            auto args = std::array { asI64(lhs), asI64(rhs) };
+            return asCond(callRuntime("endo_str_ends_with", args));
+        }
+        case MatchClass::RegExp: break; // rejected in visit(MatchInstr)
+    }
+    internalError("unexpected match class");
+    return BinaryenConst(_module, BinaryenLiteralInt32(0));
 }
 
 // }}}
@@ -737,50 +798,136 @@ void WasmFunctionLowerer::visit(RegExpGroupInstr& instr)
 
 // }}}
 // {{{ object operations
+//
+// Objects live in linear memory with the unified 8-byte header (see
+// WasmRuntimeABI.hpp); slot/tag/typeId access is inlined address math.
+
+uint32_t WasmFunctionLowerer::pinObjectOperand(Value* object)
+{
+    auto const localIndex = scratchLocal(BinaryenTypeInt64());
+    pushStatement(BinaryenLocalSet(_module, localIndex, asI64(emitValue(object))));
+    return localIndex;
+}
+
+BinaryenExpressionRef WasmFunctionLowerer::pinnedPointer(uint32_t localIndex)
+{
+    return BinaryenUnary(
+        _module, BinaryenWrapInt64(), BinaryenLocalGet(_module, localIndex, BinaryenTypeInt64()));
+}
 
 void WasmFunctionLowerer::visit(ObjAllocInstr& instr)
 {
-    unsupported(instr, "object allocation");
+    auto const typeId = instr.typeId()->get();
+    auto const slotCount = _slotCounts.find(typeId);
+    if (slotCount == _slotCounts.end())
+    {
+        unsupported(instr, std::format("allocation of unknown object type id {}", typeId));
+        return;
+    }
+    auto args = std::array {
+        BinaryenConst(_module, BinaryenLiteralInt64(typeId)),
+        BinaryenConst(_module, BinaryenLiteralInt64(slotCount->second)),
+    };
+    setResult(instr, callRuntime("endo_obj_alloc", args), ResultMode::Ordered);
 }
 
 void WasmFunctionLowerer::visit(ObjRetainInstr& instr)
 {
-    unsupported(instr, "object retain");
+    // No reference counting: the bump allocator never frees. The retain's
+    // result aliases the object operand.
+    setResult(instr, asI64(emitValue(instr.object())), ResultMode::Pure);
 }
 
 void WasmFunctionLowerer::visit(ObjReleaseInstr& instr)
 {
-    unsupported(instr, "object release");
+    // No reference counting (see ObjRetainInstr).
+    (void) instr;
 }
 
 void WasmFunctionLowerer::visit(ObjGetTagInstr& instr)
 {
-    unsupported(instr, "object tag access");
+    auto* tag = BinaryenLoad(_module,
+                             1,
+                             false,
+                             layout::TagOffset,
+                             0,
+                             BinaryenTypeInt32(),
+                             BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
+                             "0");
+    setResult(instr, tag, ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjSetTagInstr& instr)
 {
-    unsupported(instr, "object tag assignment");
+    auto const object = pinObjectOperand(instr.object());
+    auto* tag = BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.tag())));
+    pushStatement(BinaryenStore(
+        _module, 1, layout::TagOffset, 0, pinnedPointer(object), tag, BinaryenTypeInt32(), "0"));
+    // The instruction's Object-typed result aliases the object operand.
+    _pinned[&instr] = PinnedValue { .localIndex = object, .type = BinaryenTypeInt64() };
 }
 
 void WasmFunctionLowerer::visit(ObjGetSlotInstr& instr)
 {
-    unsupported(instr, "object slot access");
+    auto const offset =
+        layout::HeaderSize + (layout::SlotSize * static_cast<uint32_t>(instr.slotIndex()->get()));
+    auto* slot = BinaryenLoad(_module,
+                              8,
+                              false,
+                              offset,
+                              0,
+                              BinaryenTypeInt64(),
+                              BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
+                              "0");
+    setResult(instr, slot, ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjSetSlotInstr& instr)
 {
-    unsupported(instr, "object slot assignment");
+    auto const offset =
+        layout::HeaderSize + (layout::SlotSize * static_cast<uint32_t>(instr.slotIndex()->get()));
+    auto const object = pinObjectOperand(instr.object());
+    pushStatement(BinaryenStore(_module,
+                                8,
+                                offset,
+                                0,
+                                pinnedPointer(object),
+                                asI64(emitValue(instr.value())),
+                                BinaryenTypeInt64(),
+                                "0"));
+    // The instruction's Object-typed result aliases the object operand.
+    _pinned[&instr] = PinnedValue { .localIndex = object, .type = BinaryenTypeInt64() };
 }
 
 void WasmFunctionLowerer::visit(ObjTypeIdInstr& instr)
 {
-    unsupported(instr, "object type-id access");
+    auto* typeId = BinaryenLoad(_module,
+                                2,
+                                false,
+                                layout::TypeIdOffset,
+                                0,
+                                BinaryenTypeInt32(),
+                                BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
+                                "0");
+    setResult(instr, typeId, ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjIsTypeInstr& instr)
 {
-    unsupported(instr, "object type test");
+    auto* typeId = BinaryenLoad(_module,
+                                2,
+                                false,
+                                layout::TypeIdOffset,
+                                0,
+                                BinaryenTypeInt32(),
+                                BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
+                                "0");
+    auto* test = BinaryenBinary(
+        _module,
+        BinaryenEqInt32(),
+        typeId,
+        BinaryenConst(_module, BinaryenLiteralInt32(static_cast<int32_t>(instr.typeId()->get()))));
+    setResult(instr, test, ResultMode::PinIfUsed);
 }
 
 // }}}
