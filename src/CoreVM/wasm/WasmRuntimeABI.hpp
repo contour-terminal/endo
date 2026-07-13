@@ -48,9 +48,10 @@ namespace layout
     constexpr uint8_t KindString = 0xE5; ///< Header kind byte for strings.
     constexpr uint8_t KindObject = 0xE6; ///< Header kind byte for objects.
 
-    constexpr std::string_view MemoryExportName = "memory";           ///< WASI requires this export.
-    constexpr std::string_view HeapPointerGlobal = "endo_heap_ptr";   ///< Mutable i32 bump pointer.
-    constexpr std::string_view ExitStatusGlobal = "endo_exit_status"; ///< Mutable i32 exit status.
+    // Consumed as C strings by the binaryen API, hence char const*.
+    constexpr char const* MemoryExportName = "memory";           ///< WASI requires this export.
+    constexpr char const* HeapPointerGlobal = "endo_heap_ptr";   ///< Mutable i32 bump pointer.
+    constexpr char const* ExitStatusGlobal = "endo_exit_status"; ///< Mutable i32 exit status.
 } // namespace layout
 
 /// WASM value type in runtime-helper signatures. This is a constexpr-friendly
@@ -81,10 +82,9 @@ enum class ValType : uint8_t
 /// value-level parameters and results are ValType::I64.
 struct RuntimeHelperDef
 {
-    std::string_view name;           ///< Function name inside the module, e.g. "endo_str_concat".
+    char const* name;                ///< Function name inside the module, e.g. "endo_str_concat".
     std::span<ValType const> params; ///< Parameter types.
     std::optional<ValType> result;   ///< Result type; nullopt for no result.
-    bool noReturn = false;           ///< True if the helper never returns (traps/exits).
 };
 
 namespace detail
@@ -111,7 +111,6 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     { .name = "endo_f64_pow", .params = detail::F64x2, .result = ValType::F64 },
     // strings
     { .name = "endo_str_concat", .params = detail::I64x2, .result = ValType::I64 },
-    { .name = "endo_str_substr", .params = detail::I64x3, .result = ValType::I64 },
     { .name = "endo_str_len", .params = detail::I64x1, .result = ValType::I64 },
     { .name = "endo_str_eq", .params = detail::I64x2, .result = ValType::I64 },
     { .name = "endo_str_cmp", .params = detail::I64x2, .result = ValType::I64 },
@@ -121,7 +120,6 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     // number <-> string conversion
     { .name = "endo_i64_to_str", .params = detail::I64x1, .result = ValType::I64 },
     { .name = "endo_f64_to_str_g", .params = detail::F64x1, .result = ValType::I64 },
-    { .name = "endo_f64_to_str_fixed", .params = detail::F64x1, .result = ValType::I64 },
     { .name = "endo_str_to_i64", .params = detail::I64x1, .result = ValType::I64 },
     { .name = "endo_str_to_f64", .params = detail::I64x1, .result = ValType::F64 },
     // objects
@@ -136,12 +134,12 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
     // value formatting (composite display)
     { .name = "endo_object_to_string", .params = detail::I64x1, .result = ValType::I64 },
     { .name = "endo_list_to_string", .params = detail::I64x1, .result = ValType::I64 },
-    { .name = "endo_value_to_str", .params = detail::I64x1, .result = ValType::I64 },
     // I/O
     { .name = "endo_print", .params = detail::I64x1, .result = std::nullopt },
     { .name = "endo_println", .params = detail::I64x1, .result = std::nullopt },
     { .name = "endo_display_result", .params = detail::I64x1, .result = std::nullopt },
-    { .name = "endo_panic", .params = detail::I64x1, .result = std::nullopt, .noReturn = true },
+    // program exit (never returns): shell exit-status policy in one place
+    { .name = "endo_exit", .params = detail::I64x1, .result = std::nullopt },
 });
 
 /// Looks up a runtime helper by name.
@@ -149,7 +147,7 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
 [[nodiscard]] inline RuntimeHelperDef const* findRuntimeHelper(std::string_view name)
 {
     for (auto const& helper: RuntimeHelpers)
-        if (helper.name == name)
+        if (std::string_view(helper.name) == name)
             return &helper;
     return nullptr;
 }
@@ -168,6 +166,13 @@ inline constexpr auto RuntimeHelpers = std::to_array<RuntimeHelperDef>({
 [[nodiscard]] inline BinaryenType binaryenResultType(RuntimeHelperDef const& def)
 {
     return def.result ? toBinaryenType(*def.result) : BinaryenTypeNone();
+}
+
+/// Declares @p def as a function import from module "endo".
+inline void addEndoImport(BinaryenModuleRef module, RuntimeHelperDef const& def)
+{
+    BinaryenAddFunctionImport(
+        module, def.name, "endo", def.name, binaryenParamsType(def), binaryenResultType(def));
 }
 
 class WasmStringTable;
@@ -207,15 +212,7 @@ class ImportOnlyRuntimeProvider final: public WasmRuntimeProvider
                  WasmStringTable& /*strings*/) override
     {
         for (auto const* helper: usedHelpers)
-        {
-            auto const name = std::string(helper->name);
-            BinaryenAddFunctionImport(module,
-                                      name.c_str(),
-                                      "endo",
-                                      name.c_str(),
-                                      binaryenParamsType(*helper),
-                                      binaryenResultType(*helper));
-        }
+            addEndoImport(module, *helper);
     }
 };
 

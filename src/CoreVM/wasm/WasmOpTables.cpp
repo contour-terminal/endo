@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/wasm/WasmOpTables.hpp>
 
+#include <array>
 #include <unordered_map>
 
 namespace CoreVM::wasm
@@ -125,6 +126,30 @@ UnaryOpLowering const& unaryOpLowering(UnaryOperator op)
         UnaryOpLowering { .kind = UKind::Unsupported, .unsupportedWhat = "this operator" };
     auto const it = table.find(op);
     return it != table.end() ? it->second : unsupportedFallback;
+}
+
+CastLowering const* castLowering(LiteralType target, LiteralType source)
+{
+    using Kind = CastLowering::Kind;
+    using LT = LiteralType;
+    static constexpr auto CastMatrix = std::to_array<CastLowering>({
+        { .target = LT::String, .source = LT::Number, .kind = Kind::HelperI64, .helper = "endo_i64_to_str" },
+        { .target = LT::String, .source = LT::Boolean, .kind = Kind::HelperI64, .helper = "endo_i64_to_str" },
+        { .target = LT::String, .source = LT::Void, .kind = Kind::HelperI64, .helper = "endo_i64_to_str" },
+        { .target = LT::String, .source = LT::Object, .kind = Kind::HelperI64, .helper = "endo_i64_to_str" },
+        { .target = LT::String, .source = LT::Float, .kind = Kind::HelperF64, .helper = "endo_f64_to_str_g" },
+        { .target = LT::Number, .source = LT::String, .kind = Kind::HelperI64, .helper = "endo_str_to_i64" },
+        { .target = LT::Number, .source = LT::Float, .kind = Kind::TruncSat },
+        { .target = LT::Float, .source = LT::Number, .kind = Kind::Convert },
+        { .target = LT::Float, .source = LT::Void, .kind = Kind::Convert },
+        { .target = LT::Float, .source = LT::Object, .kind = Kind::Convert },
+        { .target = LT::Float, .source = LT::String, .kind = Kind::HelperI64, .helper = "endo_str_to_f64" },
+    });
+
+    for (auto const& row: CastMatrix)
+        if (row.target == target && row.source == source)
+            return &row;
+    return nullptr;
 }
 
 } // namespace CoreVM::wasm

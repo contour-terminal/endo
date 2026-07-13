@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <CoreVM/enums.hpp>
+#include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/wasm/WasmRuntime.hpp>
 #include <CoreVM/wasm/WasmStringTable.hpp>
 
@@ -188,12 +190,12 @@ namespace
 
         [[nodiscard]] BinaryenExpressionRef heapPtr() const
         {
-            return BinaryenGlobalGet(m, std::string(layout::HeapPointerGlobal).c_str(), BinaryenTypeInt32());
+            return BinaryenGlobalGet(m, layout::HeapPointerGlobal, BinaryenTypeInt32());
         }
 
         [[nodiscard]] BinaryenExpressionRef setHeapPtr(BinaryenExpressionRef v) const
         {
-            return BinaryenGlobalSet(m, std::string(layout::HeapPointerGlobal).c_str(), v);
+            return BinaryenGlobalSet(m, layout::HeapPointerGlobal, v);
         }
 
         void addFunction(char const* name,
@@ -240,6 +242,7 @@ void WasmRuntime::require(std::string_view name)
         { "endo_panic", &WasmRuntime::buildPanic },
         { "endo_i64_to_str", &WasmRuntime::buildI64ToStr },
         { "endo_object_to_string", &WasmRuntime::buildObjectToString },
+        { "endo_exit", &WasmRuntime::buildExit },
         { "endo_i64_div", &WasmRuntime::buildI64Div },
         { "endo_i64_rem", &WasmRuntime::buildI64Rem },
         { "endo_i64_pow", &WasmRuntime::buildI64Pow },
@@ -302,13 +305,7 @@ void WasmRuntime::importHelper(std::string_view name)
     auto const* def = findRuntimeHelper(name);
     if (def == nullptr)
         return; // unknown internal name: leave for module validation to catch
-    auto const functionName = std::string(name);
-    BinaryenAddFunctionImport(_module,
-                              functionName.c_str(),
-                              "endo",
-                              functionName.c_str(),
-                              binaryenParamsType(*def),
-                              binaryenResultType(*def));
+    addEndoImport(_module, *def);
 }
 
 // endo_alloc(size: i32) -> i32 — bump allocation with memory.grow on demand.
@@ -533,6 +530,24 @@ void WasmRuntime::buildObjectToString()
     auto e = Emit { _module };
     auto* body = e.ret(e.call("endo_value_to_str", { e.get64(0) }, I64()));
     e.addFunction("endo_object_to_string", { I64() }, I64(), {}, body);
+}
+
+// endo_exit(code: i64) — terminates the program with shell exit-status
+// semantics (Shell::execute): an exit status set during execution wins;
+// otherwise the EXIT operand collapses to 1 (non-zero) or 0.
+void WasmRuntime::buildExit()
+{
+    auto e = Emit { _module };
+    auto* status = BinaryenGlobalGet(_module, layout::ExitStatusGlobal, BinaryenTypeInt32());
+    auto* statusAgain = BinaryenGlobalGet(_module, layout::ExitStatusGlobal, BinaryenTypeInt32());
+
+    auto* body = e.block({
+        e.ifThen(status, e.callVoid("proc_exit", { statusAgain })),
+        e.callVoid("proc_exit", { e.bin(BinaryenNeInt64(), e.get64(0), e.i64(0)) }),
+        BinaryenUnreachable(_module),
+    });
+
+    e.addFunction("endo_exit", { I64() }, BinaryenTypeNone(), {}, body);
 }
 
 // endo_i64_div(a, b) -> i64 — VM semantics: division by zero is a runtime
@@ -1024,18 +1039,18 @@ void WasmRuntime::buildF64ToStrFixed()
 
 namespace
 {
-    // LiteralType values baked into formatter dispatch (see CoreVM/enums.hpp).
-    constexpr int32_t LiteralBoolean = 1;
-    constexpr int32_t LiteralNumber = 2;
-    constexpr int32_t LiteralString = 3;
-    constexpr int32_t LiteralFloat = 17;
+    // LiteralType / BuiltinTypeId values baked into the generated formatter
+    // dispatch, derived from the real enums so renumbering cannot drift.
+    constexpr auto LiteralBoolean = static_cast<int32_t>(LiteralType::Boolean);
+    constexpr auto LiteralNumber = static_cast<int32_t>(LiteralType::Number);
+    constexpr auto LiteralString = static_cast<int32_t>(LiteralType::String);
+    constexpr auto LiteralFloat = static_cast<int32_t>(LiteralType::Float);
 
-    // BuiltinTypeId values (see CoreVM/types/TypeDescriptor.hpp).
-    constexpr int32_t TypeIdOption = 1;
-    constexpr int32_t TypeIdResult = 2;
-    constexpr int32_t TypeIdTuple2 = 3;
-    constexpr int32_t TypeIdTuple3 = 4;
-    constexpr int32_t TypeIdList = 5;
+    constexpr auto TypeIdOption = static_cast<int32_t>(BuiltinTypeId::Option);
+    constexpr auto TypeIdResult = static_cast<int32_t>(BuiltinTypeId::Result);
+    constexpr auto TypeIdTuple2 = static_cast<int32_t>(BuiltinTypeId::Tuple2);
+    constexpr auto TypeIdTuple3 = static_cast<int32_t>(BuiltinTypeId::Tuple3);
+    constexpr auto TypeIdList = static_cast<int32_t>(BuiltinTypeId::List);
 } // namespace
 
 // endo_slot_to_str(v: i64, litType: i64, quote: i64) -> i64 — renders one
@@ -1234,9 +1249,9 @@ void WasmRuntime::buildResultStr()
     e.addFunction("endo_result_str", { I64() }, I64(), { I32() }, body);
 }
 
-// endo_tuple2_str(v: i64) -> i64 — "(a, b)"; element types are packed one
-// byte each into slot 2.
-void WasmRuntime::buildTuple2Str()
+// endo_tupleN_str(v: i64) -> i64 — "(a, b[, c])"; element LiteralTypes are
+// packed one byte each into the slot at index `arity`.
+void WasmRuntime::buildTupleStr(char const* name, uint32_t arity)
 {
     require("endo_str_concat");
     require("endo_slot_to_str");
@@ -1251,7 +1266,7 @@ void WasmRuntime::buildTuple2Str()
     auto const packedType = [&](uint32_t index) {
         return e.bin(BinaryenAndInt64(),
                      e.bin(BinaryenShrUInt64(),
-                           e.load64(e.get32(1), layout::HeaderSize + (2 * layout::SlotSize)),
+                           e.load64(e.get32(1), layout::HeaderSize + (arity * layout::SlotSize)),
                            e.i64(8L * index)),
                      e.i64(0xFF));
     };
@@ -1263,56 +1278,28 @@ void WasmRuntime::buildTuple2Str()
     };
 
     // params: 0=v; locals: 1=p, 2=result i64
-    auto* body = e.block({
+    auto statements = std::vector<BinaryenExpressionRef> {
         e.set(1, e.wrap(e.get64(0))),
         e.set(2, concat(e.i64(lparen), element(0))),
-        e.set(2, concat(e.get64(2), e.i64(comma))),
-        e.set(2, concat(e.get64(2), element(1))),
-        e.ret(concat(e.get64(2), e.i64(rparen))),
-    });
+    };
+    for (uint32_t index = 1; index < arity; ++index)
+    {
+        statements.push_back(e.set(2, concat(e.get64(2), e.i64(comma))));
+        statements.push_back(e.set(2, concat(e.get64(2), element(index))));
+    }
+    statements.push_back(e.ret(concat(e.get64(2), e.i64(rparen))));
 
-    e.addFunction("endo_tuple2_str", { I64() }, I64(), { I32(), I64() }, body);
+    e.addFunction(name, { I64() }, I64(), { I32(), I64() }, e.block(std::move(statements)));
 }
 
-// endo_tuple3_str(v: i64) -> i64 — "(a, b, c)"; packed types in slot 3.
+void WasmRuntime::buildTuple2Str()
+{
+    buildTupleStr("endo_tuple2_str", 2);
+}
+
 void WasmRuntime::buildTuple3Str()
 {
-    require("endo_str_concat");
-    require("endo_slot_to_str");
-    auto e = Emit { _module };
-    auto const lparen = static_cast<int64_t>(_strings->intern("("));
-    auto const rparen = static_cast<int64_t>(_strings->intern(")"));
-    auto const comma = static_cast<int64_t>(_strings->intern(", "));
-
-    auto const slotValue = [&](uint32_t index) {
-        return e.load64(e.get32(1), layout::HeaderSize + (index * layout::SlotSize));
-    };
-    auto const packedType = [&](uint32_t index) {
-        return e.bin(BinaryenAndInt64(),
-                     e.bin(BinaryenShrUInt64(),
-                           e.load64(e.get32(1), layout::HeaderSize + (3 * layout::SlotSize)),
-                           e.i64(8L * index)),
-                     e.i64(0xFF));
-    };
-    auto const concat = [&](BinaryenExpressionRef a, BinaryenExpressionRef b) {
-        return e.call("endo_str_concat", { a, b }, I64());
-    };
-    auto const element = [&](uint32_t index) {
-        return e.call("endo_slot_to_str", { slotValue(index), packedType(index), e.i64(1) }, I64());
-    };
-
-    // params: 0=v; locals: 1=p, 2=result i64
-    auto* body = e.block({
-        e.set(1, e.wrap(e.get64(0))),
-        e.set(2, concat(e.i64(lparen), element(0))),
-        e.set(2, concat(e.get64(2), e.i64(comma))),
-        e.set(2, concat(e.get64(2), element(1))),
-        e.set(2, concat(e.get64(2), e.i64(comma))),
-        e.set(2, concat(e.get64(2), element(2))),
-        e.ret(concat(e.get64(2), e.i64(rparen))),
-    });
-
-    e.addFunction("endo_tuple3_str", { I64() }, I64(), { I32(), I64() }, body);
+    buildTupleStr("endo_tuple3_str", 3);
 }
 
 // endo_display_result(v: i64) — println of the recursively formatted value.
@@ -1710,7 +1697,6 @@ void WasmRuntime::buildF64ToStrG()
     auto const minus = static_cast<int64_t>(_strings->intern("-"));
     auto const dot = static_cast<int64_t>(_strings->intern("."));
     auto const zeroDot = static_cast<int64_t>(_strings->intern("0."));
-    auto const zeroDigit = static_cast<int64_t>(_strings->intern("0"));
     auto const expPlus = static_cast<int64_t>(_strings->intern("e+"));
     auto const expMinus = static_cast<int64_t>(_strings->intern("e-"));
     auto const infinity = std::numeric_limits<double>::infinity();
@@ -1820,7 +1806,7 @@ void WasmRuntime::buildF64ToStrG()
                         e.block({ e.loop("zeros",
                                          e.block({
                                              e.brIf("zeros.done", e.un(BinaryenEqZInt64(), e.get64(8))),
-                                             e.set(5, concat(e.get64(5), e.i64(zeroDigit))),
+                                             e.set(5, concat(e.get64(5), e.i64(zero))),
                                              e.set(8, e.bin(BinaryenSubInt64(), e.get64(8), e.i64(1))),
                                              e.br("zeros"),
                                          })) },
@@ -1858,7 +1844,7 @@ void WasmRuntime::buildF64ToStrG()
                 e.ifThen(e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(0)),
                          e.set(2, e.bin(BinaryenSubInt64(), e.i64(0), e.get64(2)))),
                 e.ifThen(e.bin(BinaryenLtSInt64(), e.get64(2), e.i64(10)),
-                         e.set(5, concat(e.get64(5), e.i64(zeroDigit)))),
+                         e.set(5, concat(e.get64(5), e.i64(zero)))),
                 e.set(5, concat(e.get64(5), e.call("endo_i64_to_str", { e.get64(2) }, I64()))),
             })),
         e.ifThen(e.bin(BinaryenLtFloat64(), e.getF64(0), e.f64(0.0)),

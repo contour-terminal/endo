@@ -253,7 +253,6 @@ class WasmFunctionLowerer final: public InstructionVisitor
     };
 
     void assignLocals();
-    void lowerBlock(BasicBlock& block);
 
     /// Materializes an operand as a fresh binaryen expression.
     [[nodiscard]] BinaryenExpressionRef emitValue(Value* value);
@@ -275,7 +274,7 @@ class WasmFunctionLowerer final: public InstructionVisitor
 
     /// Emits a call to a runtime helper (recording it as used).
     [[nodiscard]] BinaryenExpressionRef callRuntime(std::string_view helperName,
-                                                    std::span<BinaryenExpressionRef const> args);
+                                                    std::span<BinaryenExpressionRef> args);
 
     /// A fresh i64 zero constant.
     [[nodiscard]] BinaryenExpressionRef zeroI64();
@@ -286,6 +285,13 @@ class WasmFunctionLowerer final: public InstructionVisitor
 
     /// The wrapped i32 pointer view of a pinned object local.
     [[nodiscard]] BinaryenExpressionRef pinnedPointer(uint32_t localIndex);
+
+    /// Loads a header field or slot of an object operand (inlined address math
+    /// over the unified cell header; see WasmRuntimeABI.hpp).
+    [[nodiscard]] BinaryenExpressionRef loadObjectField(Value* object,
+                                                        uint32_t bytes,
+                                                        uint32_t offset,
+                                                        BinaryenType type);
 
     /// Builds the i32 condition for one MatchInstr case edge.
     [[nodiscard]] BinaryenExpressionRef matchCaseCondition(Value* scrutinee,

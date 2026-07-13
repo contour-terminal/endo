@@ -50,6 +50,7 @@ class WasmRuntime final: public WasmRuntimeProvider
     void buildPanic();
     void buildI64ToStr();
     void buildObjectToString();
+    void buildExit();
     void buildI64Div();
     void buildI64Rem();
     void buildI64Pow();
@@ -70,6 +71,7 @@ class WasmRuntime final: public WasmRuntimeProvider
     void buildListToString();
     void buildOptionStr();
     void buildResultStr();
+    void buildTupleStr(char const* name, uint32_t arity);
     void buildTuple2Str();
     void buildTuple3Str();
     void buildDisplayResult();

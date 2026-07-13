@@ -228,7 +228,7 @@ uint32_t WasmFunctionLowerer::scratchLocal(BinaryenType type)
 }
 
 BinaryenExpressionRef WasmFunctionLowerer::callRuntime(std::string_view helperName,
-                                                       std::span<BinaryenExpressionRef const> args)
+                                                       std::span<BinaryenExpressionRef> args)
 {
     auto const* helper = findRuntimeHelper(helperName);
     if (helper == nullptr)
@@ -237,11 +237,10 @@ BinaryenExpressionRef WasmFunctionLowerer::callRuntime(std::string_view helperNa
         return BinaryenConst(_module, BinaryenLiteralInt64(0));
     }
     _usedHelpers.insert(helper);
-    auto operands = std::vector<BinaryenExpressionRef>(args.begin(), args.end());
     return BinaryenCall(_module,
-                        std::string(helperName).c_str(),
-                        operands.data(),
-                        static_cast<BinaryenIndex>(operands.size()),
+                        helper->name,
+                        args.data(),
+                        static_cast<BinaryenIndex>(args.size()),
                         binaryenResultType(*helper));
 }
 
@@ -411,7 +410,7 @@ void WasmFunctionLowerer::visit(CallInstr& instr)
         case BuiltinInlineOp::SetExitStatus:
             pushStatement(BinaryenGlobalSet(
                 _module,
-                std::string(layout::ExitStatusGlobal).c_str(),
+                layout::ExitStatusGlobal,
                 BinaryenUnary(_module, BinaryenWrapInt64(), args.empty() ? zeroI64() : args[0])));
             mapDummyResultForUses();
             return;
@@ -543,19 +542,10 @@ void WasmFunctionLowerer::visit(BrInstr& instr)
 void WasmFunctionLowerer::visit(RetInstr& instr)
 {
     // RetInstr terminates the *program* (VM: EXIT), not the current function.
-    // Shell semantics (Shell::execute): an exit status set during execution
-    // wins; otherwise the EXIT operand collapses to 1 (non-zero) or 0.
-    auto* code = instr.operands().empty() ? zeroI64() : asI64(emitValue(instr.operand(0)));
-    auto const statusName = std::string(layout::ExitStatusGlobal);
-    auto* status = BinaryenGlobalGet(_module, statusName.c_str(), BinaryenTypeInt32());
-    auto* statusAgain = BinaryenGlobalGet(_module, statusName.c_str(), BinaryenTypeInt32());
-    auto* operandNonZero = BinaryenBinary(_module, BinaryenNeInt64(), code, zeroI64());
-    auto exitCode = std::array { BinaryenSelect(_module, status, statusAgain, operandNonZero) };
-    pushStatement(BinaryenCall(_module,
-                               "proc_exit",
-                               exitCode.data(),
-                               static_cast<BinaryenIndex>(exitCode.size()),
-                               BinaryenTypeNone()));
+    // The shell exit-status policy (status global wins, operand collapses to
+    // 1/0) lives in the endo_exit runtime helper.
+    auto args = std::array { instr.operands().empty() ? zeroI64() : asI64(emitValue(instr.operand(0))) };
+    pushStatement(callRuntime("endo_exit", args));
     pushStatement(BinaryenUnreachable(_module));
 }
 
@@ -715,54 +705,7 @@ void WasmFunctionLowerer::visit(CastInstr& instr)
         return;
     }
 
-    /// How one (target, source) conversion pair lowers.
-    struct CastRule
-    {
-        enum class Kind : uint8_t
-        {
-            HelperI64, ///< Runtime helper taking the canonical i64 form.
-            HelperF64, ///< Runtime helper taking the f64 view.
-            TruncSat,  ///< f64 -> i64 (non-trapping saturating truncation).
-            Convert,   ///< i64 -> f64 numeric conversion.
-        };
-        Kind kind;
-        std::string_view helper;
-    };
-
-    using Kind = CastRule::Kind;
-
-    // Mirrors TargetCodeGenerator's cast matrix: dynamic types (Void/Object)
-    // are treated as numbers at runtime.
-    static auto const matrix = std::unordered_map<LiteralType, std::unordered_map<LiteralType, CastRule>> {
-        { LiteralType::String,
-          {
-              { LiteralType::Number, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
-              { LiteralType::Boolean, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
-              { LiteralType::Void, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
-              { LiteralType::Object, { .kind = Kind::HelperI64, .helper = "endo_i64_to_str" } },
-              { LiteralType::Float, { .kind = Kind::HelperF64, .helper = "endo_f64_to_str_g" } },
-          } },
-        { LiteralType::Number,
-          {
-              { LiteralType::String, { .kind = Kind::HelperI64, .helper = "endo_str_to_i64" } },
-              { LiteralType::Float, { .kind = Kind::TruncSat } },
-          } },
-        { LiteralType::Float,
-          {
-              { LiteralType::Number, { .kind = Kind::Convert } },
-              { LiteralType::Void, { .kind = Kind::Convert } },
-              { LiteralType::Object, { .kind = Kind::Convert } },
-              { LiteralType::String, { .kind = Kind::HelperI64, .helper = "endo_str_to_f64" } },
-          } },
-    };
-
-    auto const targetIt = matrix.find(targetType);
-    auto const* rule = [&]() -> CastRule const* {
-        if (targetIt == matrix.end())
-            return nullptr;
-        auto const sourceIt = targetIt->second.find(sourceType);
-        return sourceIt != targetIt->second.end() ? &sourceIt->second : nullptr;
-    }();
+    auto const* rule = castLowering(targetType, sourceType);
     if (rule == nullptr)
     {
         unsupported(instr, std::format("conversion from {} to {}", tos(sourceType), tos(targetType)));
@@ -771,23 +714,23 @@ void WasmFunctionLowerer::visit(CastInstr& instr)
 
     switch (rule->kind)
     {
-        case Kind::HelperI64: {
+        case CastLowering::Kind::HelperI64: {
             auto args = std::array { asI64(emitValue(instr.source())) };
             setResult(instr, callRuntime(rule->helper, args), ResultMode::Ordered);
             return;
         }
-        case Kind::HelperF64: {
+        case CastLowering::Kind::HelperF64: {
             auto args = std::array { asF64(emitValue(instr.source())) };
             setResult(instr, callRuntime(rule->helper, args), ResultMode::Ordered);
             return;
         }
-        case Kind::TruncSat:
+        case CastLowering::Kind::TruncSat:
             setResult(
                 instr,
                 BinaryenUnary(_module, BinaryenTruncSatSFloat64ToInt64(), asF64(emitValue(instr.source()))),
                 ResultMode::Pure);
             return;
-        case Kind::Convert:
+        case CastLowering::Kind::Convert:
             setResult(
                 instr,
                 BinaryenUnary(_module, BinaryenConvertSInt64ToFloat64(), asI64(emitValue(instr.source()))),
@@ -849,17 +792,26 @@ void WasmFunctionLowerer::visit(ObjReleaseInstr& instr)
     (void) instr;
 }
 
+BinaryenExpressionRef WasmFunctionLowerer::loadObjectField(Value* object,
+                                                           uint32_t bytes,
+                                                           uint32_t offset,
+                                                           BinaryenType type)
+{
+    return BinaryenLoad(_module,
+                        bytes,
+                        false,
+                        offset,
+                        0,
+                        type,
+                        BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(object))),
+                        "0");
+}
+
 void WasmFunctionLowerer::visit(ObjGetTagInstr& instr)
 {
-    auto* tag = BinaryenLoad(_module,
-                             1,
-                             false,
-                             layout::TagOffset,
-                             0,
-                             BinaryenTypeInt32(),
-                             BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
-                             "0");
-    setResult(instr, tag, ResultMode::PinIfUsed);
+    setResult(instr,
+              loadObjectField(instr.object(), 1, layout::TagOffset, BinaryenTypeInt32()),
+              ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjSetTagInstr& instr)
@@ -876,15 +828,7 @@ void WasmFunctionLowerer::visit(ObjGetSlotInstr& instr)
 {
     auto const offset =
         layout::HeaderSize + (layout::SlotSize * static_cast<uint32_t>(instr.slotIndex()->get()));
-    auto* slot = BinaryenLoad(_module,
-                              8,
-                              false,
-                              offset,
-                              0,
-                              BinaryenTypeInt64(),
-                              BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
-                              "0");
-    setResult(instr, slot, ResultMode::PinIfUsed);
+    setResult(instr, loadObjectField(instr.object(), 8, offset, BinaryenTypeInt64()), ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjSetSlotInstr& instr)
@@ -906,31 +850,17 @@ void WasmFunctionLowerer::visit(ObjSetSlotInstr& instr)
 
 void WasmFunctionLowerer::visit(ObjTypeIdInstr& instr)
 {
-    auto* typeId = BinaryenLoad(_module,
-                                2,
-                                false,
-                                layout::TypeIdOffset,
-                                0,
-                                BinaryenTypeInt32(),
-                                BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
-                                "0");
-    setResult(instr, typeId, ResultMode::PinIfUsed);
+    setResult(instr,
+              loadObjectField(instr.object(), 2, layout::TypeIdOffset, BinaryenTypeInt32()),
+              ResultMode::PinIfUsed);
 }
 
 void WasmFunctionLowerer::visit(ObjIsTypeInstr& instr)
 {
-    auto* typeId = BinaryenLoad(_module,
-                                2,
-                                false,
-                                layout::TypeIdOffset,
-                                0,
-                                BinaryenTypeInt32(),
-                                BinaryenUnary(_module, BinaryenWrapInt64(), asI64(emitValue(instr.object()))),
-                                "0");
     auto* test = BinaryenBinary(
         _module,
         BinaryenEqInt32(),
-        typeId,
+        loadObjectField(instr.object(), 2, layout::TypeIdOffset, BinaryenTypeInt32()),
         BinaryenConst(_module, BinaryenLiteralInt32(static_cast<int32_t>(instr.typeId()->get()))));
     setResult(instr, test, ResultMode::PinIfUsed);
 }

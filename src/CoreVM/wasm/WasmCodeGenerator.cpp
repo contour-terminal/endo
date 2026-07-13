@@ -35,8 +35,11 @@ namespace
 
     /// Synthesizes the WASI command entry point: `_start` runs global
     /// initialization (if present), then the program's main function, and
-    /// finally reports a non-zero exit status via proc_exit.
-    void synthesizeStart(BinaryenModuleRef module, IRProgram& program)
+    /// exits through the endo_exit runtime helper (the single home of the
+    /// shell exit-status policy; falling off @main equals `ret 0`).
+    void synthesizeStart(BinaryenModuleRef module,
+                         IRProgram& program,
+                         std::set<RuntimeHelperDef const*>& usedHelpers)
     {
         auto statements = std::vector<BinaryenExpressionRef> {};
         for (auto const* name: { "@__global_init__", "@main" })
@@ -49,18 +52,14 @@ namespace
             statements.push_back(BinaryenDrop(module, call));
         }
 
-        // if (exit_status != 0) proc_exit(exit_status)
-        auto const exitStatusName = std::string(layout::ExitStatusGlobal);
-        auto exitArgs = std::array { BinaryenGlobalGet(module, exitStatusName.c_str(), BinaryenTypeInt32()) };
-        statements.push_back(
-            BinaryenIf(module,
-                       BinaryenGlobalGet(module, exitStatusName.c_str(), BinaryenTypeInt32()),
-                       BinaryenCall(module,
-                                    "proc_exit",
-                                    exitArgs.data(),
-                                    static_cast<BinaryenIndex>(exitArgs.size()),
-                                    BinaryenTypeNone()),
-                       nullptr));
+        auto const* exitHelper = findRuntimeHelper("endo_exit");
+        usedHelpers.insert(exitHelper);
+        auto exitArgs = std::array { BinaryenConst(module, BinaryenLiteralInt64(0)) };
+        statements.push_back(BinaryenCall(module,
+                                          exitHelper->name,
+                                          exitArgs.data(),
+                                          static_cast<BinaryenIndex>(exitArgs.size()),
+                                          BinaryenTypeNone()));
 
         auto* body = BinaryenBlock(module,
                                    nullptr,
@@ -72,31 +71,11 @@ namespace
     }
 
     /// Builds the object typeId -> slot count map from the builtin type
-    /// registry plus the program's custom product/sum types, mirroring
-    /// TargetCodeGenerator's type registration.
+    /// registry plus the program's custom product/sum types.
     std::unordered_map<int64_t, int64_t> collectSlotCounts(IRProgram& program)
     {
         auto registry = TypeRegistry {};
-        for (auto const& customType: program.customProductTypes())
-        {
-            auto type = std::make_unique<TypeDescriptor>();
-            type->kind = TypeKind::Product;
-            type->id = customType.assignedId;
-            type->name = customType.name;
-            type->fields = customType.fields;
-            type->slotCount = customType.slotCount > 0 ? customType.slotCount
-                                                       : static_cast<uint16_t>(customType.fields.size());
-            registry.registerProductType(std::move(type));
-        }
-        for (auto const& customType: program.customSumTypes())
-        {
-            auto type = std::make_unique<TypeDescriptor>();
-            type->kind = TypeKind::Sum;
-            type->id = customType.assignedId;
-            type->name = customType.name;
-            type->variants = customType.variants;
-            registry.registerSumType(std::move(type));
-        }
+        registerCustomTypes(program, registry);
 
         auto slotCounts = std::unordered_map<int64_t, int64_t> {};
         for (auto const& type: registry.allTypes())
@@ -111,7 +90,7 @@ namespace
     {
         auto const heapBase = (strings.dataEnd() + 15U) & ~15U;
         BinaryenAddGlobal(module,
-                          std::string(layout::HeapPointerGlobal).c_str(),
+                          layout::HeapPointerGlobal,
                           BinaryenTypeInt32(),
                           /*mutable=*/true,
                           BinaryenConst(module, BinaryenLiteralInt32(static_cast<int32_t>(heapBase))));
@@ -130,7 +109,7 @@ namespace
         BinaryenSetMemory(module,
                           initialPages,
                           /*maximum=*/65536,
-                          std::string(layout::MemoryExportName).c_str(),
+                          layout::MemoryExportName,
                           &segmentName,
                           &segmentData,
                           &segmentPassive,
@@ -166,7 +145,7 @@ std::optional<WasmOutput> WasmCodeGenerator::generate(IRProgram* program, diagno
     // Shell exit-status semantics: builtins update this global; a non-zero
     // value at the end of _start becomes the process exit code.
     BinaryenAddGlobal(module,
-                      std::string(layout::ExitStatusGlobal).c_str(),
+                      layout::ExitStatusGlobal,
                       BinaryenTypeInt32(),
                       /*mutable=*/true,
                       BinaryenConst(module, BinaryenLiteralInt32(0)));
@@ -182,7 +161,7 @@ std::optional<WasmOutput> WasmCodeGenerator::generate(IRProgram* program, diagno
         lowerer.lower(function);
     }
 
-    synthesizeStart(module, *program);
+    synthesizeStart(module, *program, usedHelpers);
     _runtimeProvider.provide(module, usedHelpers, strings);
     finalizeMemory(module, strings);
 

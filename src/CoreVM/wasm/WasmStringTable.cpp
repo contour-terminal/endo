@@ -6,7 +6,7 @@ namespace CoreVM::wasm
 
 uint32_t WasmStringTable::intern(std::string_view text)
 {
-    if (auto const it = _offsets.find(std::string(text)); it != _offsets.end())
+    if (auto const it = _offsets.find(text); it != _offsets.end())
         return it->second;
 
     auto const pointer = dataEnd();

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -106,6 +107,31 @@ IRBuiltinFunction* IRProgram::getBuiltinFunction(const NativeCallback& cb)
 
     _builtinFunctions.emplace_back(std::make_unique<IRBuiltinFunction>(cb));
     return _builtinFunctions.back().get();
+}
+
+void registerCustomTypes(IRProgram& program, TypeRegistry& registry)
+{
+    for (auto const& customType: program.customProductTypes())
+    {
+        auto type = std::make_unique<TypeDescriptor>();
+        type->kind = TypeKind::Product;
+        type->id = customType.assignedId;
+        type->name = customType.name;
+        type->fields = customType.fields;
+        type->slotCount =
+            customType.slotCount > 0 ? customType.slotCount : static_cast<uint16_t>(customType.fields.size());
+        registry.registerProductType(std::move(type));
+    }
+
+    for (auto const& customType: program.customSumTypes())
+    {
+        auto type = std::make_unique<TypeDescriptor>();
+        type->kind = TypeKind::Sum;
+        type->id = customType.assignedId;
+        type->name = customType.name;
+        type->variants = customType.variants;
+        registry.registerSumType(std::move(type));
+    }
 }
 
 } // namespace CoreVM

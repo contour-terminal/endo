@@ -55,10 +55,33 @@ struct UnaryOpLowering
     std::string_view unsupportedWhat; ///< Unsupported: user-facing description.
 };
 
+/// How one (target, source) type conversion lowers to WASM. Mirrors
+/// TargetCodeGenerator's cast matrix: dynamic types (Void/Object) are treated
+/// as numbers at runtime.
+struct CastLowering
+{
+    enum class Kind : uint8_t
+    {
+        HelperI64, ///< Runtime helper taking the canonical i64 form.
+        HelperF64, ///< Runtime helper taking the f64 view.
+        TruncSat,  ///< f64 -> i64 (non-trapping saturating truncation).
+        Convert,   ///< i64 -> f64 numeric conversion.
+    };
+
+    LiteralType target;
+    LiteralType source;
+    Kind kind;
+    std::string_view helper; ///< HelperI64/HelperF64: runtime helper name.
+};
+
 /// Looks up the lowering for a binary operator. Never returns nullptr.
 [[nodiscard]] BinaryOpLowering const& binaryOpLowering(BinaryOperator op);
 
 /// Looks up the lowering for a unary operator. Never returns nullptr.
 [[nodiscard]] UnaryOpLowering const& unaryOpLowering(UnaryOperator op);
+
+/// Looks up the lowering for a type conversion.
+/// @return the matching row, or nullptr if the conversion is unsupported.
+[[nodiscard]] CastLowering const* castLowering(LiteralType target, LiteralType source);
 
 } // namespace CoreVM::wasm

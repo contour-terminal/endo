@@ -6,14 +6,11 @@
 
 #include <crispy/LogStore.hpp>
 
-#include <cerrno>
 #include <clocale>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <print>
 #include <span>
-#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -230,34 +227,19 @@ int executeScript(endo::Shell& shell,
                   std::span<std::string_view const> scriptArgs,
                   std::string_view programName)
 {
-    // 1. Open and read file
-    auto const scriptPathStr = std::string(scriptPath);
-    std::ifstream file(scriptPathStr);
-    if (!file)
+    // 1. Read the file, stripping a leading shebang line
+    auto content = endo::compile::readScriptSource(scriptPath);
+    if (!content)
     {
-        std::print(stderr, "endo: {}: {}\n", scriptPath, strerror(errno));
+        std::print(stderr, "endo: {}\n", content.error());
         return EXIT_FAILURE;
-    }
-
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    std::string content = ss.str();
-
-    // 2. Strip shebang line if present
-    if (content.starts_with("#!"))
-    {
-        auto const pos = content.find('\n');
-        if (pos != std::string::npos)
-            content = content.substr(pos + 1);
-        else
-            content.clear(); // Script is only a shebang
     }
 
     // 3. Set up non-interactive mode
     shell.setInteractive(false);
 
     // 4. Set source file path for relative module resolution
-    shell.setSourceFile(std::filesystem::canonical(scriptPathStr));
+    shell.setSourceFile(std::filesystem::canonical(std::string(scriptPath)));
 
     // 5. Set positional parameters ($0 = script, $1... = args)
     std::vector<std::string> params;
@@ -267,7 +249,7 @@ int executeScript(endo::Shell& shell,
     shell.setPositionalParameters(std::move(params));
 
     // 6. Execute (parser validates entire script before execution)
-    return shell.execute(content);
+    return shell.execute(*content);
 }
 
 #if defined(_WIN32)

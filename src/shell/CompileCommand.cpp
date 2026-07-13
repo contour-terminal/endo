@@ -2,49 +2,47 @@
 #include "CompileCommand.hpp"
 
 #include <cstdlib>
+#include <cstring>
+#include <format>
+#include <fstream>
 #include <print>
+#include <sstream>
+
+namespace endo::compile
+{
+
+std::expected<std::string, std::string> readScriptSource(std::string_view scriptPath)
+{
+    auto const path = std::string(scriptPath);
+    std::ifstream file(path);
+    if (!file)
+        return std::unexpected(std::format("{}: {}", scriptPath, strerror(errno)));
+
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    std::string content = ss.str();
+
+    if (content.starts_with("#!"))
+    {
+        auto const pos = content.find('\n');
+        content = pos != std::string::npos ? content.substr(pos + 1) : std::string {};
+    }
+    return content;
+}
+
+} // namespace endo::compile
 
 #if defined(ENDO_HAS_WASM)
 
-    #include <endo-language/CompileToIR.hpp>
-    #include <endo-language/builtins/StubRuntime.hpp>
+    #include <endo-language/CompileToWasm.hpp>
 
-    #include <CoreVM/CoreVM.hpp>
-    #include <CoreVM/transform/Passes.hpp>
-    #include <CoreVM/wasm/WasmCodeGenerator.hpp>
-    #include <CoreVM/wasm/WasmRuntime.hpp>
-
-    #include <expected>
     #include <filesystem>
-    #include <fstream>
-    #include <sstream>
-    #include <string>
 
 namespace endo::compile
 {
 
 namespace
 {
-
-    /// Reads a script file and strips a leading shebang line.
-    std::expected<std::string, std::string> readScriptSource(std::string_view scriptPath)
-    {
-        auto const path = std::string(scriptPath);
-        std::ifstream file(path);
-        if (!file)
-            return std::unexpected(std::format("{}: {}", scriptPath, strerror(errno)));
-
-        std::ostringstream ss;
-        ss << file.rdbuf();
-        std::string content = ss.str();
-
-        if (content.starts_with("#!"))
-        {
-            auto const pos = content.find('\n');
-            content = pos != std::string::npos ? content.substr(pos + 1) : std::string {};
-        }
-        return content;
-    }
 
     /// Writes the compiled module to the output file (binary or text).
     bool writeOutput(std::string_view outputFile, CoreVM::wasm::WasmOutput const& output, bool asText)
@@ -84,28 +82,15 @@ int runCompileCommand(CompileOptions const& options)
         return EXIT_FAILURE;
     }
 
-    // IR generation only needs builtin signatures, not executable callbacks.
-    auto runtime = CoreVM::Runtime {};
-    registerStubRuntime(runtime);
-
     auto report = CoreVM::diagnostics::ConsoleReport {};
-    // NOTE: The CoreVM IR-level optimization passes (PassManager) are not run
-    // here: they verify() the IR after each change, and the frontend routinely
-    // emits blocks that fail verification (e.g. unterminated match merge
-    // blocks after fully-returning arms) yet execute fine. -O optimization
-    // happens at the WASM module level via binaryen instead.
-    auto irProgram = compileToIR(std::move(*source), runtime, report, options.scriptFile);
-    if (!irProgram)
-        return EXIT_FAILURE;
-
-    auto provider = CoreVM::wasm::WasmRuntime {};
-    auto generator = CoreVM::wasm::WasmCodeGenerator(provider,
-                                                     CoreVM::wasm::WasmOptions {
-                                                         .optimize = options.optimize,
-                                                         .tailCalls = options.tailCalls,
-                                                         .emitWat = emitWat,
-                                                     });
-    auto const output = generator.generate(irProgram.get(), report);
+    auto const output = compileSourceToWasm(std::move(*source),
+                                            options.scriptFile,
+                                            CoreVM::wasm::WasmOptions {
+                                                .optimize = options.optimize,
+                                                .tailCalls = options.tailCalls,
+                                                .emitWat = emitWat,
+                                            },
+                                            report);
     if (!output)
         return EXIT_FAILURE;
 

@@ -38,8 +38,19 @@ class WasmStringTable
     [[nodiscard]] bool empty() const noexcept { return _blob.empty(); }
 
   private:
+    /// Transparent hashing so lookups take string_views without allocating.
+    struct StringHash
+    {
+        using is_transparent = void;
+
+        [[nodiscard]] size_t operator()(std::string_view text) const noexcept
+        {
+            return std::hash<std::string_view> {}(text);
+        }
+    };
+
     std::vector<uint8_t> _blob;
-    std::unordered_map<std::string, uint32_t> _offsets;
+    std::unordered_map<std::string, uint32_t, StringHash, std::equal_to<>> _offsets;
 };
 
 } // namespace CoreVM::wasm

@@ -16,11 +16,7 @@
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 #if defined(ENDO_HAS_WASM) && !defined(_WIN32)
-    #include <endo-language/CompileToIR.hpp>
-    #include <endo-language/builtins/StubRuntime.hpp>
-
-    #include <CoreVM/wasm/WasmCodeGenerator.hpp>
-    #include <CoreVM/wasm/WasmRuntime.hpp>
+    #include <endo-language/CompileToWasm.hpp>
 
     #include <algorithm>
     #include <array>
@@ -84,7 +80,8 @@ namespace
                 if (!dir.empty())
                     if (auto candidate = std::filesystem::path(dir) / "wasmtime"; executable(candidate))
                         return candidate;
-                remaining = colon == std::string_view::npos ? std::string_view {} : remaining.substr(colon + 1);
+                remaining =
+                    colon == std::string_view::npos ? std::string_view {} : remaining.substr(colon + 1);
             }
         }
 
@@ -441,36 +438,25 @@ TestResult TestExecutor::run(TestFile const& testFile)
             result.failureMessage = "built without the WebAssembly backend";
             return result;
 #else
-            auto runtime = CoreVM::Runtime {};
-            registerStubRuntime(runtime);
-            auto report = CoreVM::diagnostics::BufferedReport {};
-
             auto const finish = [&](TestOutcome outcome, std::string message = {}) {
                 auto const endTime = std::chrono::steady_clock::now();
-                result.duration =
-                    std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+                result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
                 result.outcome = outcome;
                 if (!message.empty())
                     result.failureMessage = std::move(message);
                 return result;
             };
 
-            auto irProgram = compileToIR(testFile.source, runtime, report, testFile.relativePath);
-            if (!irProgram)
-                return finish(TestOutcome::Fail,
-                              std::format("IR generation failed: {}",
-                                          report.size() > 0 ? report[0].text : "unknown error"));
-
-            auto provider = CoreVM::wasm::WasmRuntime {};
-            auto generator = CoreVM::wasm::WasmCodeGenerator(provider, CoreVM::wasm::WasmOptions {});
-            auto const wasmOutput = generator.generate(irProgram.get(), report);
+            // The shared source-to-wasm pipeline — identical to `endo -o`.
+            auto report = CoreVM::diagnostics::BufferedReport {};
+            auto const wasmOutput = compileSourceToWasm(
+                testFile.source, testFile.relativePath, CoreVM::wasm::WasmOptions {}, report);
 
             // Error tests: expect WASM compilation failure with matching diagnostics
             if (!testFile.expectedErrors.empty())
             {
                 if (wasmOutput.has_value())
-                    return finish(TestOutcome::Fail,
-                                  "Expected WASM compilation failure but it succeeded");
+                    return finish(TestOutcome::Fail, "Expected WASM compilation failure but it succeeded");
                 for (auto const& expectedError: testFile.expectedErrors)
                 {
                     if (expectedError.empty())
@@ -505,8 +491,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
                     return finish(TestOutcome::Fail, "failed to write the .wasm module");
             }
 
-            auto const run =
-                runCapture(std::format("'{}' '{}'", wasmtime->string(), wasmPath.string()));
+            auto const run = runCapture(std::format("'{}' '{}'", wasmtime->string(), wasmPath.string()));
             if (!run.has_value())
                 return finish(TestOutcome::Fail, "failed to launch wasmtime");
 
