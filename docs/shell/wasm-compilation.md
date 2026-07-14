@@ -96,3 +96,9 @@ library at build time (`dnf install binaryen` / `apt install binaryen`).
 Without it, endo builds normally and `-o` reports that the backend is
 unavailable. The backend is also disabled for static builds (binaryen ships
 as a shared library only).
+
+Because binaryen is a shared library, it must remain installed at runtime as
+well. Some distributions (Fedora among them) place `libbinaryen.so` in a
+private directory such as `/usr/lib64/binaryen`, which the dynamic loader does
+not search; the build records that directory in the installed executable's
+RPATH so that `endo` starts without any `LD_LIBRARY_PATH` setup.
