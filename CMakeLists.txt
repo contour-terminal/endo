@@ -168,22 +168,44 @@ option(ENDO_BUILTIN_CRARHDUMP "Enable built-in crashdump reporter, say NO to use
 # Apply Emscripten compatibility patches to vendored sources.
 # crispy is fetched from contour into src/crispy and is overwritten on every
 # fetch, so the patch is reapplied here at configure time rather than committed.
+#
+# emscripten's clang rejects an out-of-line definition whose written return type
+# differs from the declaration's, even when the two name the same type; upstream
+# writes `BufferObjectPtr<T> BufferObject<T>::create(...)` against a declaration
+# that returns the injected-class-name form. Rewriting the definition to a
+# trailing return type sidesteps the comparison.
+#
+# The patterns below track upstream's names, so they go stale whenever contour
+# renames. That is why a miss is a hard error rather than a status message: the
+# previous version of this block silently matched nothing after the snake_case ->
+# CamelCase rename and reported success, and the no-op only surfaced as a
+# confusing compile error in the WASM CI job.
 if(EMSCRIPTEN)
-    set(_BUFOBJ_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.h")
-    if(EXISTS "${_BUFOBJ_PATH}")
-        file(REAL_PATH "${_BUFOBJ_PATH}" _BUFOBJ_H)
-        file(READ "${_BUFOBJ_H}" _BUFOBJ_CONTENT)
-        string(FIND "${_BUFOBJ_CONTENT}" "buffer_object_ptr<T> buffer_object<T>::create(" _PATCH_POS)
-        if(NOT _PATCH_POS EQUAL -1)
-            string(REPLACE
-                "buffer_object_ptr<T> buffer_object<T>::create(size_t capacity, buffer_object_release<T> release)"
-                "auto buffer_object<T>::create(size_t capacity, buffer_object_release<T> release) -> buffer_object_ptr<T>"
-                _BUFOBJ_CONTENT "${_BUFOBJ_CONTENT}")
-            file(WRITE "${_BUFOBJ_H}" "${_BUFOBJ_CONTENT}")
-            message(STATUS "Applied Emscripten patch to BufferObject.h (trailing return type)")
-        else()
-            message(STATUS "BufferObject.h already patched or signature changed")
-        endif()
+    set(_BUFOBJ_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.hpp")
+    if(NOT EXISTS "${_BUFOBJ_PATH}")
+        message(FATAL_ERROR
+            "Emscripten patch target ${_BUFOBJ_PATH} is missing. crispy was probably "
+            "renamed upstream; update this patch in CMakeLists.txt.")
+    endif()
+
+    set(_BUFOBJ_FROM "BufferObjectPtr<T> BufferObject<T>::create(size_t capacity, BufferObjectRelease<T> release)")
+    set(_BUFOBJ_TO   "auto BufferObject<T>::create(size_t capacity, BufferObjectRelease<T> release) -> BufferObjectPtr<T>")
+
+    file(REAL_PATH "${_BUFOBJ_PATH}" _BUFOBJ_H)
+    file(READ "${_BUFOBJ_H}" _BUFOBJ_CONTENT)
+    string(FIND "${_BUFOBJ_CONTENT}" "${_BUFOBJ_TO}" _BUFOBJ_DONE)
+    string(FIND "${_BUFOBJ_CONTENT}" "${_BUFOBJ_FROM}" _BUFOBJ_TODO)
+    if(NOT _BUFOBJ_DONE EQUAL -1)
+        message(STATUS "Emscripten patch for BufferObject.hpp already applied")
+    elseif(NOT _BUFOBJ_TODO EQUAL -1)
+        string(REPLACE "${_BUFOBJ_FROM}" "${_BUFOBJ_TO}" _BUFOBJ_CONTENT "${_BUFOBJ_CONTENT}")
+        file(WRITE "${_BUFOBJ_H}" "${_BUFOBJ_CONTENT}")
+        message(STATUS "Applied Emscripten patch to BufferObject.hpp (trailing return type)")
+    else()
+        message(FATAL_ERROR
+            "Emscripten patch for BufferObject.hpp matched nothing. Upstream changed "
+            "BufferObject<T>::create's signature; update _BUFOBJ_FROM/_BUFOBJ_TO in "
+            "CMakeLists.txt to match src/crispy/BufferObject.hpp.")
     endif()
 endif()
 
