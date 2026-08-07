@@ -6,7 +6,7 @@
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <crispy/utils.h>
+#include <crispy/Utils.hpp>
 
 #include <algorithm>
 #include <cctype>

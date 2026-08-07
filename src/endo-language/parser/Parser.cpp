@@ -11,7 +11,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 
-#include <crispy/utils.h>
+#include <crispy/Utils.hpp>
 
 #include <algorithm>
 #include <array>

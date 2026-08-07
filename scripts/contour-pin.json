@@ -1,0 +1,11 @@
+{
+    "_comment": "Source of truth for the directories endo vendors from contour-terminal/contour. Consumed by scripts/get_contour_dirs.py and, via its --print-directories mode, by src/CMakeLists.txt. Set 'ref' to a branch or tag; ENDO_CONTOUR_REF (and --ref) override it for local experiments.",
+    "repository": "https://github.com/contour-terminal/contour.git",
+    "ref": "master",
+    "directories": [
+        "crispy",
+        "vtparser",
+        "coro",
+        "net"
+    ]
+}

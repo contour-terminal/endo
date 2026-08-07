@@ -3,10 +3,11 @@
 
 #include <http/HttpClient.hpp>
 
-#include <crispy/base64.h>
+#include <crispy/Base64.hpp>
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -114,7 +115,7 @@ namespace
 
         // Length after appending 0x80 byte.
         auto padded = std::vector<uint8_t>(msgLen + 1);
-        std::memcpy(padded.data(), input.data(), msgLen);
+        std::ranges::transform(input, padded.begin(), [](char c) { return static_cast<uint8_t>(c); });
         padded[msgLen] = 0x80;
 
         // Pad to 56 mod 64, then append 8-byte big-endian length.

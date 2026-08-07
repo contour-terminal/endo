@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Pipe.hpp"
 
-#include <crispy/logstore.h>
+#include <crispy/LogStore.hpp>
 
 #include <cstring>
 #include <stdexcept>
@@ -22,12 +22,12 @@ namespace
     /// Lazily-initialized log category for platform pipe operations.
     ///
     /// A function-local static (initialized on first use) is used instead of a
-    /// namespace-scope static so the potentially-throwing @c logstore::category
+    /// namespace-scope static so the potentially-throwing @c logstore::Category
     /// construction does not run during static initialization
     /// (bugprone-throwing-static-initialization).
     auto& pipeLog()
     {
-        static auto pipeTag = logstore::category("platform.pipe", "Platform pipe operations");
+        static auto pipeTag = logstore::Category("platform.pipe", "Platform pipe operations");
         return pipeTag;
     }
 } // namespace

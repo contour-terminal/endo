@@ -12,7 +12,7 @@ namespace
 auto& passManagerLog()
 {
     static auto instance =
-        logstore::category("vm.pass", "VM pass manager log", endo::log::categoryState("vm.pass"));
+        logstore::Category("vm.pass", "VM pass manager log", endo::log::categoryState("vm.pass"));
     return instance;
 }
 } // namespace
@@ -59,7 +59,7 @@ void PassManager::run(IRFunction* function)
 
 void PassManager::logDebug(const std::string& msg)
 {
-    if (passManagerLog().is_enabled())
+    if (passManagerLog().isEnabled())
         passManagerLog()()("PassManager: {}\n", msg);
 }
 

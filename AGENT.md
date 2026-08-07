@@ -28,6 +28,8 @@ Source → Lexer → Parser → AST → Semantic Analysis → Code Generation �
 | `src/testing/` | Shared testing utilities (test helpers, dialog suppression) |
 | `src/crispy/` | Vendored utility library (from Contour Terminal) |
 | `src/vtparser/` | Vendored VT terminal sequence parser (from Contour Terminal) |
+| `src/coro/` | Vendored C++23 coroutine primitives — `Task`, `whenAll`/`whenAny`, cancellation (from Contour Terminal) |
+| `src/net/` | Vendored coroutine-native networking — `EventLoop`, sockets, TLS, HTTP server (from Contour Terminal) |
 | `tests/` | E2E test files organized by category (37+ subdirectories) |
 | `docs/language/` | Language specification (18 pages, MkDocs site) |
 
@@ -123,6 +125,31 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
 
 ---
 
+## Vendored sources
+
+`src/crispy`, `src/vtparser`, `src/coro` and `src/net` are **not** part of this
+repository. They are sparse-checked-out from
+[contour-terminal/contour](https://github.com/contour-terminal/contour), which is their
+source of truth, and are gitignored here. CMake fetches them automatically at configure
+time when they are missing; `scripts/get_contour_dirs.py` does it manually.
+
+Which directories are fetched, from which repository, and at which ref are declared in
+`scripts/contour-pin.json` — the single source of truth, read by both the script and
+`src/CMakeLists.txt`. To vendor another directory or move to a different upstream branch,
+edit that file; no code changes are needed.
+
+```bash
+python3 scripts/get_contour_dirs.py                  # fetch at the pinned ref
+python3 scripts/get_contour_dirs.py --ref some/branch # override the ref once
+ENDO_CONTOUR_REF=some/branch python3 scripts/get_contour_dirs.py  # same, via env
+```
+
+**Never edit files under these directories** — every fetch overwrites them. Fixes belong
+upstream in contour, and flow back here on the next fetch. Endo-side code adapts to their
+APIs, not the other way around.
+
+---
+
 ## Building
 
 ```bash
@@ -144,6 +171,21 @@ cmake --build --preset clang-coverage --target coverage
 cmake --preset clang-release
 cmake --build --preset clang-release
 ```
+
+### Compiler caching
+
+`USE_COMPILER_CACHE` (default ON, `cmake/CompileCache.cmake`) fronts the compiler with a caching
+launcher. It picks the first of these that is installed and usable:
+
+1. `fastcache-cc` — only when `FASTCACHE_ADDR=host:port` names a running fastcached daemon. Its
+   cache entries are portable across checkout paths, so CI and local builds share hits.
+2. `sccache`
+3. `ccache`
+
+`-DUSE_COMPILER_CACHE=OFF` disables all of them. A launcher supplied externally
+(`-DCMAKE_CXX_COMPILER_LAUNCHER=...`, a preset, or a toolchain file) is always left untouched.
+Precompiled headers and C++20 module scanning are switched off whenever a launcher is active —
+neither survives a cache hit, and this project uses neither.
 
 ---
 

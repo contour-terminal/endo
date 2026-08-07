@@ -46,9 +46,9 @@ namespace tui::runtime
 /// @param screen Optional screen to dispatch events through and redraw.
 /// @return The modal's result, or std::nullopt if cancelled.
 template <typename Result>
-[[nodiscard]] endo::coro::Task<std::optional<Result>> runModal(TuiRuntime* runtime,
-                                                               ModalComponent<Result>* modal,
-                                                               Screen* screen = nullptr)
+[[nodiscard]] coro::Task<std::optional<Result>> runModal(TuiRuntime* runtime,
+                                                         ModalComponent<Result>* modal,
+                                                         Screen* screen = nullptr)
 {
     if (screen != nullptr)
         screen->draw();
@@ -60,7 +60,7 @@ template <typename Result>
         {
             event = co_await runtime->nextEvent();
         }
-        catch (endo::coro::OperationCancelled const&)
+        catch (coro::OperationCancelled const&)
         {
             co_return std::nullopt;
         }

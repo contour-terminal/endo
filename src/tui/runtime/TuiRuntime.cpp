@@ -29,7 +29,7 @@ TuiRuntime::~TuiRuntime()
     drainReadyQueue();
 }
 
-void TuiRuntime::spawn(endo::coro::Task<void> task)
+void TuiRuntime::spawn(coro::Task<void> task)
 {
     task.handle().promise().setStopToken(_rootStop.get_token());
     _ready.push_back(task.handle());

@@ -13,7 +13,7 @@ namespace
 auto& diagnosticsLog()
 {
     static auto instance =
-        logstore::category("vm.diag", "VM diagnostics log", endo::log::categoryState("vm.diag"));
+        logstore::Category("vm.diag", "VM diagnostics log", endo::log::categoryState("vm.diag"));
     return instance;
 }
 } // namespace
@@ -132,7 +132,7 @@ void BufferedReport::clear()
 
 void BufferedReport::log() const
 {
-    if (!diagnosticsLog().is_enabled())
+    if (!diagnosticsLog().isEnabled())
         return;
 
     for (const Message& message: _messages)

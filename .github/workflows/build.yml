@@ -46,11 +46,20 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
+    # OpenSSL backs the TLS transport in the vendored net library.
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev
+
     - name: Install Homebrew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install llvm ninja
+        brew install llvm ninja openssl@3
         echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+        # macOS ships no usable OpenSSL headers, so point find_package at Homebrew's.
+        echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
 
     # ── Common setup ──
 
@@ -67,7 +76,7 @@ jobs:
       if: runner.os == 'Linux'
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python3 scripts/get_contour_dirs.py
 
     # ── Configure ──
@@ -124,7 +133,9 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libc6-dev ninja-build
+        # libssl-dev ships libssl.a too, which the fully-static link needs
+        # (see OPENSSL_USE_STATIC_LIBS in cmake/EndoThirdParties.cmake).
+        sudo apt-get install -y libc6-dev ninja-build libssl-dev
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
@@ -135,7 +146,7 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python3 scripts/get_contour_dirs.py
 
     - name: Configure CMake
@@ -186,7 +197,7 @@ jobs:
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python scripts/get_contour_dirs.py
 
     - name: Setup vcpkg

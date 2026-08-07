@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <crispy/flags.h>
+#include <crispy/Flags.hpp>
 
 #include <expected>
 #include <filesystem>
@@ -62,7 +62,7 @@ enum class WaitFlag // NOLINT(performance-enum-size)
 };
 
 /// Type-safe flags for wait operations.
-using WaitFlags = crispy::flags<WaitFlag>;
+using WaitFlags = crispy::Flags<WaitFlag>;
 
 /// Abstract interface for process management operations.
 ///

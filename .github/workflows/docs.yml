@@ -24,6 +24,12 @@ jobs:
           python-version: '3.12'
 
       # Build WASM playground
+      - name: Install system dependencies
+        # OpenSSL backs the TLS transport in the vendored net library, which the
+        # native configure step below reaches.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
       - name: Get vendored libraries
         run: python3 scripts/get_contour_dirs.py
       - name: Pre-generate libunicode tablegen files

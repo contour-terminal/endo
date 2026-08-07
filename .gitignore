@@ -7,8 +7,11 @@ target/
 dist/
 
 compile_commands.json
+# Vendored from contour — see scripts/contour-pin.json
 /src/vtparser/
 /src/crispy/
+/src/coro/
+/src/net/
 site/
 __pycache__/
 *.egg-info/
