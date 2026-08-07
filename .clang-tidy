@@ -1,4 +1,14 @@
 ---
+# Note on -readability-convert-member-functions-to-static below: coroutine awaiter
+# and promise hooks (await_ready, await_suspend, await_resume, initial_suspend,
+# final_suspend, return_value, ...) are part of the C++ coroutine protocol. The
+# promise hooks must be non-static instance methods -- a static initial_suspend /
+# final_suspend makes the compiler-generated `promise.hook()` call trip
+# readability-static-accessed-through-instance -- so the stateless ones cannot be
+# turned into static members, and the check false-positives on every one of them.
+# It is therefore disabled tree-wide, matching contour (the upstream source of
+# src/coro and src/net). Endo cannot keep a directory-local .clang-tidy inside
+# those vendored directories, since they are overwritten on every fetch.
 Checks: >-
   -*,
   bugprone-*,
@@ -53,6 +63,7 @@ Checks: >-
   -performance-no-int-to-ptr,
   readability-*,
   -readability-braces-around-statements,
+  -readability-convert-member-functions-to-static,
   -readability-container-contains,
   -readability-else-after-return,
   -readability-function-cognitive-complexity,
@@ -68,7 +79,9 @@ Checks: >-
 WarningsAsErrors: >-
   *
 UseColor: true
-HeaderFilterRegex: 'src/(CoreVM|agent|coro|dap|editor-protocol|endo-language|endo-test|http|lsp|platform|shell|testing|tui|vtparser)/[^.]'
+# crispy, vtparser, coro and net are vendored from contour (see scripts/contour-pin.json)
+# and are not endo's to lint; they are excluded here.
+HeaderFilterRegex: 'src/(CoreVM|agent|dap|editor-protocol|endo-language|endo-test|http|lsp|platform|shell|testing|tui)/[^.]'
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength
