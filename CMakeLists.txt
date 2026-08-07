@@ -133,7 +133,11 @@ if(ENDO_TESTING)
              COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/TestVersionParse.cmake")
 endif()
 
-include(EnableCcache)
+# Set up the compiler-cache launcher before EndoThirdParties, so the sources CPM
+# and FetchContent pull in get cached too. CompileCache.cmake prefers fastcache-cc
+# when FASTCACHE_ADDR points at a daemon, else sccache, else ccache, and silently
+# no-ops when none is usable or USE_COMPILER_CACHE=OFF.
+include(CompileCache)
 include(StaticLinking)
 include(EndoThirdParties)
 include(PedanticCompiler)

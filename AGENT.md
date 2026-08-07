@@ -172,6 +172,21 @@ cmake --preset clang-release
 cmake --build --preset clang-release
 ```
 
+### Compiler caching
+
+`USE_COMPILER_CACHE` (default ON, `cmake/CompileCache.cmake`) fronts the compiler with a caching
+launcher. It picks the first of these that is installed and usable:
+
+1. `fastcache-cc` — only when `FASTCACHE_ADDR=host:port` names a running fastcached daemon. Its
+   cache entries are portable across checkout paths, so CI and local builds share hits.
+2. `sccache`
+3. `ccache`
+
+`-DUSE_COMPILER_CACHE=OFF` disables all of them. A launcher supplied externally
+(`-DCMAKE_CXX_COMPILER_LAUNCHER=...`, a preset, or a toolchain file) is always left untouched.
+Precompiled headers and C++20 module scanning are switched off whenever a launcher is active —
+neither survives a cache hit, and this project uses neither.
+
 ---
 
 ## Testing
