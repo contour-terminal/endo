@@ -4,7 +4,6 @@
 # expect: 1042
 
 let mut _value = 10
-
 let Value with get () = _value and set (v) = _value <- v
 
 print Value
