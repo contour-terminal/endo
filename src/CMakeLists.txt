@@ -24,6 +24,17 @@ foreach(_contour_dir IN LISTS _contour_dirs)
     endif()
 endforeach()
 
+# coro and net used to be first-party endo sources. A working tree from before
+# they were vendored still has them, and they are gitignored now, so the check
+# above would happily build against the stale copies. EventLoop.hpp exists only
+# upstream, so its absence identifies such a tree and forces a refetch.
+if(NOT EMSCRIPTEN
+   AND IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/net"
+   AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/net/EventLoop.hpp")
+    message(STATUS "Stale pre-vendoring src/net detected; refetching.")
+    set(_need_fetch TRUE)
+endif()
+
 if(_need_fetch)
     message(STATUS "Fetching vendored contour sources via get_contour_dirs.py ...")
     execute_process(
@@ -37,6 +48,7 @@ if(_need_fetch)
 endif()
 
 add_subdirectory(coro)
+set_target_properties(coro PROPERTIES SYSTEM TRUE)
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
 set_target_properties(crispy-core PROPERTIES SYSTEM TRUE)
@@ -47,8 +59,11 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(vtparser)
     set_target_properties(vtparser PROPERTIES SYSTEM TRUE)
     add_subdirectory(platform)
-    add_subdirectory(tui)
+    # net sits below tui now: it drives its own net::EventLoop reactor rather than
+    # borrowing the TUI runtime's, so it depends on coro alone.
     add_subdirectory(net)
+    set_target_properties(net PROPERTIES SYSTEM TRUE)
+    add_subdirectory(tui)
     add_subdirectory(http)
     if(ENDO_ENABLE_AGENT)
         add_subdirectory(agent)

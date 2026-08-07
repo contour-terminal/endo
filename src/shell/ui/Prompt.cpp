@@ -179,7 +179,7 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         {
             event = co_await runtime->nextEventFor(waitFor);
         }
-        catch (endo::coro::OperationCancelled const&)
+        catch (coro::OperationCancelled const&)
         {
             // SIGINT/cancellation while waiting — abandon this read.
             co_return {};

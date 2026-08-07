@@ -68,7 +68,7 @@ target_include_directories(tui PUBLIC
 target_link_libraries(tui PUBLIC
     unicode::unicode
     endo-platform
-    endo-coro
+    coro
     stb_image
 )
 

@@ -17,8 +17,8 @@
 #include <platform/Clock.hpp>
 #include <platform/SystemPipe.hpp>
 
-using endo::coro::OperationCancelled;
-using endo::coro::Task;
+using coro::OperationCancelled;
+using coro::Task;
 using endo::platform::ManualClock;
 using tui::InputEvent;
 using tui::KeyEvent;
@@ -471,7 +471,8 @@ TEST_CASE("waitReadable resumes when the registered fd becomes readable", "[TuiR
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -1;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == 1);
 }
@@ -483,7 +484,8 @@ TEST_CASE("waitReadable on an interrupt cancels the parked flow", "[TuiRuntime][
     auto runtime = TuiRuntime { source };
 
     constexpr auto Cancelled = -7;
-    auto const result = runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
+    auto const result =
+        runtime.blockOn(awaitReadableOrCancel(&runtime, endo::platform::standardInput(), Cancelled));
 
     REQUIRE(result == Cancelled);
 }

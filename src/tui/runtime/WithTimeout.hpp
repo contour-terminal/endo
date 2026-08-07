@@ -9,6 +9,14 @@
 /// cancelled (it unwinds via @c OperationCancelled, like every runtime awaitable)
 /// and the result is @c std::nullopt. Built entirely on @c whenAny + the runtime
 /// timer, so it is deterministic under an injected @c ManualClock.
+///
+/// The vendored @c net/WithTimeout.hpp is the same construction over
+/// @c net::EventLoop. The two are deliberately kept apart rather than
+/// deduplicated: they are parameterized on different runtimes, and this one's
+/// @c TuiRuntime carries terminal input, resize and interrupt wakeups that
+/// @c net::EventLoop (a pure fd reactor) does not model. Unifying them would mean
+/// either editing the vendored header — which every fetch overwrites — or
+/// templating over the runtime, which buys little for two call sites.
 
 #include <tui/runtime/TuiRuntime.hpp>
 
@@ -32,7 +40,7 @@ namespace detail
     /// @param work The task to run.
     /// @param slot Shared storage receiving the result if @p work completes.
     template <typename T>
-    endo::coro::Task<void> captureResult(endo::coro::Task<T> work, std::shared_ptr<std::optional<T>> slot)
+    coro::Task<void> captureResult(coro::Task<T> work, std::shared_ptr<std::optional<T>> slot)
     {
         *slot = co_await std::move(work);
     }
@@ -40,7 +48,7 @@ namespace detail
     /// The timer arm of a `withTimeout`: simply sleeps to the deadline.
     /// @param runtime The runtime providing the timer.
     /// @param timeout The duration after which the wait elapses.
-    inline endo::coro::Task<void> timeoutArm(TuiRuntime* runtime, std::chrono::milliseconds timeout)
+    inline coro::Task<void> timeoutArm(TuiRuntime* runtime, std::chrono::milliseconds timeout)
     {
         co_await runtime->delay(timeout);
     }
@@ -58,17 +66,17 @@ namespace detail
 /// @return The work's result, or @c std::nullopt on timeout.
 template <typename T>
     requires(!std::is_void_v<T>)
-endo::coro::Task<std::optional<T>> withTimeout(TuiRuntime* runtime,
-                                               endo::coro::Task<T> work,
-                                               std::chrono::milliseconds timeout)
+coro::Task<std::optional<T>> withTimeout(TuiRuntime* runtime,
+                                         coro::Task<T> work,
+                                         std::chrono::milliseconds timeout)
 {
     auto slot = std::make_shared<std::optional<T>>();
-    auto tasks = std::vector<endo::coro::Task<void>> {};
+    auto tasks = std::vector<coro::Task<void>> {};
     tasks.reserve(2);
     tasks.push_back(detail::captureResult(std::move(work), slot));
     tasks.push_back(detail::timeoutArm(runtime, timeout));
 
-    auto const winner = co_await endo::coro::whenAny(std::move(tasks));
+    auto const winner = co_await coro::whenAny(std::move(tasks));
     if (winner == 0)
         co_return std::move(*slot);
     co_return std::nullopt; // the timeout arm won; the work was cancelled
@@ -80,16 +88,16 @@ endo::coro::Task<std::optional<T>> withTimeout(TuiRuntime* runtime,
 /// @param work The void task to bound (moved in).
 /// @param timeout The maximum duration to allow.
 /// @return True if @p work completed before the timeout, false if it timed out.
-inline endo::coro::Task<bool> withTimeout(TuiRuntime* runtime,
-                                          endo::coro::Task<void> work,
-                                          std::chrono::milliseconds timeout)
+inline coro::Task<bool> withTimeout(TuiRuntime* runtime,
+                                    coro::Task<void> work,
+                                    std::chrono::milliseconds timeout)
 {
-    auto tasks = std::vector<endo::coro::Task<void>> {};
+    auto tasks = std::vector<coro::Task<void>> {};
     tasks.reserve(2);
     tasks.push_back(std::move(work));
     tasks.push_back(detail::timeoutArm(runtime, timeout));
 
-    auto const winner = co_await endo::coro::whenAny(std::move(tasks));
+    auto const winner = co_await coro::whenAny(std::move(tasks));
     co_return winner == 0;
 }
 

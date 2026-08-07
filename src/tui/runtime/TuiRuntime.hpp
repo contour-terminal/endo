@@ -6,7 +6,7 @@
 ///
 /// The runtime owns the one blocking primitive (an injected @c EventSource) and
 /// multiplexes terminal input, the agent-message wakeup, the interrupt wakeup,
-/// and timers over it. Flows (`endo::coro::Task`s) suspend on the awaitables the
+/// and timers over it. Flows (`coro::Task`s) suspend on the awaitables the
 /// runtime hands out — `nextEvent()`, `delay()`, `nextAgentReady()` — and the
 /// pump loop resumes them when their source is ready. This replaces the many
 /// hand-rolled `terminal.poll(timeout)` loops with one driver.
@@ -85,7 +85,7 @@ class TuiRuntime
     /// @param task The root flow to run (its frame is kept alive for the call).
     /// @return The value produced by @p task (or void).
     template <typename T>
-    T blockOn(endo::coro::Task<T> task)
+    T blockOn(coro::Task<T> task)
     {
         task.handle().promise().setStopToken(_rootStop.get_token());
         _ready.push_back(task.handle());
@@ -96,10 +96,10 @@ class TuiRuntime
 
     /// Starts a background flow that runs alongside the root flow.
     /// @param task The flow to run (its frame is kept alive by the runtime).
-    void spawn(endo::coro::Task<void> task);
+    void spawn(coro::Task<void> task);
 
     /// @return The root cancellation source; `request_stop()` cancels every flow.
-    [[nodiscard]] endo::coro::StopSource& rootStopSource() noexcept { return _rootStop; }
+    [[nodiscard]] coro::StopSource& rootStopSource() noexcept { return _rootStop; }
 
     /// @return The monotonic clock backing all timers, timed waits, and delays.
     ///         Awaiters read deadlines through this so tests can drive time
@@ -289,10 +289,10 @@ class TuiRuntime
     std::coroutine_handle<> _agentWaiter; ///< Flow parked in nextAgentReady(), if any.
     bool _agentPending = false; ///< Agent wakeup fired; consumed only by an agent-interested waiter.
     std::unordered_map<FdToken, std::coroutine_handle<>>
-        _fdWaiters;                             ///< Flows parked on a generic fd, by token.
-    std::vector<endo::coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
-    endo::coro::StopSource _rootStop;           ///< Root cancellation source.
-    std::function<void()> _onInterrupt;         ///< Interrupt policy; default cancels the root.
+        _fdWaiters;                       ///< Flows parked on a generic fd, by token.
+    std::vector<coro::Task<void>> _roots; ///< Keeps spawned background flows alive.
+    coro::StopSource _rootStop;           ///< Root cancellation source.
+    std::function<void()> _onInterrupt;   ///< Interrupt policy; default cancels the root.
 };
 
 /// Awaitable yielding the next input event, or throwing @c OperationCancelled if
@@ -322,13 +322,13 @@ class NextInputEventAwaiter
     [[nodiscard]] InputEvent await_resume()
     {
         if (_token.stop_requested() || !_runtime.hasBufferedInput())
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
         return _runtime.popBufferedInput();
     }
 
   private:
     TuiRuntime& _runtime;
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 /// Awaitable yielding the next input event, or std::nullopt if a timeout elapses
@@ -361,7 +361,7 @@ class NextEventForAwaiter
     [[nodiscard]] std::optional<InputEvent> await_resume()
     {
         if (_token.stop_requested())
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
         if (_runtime.hasBufferedInput())
             return _runtime.popBufferedInput();
         return std::nullopt; // timed out
@@ -370,7 +370,7 @@ class NextEventForAwaiter
   private:
     TuiRuntime& _runtime;
     std::chrono::steady_clock::time_point _deadline;
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 /// Awaitable that resumes on the first of: an input event, an agent message, or
@@ -406,7 +406,7 @@ class NextActivityAwaiter
     [[nodiscard]] Activity await_resume()
     {
         if (_token.stop_requested())
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
         if (_runtime.hasBufferedInput())
             return Activity { .kind = ActivityKind::Event, .event = _runtime.popBufferedInput() };
         if (_runtime.agentPending())
@@ -420,7 +420,7 @@ class NextActivityAwaiter
   private:
     TuiRuntime& _runtime;
     std::chrono::steady_clock::time_point _deadline;
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 /// Awaitable that resumes after a delay (or throws on cancellation).
@@ -458,14 +458,14 @@ class DelayAwaiter
     {
         _cancelReg.reset();
         if (_token.stop_requested())
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
     }
 
   private:
-    std::optional<endo::coro::StopCallback<std::function<void()>>> _cancelReg;
+    std::optional<coro::StopCallback<std::function<void()>>> _cancelReg;
     TuiRuntime& _runtime;
     std::chrono::steady_clock::time_point _deadline;
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 /// Awaitable that resumes when the agent-message wakeup fires; the consumer then
@@ -492,13 +492,13 @@ class NextAgentReadyAwaiter
     void await_resume()
     {
         if (_token.stop_requested())
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
         _runtime.consumeAgentPending();
     }
 
   private:
     TuiRuntime& _runtime;
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 /// Awaitable that resumes when a registered fd reaches a given readiness (Read or
@@ -558,16 +558,16 @@ class WaitFdAwaiter
         if (_registration)
             _runtime.unregisterFdWaiter(_registration);
         if (_token.stop_requested() || !_registration)
-            throw endo::coro::OperationCancelled {};
+            throw coro::OperationCancelled {};
     }
 
   private:
-    std::optional<endo::coro::StopCallback<std::function<void()>>> _cancelReg;
+    std::optional<coro::StopCallback<std::function<void()>>> _cancelReg;
     TuiRuntime& _runtime;
     endo::platform::NativeHandle _fd;
     FdInterest _interest;
     FdToken _registration {};
-    endo::coro::StopToken _token;
+    coro::StopToken _token;
 };
 
 } // namespace tui::runtime

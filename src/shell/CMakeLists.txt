@@ -232,7 +232,7 @@ else()
     endif()
 endif()
 
-target_link_libraries(endo-shell PUBLIC endo-platform endo-net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+target_link_libraries(endo-shell PUBLIC endo-platform net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
 if(ENDO_ENABLE_AGENT)
     target_sources(endo-shell PRIVATE AgentModeSession.cpp)
     target_link_libraries(endo-shell PUBLIC endo-agent)

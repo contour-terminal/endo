@@ -4,6 +4,8 @@
     "ref": "master",
     "directories": [
         "crispy",
-        "vtparser"
+        "vtparser",
+        "coro",
+        "net"
     ]
 }
