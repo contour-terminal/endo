@@ -42,6 +42,7 @@ macro(EndoThirdPartiesSummary2)
     if(NOT EMSCRIPTEN)
         message(STATUS "nlohmann_json       ${THIRDPARTY_BUILTIN_nlohmann_json}")
         message(STATUS "CURL                ${THIRDPARTY_BUILTIN_CURL}")
+        message(STATUS "OpenSSL             ${THIRDPARTY_BUILTIN_OpenSSL}")
         if(ENABLE_STATIC_LINKING)
             message(STATUS "mbedTLS             ${THIRDPARTY_BUILTIN_mbedtls}")
         endif()
@@ -184,6 +185,37 @@ else()
         SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
+endif()
+
+# ==============================================================================
+# System dependency: OpenSSL (TLS transport in the vendored net library)
+# ==============================================================================
+# net/Tls.cpp keeps OpenSSL behind the ITlsContext seam and links it PRIVATE, so
+# no OpenSSL type crosses a net header. The vendored src/net/CMakeLists.txt calls
+# find_package(OpenSSL REQUIRED) itself and must not be patched, so all endo does
+# here is make that call resolve the way each build configuration needs.
+#
+# This is unrelated to the mbedTLS block below: mbedTLS is CURL's TLS backend for
+# static builds, chosen so the *fetch* builtin does not pull in system OpenSSL.
+# The two coexist.
+if(NOT EMSCRIPTEN)
+    if(ENABLE_STATIC_LINKING)
+        # Pick libssl.a/libcrypto.a so the fully-static link keeps working; the
+        # CI job asserts the result with ldd.
+        set(OPENSSL_USE_STATIC_LIBS ON)
+    endif()
+    find_package(OpenSSL QUIET)
+    if(OpenSSL_FOUND)
+        set(THIRDPARTY_BUILTIN_OpenSSL "system (${OPENSSL_VERSION})")
+    else()
+        # Not fatal here — the vendored net/CMakeLists.txt is what actually
+        # requires it, and this message is friendlier than its bare failure.
+        set(THIRDPARTY_BUILTIN_OpenSSL "NOT FOUND")
+        message(WARNING
+            "OpenSSL was not found. The vendored net library requires it; "
+            "install libssl-dev (Linux), `brew install openssl@3` plus "
+            "OPENSSL_ROOT_DIR (macOS), or the vcpkg openssl port (Windows).")
+    endif()
 endif()
 
 # ==============================================================================

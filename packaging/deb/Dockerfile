@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libyaml-cpp-dev \
         nlohmann-json3-dev \
         libmsgsl-dev \
+        libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Package version, supplied by the caller (scripts/package-deb.sh derives it from

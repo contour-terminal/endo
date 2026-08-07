@@ -41,7 +41,8 @@ jobs:
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
-        sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }}
+        # libssl-dev backs the TLS transport in the vendored net library.
+        sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }} libssl-dev
 
     - name: Setup clang-tidy problem matcher
       run: echo "::add-matcher::.github/clang-tidy-matcher.json"
