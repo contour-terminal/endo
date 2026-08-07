@@ -674,6 +674,30 @@ bool SourceFormatter::wouldFormatMultiline(ast::Expr const& expr) const
     return false;
 }
 
+bool SourceFormatter::bodyBreaksAfterEquals(ast::LetBindingStmt const& node) const
+{
+    // Property bindings (`with get () = ...` / `and set (v) = ...`) span several lines
+    // when either accessor body wraps — mirroring how visit(LetBindingStmt) emits them.
+    if ((node.getter && wouldFormatMultiline(*node.getter->body))
+        || (node.setter && wouldFormatMultiline(*node.setter->body)))
+        return true;
+
+    if (!node.value)
+        return false;
+
+    // List/Tuple expressions wrap themselves (emitWrappedWith handles `[`, indent,
+    // bin-pack, dedent, `]`), so their opening delimiter stays on the `=` line.
+    if (dynamic_cast<ast::ListExpr const*>(node.value.get())
+        || dynamic_cast<ast::TupleExpr const*>(node.value.get()))
+        return false;
+
+    // A wide body is only pushed onto its own line for function bindings, where the
+    // parameter list has already consumed part of the first line.
+    auto const bodyWidth = estimateWidth(*node.value);
+    return wouldFormatMultiline(*node.value)
+           || (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty());
+}
+
 // ============================================================================
 // Current column tracking
 // ============================================================================
@@ -948,6 +972,14 @@ static bool isDeclarationOrBlock(ast::Node const& node)
            || dynamic_cast<ast::ForInStmt const*>(&node) != nullptr;
 }
 
+/// Checks whether a statement is a `let` binding, which participates in grouping:
+/// consecutive single-line bindings the author wrote adjacently stay adjacent, rather
+/// than being forced apart by a blank line.
+static bool isLetBinding(ast::Node const& node)
+{
+    return dynamic_cast<ast::LetBindingStmt const*>(&node) != nullptr;
+}
+
 void SourceFormatter::visit(ast::CompoundStmt const& node)
 {
     emitLeadingComments(node);
@@ -972,13 +1004,36 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
             emitNewline();
             auto wantBlankLine = false;
 
-            // (A) Existing heuristic: declarations/blocks at top level always get blank lines
-            if (_indentLevel == 0
+            // Consecutive `let` bindings form a group: when the author wrote them on
+            // adjacent lines they stay adjacent, so related aliases or exports read as a
+            // block instead of being spread apart. A binding that occupies more than one
+            // line is always isolated by blank lines above and below, which keeps a
+            // wrapped body from visually merging into its neighbours. Whether a binding
+            // is multi-line is decided from what was actually emitted (see
+            // previousStatementWasMultiline), not from the source: a long single-line
+            // binding may wrap, and a wrapped one may fit back onto a single line.
+            auto const groupableLets =
+                isLetBinding(*node.statements[i - 1]) && isLetBinding(*node.statements[i]);
+
+            // (A) Existing heuristic: declarations/blocks at top level get blank lines.
+            // Groupable `let` runs are exempt, and fall through to (B) so the author's
+            // own blank lines decide where one group ends and the next begins.
+            if (_indentLevel == 0 && !groupableLets
                 && (isDeclarationOrBlock(*node.statements[i - 1])
                     || isDeclarationOrBlock(*node.statements[i])))
                 wantBlankLine = true;
 
-            // (B) Preserve user-authored blank lines at any indent level
+            // A multi-line binding gets a group to itself, regardless of how the author
+            // spaced it: separated from the binding before it (which has already been
+            // emitted, so its shape is known exactly) and from the one after it (not yet
+            // emitted, so its shape is predicted with the same helper that decides the
+            // wrap).
+            if (!wantBlankLine && groupableLets
+                && (_previousStatementWasMultiline
+                    || bodyBreaksAfterEquals(dynamic_cast<ast::LetBindingStmt const&>(*node.statements[i]))))
+                wantBlankLine = true;
+
+            // (B) Preserve user-authored blank lines at any indent level.
             if (!wantBlankLine && !_blankLines.empty())
             {
                 auto const prevStart = findFirstLine(*node.statements[i - 1]);
@@ -998,10 +1053,18 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
         {
             emitVerbatimRegion(*region);
             lastEmittedRegionBegin = region->beginLine;
+            _previousStatementWasMultiline = true; // a verbatim block spans its own lines
             continue;
         }
 
+        // Emit the statement, then record whether it produced more than one line so the
+        // next iteration can isolate it. Counting newlines in the emitted text is exact,
+        // where re-deriving the wrapping decision from the AST would have to duplicate
+        // (and stay in sync with) the composite condition in visit(LetBindingStmt).
+        auto const offsetBefore = _result.size();
         node.statements[i]->accept(*this);
+        auto const emitted = std::string_view { _result }.substr(offsetBefore);
+        _previousStatementWasMultiline = emitted.find('\n') != std::string_view::npos;
     }
     emitTrailingComment(node);
 }
@@ -1703,12 +1766,7 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         {
             // List/Tuple expressions are self-wrapping (emitWrappedWith handles [, indent,
             // bin-pack, dedent, ]) — keep opening delimiter on the = line.
-            auto const bodyWidth = estimateWidth(*node.value);
-            auto const isWrappableContainer = dynamic_cast<ast::ListExpr const*>(node.value.get())
-                                              || dynamic_cast<ast::TupleExpr const*>(node.value.get());
-            if (!isWrappableContainer
-                && (wouldFormatMultiline(*node.value)
-                    || (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty())))
+            if (bodyBreaksAfterEquals(node))
             {
                 emitNewline();
                 indent();

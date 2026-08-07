@@ -823,12 +823,53 @@ TEST_CASE("SourceFormatter.blank_line_between_expression_and_let", "[format]")
     CHECK(result.find("print 1\n\nlet x = 42") != std::string::npos);
 }
 
-TEST_CASE("SourceFormatter.blank_line_between_consecutive_lets", "[format]")
+TEST_CASE("SourceFormatter.consecutive_lets_stay_grouped", "[format]")
 {
-    // Consecutive let bindings should still get blank lines (declarations)
+    // Single-line bindings the author wrote adjacently keep their grouping, so a run of
+    // related aliases or exports is not spread apart.
     auto const result = SourceFormatter::format("let x = 1\nlet y = 2");
     INFO("Result: [" << result << "]");
-    CHECK(result.find("let x = 1\n\nlet y = 2") != std::string::npos);
+    CHECK(result.find("let x = 1\nlet y = 2") != std::string::npos);
+    CHECK(result.find("let x = 1\n\nlet y = 2") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.let_groups_separated_by_authored_blank_line", "[format]")
+{
+    // A blank line the author wrote is what separates one group from the next.
+    auto const result = SourceFormatter::format("let a = 1\nlet b = 2\n\nlet c = 3\nlet d = 4");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let a = 1\nlet b = 2") != std::string::npos);
+    CHECK(result.find("let b = 2\n\nlet c = 3") != std::string::npos);
+    CHECK(result.find("let c = 3\nlet d = 4") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.multiline_let_is_isolated", "[format]")
+{
+    // A binding whose body breaks onto its own line gets a group to itself — blank lines
+    // above *and* below — even though the author wrote all three flush together.
+    auto const result = SourceFormatter::format("let a = 1\nlet r = if true then 42 else 0\nlet b = 2");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let a = 1\n\nlet r =") != std::string::npos);
+    CHECK(result.find("else 0\n\nlet b = 2") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.let_grouping_idempotency", "[format]")
+{
+    const auto* const source = "let a = 1\nlet b = 2\n\nlet r = if true then 42 else 0\nlet c = 3";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.let_grouping_only_at_top_level", "[format]")
+{
+    // Nested bindings are governed by the author's own spacing, not by the top-level
+    // grouping rule; this simply must not crash or insert stray blank lines.
+    auto const result = SourceFormatter::format("let f () =\n    let a = 1\n    let b = 2\n    a + b");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let a = 1\n    let b = 2") != std::string::npos);
 }
 
 TEST_CASE("SourceFormatter.consecutive_expressions_idempotency", "[format]")

@@ -260,6 +260,15 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     /// Checks whether an expression would produce multiline output when formatted.
     [[nodiscard]] bool wouldFormatMultiline(ast::Expr const& expr) const;
 
+    /// Checks whether a `let` binding's body is pushed onto its own indented line rather
+    /// than staying after the `=`, which is what makes the binding span several lines.
+    ///
+    /// Shared by the emission itself and by the blank-line grouping that isolates a
+    /// multi-line binding, so the prediction cannot drift from what is actually emitted.
+    /// @param node The binding to inspect.
+    /// @return True if the body breaks onto its own line.
+    [[nodiscard]] bool bodyBreaksAfterEquals(ast::LetBindingStmt const& node) const;
+
     /// Returns the current column position (0-based) in the output.
     [[nodiscard]] size_t currentColumn() const;
 
@@ -328,6 +337,13 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     std::vector<CommentTrivia> const& _comments;
     size_t _nextCommentIndex = 0; ///< Index of next un-emitted comment
     std::set<int> _blankLines;    ///< 0-based line numbers of blank lines in original source
+
+    /// Whether the statement emitted just before the current one spanned several lines.
+    /// Drives `let`-group separation: a multi-line binding is isolated by blank lines even
+    /// when the author wrote it flush against its neighbours. Derived from the emitted text
+    /// rather than the source, so a binding that wraps (or stops wrapping) is classified by
+    /// how it actually comes out.
+    bool _previousStatementWasMultiline = false;
 
     /// Original source split into lines (0-based), used to reproduce verbatim regions exactly.
     /// Empty when the formatter is invoked without source (AST-only overload) — in that case

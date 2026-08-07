@@ -4,7 +4,6 @@
 # expect: 0
 
 let mut _count = 0
-
 let Count with get () = _count
 
 print Count
