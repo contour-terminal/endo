@@ -3,7 +3,7 @@
 
 #include <http/HttpClient.hpp>
 
-#include <crispy/base64.h>
+#include <crispy/Base64.hpp>
 
 #include <format>
 #include <ranges>

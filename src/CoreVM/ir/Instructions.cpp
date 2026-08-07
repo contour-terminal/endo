@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 
-#include <crispy/assert.h>
+#include <crispy/Assert.hpp>
 
 #include <cassert>
 #include <format>

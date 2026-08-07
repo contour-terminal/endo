@@ -33,7 +33,7 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
-#include <crispy/assert.h>
+#include <crispy/Assert.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1684,7 +1684,7 @@ int Shell::execute(std::string const& lineBuffer,
             pm.run(irProgram.get());
         }
 
-        if (irLog().is_enabled())
+        if (irLog().isEnabled())
         {
             irLog()()("================================================\n");
             irLog()()("{} IR program (SSA form):\n", _optimize ? "Optimized" : "Unoptimized");
@@ -1711,7 +1711,7 @@ int Shell::execute(std::string const& lineBuffer,
         if (_checkOnly)
             return EXIT_SUCCESS;
 
-        if (irLog().is_enabled())
+        if (irLog().isEnabled())
         {
             irLog()()("================================================\n");
             irLog()()("Linked target code (bytecode):\n");

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ClaudeProvider.hpp"
 
-#include <crispy/base64.h>
+#include <crispy/Base64.hpp>
 
 #include <format>
 

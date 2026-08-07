@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <crispy/App.h>
-#include <crispy/logstore.h>
+#include <crispy/App.hpp>
+#include <crispy/LogStore.hpp>
 
 #include <catch2/catch_session.hpp>
 
@@ -13,7 +13,7 @@ int main(int argc, char const* argv[])
     if (logFilterString)
     {
         logstore::configure(logFilterString);
-        crispy::app::customizeLogStoreOutput();
+        crispy::App::customizeLogStoreOutput();
     }
     int const result = Catch::Session().run(argc, argv);
 

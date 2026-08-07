@@ -3,7 +3,7 @@
 
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 
-#include <crispy/utils.h>
+#include <crispy/Utils.hpp>
 
 #include <array>
 #include <filesystem>
