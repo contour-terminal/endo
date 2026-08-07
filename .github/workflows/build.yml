@@ -76,7 +76,7 @@ jobs:
       if: runner.os == 'Linux'
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python3 scripts/get_contour_dirs.py
 
     # ── Configure ──
@@ -146,7 +146,7 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python3 scripts/get_contour_dirs.py
 
     - name: Configure CMake
@@ -197,7 +197,7 @@ jobs:
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: "Get library crispy & vtparser"
+    - name: "Get vendored contour sources"
       run: python scripts/get_contour_dirs.py
 
     - name: Setup vcpkg

@@ -62,10 +62,11 @@ ARG ENDO_VERSION=0.0.0
 WORKDIR /src
 COPY . .
 
-# Record the version for cmake/Version.cmake, then fetch the vendored crispy &
-# vtparser sources. get_contour_dirs.py locates the tree via `git rev-parse`, so a
-# throwaway repo is initialised (the real .git is not in the build context); the
-# script itself clones the sources it needs over the network.
+# Record the version for cmake/Version.cmake, then fetch the vendored contour
+# sources (crispy, vtparser, coro, net — see scripts/contour-pin.json).
+# get_contour_dirs.py locates the tree via `git rev-parse`, so a throwaway repo is
+# initialised (the real .git is not in the build context); the script itself clones
+# the sources it needs over the network.
 RUN printf '%s\n' "${ENDO_VERSION}" > version.txt \
     && git init -q . \
     && python3 scripts/get_contour_dirs.py

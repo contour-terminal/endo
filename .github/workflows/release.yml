@@ -65,7 +65,7 @@ jobs:
       - name: Install CMake
         uses: ssrobins/install-cmake@v1
 
-      - name: "Fetch vendored libraries (crispy & vtparser)"
+      - name: "Fetch vendored contour sources"
         run: python3 scripts/get_contour_dirs.py
 
       - name: Configure
@@ -146,7 +146,7 @@ jobs:
       - name: Install CMake
         uses: ssrobins/install-cmake@v1
 
-      - name: "Fetch vendored libraries (crispy & vtparser)"
+      - name: "Fetch vendored contour sources"
         run: python3 scripts/get_contour_dirs.py
 
       - name: Configure
@@ -189,7 +189,7 @@ jobs:
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
 
-      - name: "Fetch vendored libraries (crispy & vtparser)"
+      - name: "Fetch vendored contour sources"
         run: python scripts/get_contour_dirs.py
 
       - name: Setup vcpkg

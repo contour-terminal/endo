@@ -158,15 +158,16 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-D_GLIBCXX_ASSERTIONS)
 endif()
 
-# crispy is vendored from contour — pass through its testing flag
+# crispy, vtparser, coro and net are vendored from contour — pass through the
+# testing flag their CMakeLists gate their unit tests on.
 # (ENDO_TESTING is defined earlier, before include(EndoThirdParties).)
 set(CONTOUR_TESTING ${ENDO_TESTING})
 
 option(ENDO_BUILTIN_CRARHDUMP "Enable built-in crashdump reporter, say NO to use system wide crashdump collection like coredumpctl [default: ON]" ON)
 
 # Apply Emscripten compatibility patches to vendored sources.
-# crispy is symlinked from contour, so we use sed for in-place patching
-# (GNU patch does not follow symlinked directories).
+# crispy is fetched from contour into src/crispy and is overwritten on every
+# fetch, so the patch is reapplied here at configure time rather than committed.
 if(EMSCRIPTEN)
     set(_BUFOBJ_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.h")
     if(EXISTS "${_BUFOBJ_PATH}")

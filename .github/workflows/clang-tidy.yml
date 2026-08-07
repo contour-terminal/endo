@@ -68,7 +68,7 @@ jobs:
         fi
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
-            ':!src/crispy/*' ':!src/vtparser/*' \
+            ':!src/crispy/*' ':!src/vtparser/*' ':!src/coro/*' ':!src/net/*' \
             ':!src/shell/platform/Windows*' \
             ':!src/endo-language/wasm_bridge.cpp' \
           | python3 "$CLANG_TIDY_DIFF" \
