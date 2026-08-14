@@ -4,6 +4,7 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <ranges>
 #include <stdexcept>
 

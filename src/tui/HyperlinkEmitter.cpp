@@ -3,8 +3,10 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <format>
 #include <ranges>
+#include <utility> // std::cmp_greater_equal
 
 namespace tui
 {
