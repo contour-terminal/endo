@@ -62,6 +62,26 @@ inline constexpr bool FilesystemCaseInsensitive =
     return p.generic_string();
 }
 
+/// @brief Resolves @p path against @p base, without touching the filesystem.
+///
+/// A path that is already absolute is returned normalized and otherwise untouched. A relative
+/// one is joined onto @p base and lexically normalized, so `./x` and `a/../b` collapse. Purely
+/// lexical by design: callers resolving thousands of entries cannot afford a syscall each, and
+/// symlinks must not be followed.
+///
+/// @param path The path to resolve.
+/// @param base Absolute directory to resolve against. Empty returns @p path normalized only,
+///             since there is nothing to resolve against.
+/// @return The resolved, forward-slash normalized path.
+[[nodiscard]] inline auto absolutePath(std::string_view path, std::string_view base) -> std::string
+{
+    auto const candidate = std::filesystem::path { path };
+    if (base.empty() || candidate.is_absolute())
+        return normalizePath(candidate.lexically_normal());
+
+    return normalizePath((std::filesystem::path { base } / candidate).lexically_normal());
+}
+
 /// @brief Returns a path with its real on-disk capitalization and forward slashes.
 ///
 /// On Windows the working directory and user-typed paths preserve whatever case was

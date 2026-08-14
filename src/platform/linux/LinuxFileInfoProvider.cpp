@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 
 #include <platform/GlobMatch.hpp>
+#include <platform/PathUtils.hpp>
 
 namespace endo::platform
 {
@@ -27,15 +28,27 @@ namespace
     ///
     /// @param fullPath Absolute or relative path to stat.
     /// @param name     The entry's display name (filename component).
+    /// @param absoluteParent Absolute, normalized directory holding the entry, used to build
+    ///                       FileEntry::path. Empty leaves the path empty.
     /// @param entry    Output entry to populate.
     /// @return true on success, false if the path could not be stat'd.
-    [[nodiscard]] bool statEntry(std::string const& fullPath, std::string name, FileEntry& entry)
+    [[nodiscard]] bool statEntry(std::string const& fullPath,
+                                 std::string name,
+                                 std::string_view absoluteParent,
+                                 FileEntry& entry)
     {
         struct stat st {};
         if (::lstat(fullPath.c_str(), &st) != 0)
             return false;
 
         entry.name = std::move(name);
+        if (!absoluteParent.empty())
+        {
+            entry.path = std::string { absoluteParent };
+            if (!entry.path.ends_with('/'))
+                entry.path += '/';
+            entry.path += entry.name;
+        }
         entry.isSymlink = S_ISLNK(st.st_mode);
         if (entry.isSymlink)
         {
@@ -61,6 +74,23 @@ namespace
         return true;
     }
 
+    /// Returns @p dir as an absolute, forward-slash normalized directory path.
+    ///
+    /// Resolved once per listing rather than once per entry: fs::absolute() consults the
+    /// process working directory, so calling it for every file would add a syscall per entry
+    /// on a hot path.
+    ///
+    /// @param dir Directory to resolve; empty is treated as the working directory.
+    /// @return The absolute directory, or an empty string if it could not be resolved.
+    [[nodiscard]] std::string absoluteDirectory(fs::path const& dir)
+    {
+        std::error_code ec;
+        auto const absolute = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
+        if (ec)
+            return {};
+        return normalizePath(absolute.lexically_normal());
+    }
+
 } // namespace
 
 std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& path) const
@@ -78,6 +108,8 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
         if (parentDir.empty())
             parentDir = ".";
 
+        auto const absoluteParent = absoluteDirectory(parentDir);
+
         for (auto const& dirEntry: fs::directory_iterator(parentDir, ec))
         {
             if (ec)
@@ -87,7 +119,7 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
             if (endo::globMatchFilename(filename, filePattern))
             {
                 FileEntry entry {};
-                if (statEntry(dirEntry.path().string(), std::move(filename), entry))
+                if (statEntry(dirEntry.path().string(), std::move(filename), absoluteParent, entry))
                     entries.push_back(std::move(entry));
             }
         }
@@ -99,13 +131,18 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
     // Case 2: Directory path — enumerate contents.
     if (fs::is_directory(path, ec) && !ec)
     {
+        auto const absoluteParent = absoluteDirectory(path);
+
         for (auto const& dirEntry: fs::directory_iterator(path, ec))
         {
             if (ec)
                 break;
 
             FileEntry entry {};
-            if (statEntry(dirEntry.path().string(), dirEntry.path().filename().string(), entry))
+            if (statEntry(dirEntry.path().string(),
+                          dirEntry.path().filename().string(),
+                          absoluteParent,
+                          entry))
                 entries.push_back(std::move(entry));
         }
 
@@ -117,7 +154,7 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
     {
         auto const single = fs::path(path);
         FileEntry entry {};
-        if (statEntry(path, single.filename().string(), entry))
+        if (statEntry(path, single.filename().string(), absoluteDirectory(single.parent_path()), entry))
             entries.push_back(std::move(entry));
     }
 

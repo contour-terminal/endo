@@ -27,6 +27,10 @@ struct FileEntry
     bool isSymlink = false;    ///< Whether this entry is a symbolic link (from lstat, not followed).
     std::string symlinkTarget; ///< Target path of a symbolic link (verbatim, possibly relative);
                                ///< empty if not a symlink or if the target could not be read.
+    std::string path;          ///< Absolute path of the entry, forward-slash normalized; empty if
+                               ///< it could not be determined. Consumers that must address the
+                               ///< entry itself (rather than display it) need this, because
+                               ///< @c name alone is meaningless once the listing is passed around.
 };
 
 /// Abstract interface for listing directory contents.

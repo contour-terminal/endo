@@ -389,7 +389,7 @@ namespace
             { "FileInfo",
               "`FileInfo` \u2014 Record type for file/directory information\n\n"
               "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`, `isSymlink: bool`, `target: str`\n\n"
+              "bool`, `isSymlink: bool`, `target: str`, `path: str`\n\n"
               "Returned by `ls`. Supports dot access and pattern matching.\n\n"
               "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```" },
             { "ProcessInfo",

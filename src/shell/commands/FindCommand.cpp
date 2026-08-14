@@ -6,10 +6,10 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
-#include <platform/PathUtils.hpp>
-
 #include <filesystem>
 #include <ranges>
+
+#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -134,10 +134,19 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
     auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
     list->tag = 0; // Nil
 
+    // Hoisted out of the loop: fs::current_path() is a syscall, and `find` can match many
+    // thousands of entries.
+    auto const workingDirectory = [] {
+        std::error_code ec;
+        auto const cwd = fs::current_path(ec);
+        return ec ? std::string {} : platform::normalizePath(cwd);
+    }();
+
     for (auto& match: std::ranges::reverse_view(matches))
     {
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
-        record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(match.path)));
+        auto* const nameString = runner.newString(match.path);
+        record->setSlot(0, reinterpret_cast<uintptr_t>(nameString));
         auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, static_cast<int64_t>(match.size));
         record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
         auto* modeObj = endo::builtins::makeFileModeFromBits(&runner, static_cast<int64_t>(match.mode));
@@ -145,6 +154,16 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
         auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, match.mtime);
         record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
         record->setSlot(4, static_cast<uint64_t>(match.isDir ? 1 : 0));
+        // `find` reports no symlink information, but the slots must still hold valid values so
+        // f.isSymlink / f.target never read back as a null string.
+        record->setSlot(5, static_cast<uint64_t>(0));
+        record->setSlot(6, reinterpret_cast<uintptr_t>(runner.emptyString()));
+        // find's `name` is the path it walked, which is relative when the search root was.
+        // Reuse the slot-0 string when it is already absolute — the common `find /abs` case
+        // then costs no extra allocation.
+        auto const resolved = platform::absolutePath(match.path, workingDirectory);
+        record->setSlot(
+            7, reinterpret_cast<uintptr_t>(resolved == match.path ? nameString : runner.newString(resolved)));
 
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
         cons->tag = 1; // Cons

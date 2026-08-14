@@ -49,6 +49,11 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
                         reinterpret_cast<uintptr_t>(file.symlinkTarget.empty()
                                                         ? runner.emptyString()
                                                         : runner.newString(file.symlinkTarget)));
+        // Absolute path, so consumers can address the entry after the listing has been passed
+        // around, filtered, or concatenated with another listing.
+        record->setSlot(7,
+                        reinterpret_cast<uintptr_t>(file.path.empty() ? runner.emptyString()
+                                                                      : runner.newString(file.path)));
 
         // Cons this record onto the list
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);

@@ -154,7 +154,7 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->kind = TypeKind::Product;
     fileInfoType->id = BuiltinTypeId::FileInfo;
     fileInfoType->name = "FileInfo";
-    fileInfoType->slotCount = 7;
+    fileInfoType->slotCount = 8;
     fileInfoType->fields = {
         { .name = "name", .offset = 0, .type = LiteralType::String },
         { .name = "size", .offset = 1, .type = LiteralType::Object, .nestedTypeName = "Size" },
@@ -165,10 +165,14 @@ void TypeRegistry::registerBuiltins()
         { .name = "isDir", .offset = 4, .type = LiteralType::Boolean, .display = false },
         { .name = "isSymlink", .offset = 5, .type = LiteralType::Boolean, .display = false },
         { .name = "target", .offset = 6, .type = LiteralType::String, .display = false },
+        // The entry's absolute path. `name` is only a basename, so anything that must address
+        // the file rather than display it (OSC 8 hyperlinks, passing an entry to another
+        // command) needs this. Hidden from the default table so `ls` output is unchanged.
+        { .name = "path", .offset = 7, .type = LiteralType::String, .display = false },
     };
     fileInfoType->producingCommand = "ls";
     // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects.
-    // Slots 0 (name) and 6 (target) are Strings: CoreString lives in the Runner's
+    // Slots 0 (name), 6 (target) and 7 (path) are Strings: CoreString lives in the Runner's
     // separate string arena (not the GC object pool), so String slots are intentionally
     // NOT traced and must stay out of fixedObjectSlots.
     fileInfoType->traceInfo.fixedObjectSlots = { 1, 2, 3 };

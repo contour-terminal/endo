@@ -10,6 +10,7 @@
     #include <vector>
 
     #include <platform/GlobMatch.hpp>
+    #include <platform/PathUtils.hpp>
 
 namespace endo::platform
 {
@@ -33,13 +34,43 @@ namespace
         return std::string { reinterpret_cast<char const*>(u8.data()), u8.size() };
     }
 
+    /// Returns @p dir as an absolute, forward-slash normalized directory path.
+    ///
+    /// Resolved once per listing rather than once per entry: fs::absolute() consults the
+    /// process working directory, so calling it for every file would add a syscall per entry
+    /// on a hot path.
+    ///
+    /// @param dir Directory to resolve; empty is treated as the working directory.
+    /// @return The absolute directory, or an empty string if it could not be resolved.
+    [[nodiscard]] std::string absoluteDirectory(fs::path const& dir)
+    {
+        std::error_code ec;
+        auto const absolute = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
+        if (ec)
+            return {};
+        return normalizePath(toUtf8(absolute.lexically_normal()));
+    }
+
     /// Populates a FileEntry from a filesystem directory_entry.
+    /// @param dirEntry The entry to inspect.
+    /// @param absoluteParent Absolute, normalized directory holding the entry, used to build
+    ///                       FileEntry::path. Empty leaves the path empty.
+    /// @param fileEntry Output entry to populate.
     /// @return true on success, false if the entry could not be stat'd.
-    [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry, FileEntry& fileEntry)
+    [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry,
+                                 std::string_view absoluteParent,
+                                 FileEntry& fileEntry)
     {
         std::error_code ec;
 
         fileEntry.name = toUtf8(dirEntry.path().filename());
+        if (!absoluteParent.empty())
+        {
+            fileEntry.path = std::string { absoluteParent };
+            if (!fileEntry.path.ends_with('/'))
+                fileEntry.path += '/';
+            fileEntry.path += fileEntry.name;
+        }
 
         // status() follows reparse points. App Execution Aliases (winget, Microsoft Store
         // python, …) are reparse points that cannot be opened or followed through normal
@@ -128,6 +159,8 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
         if (parentDir.empty())
             parentDir = ".";
 
+        auto const absoluteParent = absoluteDirectory(parentDir);
+
         for (auto const& entry: fs::directory_iterator(parentDir, ec))
         {
             if (ec)
@@ -137,7 +170,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
             if (endo::globMatchFilename(filename, filePattern))
             {
                 FileEntry fileEntry {};
-                if (statEntry(entry, fileEntry))
+                if (statEntry(entry, absoluteParent, fileEntry))
                     result.push_back(std::move(fileEntry));
             }
         }
@@ -150,13 +183,15 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     auto const dir = fs::path(path);
     if (fs::is_directory(dir, ec) && !ec)
     {
+        auto const absoluteParent = absoluteDirectory(dir);
+
         for (auto const& entry: fs::directory_iterator(dir, ec))
         {
             if (ec)
                 break;
 
             FileEntry fileEntry {};
-            if (statEntry(entry, fileEntry))
+            if (statEntry(entry, absoluteParent, fileEntry))
                 result.push_back(std::move(fileEntry));
         }
 
@@ -168,7 +203,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
     {
         FileEntry fileEntry {};
-        if (statEntry(dirEntry, fileEntry))
+        if (statEntry(dirEntry, absoluteDirectory(dir.parent_path()), fileEntry))
             result.push_back(std::move(fileEntry));
     }
 

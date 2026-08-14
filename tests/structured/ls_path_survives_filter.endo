@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileInfo.path stays usable after the listing has been filtered and mapped
+# mode: structured
+# expect: /tmp/docs
+
+ls |> filter _.isDir |> map _.path |> each print
