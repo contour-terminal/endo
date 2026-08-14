@@ -222,6 +222,15 @@ static constexpr std::array PromptProperties = {
                   "names in `ls` output.",
     },
     PropertyDescriptor {
+        .name = "shell_hyperlinks",
+        .type = CoreVM::LiteralType::Boolean,
+        .description = "Emit OSC 8 clickable paths (default: true)",
+        .detail = "**shell_hyperlinks** -- property\n\nWhether to emit OSC 8 hyperlinks so paths are "
+                  "clickable: the working directory in the prompt, and file names in `ls`, `find` and "
+                  "`grep` output. Only ever emitted to a terminal, never into a pipe or redirect.",
+        .enumValues = BoolValues,
+    },
+    PropertyDescriptor {
         .name = "shell_is_interactive",
         .type = CoreVM::LiteralType::Boolean,
         .description = "Whether running interactively (read-only)",

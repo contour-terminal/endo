@@ -117,6 +117,11 @@ struct PromptConfig
     int64_t exitConfirmTimeoutMs =
         1000; ///< Timeout (ms) for double Ctrl+D exit confirmation (0 = immediate exit).
     PromptColorOverrides colorOverrides; ///< Per-color overrides (empty = use theme defaults).
+
+    /// Wrap prompt segments that carry a URI in OSC 8 hyperlinks, making the working directory
+    /// clickable. Checked when the regions are registered rather than when a module builds its
+    /// segments, so toggling it takes effect on the next render with no cache invalidation.
+    bool hyperlinks = true;
 };
 
 } // namespace endo

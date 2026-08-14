@@ -15,6 +15,7 @@
 #include <format>
 
 #include <platform/Types.hpp>
+#include <platform/SystemInfo.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -234,6 +235,10 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.useColor = useColor;
             config.showIcons = _lsIcons;
             config.showDirectorySlash = _lsDirectorySlash;
+            // useColor is isTerminal(outputFd) here, so pipes and redirects get no escapes.
+            config.useHyperlinks = useColor && _hyperlinks;
+            if (config.useHyperlinks)
+                config.uriHost = platform::cachedHostName();
             // Let the name column auto-grow for FileInfo records (ls output)
             auto* firstElem = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(obj->getSlot(0)));
             if (firstElem->type->id == CoreVM::BuiltinTypeId::FileInfo)

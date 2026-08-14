@@ -166,6 +166,11 @@ namespace
             { "shell_ls_directory_slash",
               "`shell_ls_directory_slash` : `bool`\n\nAppend a trailing `/` to directory names in "
               "`ls` output (default: `true`). Read or write with `<-`." },
+            { "shell_hyperlinks",
+              "`shell_hyperlinks` : `bool`\n\nEmit OSC 8 hyperlinks so paths are clickable: the "
+              "working directory in the prompt, and file names in `ls`, `find` and `grep` output "
+              "(default: `true`). Only emitted to a terminal, never into a pipe. Read or write "
+              "with `<-`." },
             { "shell_is_interactive",
               "`shell_is_interactive` : `bool`\n\nWhether the shell is running in interactive mode "
               "(true for REPL, false for scripts and `-c` commands). Read-only." },

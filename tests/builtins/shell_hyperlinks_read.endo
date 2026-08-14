@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_hyperlinks is readable as an expression
+# mode: ir-only
+
+print shell_hyperlinks
