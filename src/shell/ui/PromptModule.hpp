@@ -58,6 +58,11 @@ struct PromptSegment
 {
     std::string text; ///< The text content.
     tui::Style style; ///< The style to render this segment with.
+
+    /// Absolute URI making this segment clickable, or empty for none. Adjacent segments sharing
+    /// a URI are rendered as one OSC 8 link, so a module may split its text freely (the path
+    /// module's text is re-split per grapheme when a gradient applies) without fragmenting it.
+    std::string hyperlink;
 };
 
 /// @brief A sequence of styled segments forming a prompt section.
@@ -74,6 +79,7 @@ struct PromptContext
     bool isSSH = false;                           ///< Whether running inside an SSH session.
     std::string hostname;                         ///< Hostname of the machine.
     std::string username;                         ///< Current user's login name.
+    bool hyperlinks = true;                       ///< Emit OSC 8 hyperlinks for module segments.
     tui::Theme const* theme = nullptr;            ///< Current TUI theme.
     ResolvedPromptColors const* resolvedColors =
         nullptr; ///< Resolved prompt colors (overrides merged with theme).

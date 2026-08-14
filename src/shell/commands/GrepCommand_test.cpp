@@ -685,9 +685,11 @@ TEST_CASE("grep.hyperlinks.absent_when_disabled", "[grep]")
     CHECK(output.find("a.cpp") != std::string::npos);
 }
 
-TEST_CASE("grep.hyperlinks.independent_of_color", "[grep]")
+TEST_CASE("grep.hyperlinks.do_not_require_color", "[grep]")
 {
-    // A user who passed --color=never still gets clickable results.
+    // renderFilename() decides colors and links independently. Whether --color=never should
+    // also suppress links is a policy the caller applies (it does; see the grep driver), not
+    // something baked into the renderer.
     std::vector<std::string> const lines = { "hello" };
     GrepOptions opts;
     opts.patterns = { "hello" };

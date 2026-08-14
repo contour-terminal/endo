@@ -270,8 +270,10 @@ shell_hyperlinks <- true
 ```
 
 Links are only ever written to a terminal -- piping or redirecting output produces plain
-text, so `ls > files.txt` and `ls | grep foo` are unaffected. The setting is independent of
-colors and icons, so turning `shell_ls_icons` off keeps names clickable.
+text, so `ls > files.txt` and `ls | grep foo` are unaffected. Turning `shell_ls_icons` off
+keeps names clickable, since that setting is only about icons. For `grep`, passing
+`--color=never` suppresses links along with the colors, as it is the conventional way to ask
+for wholly undecorated output.
 
 !!! note
     How a click is handled is up to the terminal, and so is whether `grep`'s line-number

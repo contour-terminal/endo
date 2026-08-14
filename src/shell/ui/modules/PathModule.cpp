@@ -2,6 +2,9 @@
 #include "PathModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
+#include <platform/FileUri.hpp>
+#include <platform/PathUtils.hpp>
+
 #include <tui/Theme.hpp>
 
 #include <algorithm>
@@ -55,7 +58,11 @@ PromptSegments PathModule::evaluate(PromptContext const& ctx) const
         style.fg = ctx.theme->promptColors.path;
     style.bold = true;
 
-    return { PromptSegment { .text = std::move(path), .style = style } };
+    // Link the real cwd, not the tilde-contracted text the user sees.
+    auto hyperlink =
+        ctx.hyperlinks ? platform::fileUri(platform::normalizePath(ctx.cwd), ctx.hostname) : std::string {};
+
+    return { PromptSegment { .text = std::move(path), .style = style, .hyperlink = std::move(hyperlink) } };
 }
 
 } // namespace endo

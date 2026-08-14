@@ -1293,8 +1293,9 @@ void Shell::updatePromptContext()
     ctx.terminalWidth = prompt.terminal().columns();
     ctx.isSSH = _env.get("SSH_CONNECTION").has_value();
     // Populate identity unconditionally so the prompt can show user@host in every session.
-    ctx.hostname = platform::hostName();
+    ctx.hostname = platform::cachedHostName();
     ctx.username = _env.userName().value_or("");
+    ctx.hyperlinks = _hyperlinks;
     ctx.theme = &tui::currentTheme();
     ctx.fsharpState = &_fsharpState;
     ctx.outputDefs = &_outputDefinitions;

@@ -39,10 +39,10 @@
 #include <platform/Generator.hpp>
 #include <platform/InterruptThrottle.hpp>
 #include <platform/PathUtils.hpp>
-#include <platform/SystemInfo.hpp>
 #include <platform/Process.hpp>
 #include <platform/ProcessProvider.hpp>
 #include <platform/SignalHandler.hpp>
+#include <platform/SystemInfo.hpp>
 #include <platform/Types.hpp>
 
 #if defined(_WIN32)
@@ -2463,12 +2463,13 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         useColor = isTerminal(outputFd);
     }
 
-    // Hyperlinks are gated on terminal-ness only, not on --color: a user who asked for
-    // --color=never still benefits from clickable results, and one who forced --color=always
-    // into a pipe does not want OSC 8 bytes in the captured text.
+    // `--color=never` is grep's conventional "give me plain output" switch, so it suppresses
+    // hyperlinks too — a caller asking for undecorated text means all decoration, not just SGR.
+    // Terminal-ness gates them independently, so `--color=always` into a pipe still yields no
+    // OSC 8 bytes in the captured output.
     auto const render = grep::GrepRenderOptions {
         .useColor = useColor,
-        .useHyperlinks = _hyperlinks && isTerminal(outputFd),
+        .useHyperlinks = _hyperlinks && isTerminal(outputFd) && opts.colorMode != grep::ColorMode::Never,
         .uriHost = platform::cachedHostName(),
         .baseDirectory = platform::normalizePath(_fs.currentPath()),
     };
