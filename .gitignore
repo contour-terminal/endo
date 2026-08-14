@@ -7,11 +7,14 @@ target/
 dist/
 
 compile_commands.json
-# Vendored from contour — see scripts/contour-pin.json
-/src/vtparser/
-/src/crispy/
-/src/coro/
-/src/net/
+# Vendored from contour — see scripts/contour-pin.json.
+# No trailing slash: a fetch creates real directories, but these are commonly symlinked to a
+# sibling contour checkout during development, and a trailing slash would not match a symlink —
+# leaving `git add -A` free to commit one, which then breaks the vendor fetch in CI.
+/src/vtparser
+/src/crispy
+/src/coro
+/src/net
 site/
 __pycache__/
 *.egg-info/
