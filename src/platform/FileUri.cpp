@@ -10,22 +10,19 @@ namespace endo::platform
 
 namespace
 {
-    /// @brief Per-byte table of characters that need no percent-encoding in a URI path.
+    /// @brief Bytes that need no percent-encoding in a URI path.
     ///
-    /// The RFC 3986 unreserved set plus `/`. Built once at compile time so classification is
-    /// a single indexed load and, unlike `std::isalnum`, cannot vary with the active locale.
+    /// The RFC 3986 unreserved set plus `/`, spelled once as data. Built at compile time so
+    /// classification is a single indexed load and, unlike a ctype call, cannot vary with locale.
     constexpr auto UriPathSafe = [] {
         auto table = std::array<bool, 256> {};
-        for (auto const ch: std::views::iota('a', static_cast<char>('z' + 1)))
-            table[static_cast<unsigned char>(ch)] = true;
-        for (auto const ch: std::views::iota('A', static_cast<char>('Z' + 1)))
-            table[static_cast<unsigned char>(ch)] = true;
-        for (auto const ch: std::views::iota('0', static_cast<char>('9' + 1)))
-            table[static_cast<unsigned char>(ch)] = true;
-        for (auto const ch: std::string_view { "-._~/" })
+        for (auto const ch:
+             std::string_view { "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~/" })
             table[static_cast<unsigned char>(ch)] = true;
         return table;
     }();
+
+    constexpr auto HexDigits = std::string_view { "0123456789ABCDEF" };
 
     /// @brief Whether @p path starts with a Windows drive specifier such as `C:`.
     [[nodiscard]] constexpr bool hasDriveSpecifier(std::string_view path) noexcept
@@ -43,10 +40,17 @@ auto percentEncodeUriPath(std::string_view path) -> std::string
     encoded.reserve(path.size());
     for (auto const ch: path)
     {
-        if (UriPathSafe[static_cast<unsigned char>(ch)])
+        auto const byte = static_cast<unsigned char>(ch);
+        if (UriPathSafe[byte])
+        {
             encoded += ch;
+        }
         else
-            encoded += std::format("%{:02X}", static_cast<unsigned char>(ch));
+        {
+            encoded += '%';
+            encoded += HexDigits[byte >> 4U];
+            encoded += HexDigits[byte & 0x0FU];
+        }
     }
     return encoded;
 }
@@ -56,7 +60,7 @@ auto fileUri(std::string_view absolutePath, std::string_view host, std::string_v
     if (absolutePath.empty())
         return {};
 
-    auto authority = std::string { host };
+    auto authority = host;
     auto path = absolutePath;
 
     if (path.starts_with("//"))
@@ -65,7 +69,7 @@ auto fileUri(std::string_view absolutePath, std::string_view host, std::string_v
         // local hostname is irrelevant here — the file does not live on this machine.
         path.remove_prefix(2);
         auto const slash = path.find('/');
-        authority = std::string { path.substr(0, slash) };
+        authority = path.substr(0, slash);
         path = slash == std::string_view::npos ? std::string_view {} : path.substr(slash);
     }
 

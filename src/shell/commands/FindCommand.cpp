@@ -134,13 +134,9 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
     auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
     list->tag = 0; // Nil
 
-    // Hoisted out of the loop: fs::current_path() is a syscall, and `find` can match many
-    // thousands of entries.
-    auto const workingDirectory = [] {
-        std::error_code ec;
-        auto const cwd = fs::current_path(ec);
-        return ec ? std::string {} : platform::normalizePath(cwd);
-    }();
+    // Hoisted out of the loop: resolving the working directory is a syscall, and `find` can match
+    // many thousands of entries.
+    auto const workingDirectory = platform::absoluteDirectory({});
 
     for (auto& match: std::ranges::reverse_view(matches))
     {

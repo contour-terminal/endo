@@ -58,9 +58,9 @@ PromptSegments PathModule::evaluate(PromptContext const& ctx) const
         style.fg = ctx.theme->promptColors.path;
     style.bold = true;
 
-    // Link the real cwd, not the tilde-contracted text the user sees.
-    auto hyperlink =
-        ctx.hyperlinks ? platform::fileUri(platform::normalizePath(ctx.cwd), ctx.hostname) : std::string {};
+    // Link the real cwd, not the tilde-contracted text the user sees. Built unconditionally —
+    // whether links are emitted is the renderer's call, so there is exactly one gate.
+    auto hyperlink = platform::fileUri(platform::normalizePath(ctx.cwd), ctx.hostname);
 
     return { PromptSegment { .text = std::move(path), .style = style, .hyperlink = std::move(hyperlink) } };
 }

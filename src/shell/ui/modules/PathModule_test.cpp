@@ -64,13 +64,15 @@ namespace
 {
 
 /// @brief Renders a PathModule and returns the single segment.
-[[nodiscard]] PromptSegment renderSegment(std::string cwd, std::string homePath, bool hyperlinks)
+///
+/// The URI is always produced; whether it is emitted is the renderer's decision, covered by
+/// PromptComponent.path_hyperlink_omitted_when_disabled.
+[[nodiscard]] PromptSegment renderSegment(std::string cwd, std::string homePath)
 {
     auto ctx = PromptContext {};
     ctx.cwd = std::move(cwd);
     ctx.homePath = std::move(homePath);
     ctx.hostname = "box";
-    ctx.hyperlinks = hyperlinks;
     auto segments = PathModule {}.evaluate(ctx);
     REQUIRE(segments.size() == 1);
     return std::move(segments.front());
@@ -82,29 +84,21 @@ TEST_CASE("PathModule.hyperlink_targets_real_path_not_tilde")
 {
     // The displayed text is contracted for brevity, but a link must address the actual
     // directory — "~/projects" is not a path any terminal can open.
-    auto const segment = renderSegment("/home/alice/projects", "/home/alice", true);
+    auto const segment = renderSegment("/home/alice/projects", "/home/alice");
     CHECK(segment.text == "~/projects");
     CHECK(segment.hyperlink == "file://box/home/alice/projects");
 }
 
 TEST_CASE("PathModule.hyperlink_percent_encodes_the_path")
 {
-    auto const segment = renderSegment("/tmp/my dir", "", true);
+    auto const segment = renderSegment("/tmp/my dir", "");
     CHECK(segment.hyperlink == "file://box/tmp/my%20dir");
-}
-
-TEST_CASE("PathModule.hyperlink_omitted_when_disabled")
-{
-    auto const segment = renderSegment("/home/alice/projects", "/home/alice", false);
-    CHECK(segment.text == "~/projects");
-    CHECK(segment.hyperlink.empty());
 }
 
 TEST_CASE("PathModule.hyperlink_uses_local_form_without_hostname")
 {
     auto ctx = PromptContext {};
     ctx.cwd = "/tmp/x";
-    ctx.hyperlinks = true;
     auto const segments = PathModule {}.evaluate(ctx);
     REQUIRE(segments.size() == 1);
     CHECK(segments.front().hyperlink == "file:///tmp/x");

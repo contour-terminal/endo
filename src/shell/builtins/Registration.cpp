@@ -1076,16 +1076,12 @@ void Shell::registerPromptBuiltins()
         .onSet([this](CoreVM::Params& args) { _lsDirectorySlash = args.getBool(1); });
 
     // One switch for every clickable path the shell emits: the prompt's working directory and
-    // the file names in ls/find/grep output. The prompt reads it through PromptConfig so a
-    // toggle takes effect on the next render without invalidating the module cache.
+    // the file names in ls/find/grep output. This member is the only copy — the prompt reads it
+    // through PromptContext, refreshed each prompt cycle, so a preset switch cannot resurrect
+    // links the user turned off.
     _runtime.registerProperty("shell_hyperlinks", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_hyperlinks); })
-        .onSet([this](CoreVM::Params& args) {
-            _hyperlinks = args.getBool(1);
-            auto config = prompt.promptConfig();
-            config.hyperlinks = _hyperlinks;
-            prompt.setPromptConfig(std::move(config));
-        });
+        .onSet([this](CoreVM::Params& args) { _hyperlinks = args.getBool(1); });
 
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });

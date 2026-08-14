@@ -14,11 +14,11 @@ namespace tui
 
 class TerminalOutput;
 
-/// @brief A per-row index over a buffer's hyperlink regions, for cell lookup during flush.
+/// @brief A snapshot of a buffer's hyperlink regions, for cell lookup during flush.
 ///
-/// Flushing tests every cell, so the regions are bucketed by row once up front rather than
-/// scanned linearly per cell. A buffer normally carries at most a handful of regions, so the
-/// per-row bucket is tiny and a linear scan within it is the right trade.
+/// A flat scan rather than a row index: a frame carries at most a handful of regions, so bucketing
+/// them would cost more bookkeeping than it saves. Callers on the per-cell path should test
+/// empty() once per flush instead — that is where the win actually is.
 class HyperlinkIndex
 {
   public:
@@ -39,8 +39,6 @@ class HyperlinkIndex
     [[nodiscard]] bool empty() const noexcept { return _regions.empty(); }
 
   private:
-    /// Regions, copied by pointer into per-row buckets. Indexed by row.
-    std::vector<std::vector<HyperlinkRegion const*>> _byRow;
     std::vector<HyperlinkRegion> _regions;
 };
 
@@ -87,6 +85,38 @@ class HyperlinkEmitter
     TerminalOutput* _out;
     HyperlinkIndex const* _index;
     HyperlinkRegion const* _open = nullptr;
+};
+
+/// @brief Per-flush hyperlink state: both frames' regions plus the emitter bracketing writes.
+///
+/// Bundled so each flush path sets links up in one line and asks one question, rather than
+/// repeating the setup and — more importantly — the retargeted() test, which is easy to omit and
+/// silently leaves the terminal pointing at a stale target.
+struct FlushLinks
+{
+    HyperlinkIndex current;  ///< The frame being flushed.
+    HyperlinkIndex previous; ///< The frame on screen; empty when not diffing.
+    HyperlinkEmitter emitter;
+
+    /// Whether either frame has any regions at all. Hoisted because the per-cell retargeted()
+    /// test would otherwise run for every unchanged cell of every frame, links or not.
+    bool any = false;
+
+    /// @brief Builds the state for one flush.
+    /// @param out Sink receiving the framing. Must outlive this object.
+    /// @param currentBuffer The buffer being flushed.
+    /// @param previousBuffer The buffer on screen, or nullptr when not diffing.
+    FlushLinks(TerminalOutput& out, Buffer const& currentBuffer, Buffer const* previousBuffer);
+
+    /// @brief Whether the link covering (@p row, @p col) changed target since the last frame.
+    ///
+    /// The URI lives beside the cell rather than in it, so Cell equality cannot see it: a link
+    /// retargeted while its text stayed byte-identical must still be repainted, or the terminal
+    /// keeps opening the old target for the rest of the session.
+    [[nodiscard]] bool retargeted(int row, int col) const noexcept
+    {
+        return any && current.uriAt(row, col) != previous.uriAt(row, col);
+    }
 };
 
 } // namespace tui

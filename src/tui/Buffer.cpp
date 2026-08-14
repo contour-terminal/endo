@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Buffer.hpp"
 
+#include <tui/HyperlinkEmitter.hpp>
 #include <tui/TerminalOutput.hpp>
+
+#include <crispy/FNV.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -250,18 +253,12 @@ void Buffer::addHyperlink(Rect cellArea, std::string uri)
     if (uri.empty() || cellArea.width <= 0 || cellArea.height <= 0)
         return;
 
-    // The OSC 8 `id` is derived from the URI so it is identical for every region pointing at
-    // the same target and stable across frames — a redraw must not mint a new link identity.
-    // FNV-1a is used rather than std::hash because the value goes on the wire and must not
-    // vary between runs or standard-library versions.
-    constexpr auto FnvOffsetBasis = std::uint32_t { 2166136261U };
-    constexpr auto FnvPrime = std::uint32_t { 16777619U };
-    auto hash = FnvOffsetBasis;
-    for (auto const ch: uri)
-    {
-        hash ^= static_cast<std::uint8_t>(ch);
-        hash *= FnvPrime;
-    }
+    // The OSC 8 `id` is derived from the URI so it is identical for every region pointing at the
+    // same target and stable across frames — a redraw must not mint a new link identity. FNV
+    // rather than std::hash because the value goes on the wire and must not vary between runs or
+    // standard-library versions. Hashed as bytes so any byte >= 0x80 does not sign-extend.
+    auto const hash = crispy::FNV<std::uint8_t, std::uint32_t> {}(
+        reinterpret_cast<std::uint8_t const*>(uri.data()), uri.size());
 
     _hyperlinks.push_back(HyperlinkRegion {
         .cellArea = cellArea,
@@ -283,6 +280,12 @@ void Buffer::clearHyperlinks() noexcept
 
 void Buffer::writeTo(TerminalOutput& out) const
 {
+    // Honour hyperlink regions here too, not just in Screen's flush loops: the payload lives at
+    // this layer, so a component that registers a link and renders through writeTo() would
+    // otherwise lose it silently, with nothing to hint why.
+    auto const linkIndex = HyperlinkIndex { *this };
+    auto linkEmitter = HyperlinkEmitter { out, linkIndex };
+
     for (auto const row: std::views::iota(0, _rows))
     {
         out.carriageReturn();
@@ -294,9 +297,11 @@ void Buffer::writeTo(TerminalOutput& out) const
                 ++col;
                 continue;
             }
+            linkEmitter.beforeWrite(row, col);
             out.writeText(cell.grapheme, cell.style);
             col += std::max(1, static_cast<int>(cell.width));
         }
+        linkEmitter.close();
         out.clearToEndOfLine();
         if (row < _rows - 1)
             out.linefeed();

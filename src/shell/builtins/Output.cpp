@@ -235,8 +235,9 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.useColor = useColor;
             config.showIcons = _lsIcons;
             config.showDirectorySlash = _lsDirectorySlash;
-            // useColor is isTerminal(outputFd) here, so pipes and redirects get no escapes.
-            config.useHyperlinks = useColor && _hyperlinks;
+            // Gated on terminal-ness alone, not on color: escapes must not reach a pipe or a
+            // redirect, but disabling colors or icons must not cost the user clickable names.
+            config.useHyperlinks = _hyperlinks && isTerminal(outputFd);
             if (config.useHyperlinks)
                 config.uriHost = platform::cachedHostName();
             // Let the name column auto-grow for FileInfo records (ls output)

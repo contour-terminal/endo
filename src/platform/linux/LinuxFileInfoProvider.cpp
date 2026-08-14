@@ -43,12 +43,7 @@ namespace
 
         entry.name = std::move(name);
         if (!absoluteParent.empty())
-        {
-            entry.path = std::string { absoluteParent };
-            if (!entry.path.ends_with('/'))
-                entry.path += '/';
-            entry.path += entry.name;
-        }
+            entry.path = joinPath(absoluteParent, entry.name);
         entry.isSymlink = S_ISLNK(st.st_mode);
         if (entry.isSymlink)
         {
@@ -72,23 +67,6 @@ namespace
         entry.size = static_cast<int64_t>(st.st_size);
 
         return true;
-    }
-
-    /// Returns @p dir as an absolute, forward-slash normalized directory path.
-    ///
-    /// Resolved once per listing rather than once per entry: fs::absolute() consults the
-    /// process working directory, so calling it for every file would add a syscall per entry
-    /// on a hot path.
-    ///
-    /// @param dir Directory to resolve; empty is treated as the working directory.
-    /// @return The absolute directory, or an empty string if it could not be resolved.
-    [[nodiscard]] std::string absoluteDirectory(fs::path const& dir)
-    {
-        std::error_code ec;
-        auto const absolute = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
-        if (ec)
-            return {};
-        return normalizePath(absolute.lexically_normal());
     }
 
 } // namespace

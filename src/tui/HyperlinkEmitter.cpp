@@ -3,10 +3,8 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <algorithm>
-#include <cstddef>
 #include <format>
 #include <ranges>
-#include <utility> // std::cmp_greater_equal
 
 namespace tui
 {
@@ -14,36 +12,17 @@ namespace tui
 HyperlinkIndex::HyperlinkIndex(Buffer const& buffer)
 {
     auto const regions = buffer.hyperlinks();
-    if (regions.empty())
-        return;
-
-    // Copy the regions so the index stays valid even if the buffer is cleared or re-rendered
-    // before the flush completes; a frame carries only a handful of them.
     _regions.assign(regions.begin(), regions.end());
-
-    auto maxRow = 0;
-    for (auto const& region: _regions)
-        maxRow = std::max(maxRow, region.cellArea.bottom());
-    _byRow.resize(static_cast<std::size_t>(std::max(0, maxRow)));
-
-    for (auto const& region: _regions)
-    {
-        auto const firstRow = std::max(0, region.cellArea.y);
-        for (auto const row: std::views::iota(firstRow, std::max(firstRow, region.cellArea.bottom())))
-            _byRow[static_cast<std::size_t>(row)].push_back(&region);
-    }
 }
 
 auto HyperlinkIndex::at(int row, int col) const noexcept -> HyperlinkRegion const*
 {
-    if (row < 0 || std::cmp_greater_equal(row, _byRow.size()))
-        return nullptr;
-
-    for (auto const* region: _byRow[static_cast<std::size_t>(row)])
-        if (col >= region->cellArea.x && col < region->cellArea.right())
-            return region;
-
-    return nullptr;
+    auto const covers = [row, col](HyperlinkRegion const& region) {
+        return row >= region.cellArea.y && row < region.cellArea.bottom() && col >= region.cellArea.x
+               && col < region.cellArea.right();
+    };
+    auto const it = std::ranges::find_if(_regions, covers);
+    return it != _regions.end() ? &*it : nullptr;
 }
 
 auto HyperlinkIndex::uriAt(int row, int col) const noexcept -> std::string_view
@@ -64,9 +43,6 @@ HyperlinkEmitter::~HyperlinkEmitter()
 
 void HyperlinkEmitter::beforeWrite(int row, int col)
 {
-    if (_index->empty() && _open == nullptr)
-        return;
-
     auto const* region = _index->at(row, col);
     if (region == _open)
         return;
@@ -87,6 +63,14 @@ void HyperlinkEmitter::close()
 
     _out->endHyperlink();
     _open = nullptr;
+}
+
+FlushLinks::FlushLinks(TerminalOutput& out, Buffer const& currentBuffer, Buffer const* previousBuffer):
+    current(currentBuffer),
+    previous(previousBuffer != nullptr ? HyperlinkIndex { *previousBuffer } : HyperlinkIndex {}),
+    emitter(out, current),
+    any(!current.empty() || !previous.empty())
+{
 }
 
 } // namespace tui

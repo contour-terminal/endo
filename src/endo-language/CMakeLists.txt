@@ -145,6 +145,7 @@ if(ENDO_TESTING)
         ide/HoverProvider_test.cpp
         ide/DiagnosticsCollector_test.cpp
         ide/TypeRegistryCompletionAdapter_test.cpp
+        sema/TypeRegistry_test.cpp
 
         format/SourceFormatter_test.cpp
     )

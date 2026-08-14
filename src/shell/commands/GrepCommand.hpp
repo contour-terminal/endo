@@ -44,20 +44,41 @@ struct GrepRenderOptions
     std::string baseDirectory;  ///< Absolute directory that relative filenames resolve against.
 };
 
-/// Renders a filename for output, optionally colorized and hyperlinked.
+/// A file's decorated name prefix, prepared once and reused across its output lines.
 ///
-/// The link target is the file itself, resolved against GrepRenderOptions::baseDirectory when
-/// the reported name is relative. When @p lineNumber is non-zero it is appended as a URI
-/// fragment; terminals that understand it (kitty, WezTerm, the VS Code terminal) then open the
-/// file at that line, and the rest ignore the fragment.
+/// Everything but the line number is invariant per file, and one grep hit can print thousands of
+/// lines — resolving the path and rebuilding the URI per line would repeat a path normalization
+/// and a dozen allocations for each of them.
 ///
-/// @param filename The file being reported.
-/// @param lineNumber 1-based line to target as a fragment; 0 for no fragment.
-/// @param render How to decorate.
-/// @return The filename with any SGR and OSC 8 sequences applied.
-[[nodiscard]] std::string renderFilename(std::string_view filename,
-                                         int lineNumber,
-                                         GrepRenderOptions const& render);
+/// The link target is the file itself, resolved against GrepRenderOptions::baseDirectory when the
+/// reported name is relative.
+class FilenamePrefix
+{
+  public:
+    /// @brief Prepares the prefix for @p filename.
+    /// @param filename The file being reported; empty disables hyperlinking. Must outlive this
+    ///        object, which borrows it.
+    /// @param render How to decorate.
+    FilenamePrefix(std::string_view filename, GrepRenderOptions const& render);
+
+    /// @brief Appends the decorated name to @p out.
+    ///
+    /// A non-zero @p lineNumber becomes a URI fragment, so terminals that understand one (kitty,
+    /// WezTerm, the VS Code terminal) open the file at that line; the rest ignore it.
+    ///
+    /// @param out Destination to append to.
+    /// @param lineNumber 1-based line to target as a fragment; 0 for none.
+    void appendTo(std::string& out, int lineNumber = 0) const;
+
+    /// @brief Returns the decorated name as a fresh string.
+    /// @param lineNumber 1-based line to target as a fragment; 0 for none.
+    [[nodiscard]] std::string render(int lineNumber = 0) const;
+
+  private:
+    std::string_view _filename;
+    std::string _linkOpenPrefix; ///< OSC 8 opener up to where a `#line` fragment goes; empty = no link.
+    bool _useColor = false;
+};
 
 /// All parsed grep command-line options.
 struct GrepOptions

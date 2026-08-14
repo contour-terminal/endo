@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/completion/Completer.hpp>
+#include <shell/ui/PromptPresets.hpp>
 
 #include <tui/Buffer.hpp>
 #include <tui/Canvas.hpp>
@@ -582,13 +583,12 @@ TEST_CASE("PromptComponent.path_hyperlink_omitted_when_disabled", "[prompt]")
     auto comp = PromptComponent();
     auto config = comp.promptConfig();
     config.infoLineModules = { "path" };
-    config.hyperlinks = false;
     comp.setPromptConfig(std::move(config));
 
     auto ctx = PromptContext {};
     ctx.cwd = "/home/alice/projects";
     ctx.hostname = "box";
-    ctx.hyperlinks = true; // module still produces a URI; the renderer must not register it
+    ctx.hyperlinks = false;
     comp.setPromptContext(std::move(ctx));
 
     auto buffer = tui::Buffer(8, 80);
@@ -624,4 +624,33 @@ TEST_CASE("PromptComponent.solid_color_path_registers_one_region", "[prompt]")
     REQUIRE(links.size() == 1);
     CHECK(links[0].uri == "file://box/tmp/x");
     CHECK(links[0].cellArea.width == 6); // "/tmp/x"
+}
+
+TEST_CASE("PromptComponent.preset_switch_does_not_resurrect_disabled_hyperlinks", "[prompt]")
+{
+    // Switching presets replaces the whole PromptConfig. If the enable flag lived there it would
+    // silently come back on, re-enabling links the user had turned off — so it lives on the
+    // context, which the shell refreshes from its own state each prompt cycle.
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.infoLineModules = { "path" };
+    comp.setPromptConfig(std::move(config));
+
+    auto ctx = PromptContext {};
+    ctx.cwd = "/tmp/x";
+    ctx.hostname = "box";
+    ctx.hyperlinks = false;
+    comp.setPromptContext(std::move(ctx));
+
+    // A preset switch, as `shell_prompt_preset <- ...` performs it.
+    auto preset = promptPreset("powerline", tui::ColorScheme::Dark);
+    preset.infoLineModules = { "path" };
+    comp.setPromptConfig(std::move(preset));
+
+    auto buffer = tui::Buffer(8, 80);
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    comp.render(canvas);
+
+    CHECK(buffer.hyperlinks().empty());
 }

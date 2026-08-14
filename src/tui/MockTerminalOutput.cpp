@@ -20,7 +20,7 @@ void MockTerminalOutput::writeText(std::string_view text, [[maybe_unused]] Style
     // Accumulate into the open hyperlink run, if any. Only text actually written counts, so a
     // frame whose diff skipped cells yields a run holding just the rewritten graphemes —
     // which is precisely what such a test wants to assert about.
-    if (!_hyperlinkRuns.empty() && _hyperlinkOpen)
+    if (_hyperlinkOpen)
         _hyperlinkRuns.back().text += text;
 
     // Advance cursor column by display width of text.
@@ -290,7 +290,9 @@ void MockTerminalOutput::endHyperlink()
 
 void MockTerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
 {
-    beginHyperlink(url);
+    // Explicit second argument: a default on the base declaration is not inherited by the
+    // override, and this call resolves against the derived type.
+    beginHyperlink(url, {});
     writeText(text, style);
     endHyperlink();
 }

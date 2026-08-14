@@ -940,8 +940,8 @@ void Shell::emitCurrentWorkingDirectory()
 
     auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
 
-    _tty.writeToStdout(std::format("\033]7;{}\033\\",
-                                   platform::fileUri(platform::normalizePath(cwd), platform::hostName())));
+    _tty.writeToStdout(std::format(
+        "\033]7;{}\033\\", platform::fileUri(platform::normalizePath(cwd), platform::cachedHostName())));
 }
 
 void Shell::emitWindowTitle(std::string_view title)

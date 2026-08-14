@@ -35,21 +35,21 @@ namespace
         return std::string { reinterpret_cast<char const*>(u8.data()), u8.size() };
     }
 
-    /// Returns @p dir as an absolute, forward-slash normalized directory path.
+    /// Returns @p dir as an absolute, UTF-8, forward-slash normalized directory path.
     ///
-    /// Resolved once per listing rather than once per entry: fs::absolute() consults the
-    /// process working directory, so calling it for every file would add a syscall per entry
-    /// on a hot path.
+    /// Not platform::absoluteDirectory(): that goes through normalizePath(fs::path), which uses
+    /// generic_string() and so narrows to the ANSI code page — throwing on any directory name the
+    /// code page cannot represent. Resolved once per listing, as the shared helper is.
     ///
     /// @param dir Directory to resolve; empty is treated as the working directory.
     /// @return The absolute directory, or an empty string if it could not be resolved.
-    [[nodiscard]] std::string absoluteDirectory(fs::path const& dir)
+    [[nodiscard]] std::string absoluteDirectoryUtf8(fs::path const& dir)
     {
         std::error_code ec;
-        auto const absolute = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
+        auto const resolved = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
         if (ec)
             return {};
-        return normalizePath(toUtf8(absolute.lexically_normal()));
+        return normalizePath(toUtf8(resolved.lexically_normal()));
     }
 
     /// Populates a FileEntry from a filesystem directory_entry.
@@ -66,12 +66,7 @@ namespace
 
         fileEntry.name = toUtf8(dirEntry.path().filename());
         if (!absoluteParent.empty())
-        {
-            fileEntry.path = std::string { absoluteParent };
-            if (!fileEntry.path.ends_with('/'))
-                fileEntry.path += '/';
-            fileEntry.path += fileEntry.name;
-        }
+            fileEntry.path = joinPath(absoluteParent, fileEntry.name);
 
         // status() follows reparse points. App Execution Aliases (winget, Microsoft Store
         // python, …) are reparse points that cannot be opened or followed through normal
@@ -160,7 +155,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
         if (parentDir.empty())
             parentDir = ".";
 
-        auto const absoluteParent = absoluteDirectory(parentDir);
+        auto const absoluteParent = absoluteDirectoryUtf8(parentDir);
 
         for (auto const& entry: fs::directory_iterator(parentDir, ec))
         {
@@ -184,7 +179,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     auto const dir = fs::path(path);
     if (fs::is_directory(dir, ec) && !ec)
     {
-        auto const absoluteParent = absoluteDirectory(dir);
+        auto const absoluteParent = absoluteDirectoryUtf8(dir);
 
         for (auto const& entry: fs::directory_iterator(dir, ec))
         {
@@ -204,7 +199,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
     {
         FileEntry fileEntry {};
-        if (statEntry(dirEntry, absoluteDirectory(dir.parent_path()), fileEntry))
+        if (statEntry(dirEntry, absoluteDirectoryUtf8(dir.parent_path()), fileEntry))
             result.push_back(std::move(fileEntry));
     }
 

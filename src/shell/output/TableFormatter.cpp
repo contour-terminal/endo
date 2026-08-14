@@ -294,6 +294,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     std::vector<int> colWidths(numCols, 0);
     std::vector<FileDecoration> fileDecorations; // one per row (only when decorateFiles)
     std::vector<std::string> fileUris;           // one per row (only when linkFiles; may be empty)
+    if (linkFiles)
+        fileUris.reserve(records.size());
 
     for (size_t col = 0; col < numCols; ++col)
         colWidths[col] = static_cast<int>(headers[col].size());
@@ -308,7 +310,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         std::vector<std::string> row;
         row.reserve(numCols);
 
-        // FileInfo hidden slots that drive visuals: isDir (4), isSymlink (5), target (6).
+        // FileInfo hidden slots: isDir (4), isSymlink (5) and target (6) drive visuals,
+        // path (7) is the hyperlink target.
         auto const isDir = isFileInfo && record->getSlot(4) != 0;
         auto const isSymlink = isFileInfo && record->getSlot(5) != 0;
         if (decorateFiles)
@@ -425,35 +428,32 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         if ((decorateFiles || linkFiles) && col == 0)
         {
             auto const sgr = decorateFiles ? sgrSequence(fileDecorations[rowIdx].style) : std::string {};
-            auto const sgrReset = sgr.empty() ? std::string {} : std::string { "\033[m" };
+            auto const* const sgrReset = sgr.empty() ? "" : "\033[m";
             auto const showIcon = decorateFiles && config.showIcons;
             auto const iconWidth = showIcon ? IconDisplayWidth : 0;
-            auto const& uri = linkFiles ? fileUris[rowIdx] : std::string {};
+            // A conditional mixing an lvalue with a prvalue yields a prvalue, so binding this by
+            // reference would copy the vector element per row; a view aliases it.
+            auto const uri = linkFiles ? std::string_view { fileUris[rowIdx] } : std::string_view {};
 
             // Padding sits outside both the link and the SGR span, so clicking the blank filler
             // does nothing and the highlight stops at the name. Same total width as padCell():
-            // iconWidth + displayWidth(cellText) + pad == width.
+            // iconWidth + displayWidth(cellText) + pad == width. Always trailing, since the name
+            // column is never right-aligned (isRightAlignedColumn says so only for numeric ones).
             auto const pad = std::max(0, width - (displayWidth(cellText) + iconWidth));
-            auto const emitPad = [&] {
-                out.append(static_cast<size_t>(pad), ' ');
-            };
 
-            if (rightAlign)
-                emitPad();
             if (!uri.empty())
                 out += tui::protocols::buildHyperlinkOpen(uri);
             out += sgr;
             if (showIcon)
             {
-                out += std::string(fileDecorations[rowIdx].icon);
+                out += fileDecorations[rowIdx].icon;
                 out += ' ';
             }
             out += cellText;
             out += sgrReset;
             if (!uri.empty())
                 out += tui::protocols::HyperlinkClose;
-            if (!rightAlign)
-                emitPad();
+            out.append(static_cast<size_t>(pad), ' ');
         }
         else if (config.useColor && isFileModeCol[col])
         {

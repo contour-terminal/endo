@@ -541,15 +541,16 @@ void PromptComponent::render(tui::Canvas& canvas)
         // carrying the same URI, so it yields exactly one region — the link stays whole without
         // depending on how a terminal groups adjacent same-URI runs.
         //
-        // Gating on _config.hyperlinks here rather than in the module means toggling the setting
-        // takes effect on the next render, with no module-cache invalidation needed.
+        // Gated on the context rather than on PromptConfig: a preset switch replaces the whole
+        // PromptConfig, which would silently re-enable links the user had turned off. The context
+        // is refreshed from the shell every prompt cycle, so it is the authoritative value.
         auto const renderSegments = [&](int row, int startCol, PromptSegments const& segments) {
             auto col = startCol;
             auto runStart = startCol;
             auto runUri = std::string_view {};
 
             auto const flushRun = [&](int endCol) {
-                if (_config.hyperlinks && !runUri.empty() && endCol > runStart)
+                if (_context.hyperlinks && !runUri.empty() && endCol > runStart)
                     canvas.addHyperlink(row, runStart, endCol - runStart, runUri);
             };
 

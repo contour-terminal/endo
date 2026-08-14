@@ -62,6 +62,43 @@ inline constexpr bool FilesystemCaseInsensitive =
     return p.generic_string();
 }
 
+/// @brief Joins a directory and an entry name with a single `/`.
+///
+/// Tolerates @p dir already ending in a separator, which is what a filesystem root does.
+///
+/// @param dir Directory path (may be empty, in which case @p name is returned).
+/// @param name Entry name to append.
+/// @return The joined path.
+[[nodiscard]] inline auto joinPath(std::string_view dir, std::string_view name) -> std::string
+{
+    if (dir.empty())
+        return std::string { name };
+
+    auto joined = std::string {};
+    joined.reserve(dir.size() + 1 + name.size());
+    joined += dir;
+    if (!joined.ends_with('/'))
+        joined += '/';
+    joined += name;
+    return joined;
+}
+
+/// @brief Resolves @p dir to an absolute, forward-slash normalized directory path.
+///
+/// Intended to be called once per directory listing rather than once per entry: fs::absolute()
+/// consults the process working directory, so per-entry resolution costs a syscall per file.
+///
+/// @param dir Directory to resolve; empty is treated as the working directory.
+/// @return The absolute directory, or an empty string if it could not be resolved.
+[[nodiscard]] inline auto absoluteDirectory(std::filesystem::path const& dir) -> std::string
+{
+    auto ec = std::error_code {};
+    auto const absolute = std::filesystem::absolute(dir.empty() ? std::filesystem::path { "." } : dir, ec);
+    if (ec)
+        return {};
+    return normalizePath(absolute.lexically_normal());
+}
+
 /// @brief Resolves @p path against @p base, without touching the filesystem.
 ///
 /// A path that is already absolute is returned normalized and otherwise untouched. A relative

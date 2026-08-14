@@ -412,7 +412,7 @@ namespace
               "`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
               "Lists directory contents as structured FileInfo records.\n\n"
               "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`, `isSymlink: bool`, `target: str`" },
+              "bool`, `isSymlink: bool`, `target: str`, `path: str`" },
             { "ps",
               "`ps` : `list<ProcessInfo>`\n\n"
               "Lists running processes as structured ProcessInfo records.\n\n"
