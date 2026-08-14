@@ -39,6 +39,7 @@
 #include <platform/Generator.hpp>
 #include <platform/InterruptThrottle.hpp>
 #include <platform/PathUtils.hpp>
+#include <platform/SystemInfo.hpp>
 #include <platform/Process.hpp>
 #include <platform/ProcessProvider.hpp>
 #include <platform/SignalHandler.hpp>
@@ -2462,6 +2463,16 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
         useColor = isTerminal(outputFd);
     }
 
+    // Hyperlinks are gated on terminal-ness only, not on --color: a user who asked for
+    // --color=never still benefits from clickable results, and one who forced --color=always
+    // into a pipe does not want OSC 8 bytes in the captured text.
+    auto const render = grep::GrepRenderOptions {
+        .useColor = useColor,
+        .useHyperlinks = _hyperlinks && isTerminal(outputFd),
+        .uriHost = platform::cachedHostName(),
+        .baseDirectory = platform::normalizePath(_fs.currentPath()),
+    };
+
     // Output + error writer lambdas
     auto const writer = [outputFd](std::string_view sv) {
         platformWrite(outputFd, sv.data(), sv.size());
@@ -2520,7 +2531,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             lines.push_back(std::move(currentLine));
 
         totalMatches = grep::searchLines(
-            lines, *regex, opts, "(standard input)", showFilename, useColor, writer, &throttle);
+            lines, *regex, opts, "(standard input)", showFilename, render, writer, &throttle);
         if (interrupted())
             return 130;
     }
@@ -2565,7 +2576,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                                                    opts,
                                                    platform::normalizePath(filePath),
                                                    showFilename,
-                                                   useColor,
+                                                   render,
                                                    writer,
                                                    &throttle);
             if (interrupted())

@@ -2,6 +2,11 @@
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
+#include <platform/FileUri.hpp>
+#include <platform/PathUtils.hpp>
+
+#include <tui/TerminalProtocols.hpp>
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -549,15 +554,44 @@ std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
     return result;
 }
 
+std::string renderFilename(std::string_view filename, int lineNumber, GrepRenderOptions const& render)
+{
+    auto uri = std::string {};
+    if (render.useHyperlinks && !filename.empty())
+    {
+        auto const fragment = lineNumber > 0 ? std::to_string(lineNumber) : std::string {};
+        uri = platform::fileUri(platform::absolutePath(filename, render.baseDirectory),
+                                render.uriHost,
+                                fragment);
+    }
+
+    auto out = std::string {};
+    if (!uri.empty())
+        out += tui::protocols::buildHyperlinkOpen(uri);
+    if (render.useColor)
+        out += ColorFilename;
+    out += filename;
+    if (render.useColor)
+        out += ColorReset;
+    if (!uri.empty())
+        out += tui::protocols::HyperlinkClose;
+    return out;
+}
+
 size_t searchLines(std::vector<std::string> const& lines,
                    std::regex const& regex,
                    GrepOptions const& opts,
                    std::string_view filename,
                    bool showFilename,
-                   bool useColor,
+                   GrepRenderOptions const& render,
                    OutputWriter const& writer,
                    platform::InterruptThrottle* throttle)
 {
+    auto const useColor = render.useColor;
+    // Rendered once per file rather than per output line: a single grep hit can print thousands
+    // of lines, and the prefix is identical for all of them except the line number.
+    auto const renderedName = showFilename ? renderFilename(filename, 0, render) : std::string {};
+
     auto const beforeCtx = opts.effectiveBeforeContext();
     auto const afterCtx = opts.effectiveAfterContext();
     auto const hasContext = beforeCtx > 0 || afterCtx > 0;
@@ -592,12 +626,7 @@ size_t searchLines(std::vector<std::string> const& lines,
     {
         std::string output;
         if (showFilename)
-        {
-            if (useColor)
-                output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset) + ":";
-            else
-                output += std::string(filename) + ":";
-        }
+            output += renderedName + ":";
         output += std::to_string(matchCount) + "\n";
         writer(output);
         return matchCount;
@@ -607,7 +636,7 @@ size_t searchLines(std::vector<std::string> const& lines,
     if (opts.filesWithMatches)
     {
         if (matchCount > 0)
-            writer(std::string(filename) + "\n");
+            writer(renderFilename(filename, 0, render) + "\n");
         return matchCount;
     }
 
@@ -615,7 +644,7 @@ size_t searchLines(std::vector<std::string> const& lines,
     if (opts.filesWithoutMatch)
     {
         if (matchCount == 0)
-            writer(std::string(filename) + "\n");
+            writer(renderFilename(filename, 0, render) + "\n");
         return matchCount;
     }
 
@@ -686,13 +715,7 @@ size_t searchLines(std::vector<std::string> const& lines,
 
                 std::string output;
                 if (showFilename)
-                {
-                    if (useColor)
-                        output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset)
-                                  + ":";
-                    else
-                        output += std::string(filename) + ":";
-                }
+                    output += renderFilename(filename, lineIndex + 1, render) + ":";
                 if (opts.lineNumbers)
                 {
                     if (useColor)
@@ -718,10 +741,7 @@ size_t searchLines(std::vector<std::string> const& lines,
         std::string output;
         if (showFilename)
         {
-            if (useColor)
-                output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset);
-            else
-                output += std::string(filename);
+            output += renderFilename(filename, lineIndex + 1, render);
 
             // Use : for match lines, - for context lines
             if (hasContext && !isMatch)

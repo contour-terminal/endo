@@ -351,11 +351,12 @@ std::string collectOutput(std::vector<std::string> const& lines,
                           std::regex const& regex,
                           GrepOptions const& opts,
                           std::string_view filename = "",
-                          bool showFilename = false)
+                          bool showFilename = false,
+                          GrepRenderOptions const& render = {})
 {
     std::string output;
     auto const matchCount = searchLines(
-        lines, regex, opts, filename, showFilename, false, [&](std::string_view sv) { output += sv; });
+        lines, regex, opts, filename, showFilename, render, [&](std::string_view sv) { output += sv; });
     (void) matchCount;
     return output;
 }
@@ -382,7 +383,7 @@ TEST_CASE("grep.search.no_match", "[grep]")
     auto regex = buildRegex(opts);
     REQUIRE(regex.has_value());
 
-    auto count = searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {});
+    auto count = searchLines(lines, *regex, opts, "", false, {}, [](std::string_view) {});
     CHECK(count == 0);
 }
 
@@ -432,7 +433,7 @@ TEST_CASE("grep.search.interrupt_aborts_early", "[grep]")
     SignalHandler::simulateSigint();
     auto throttle = endo::platform::InterruptThrottle {};
 
-    auto const count = searchLines(lines, *regex, opts, "", false, false, [](std::string_view) {}, &throttle);
+    auto const count = searchLines(lines, *regex, opts, "", false, {}, [](std::string_view) {}, &throttle);
 
     // The match loop aborts at the first poll boundary, long before all 1000 lines.
     CHECK(count < 1000);
@@ -624,4 +625,104 @@ TEST_CASE("grep.binary.null_bytes", "[grep]")
     }
     CHECK(isBinaryFile(endo::platform::NativeFileSystem::instance(), binFile));
     fs::remove_all(tmpDir);
+}
+
+// ============================================================================
+// OSC 8 hyperlinks on filename prefixes
+// ============================================================================
+
+TEST_CASE("grep.hyperlinks.filename_prefix_links_to_line", "[grep]")
+{
+    std::vector<std::string> const lines = { "no", "hello world" };
+    GrepOptions opts;
+    opts.patterns = { "hello" };
+    opts.lineNumbers = true;
+    auto const regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto const render = GrepRenderOptions {
+        .useHyperlinks = true,
+        .uriHost = "box",
+        .baseDirectory = "/work",
+    };
+    auto const output = collectOutput(lines, *regex, opts, "src/a.cpp", true, render);
+
+    // Relative name resolved against the base directory, with the 1-based line as a fragment.
+    CHECK(output.find("\033]8;;file://box/work/src/a.cpp#2\033\\") != std::string::npos);
+    CHECK(output.find("\033]8;;\033\\") != std::string::npos);
+}
+
+TEST_CASE("grep.hyperlinks.absolute_filename_is_not_rebased", "[grep]")
+{
+    std::vector<std::string> const lines = { "hello" };
+    GrepOptions opts;
+    opts.patterns = { "hello" };
+    auto const regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto const render = GrepRenderOptions {
+        .useHyperlinks = true,
+        .uriHost = "box",
+        .baseDirectory = "/work",
+    };
+    auto const output = collectOutput(lines, *regex, opts, "/etc/hosts", true, render);
+
+    CHECK(output.find("file://box/etc/hosts") != std::string::npos);
+    CHECK(output.find("/work/etc") == std::string::npos);
+}
+
+TEST_CASE("grep.hyperlinks.absent_when_disabled", "[grep]")
+{
+    std::vector<std::string> const lines = { "hello" };
+    GrepOptions opts;
+    opts.patterns = { "hello" };
+    auto const regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto const output = collectOutput(lines, *regex, opts, "a.cpp", true, GrepRenderOptions {});
+
+    CHECK(output.find("]8;;") == std::string::npos);
+    CHECK(output.find("a.cpp") != std::string::npos);
+}
+
+TEST_CASE("grep.hyperlinks.independent_of_color", "[grep]")
+{
+    // A user who passed --color=never still gets clickable results.
+    std::vector<std::string> const lines = { "hello" };
+    GrepOptions opts;
+    opts.patterns = { "hello" };
+    auto const regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto const render = GrepRenderOptions {
+        .useColor = false,
+        .useHyperlinks = true,
+        .uriHost = "box",
+        .baseDirectory = "/work",
+    };
+    auto const output = collectOutput(lines, *regex, opts, "a.cpp", true, render);
+
+    CHECK(output.find("file://box/work/a.cpp") != std::string::npos);
+    CHECK(output.find("\033[35m") == std::string::npos); // no filename color
+}
+
+TEST_CASE("grep.hyperlinks.files_with_matches_listing_is_linked", "[grep]")
+{
+    // -l prints bare filenames and was previously uncolored; it gets links with no fragment.
+    std::vector<std::string> const lines = { "hello" };
+    GrepOptions opts;
+    opts.patterns = { "hello" };
+    opts.filesWithMatches = true;
+    auto const regex = buildRegex(opts);
+    REQUIRE(regex.has_value());
+
+    auto const render = GrepRenderOptions {
+        .useHyperlinks = true,
+        .uriHost = "box",
+        .baseDirectory = "/work",
+    };
+    auto const output = collectOutput(lines, *regex, opts, "a.cpp", true, render);
+
+    CHECK(output.find("\033]8;;file://box/work/a.cpp\033\\") != std::string::npos);
+    CHECK(output.find('#') == std::string::npos); // no line fragment for -l
 }

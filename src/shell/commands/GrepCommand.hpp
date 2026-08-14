@@ -32,6 +32,33 @@ enum class FilenameMode : uint8_t
     Never,  ///< Never show (-h)
 };
 
+/// How grep decorates its output.
+///
+/// Grouped into one struct rather than threaded as parallel bool parameters, since the
+/// decorations are resolved together at the call site and consumed together per output line.
+struct GrepRenderOptions
+{
+    bool useColor = false;      ///< Emit SGR color sequences.
+    bool useHyperlinks = false; ///< Wrap filenames in OSC 8 hyperlinks (terminal only).
+    std::string uriHost;        ///< Authority for `file://` URIs, normally platform::hostName().
+    std::string baseDirectory;  ///< Absolute directory that relative filenames resolve against.
+};
+
+/// Renders a filename for output, optionally colorized and hyperlinked.
+///
+/// The link target is the file itself, resolved against GrepRenderOptions::baseDirectory when
+/// the reported name is relative. When @p lineNumber is non-zero it is appended as a URI
+/// fragment; terminals that understand it (kitty, WezTerm, the VS Code terminal) then open the
+/// file at that line, and the rest ignore the fragment.
+///
+/// @param filename The file being reported.
+/// @param lineNumber 1-based line to target as a fragment; 0 for no fragment.
+/// @param render How to decorate.
+/// @return The filename with any SGR and OSC 8 sequences applied.
+[[nodiscard]] std::string renderFilename(std::string_view filename,
+                                         int lineNumber,
+                                         GrepRenderOptions const& render);
+
 /// All parsed grep command-line options.
 struct GrepOptions
 {
@@ -132,7 +159,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
 /// @param opts The grep options controlling output format.
 /// @param filename The filename for output prefixing (empty for stdin).
 /// @param showFilename Whether to prefix output with filename.
-/// @param useColor Whether to colorize the output.
+/// @param render How to decorate the output (colors, hyperlinks).
 /// @param writer Callback for writing output.
 /// @param throttle Optional throttled, non-consuming interrupt poll; when non-null, searching
 ///                 stops early once a pending Ctrl+C is observed (the flag is left set for the
@@ -143,7 +170,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
                                  GrepOptions const& opts,
                                  std::string_view filename,
                                  bool showFilename,
-                                 bool useColor,
+                                 GrepRenderOptions const& render,
                                  OutputWriter const& writer,
                                  platform::InterruptThrottle* throttle = nullptr);
 
