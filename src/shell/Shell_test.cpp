@@ -5429,10 +5429,11 @@ namespace
 ///
 /// `structured_ls` reads the real filesystem (it constructs the platform provider directly
 /// rather than taking the injected FileSystem), so an ls test needs real files.
-auto writeLsFixture() -> std::filesystem::path
+auto writeLsFixture(std::string_view caseName) -> std::filesystem::path
 {
     namespace fs = std::filesystem;
-    auto const dir = fs::temp_directory_path() / "endo_ls_links";
+    // Per-case directory so the three ls cases cannot observe each other's entries.
+    auto const dir = fs::temp_directory_path() / std::format("endo_ls_links_{}", caseName);
     fs::remove_all(dir);
     fs::create_directories(dir / "subdir");
     auto plain = std::ofstream(dir / "plain.txt", std::ios::binary);
@@ -5446,7 +5447,7 @@ auto writeLsFixture() -> std::filesystem::path
 
 TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 {
-    auto const dir = writeLsFixture();
+    auto const dir = writeLsFixture("emits");
 
     TestShell shell;
     shell(std::format("ls {}", dir.string()));
@@ -5456,8 +5457,9 @@ TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 #if !defined(_WIN32)
     // Assert on the resolved absolute target, not merely that some escape appeared — that is
     // what proves the FileInfo path slot is actually plumbed through.
-    CHECK(output.find(std::format("]8;;file://{}{}/plain.txt", endo::platform::cachedHostName(), dir.string()))
-          != std::string::npos);
+    CHECK(
+        output.find(std::format("]8;;file://{}{}/plain.txt", endo::platform::cachedHostName(), dir.string()))
+        != std::string::npos);
     // A space in the name must be percent-encoded inside the URI.
     CHECK(output.find("with%20space.txt") != std::string::npos);
     CHECK(output.find("\033]8;;\033\\") != std::string::npos);
@@ -5467,7 +5469,7 @@ TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 
 TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 {
-    auto const dir = writeLsFixture();
+    auto const dir = writeLsFixture("disabled");
 
     TestShell shell;
     shell("shell_hyperlinks <- false");
@@ -5485,7 +5487,7 @@ TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
 {
     // The URI comes from each record, so it stays correct after the listing is reshaped.
-    auto const dir = writeLsFixture();
+    auto const dir = writeLsFixture("filtered");
 
     TestShell shell;
     shell(std::format("ls {} |> filter _.isDir", dir.string()));

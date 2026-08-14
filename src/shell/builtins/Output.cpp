@@ -14,8 +14,8 @@
 #include <filesystem>
 #include <format>
 
-#include <platform/Types.hpp>
 #include <platform/SystemInfo.hpp>
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>

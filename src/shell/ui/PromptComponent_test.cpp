@@ -559,7 +559,8 @@ TEST_CASE("PromptComponent.gradient_path_registers_a_single_hyperlink_region", "
     comp.setPromptContext(std::move(ctx));
 
     auto buffer = tui::Buffer(8, 80);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
     comp.render(canvas);
 
     auto const links = buffer.hyperlinks();
@@ -591,7 +592,8 @@ TEST_CASE("PromptComponent.path_hyperlink_omitted_when_disabled", "[prompt]")
     comp.setPromptContext(std::move(ctx));
 
     auto buffer = tui::Buffer(8, 80);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
     comp.render(canvas);
 
     CHECK(buffer.hyperlinks().empty());
@@ -614,7 +616,8 @@ TEST_CASE("PromptComponent.solid_color_path_registers_one_region", "[prompt]")
     comp.setPromptContext(std::move(ctx));
 
     auto buffer = tui::Buffer(8, 80);
-    auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
     comp.render(canvas);
 
     auto const links = buffer.hyperlinks();

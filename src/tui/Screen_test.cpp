@@ -1397,17 +1397,13 @@ struct LinkedTextComponent: Component
             canvas.addHyperlink(0, 0, col, uri);
     }
 
-    [[nodiscard]] Size preferredSize() const override
-    {
-        return { .width = 80, .height = 1 };
-    }
+    [[nodiscard]] Size preferredSize() const override { return { .width = 80, .height = 1 }; }
 };
 
 /// @brief Attaches @p component to @p screen as a single full-width row.
 void attachSingleRow(Screen& screen, Component& component)
 {
-    screen.root().addChild(component,
-                           LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 1 } });
+    screen.root().addChild(component, LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 1 } });
 }
 
 } // namespace

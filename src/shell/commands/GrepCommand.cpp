@@ -2,9 +2,6 @@
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
-#include <platform/FileUri.hpp>
-#include <platform/PathUtils.hpp>
-
 #include <tui/TerminalProtocols.hpp>
 
 #include <algorithm>
@@ -17,6 +14,9 @@
 #include <ranges>
 #include <regex>
 #include <utility>
+
+#include <platform/FileUri.hpp>
+#include <platform/PathUtils.hpp>
 
 namespace endo::grep
 {
@@ -560,9 +560,8 @@ std::string renderFilename(std::string_view filename, int lineNumber, GrepRender
     if (render.useHyperlinks && !filename.empty())
     {
         auto const fragment = lineNumber > 0 ? std::to_string(lineNumber) : std::string {};
-        uri = platform::fileUri(platform::absolutePath(filename, render.baseDirectory),
-                                render.uriHost,
-                                fragment);
+        uri = platform::fileUri(
+            platform::absolutePath(filename, render.baseDirectory), render.uriHost, fragment);
     }
 
     auto out = std::string {};

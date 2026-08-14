@@ -2,14 +2,14 @@
 #include "PathModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <platform/FileUri.hpp>
-#include <platform/PathUtils.hpp>
-
 #include <tui/Theme.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <string_view>
+
+#include <platform/FileUri.hpp>
+#include <platform/PathUtils.hpp>
 
 namespace endo
 {

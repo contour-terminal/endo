@@ -139,10 +139,8 @@ std::vector<FileEntry> LinuxFileInfoProvider::listDirectory(std::string const& p
                 break;
 
             FileEntry entry {};
-            if (statEntry(dirEntry.path().string(),
-                          dirEntry.path().filename().string(),
-                          absoluteParent,
-                          entry))
+            if (statEntry(
+                    dirEntry.path().string(), dirEntry.path().filename().string(), absoluteParent, entry))
                 entries.push_back(std::move(entry));
         }
 
