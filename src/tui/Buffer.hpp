@@ -4,6 +4,7 @@
 #include <tui/Cell.hpp>
 #include <tui/Rect.hpp>
 
+#include <cstdint>
 #include <limits>
 #include <span>
 #include <string>
@@ -23,6 +24,22 @@ struct ImageRegion
     Rect cellArea;               ///< Which cells this image covers (buffer coordinates).
     std::string encodedSixel;    ///< Pre-encoded sixel data (without DCS framing).
     std::size_t contentHash = 0; ///< Hash of encodedSixel for fast diff comparison.
+};
+
+/// @brief A hyperlink region stored in the buffer.
+///
+/// The out-of-band counterpart to ImageRegion. Covered cells hold ordinary graphemes and
+/// styles; only the OSC 8 framing is stored here and emitted around them at flush time.
+/// Keeping the URI off the cell is what makes a hyperlink zero-width by construction, so
+/// display-width and column hit-testing arithmetic never has to know about it.
+///
+/// A region spans a whole run, which is what keeps a gradient-coloured path — drawn as one
+/// Cell per grapheme cluster — a single logical link rather than N adjacent ones.
+struct HyperlinkRegion
+{
+    Rect cellArea;        ///< Which cells this link covers (buffer coordinates).
+    std::string uri;      ///< Absolute URI, e.g. "file://host/home/me/src".
+    std::uint32_t id = 0; ///< Stable OSC 8 `id=` derived from uri (0 = emit no id).
 };
 
 /// A 2D grid of terminal cells representing a virtual screen buffer.
@@ -149,6 +166,23 @@ class Buffer
     /// @brief Clears all image regions.
     void clearImages() noexcept;
 
+    // --- Hyperlink Regions ---
+
+    /// @brief Registers an OSC 8 hyperlink covering @p cellArea.
+    ///
+    /// Call after the covered cells have been drawn. Empty URIs are ignored, so callers can
+    /// pass the result of a URI builder unconditionally.
+    ///
+    /// @param cellArea The cell run the link covers (in buffer coordinates).
+    /// @param uri Absolute URI, e.g. `file://host/home/me/src`.
+    void addHyperlink(Rect cellArea, std::string uri);
+
+    /// @brief Returns all hyperlink regions, in registration order.
+    [[nodiscard]] std::span<HyperlinkRegion const> hyperlinks() const noexcept;
+
+    /// @brief Clears all hyperlink regions.
+    void clearHyperlinks() noexcept;
+
     /// Writes buffer content to a terminal output stream.
     ///
     /// Iterates rows/cells and emits text with styling, handling wide characters
@@ -163,6 +197,7 @@ class Buffer
     Point _cursor { .x = 0, .y = 0 };
     bool _cursorVisible = true;
     std::vector<ImageRegion> _images;
+    std::vector<HyperlinkRegion> _hyperlinks;
 
     /// Converts (row, col) to a linear index.
     [[nodiscard]] std::size_t index(int row, int col) const noexcept

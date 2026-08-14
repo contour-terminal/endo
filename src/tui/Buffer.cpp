@@ -69,6 +69,7 @@ void Buffer::resize(int rows, int cols)
     _rows = rows;
     _cols = cols;
     clearImages();
+    clearHyperlinks();
 
     // Clamp cursor to new bounds
     _cursor.x = std::min(_cursor.x, _cols - 1);
@@ -110,6 +111,7 @@ void Buffer::clear(Style const& style)
     for (auto& cell: _cells)
         cell.reset(style);
     clearImages();
+    clearHyperlinks();
 }
 
 void Buffer::clearRect(Rect area, Style const& style)
@@ -240,6 +242,42 @@ std::span<ImageRegion const> Buffer::images() const noexcept
 void Buffer::clearImages() noexcept
 {
     _images.clear();
+}
+
+void Buffer::addHyperlink(Rect cellArea, std::string uri)
+{
+    if (uri.empty() || cellArea.width <= 0 || cellArea.height <= 0)
+        return;
+
+    // The OSC 8 `id` is derived from the URI so it is identical for every region pointing at
+    // the same target and stable across frames — a redraw must not mint a new link identity.
+    // FNV-1a is used rather than std::hash because the value goes on the wire and must not
+    // vary between runs or standard-library versions.
+    constexpr auto FnvOffsetBasis = std::uint32_t { 2166136261U };
+    constexpr auto FnvPrime = std::uint32_t { 16777619U };
+    auto hash = FnvOffsetBasis;
+    for (auto const ch: uri)
+    {
+        hash ^= static_cast<std::uint8_t>(ch);
+        hash *= FnvPrime;
+    }
+
+    _hyperlinks.push_back(HyperlinkRegion {
+        .cellArea = cellArea,
+        .uri = std::move(uri),
+        // 0 is the "no id" sentinel, so fold it away rather than losing the grouping.
+        .id = hash != 0 ? hash : 1,
+    });
+}
+
+std::span<HyperlinkRegion const> Buffer::hyperlinks() const noexcept
+{
+    return _hyperlinks;
+}
+
+void Buffer::clearHyperlinks() noexcept
+{
+    _hyperlinks.clear();
 }
 
 void Buffer::writeTo(TerminalOutput& out) const

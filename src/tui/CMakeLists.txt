@@ -3,6 +3,7 @@ add_library(tui
     Box.cpp
     Buffer.cpp
     Canvas.cpp
+    HyperlinkEmitter.cpp
     Cell.cpp
     CommandPalettePopup.cpp
     CommandRegistry.cpp

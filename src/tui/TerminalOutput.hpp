@@ -268,7 +268,9 @@ class TerminalOutput
     /// Terminals without OSC 8 support ignore the sequence, so no capability
     /// probe is required.
     /// @param url The link target. Should be an absolute URI.
-    virtual void beginHyperlink(std::string_view url);
+    /// @param id Optional OSC 8 `id=` value. Runs sharing an id form one logical link, which
+    ///           matters when a cell-diffing renderer emits one visual link as several runs.
+    virtual void beginHyperlink(std::string_view url, std::string_view id = {});
 
     /// @brief Closes the hyperlink opened by beginHyperlink().
     virtual void endHyperlink();

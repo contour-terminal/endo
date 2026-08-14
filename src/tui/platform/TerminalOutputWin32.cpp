@@ -450,9 +450,9 @@ bool TerminalOutput::supportsUnscroll() const noexcept
     return _unscrollSupported;
 }
 
-void TerminalOutput::beginHyperlink(std::string_view url)
+void TerminalOutput::beginHyperlink(std::string_view url, std::string_view id)
 {
-    _buffer += protocols::buildHyperlinkOpen(url);
+    _buffer += protocols::buildHyperlinkOpen(url, id);
 }
 
 void TerminalOutput::endHyperlink()

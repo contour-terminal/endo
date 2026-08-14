@@ -166,6 +166,26 @@ void Canvas::drawImage(int row, int col, int columnSpan, int lineSpan, std::stri
     _buffer.addImage(cellArea, std::string(encodedSixel));
 }
 
+void Canvas::addHyperlink(int row, int col, int columnSpan, std::string_view uri)
+{
+    if (uri.empty() || columnSpan <= 0 || row < 0 || row >= _area.height)
+        return;
+
+    // Clip the run to this canvas so a subcanvas cannot claim columns it does not own.
+    auto const startCol = std::max(0, col);
+    auto const endCol = std::min(_area.width, col + columnSpan);
+    if (endCol <= startCol)
+        return;
+
+    auto const cellArea = Rect {
+        .x = toBufferCol(startCol),
+        .y = toBufferRow(row),
+        .width = endCol - startCol,
+        .height = 1,
+    };
+    _buffer.addHyperlink(cellArea, std::string(uri));
+}
+
 void Canvas::setCursor(int row, int col)
 {
     if (inBounds(row, col))

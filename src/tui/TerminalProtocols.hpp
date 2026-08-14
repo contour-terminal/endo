@@ -73,7 +73,7 @@ constexpr auto DisableWin32InputMode = "\033[?9001l"sv; ///< Disable win32-input
 constexpr auto QueryPrimaryDeviceAttributes = "\033[c"sv; ///< Request DA1 (feature list).
 
 // OSC 8 hyperlinks: OSC 8 ; params ; URI ST ... OSC 8 ; ; ST
-constexpr auto HyperlinkOpenPrefix = "\033]8;;"sv;  ///< Precedes the URI of an OSC 8 hyperlink.
+constexpr auto HyperlinkIntroducer = "\033]8;"sv;   ///< Opens an OSC 8 hyperlink's parameter list.
 constexpr auto StringTerminator = "\033\\"sv;       ///< ST, terminating an OSC/DCS string.
 constexpr auto HyperlinkClose = "\033]8;;\033\\"sv; ///< Closes the current OSC 8 hyperlink.
 
@@ -82,11 +82,24 @@ constexpr auto HyperlinkClose = "\033]8;;\033\\"sv; ///< Closes the current OSC 
 /// Shared by the platform TerminalOutput implementations and HelpPrinter so the
 /// escape is spelled in exactly one place.
 ///
+/// Passing an @p id makes every run carrying that same id part of one logical link, which
+/// matters when a link is emitted as several runs — a cell-diffing renderer rewrites only
+/// the cells that changed, so one visual link can reach the terminal as multiple runs.
+/// Without an id, terminals group only immediately adjacent runs sharing a URI.
+///
 /// @param url The link target.
-/// @return The complete opening sequence.
-[[nodiscard]] inline auto buildHyperlinkOpen(std::string_view url) -> std::string
+/// @param id Optional OSC 8 `id=` value. Empty emits no parameters, keeping the sequence
+///           byte-identical to the id-less form.
+/// @return The complete opening sequence: `ESC ] 8 ; [id=<id>] ; <url> ESC \`.
+[[nodiscard]] inline auto buildHyperlinkOpen(std::string_view url, std::string_view id = {}) -> std::string
 {
-    auto result = std::string { HyperlinkOpenPrefix };
+    auto result = std::string { HyperlinkIntroducer };
+    if (!id.empty())
+    {
+        result.append("id="sv);
+        result.append(id);
+    }
+    result.append(";"sv);
     result.append(url);
     result.append(StringTerminator);
     return result;

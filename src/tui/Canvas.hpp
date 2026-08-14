@@ -111,6 +111,21 @@ class Canvas
     /// @param encodedSixel Pre-encoded sixel data (without DCS framing).
     void drawImage(int row, int col, int columnSpan, int lineSpan, std::string_view encodedSixel);
 
+    // --- Hyperlinks ---
+
+    /// @brief Registers an OSC 8 hyperlink over a horizontal run of already-drawn cells.
+    ///
+    /// Call after the covered cells have been drawn; the framing is emitted around them at
+    /// flush time. The link occupies no cells of its own, so it does not affect display
+    /// widths or column arithmetic. An empty @p uri is ignored, and the run is clipped to
+    /// this canvas so a subcanvas cannot register a link outside its own area.
+    ///
+    /// @param row Row (canvas-local, 0-based).
+    /// @param col Starting column (canvas-local, 0-based).
+    /// @param columnSpan Number of columns the link covers.
+    /// @param uri Absolute URI, e.g. `file://host/home/me/src`.
+    void addHyperlink(int row, int col, int columnSpan, std::string_view uri);
+
     // --- Cursor ---
 
     /// Sets the cursor position (relative to this canvas).

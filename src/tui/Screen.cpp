@@ -2,6 +2,7 @@
 #include "Screen.hpp"
 
 #include <tui/Canvas.hpp>
+#include <tui/HyperlinkEmitter.hpp>
 #include <tui/Terminal.hpp>
 
 #include <algorithm>
@@ -554,6 +555,10 @@ void Screen::flushFullscreen()
     auto& out = _terminal.output();
     bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
 
+    auto const linkIndex = HyperlinkIndex { _current };
+    auto const prevLinkIndex = useDiff ? HyperlinkIndex { _previous } : HyperlinkIndex {};
+    auto linkEmitter = HyperlinkEmitter { out, linkIndex };
+
     // Hide cursor during update
     out.hideCursor();
 
@@ -575,17 +580,26 @@ void Screen::flushFullscreen()
             if (useDiff && _previous.inBounds(row, col))
             {
                 Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
+                // The URI lives beside the cell rather than in it, so Cell equality cannot
+                // see it. Without this second term a link whose target changed while its
+                // text stayed identical would never be repainted, leaving the terminal
+                // pointing at the old target for the rest of the session.
+                needsUpdate =
+                    (cell != prevCell) || linkIndex.uriAt(row, col) != prevLinkIndex.uriAt(row, col);
             }
 
             if (needsUpdate)
             {
                 out.moveTo(row + 1, col + 1); // Terminal is 1-based
+                linkEmitter.beforeWrite(row, col);
                 out.writeText(cell.grapheme, cell.style);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
         }
+        // Never hold framing open across a row boundary: the next row's cells are reached by
+        // absolute cursor motion, which the terminal does not treat as ending a link.
+        linkEmitter.close();
     }
 
     // Restore cursor
@@ -732,6 +746,10 @@ void Screen::flushInline()
     // Now render each line
     bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
 
+    auto const linkIndex = HyperlinkIndex { _current };
+    auto const prevLinkIndex = useDiff ? HyperlinkIndex { _previous } : HyperlinkIndex {};
+    auto linkEmitter = HyperlinkEmitter { out, linkIndex };
+
     out.hideCursor();
 
     // Build image row coverage: for each row, the image (if any) that starts there
@@ -808,23 +826,31 @@ void Screen::flushInline()
             if (useDiff && _previous.inBounds(row, col))
             {
                 Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
+                // See the note in flushFullscreen(): Cell equality cannot see the
+                // out-of-band URI, so a retargeted link needs this second term to repaint.
+                needsUpdate =
+                    (cell != prevCell) || linkIndex.uriAt(row, col) != prevLinkIndex.uriAt(row, col);
             }
 
             if (needsUpdate)
             {
                 // For inline mode, we render sequentially
+                linkEmitter.beforeWrite(row, col);
                 out.writeText(cell.grapheme, cell.style);
             }
             else
             {
-                // Move cursor past unchanged cells
+                // Move cursor past unchanged cells. Cursor motion does not carry the link
+                // attribute, and skipped cells already hold the link recorded when they were
+                // last written — which is the link we would otherwise have re-emitted.
                 out.moveRight(cell.width > 0 ? cell.width : 1);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
         }
 
+        // Close before the erase so the cleared tail is not attributed to the link.
+        linkEmitter.close();
         out.clearToEndOfLine();
 
         if (row < contentHeight - 1)
@@ -875,6 +901,10 @@ void Screen::flushFixed()
     Rect area = _config.fixedArea;
     bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
 
+    auto const linkIndex = HyperlinkIndex { _current };
+    auto const prevLinkIndex = useDiff ? HyperlinkIndex { _previous } : HyperlinkIndex {};
+    auto linkEmitter = HyperlinkEmitter { out, linkIndex };
+
     out.hideCursor();
 
     for (int row = area.y; row < area.bottom() && row < _current.rows(); ++row)
@@ -893,17 +923,22 @@ void Screen::flushFixed()
             if (useDiff && _previous.inBounds(row, col))
             {
                 Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
+                // See the note in flushFullscreen(): Cell equality cannot see the
+                // out-of-band URI, so a retargeted link needs this second term to repaint.
+                needsUpdate =
+                    (cell != prevCell) || linkIndex.uriAt(row, col) != prevLinkIndex.uriAt(row, col);
             }
 
             if (needsUpdate)
             {
                 out.moveTo(row + 1, col + 1);
+                linkEmitter.beforeWrite(row, col);
                 out.writeText(cell.grapheme, cell.style);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
         }
+        linkEmitter.close();
     }
 
     if (_current.cursorVisible())
