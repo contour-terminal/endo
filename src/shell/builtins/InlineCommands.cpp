@@ -2453,6 +2453,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     // Determine color mode
+    auto const toTerminal = isTerminal(outputFd);
     bool useColor = false;
     if (opts.colorMode == grep::ColorMode::Always)
     {
@@ -2460,18 +2461,20 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     }
     else if (opts.colorMode == grep::ColorMode::Auto)
     {
-        useColor = isTerminal(outputFd);
+        useColor = toTerminal;
     }
 
     // `--color=never` is grep's conventional "give me plain output" switch, so it suppresses
     // hyperlinks too — a caller asking for undecorated text means all decoration, not just SGR.
-    // Terminal-ness gates them independently, so `--color=always` into a pipe still yields no
-    // OSC 8 bytes in the captured output.
+    // Terminal-ness gates them independently of the resolved color mode, so `--color=always`
+    // into a pipe still yields no OSC 8 bytes in the captured output.
+    auto const useHyperlinks = _hyperlinks && toTerminal && opts.colorMode != grep::ColorMode::Never;
     auto const render = grep::GrepRenderOptions {
         .useColor = useColor,
-        .useHyperlinks = _hyperlinks && isTerminal(outputFd) && opts.colorMode != grep::ColorMode::Never,
-        .uriHost = platform::cachedHostName(),
-        .baseDirectory = platform::normalizePath(_fs.currentPath()),
+        .useHyperlinks = useHyperlinks,
+        // Only the linking path reads these, and resolving the base directory is a getcwd.
+        .uriHost = useHyperlinks ? platform::cachedHostName() : std::string {},
+        .baseDirectory = useHyperlinks ? platform::normalizePath(_fs.currentPath()) : std::string {},
     };
 
     // Output + error writer lambdas

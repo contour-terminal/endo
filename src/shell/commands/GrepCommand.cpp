@@ -612,8 +612,13 @@ size_t searchLines(std::vector<std::string> const& lines,
 {
     auto const useColor = render.useColor;
     // Built once per file: a single grep hit can print thousands of lines, and everything but the
-    // line number is identical across them.
-    auto const namePrefix = FilenamePrefix { filename, render };
+    // line number is identical across them. Skipped altogether when nothing below will print a
+    // name — plain single-file grep, or -q — since an empty name disables the prefix and saves
+    // resolving a URI for output that never happens. Note -l/-L print the name whatever
+    // showFilename says, so they have to be asked separately.
+    auto const printsFilename =
+        !opts.quiet && (showFilename || opts.filesWithMatches || opts.filesWithoutMatch);
+    auto const namePrefix = FilenamePrefix { printsFilename ? filename : std::string_view {}, render };
 
     auto const beforeCtx = opts.effectiveBeforeContext();
     auto const afterCtx = opts.effectiveAfterContext();

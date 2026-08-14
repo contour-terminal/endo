@@ -4,16 +4,9 @@
 
 #include <algorithm>
 #include <format>
-#include <ranges>
 
 namespace tui
 {
-
-HyperlinkIndex::HyperlinkIndex(Buffer const& buffer)
-{
-    auto const regions = buffer.hyperlinks();
-    _regions.assign(regions.begin(), regions.end());
-}
 
 auto HyperlinkIndex::at(int row, int col) const noexcept -> HyperlinkRegion const*
 {
@@ -41,7 +34,7 @@ HyperlinkEmitter::~HyperlinkEmitter()
     close();
 }
 
-void HyperlinkEmitter::beforeWrite(int row, int col)
+void HyperlinkEmitter::syncTo(int row, int col)
 {
     auto const* region = _index->at(row, col);
     if (region == _open)

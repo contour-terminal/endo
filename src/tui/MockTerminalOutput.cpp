@@ -290,9 +290,7 @@ void MockTerminalOutput::endHyperlink()
 
 void MockTerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
 {
-    // Explicit second argument: a default on the base declaration is not inherited by the
-    // override, and this call resolves against the derived type.
-    beginHyperlink(url, {});
+    beginHyperlink(url);
     writeText(text, style);
     endHyperlink();
 }

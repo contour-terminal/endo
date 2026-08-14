@@ -6,19 +6,19 @@
 
 #include <tui/Buffer.hpp>
 
+#include <span>
 #include <string_view>
-#include <vector>
 
 namespace tui
 {
 
 class TerminalOutput;
 
-/// @brief A snapshot of a buffer's hyperlink regions, for cell lookup during flush.
+/// @brief A view of a buffer's hyperlink regions, for cell lookup during flush.
 ///
 /// A flat scan rather than a row index: a frame carries at most a handful of regions, so bucketing
-/// them would cost more bookkeeping than it saves. Callers on the per-cell path should test
-/// empty() once per flush instead — that is where the win actually is.
+/// them would cost more bookkeeping than it saves. The scan is never reached on a linkless frame —
+/// HyperlinkEmitter::beforeWrite() tests empty() inline first, which is where the win actually is.
 class HyperlinkIndex
 {
   public:
@@ -26,8 +26,10 @@ class HyperlinkIndex
     HyperlinkIndex() = default;
 
     /// @brief Builds an index over @p buffer's regions.
-    /// @param buffer The buffer being flushed. Only its regions are read, during construction.
-    explicit HyperlinkIndex(Buffer const& buffer);
+    /// @param buffer The buffer being flushed. Borrowed, not copied: it must outlive this index,
+    ///        which every flush-scoped use satisfies — Screen swaps its buffers only after the
+    ///        flush returns, and Buffer::writeTo indexes itself.
+    explicit HyperlinkIndex(Buffer const& buffer): _regions(buffer.hyperlinks()) {}
 
     /// @brief Returns the region covering (@p row, @p col), or nullptr when unlinked.
     [[nodiscard]] HyperlinkRegion const* at(int row, int col) const noexcept;
@@ -39,7 +41,7 @@ class HyperlinkIndex
     [[nodiscard]] bool empty() const noexcept { return _regions.empty(); }
 
   private:
-    std::vector<HyperlinkRegion> _regions;
+    std::span<HyperlinkRegion const> _regions;
 };
 
 /// @brief Keeps the terminal's open OSC 8 link in sync with a buffer's regions during flush.
@@ -72,8 +74,16 @@ class HyperlinkEmitter
 
     /// @brief Synchronizes link state with the region covering (@p row, @p col).
     ///
-    /// Call immediately before writing that cell's grapheme.
-    void beforeWrite(int row, int col);
+    /// Call immediately before writing that cell's grapheme. A frame with no regions at all —
+    /// every fullscreen frame, and every prompt frame with hyperlinks disabled — returns here
+    /// without a call or a scan, so the per-cell cost of carrying this mechanism is one inline
+    /// test. Gating this at the call sites instead would leave each of them free to forget.
+    void beforeWrite(int row, int col)
+    {
+        if (_index->empty())
+            return;
+        syncTo(row, col);
+    }
 
     /// @brief Closes any open link. Idempotent.
     ///
@@ -82,6 +92,10 @@ class HyperlinkEmitter
     void close();
 
   private:
+    /// @brief Opens, closes or leaves alone the link for (@p row, @p col). Out of line: reached
+    ///        only on frames that actually carry regions.
+    void syncTo(int row, int col);
+
     TerminalOutput* _out;
     HyperlinkIndex const* _index;
     HyperlinkRegion const* _open = nullptr;

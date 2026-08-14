@@ -257,10 +257,14 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     auto const& fields = resolvedFields.empty() ? records[0]->type->fields : resolvedFields;
     auto const numCols = fields.size();
     bool const decorateFiles = isFileInfo && config.useColor;
+    // The link target is looked up by name, once, rather than by slot literal: reordering
+    // FileInfo's hidden fields would otherwise retarget every hyperlink to whatever landed at
+    // that slot, with the tests — which only assert that some file:// URI appears — still green.
+    auto const* const pathField = isFileInfo ? records[0]->type->getFieldByName("path") : nullptr;
     // Kept separate from decorateFiles, which conflates terminal-ness, SGR and icons: turning
     // icons or colors off must not cost the user clickable names. Plain style pads inline and
     // never reaches renderDataCell, so excluding it here only skips the wasted URI building.
-    bool const linkFiles = isFileInfo && config.useHyperlinks && config.style != TableStyle::Plain;
+    bool const linkFiles = pathField != nullptr && config.useHyperlinks && config.style != TableStyle::Plain;
 
     // Determine per-column alignment and FileMode columns from the first record's runtime types
     std::vector<bool> rightAligned(numCols, false);
@@ -310,8 +314,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         std::vector<std::string> row;
         row.reserve(numCols);
 
-        // FileInfo hidden slots: isDir (4), isSymlink (5) and target (6) drive visuals,
-        // path (7) is the hyperlink target.
+        // FileInfo hidden slots: isDir (4), isSymlink (5) and target (6) drive visuals; the
+        // hyperlink target comes from pathField, resolved by name above.
         auto const isDir = isFileInfo && record->getSlot(4) != 0;
         auto const isSymlink = isFileInfo && record->getSlot(5) != 0;
         if (decorateFiles)
@@ -339,7 +343,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             // to the right file precisely because the URI never comes from the cell text.
             // A record with no path (one built before FileInfo carried it) yields an empty URI
             // and is simply not linked.
-            auto const pathSlot = record->getSlot(7);
+            auto const pathSlot = record->getSlot(pathField->offset);
             auto const* pathStr =
                 reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(pathSlot));
             fileUris.push_back(pathStr != nullptr && !pathStr->empty()

@@ -190,13 +190,11 @@ std::vector<PromptSegments> PromptComponent::buildModuleVector(
             // Transfer style attributes (bold, etc.) from original segments
             for (auto& seg: gradientSegments)
                 seg.style.bold = true;
-            // gradient() returns fresh segments, one per grapheme cluster of the concatenated
-            // text, so any hyperlink on the sources would be dropped. Walk the sources and stamp
-            // each one's URI onto its own share of the output; the renderer then coalesces the
-            // equal-URI run back into a single link.
-            // gradient() splits on grapheme boundaries and its segments concatenate back to
-            // combinedText exactly, so walking byte counts realigns each output segment with the
-            // source it came from.
+            // gradient() returns fresh segments, one per grapheme cluster, so any hyperlink on
+            // the sources would be dropped. Stamp each source's URI onto its own share of the
+            // output; the renderer then coalesces the equal-URI run back into a single link.
+            // Byte counts are enough to realign the two, because the gradient's segments
+            // concatenate back to combinedText exactly.
             auto out = gradientSegments.begin();
             for (auto const& src: it->second.segments)
             {
@@ -545,7 +543,9 @@ void PromptComponent::render(tui::Canvas& canvas)
         // PromptConfig, which would silently re-enable links the user had turned off. The context
         // is refreshed from the shell every prompt cycle, so it is the authoritative value.
         auto const renderSegments = [&](int row, int startCol, PromptSegments const& segments) {
-            auto col = startCol;
+            // Named `cursor` rather than `col` so it cannot be confused with the enclosing
+            // render()'s `col`, which the callers below advance by this lambda's return value.
+            auto cursor = startCol;
             auto runStart = startCol;
             auto runUri = std::string_view {};
 
@@ -558,16 +558,16 @@ void PromptComponent::render(tui::Canvas& canvas)
             {
                 if (seg.hyperlink != runUri)
                 {
-                    flushRun(col);
-                    runStart = col;
+                    flushRun(cursor);
+                    runStart = cursor;
                     runUri = seg.hyperlink;
                 }
                 auto segStyle = seg.style;
-                applyBg(segStyle, bgAt(col));
-                col += canvas.putString(row, col, seg.text, segStyle);
+                applyBg(segStyle, bgAt(cursor));
+                cursor += canvas.putString(row, cursor, seg.text, segStyle);
             }
-            flushRun(col);
-            return col - startCol;
+            flushRun(cursor);
+            return cursor - startCol;
         };
 
         // Render info modules
