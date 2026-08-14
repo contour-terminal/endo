@@ -100,6 +100,7 @@
     #include <agent/ui/ToolStatusComponent.hpp>
 #endif
 #include <nlohmann/json.hpp>
+#include <platform/FileUri.hpp>
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/PathUtils.hpp>
@@ -939,21 +940,8 @@ void Shell::emitCurrentWorkingDirectory()
 
     auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
 
-    // Percent-encode the path for the file:// URI
-    auto encoded = std::string();
-    for (auto const ch: cwd)
-    {
-        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '/' || ch == '-' || ch == '_' || ch == '.'
-            || ch == '~')
-            encoded += ch;
-        else
-            encoded += std::format("%{:02X}", static_cast<unsigned char>(ch));
-    }
-
-    // Get hostname for the file:// URI
-    auto const hostname = platform::hostName();
-
-    _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname, encoded));
+    _tty.writeToStdout(std::format("\033]7;{}\033\\",
+                                   platform::fileUri(platform::normalizePath(cwd), platform::hostName())));
 }
 
 void Shell::emitWindowTitle(std::string_view title)
