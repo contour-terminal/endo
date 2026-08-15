@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <bit>
 #include <cassert>
-#include <ranges>
 #include <string>
 
 namespace endo::builtins
@@ -25,7 +24,8 @@ CoreVM::FieldInfo const* RecordWriter::claim(std::string_view field)
     if (it == fields.end())
         return nullptr;
 
-    _written |= uint64_t { 1 } << static_cast<unsigned>(std::ranges::distance(fields.begin(), it));
+    if (it->offset < SlotBits)
+        _written |= uint64_t { 1 } << it->offset;
     return &*it;
 }
 
@@ -74,13 +74,13 @@ CoreVM::TypedObject* RecordWriter::record()
     // String: a null CoreString misbehaves on read. Backfilling here means a producer that omits a
     // field it has nothing to say about — `find` has no symlink target — still yields a record every
     // consumer can read.
-    auto const& fields = _record->type->fields;
-    for (auto const [index, info]: std::views::enumerate(fields))
+    for (auto const& info: _record->type->fields)
     {
-        if ((_written & (uint64_t { 1 } << static_cast<unsigned>(index))) != 0)
+        if (info.type != CoreVM::LiteralType::String)
             continue;
-        if (info.type == CoreVM::LiteralType::String)
-            _record->setSlot(info.offset, reinterpret_cast<uintptr_t>(_runner->emptyString()));
+        if (info.offset < SlotBits && (_written & (uint64_t { 1 } << info.offset)) != 0)
+            continue;
+        _record->setSlot(info.offset, reinterpret_cast<uintptr_t>(_runner->emptyString()));
     }
     return _record;
 }

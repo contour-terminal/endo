@@ -87,9 +87,13 @@ class RecordWriter
     /// @brief Resolves @p field and marks it written; returns nullptr for an unknown name.
     CoreVM::FieldInfo const* claim(std::string_view field);
 
+    /// Slot offsets this writer can track in _written. Builtin records declare far fewer slots;
+    /// a field past this is simply always backfilled, which is the safe direction.
+    static constexpr uint8_t SlotBits = 64;
+
     CoreVM::Runner* _runner;
     CoreVM::TypedObject* _record;
-    uint64_t _written = 0; ///< Bit per field index, so record() knows what to backfill.
+    uint64_t _written = 0; ///< Bit per written slot offset, so record() knows what to backfill.
 };
 
 } // namespace endo::builtins
