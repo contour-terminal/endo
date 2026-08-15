@@ -140,26 +140,18 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
 
     for (auto& match: std::ranges::reverse_view(matches))
     {
-        auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
-        auto* const nameString = runner.newString(match.path);
-        record->setSlot(0, reinterpret_cast<uintptr_t>(nameString));
-        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, static_cast<int64_t>(match.size));
-        record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
-        auto* modeObj = endo::builtins::makeFileModeFromBits(&runner, static_cast<int64_t>(match.mode));
-        record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));
-        auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, match.mtime);
-        record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
-        record->setSlot(4, static_cast<uint64_t>(match.isDir ? 1 : 0));
-        // `find` reports no symlink information, but the slots must still hold valid values so
-        // f.isSymlink / f.target never read back as a null string.
-        record->setSlot(5, static_cast<uint64_t>(0));
-        record->setSlot(6, reinterpret_cast<uintptr_t>(runner.emptyString()));
-        // find's `name` is the path it walked, which is relative when the search root was.
-        // Reuse the slot-0 string when it is already absolute — the common `find /abs` case
-        // then costs no extra allocation.
+        // find's name is the path it walked, which is relative when the search root was; the
+        // record additionally carries the absolute form. It reports no symlink information, and
+        // the builder writes valid values into those slots regardless, so f.isSymlink / f.target
+        // never read back as a null string.
         auto const resolved = platform::absolutePath(match.path, workingDirectory);
-        record->setSlot(
-            7, reinterpret_cast<uintptr_t>(resolved == match.path ? nameString : runner.newString(resolved)));
+        auto* record = endo::builtins::makeFileInfoRecord(&runner,
+                                                          { .name = match.path,
+                                                            .path = resolved,
+                                                            .size = static_cast<int64_t>(match.size),
+                                                            .mode = static_cast<int64_t>(match.mode),
+                                                            .mtime = match.mtime,
+                                                            .isDir = match.isDir });
 
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
         cons->tag = 1; // Cons

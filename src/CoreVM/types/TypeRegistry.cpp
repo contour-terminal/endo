@@ -120,7 +120,7 @@ void TypeRegistry::registerBuiltins()
         { .name = "ppid", .offset = 1, .type = LiteralType::Number },
         { .name = "user", .offset = 2, .type = LiteralType::String },
         { .name = "cpu", .offset = 3, .type = LiteralType::Float },
-        { .name = "mem", .offset = 4, .type = LiteralType::Object },
+        { .name = "mem", .offset = 4, .type = LiteralType::Object, .nestedTypeName = "Size" },
         { .name = "command", .offset = 5, .type = LiteralType::String },
     };
     processInfoType->producingCommand = "ps";
@@ -578,6 +578,12 @@ const TypeDescriptor* TypeRegistry::getByName(std::string_view name) const
     if (it != _nameToId.end())
         return get(it->second);
     return nullptr;
+}
+
+TypeRegistry const& builtinTypes()
+{
+    static TypeRegistry const registry;
+    return registry;
 }
 
 TypeDescriptor* TypeRegistry::addType(std::unique_ptr<TypeDescriptor> type)

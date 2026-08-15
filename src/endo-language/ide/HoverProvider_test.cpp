@@ -272,3 +272,41 @@ TEST_CASE("HoverProvider.field_access_no_hover_without_dot", "[hover]")
     if (result.has_value())
         CHECK(result->markdownText.find("field of") == std::string::npos);
 }
+
+// ============================================================================
+// Configuration properties, hovered from their descriptors
+// ============================================================================
+
+TEST_CASE("HoverProvider.property_hover_comes_from_the_descriptor", "[hover]")
+{
+    auto result = computeHover("shell_hyperlinks <- false", SourcePosition { .line = 0, .character = 3 });
+    REQUIRE(result.has_value());
+    // Signature line, then the descriptor's own prose, then how to use it.
+    CHECK(result->markdownText.starts_with("`shell_hyperlinks` : `bool`"));
+    CHECK(result->markdownText.find("OSC 8 hyperlinks") != std::string::npos);
+    CHECK(result->markdownText.find("Read or write with `<-`.") != std::string::npos);
+    // The descriptor's completion-panel header is not repeated after the signature line.
+    CHECK(result->markdownText.find("**shell_hyperlinks** -- property") == std::string::npos);
+}
+
+TEST_CASE("HoverProvider.property_hover_covers_properties_it_never_listed", "[hover]")
+{
+    // Deriving from the descriptor table rather than a hand-written map is what gives these
+    // hover at all: shell_prompt_color_* and agent_local_* were absent from the old map.
+    auto const color =
+        computeHover("shell_prompt_color_path <- \"red\"", SourcePosition { .line = 0, .character = 5 });
+    REQUIRE(color.has_value());
+    CHECK(color->markdownText.starts_with("`shell_prompt_color_path` :"));
+
+    auto const local = computeHover("agent_local_threads <- 4", SourcePosition { .line = 0, .character = 5 });
+    REQUIRE(local.has_value());
+    CHECK(local->markdownText.starts_with("`agent_local_threads` :"));
+}
+
+TEST_CASE("HoverProvider.read_only_property_says_so", "[hover]")
+{
+    auto result = computeHover("shell_is_interactive", SourcePosition { .line = 0, .character = 5 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("Read-only.") != std::string::npos);
+    CHECK(result->markdownText.find("Read or write") == std::string::npos);
+}

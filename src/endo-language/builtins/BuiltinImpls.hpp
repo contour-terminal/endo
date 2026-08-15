@@ -12,6 +12,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace endo::builtins
 {
@@ -179,6 +180,38 @@ std::string formatFileModeToString(int64_t mode);
 /// @param mode Raw Unix permission bits
 /// @return Pointer to the newly allocated FileMode TypedObject
 CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode);
+
+/// @brief The values one FileInfo record is built from.
+///
+/// Deliberately not platform::FileEntry: this library does not depend on endo-platform, and the
+/// producers do not all start from a directory listing (`find` walks paths, the test mock reads a
+/// fixture table). Views, so filling this copies nothing.
+///
+/// A default-constructed field means "unknown", which is a legitimate state — `find` reports no
+/// symlink information — and the builder still writes a valid value into every slot.
+struct FileInfoFields
+{
+    std::string_view name;          ///< Displayed name; whatever the producer calls the entry.
+    std::string_view path;          ///< Absolute path used to address the entry; may equal name.
+    std::string_view symlinkTarget; ///< Link target, verbatim; empty when not a symlink.
+    int64_t size = 0;               ///< Apparent size in bytes.
+    int64_t mode = 0;               ///< Permission bits (e.g. 0755).
+    int64_t mtime = 0;              ///< Last modification time as epoch seconds.
+    bool isDir = false;             ///< Whether the entry is a directory.
+    bool isSymlink = false;         ///< Whether the entry is a symbolic link.
+};
+
+/// @brief Creates a FileInfo record, the one place that knows the type's slot layout.
+///
+/// Every producer of `ls`-shaped output goes through here, so none of them can leave a slot
+/// unwritten — which is what `find` used to do, returning records whose isSymlink/target read back
+/// as a null string. Nested Size/FileMode/DateTime records are built as the layout requires, and
+/// String slots fall back to the runner's shared empty-string sentinel rather than nullptr.
+///
+/// @param runner The runner instance for object allocation.
+/// @param fields The entry's values.
+/// @return Pointer to the newly allocated FileInfo TypedObject.
+CoreVM::TypedObject* makeFileInfoRecord(CoreVM::Runner* runner, FileInfoFields const& fields);
 
 /// filemode_from_bits(n) -> FileMode: Creates a FileMode from raw permission bits.
 void fileModeFromBits(CoreVM::Params& args);

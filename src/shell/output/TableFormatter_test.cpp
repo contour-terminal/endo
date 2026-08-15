@@ -4,6 +4,7 @@
 #include <endo-language/builtins/BuiltinImpls.hpp>
 
 #include <CoreVM/CoreVM.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -58,21 +59,22 @@ class RecordBuilder
 
         for (auto const& f: fixtures | std::views::reverse)
         {
-            auto* record = _runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
-            record->setSlot(0, reinterpret_cast<uintptr_t>(_runner.newString(std::string { f.name })));
-            record->setSlot(1, reinterpret_cast<uintptr_t>(builtins::makeSizeFromBytes(&_runner, f.size)));
-            record->setSlot(2, reinterpret_cast<uintptr_t>(builtins::makeFileModeFromBits(&_runner, f.mode)));
-            record->setSlot(
-                3, reinterpret_cast<uintptr_t>(builtins::makeDateTimeFromEpoch(&_runner, 1700000000)));
-            record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
-            record->setSlot(5, static_cast<uint64_t>(f.isSymlink ? 1 : 0));
-            record->setSlot(6, reinterpret_cast<uintptr_t>(_runner.newString(std::string { f.target })));
-            // An empty path is left as slot 0 so the "record predating the path field" case is
-            // reachable from a fixture.
-            record->setSlot(7,
-                            f.path.empty()
-                                ? uintptr_t { 0 }
-                                : reinterpret_cast<uintptr_t>(_runner.newString(std::string { f.path })));
+            // Through the shared builder, so these fixtures exercise the same slot layout the
+            // real producers write.
+            auto* record = builtins::makeFileInfoRecord(&_runner,
+                                                        { .name = f.name,
+                                                          .path = f.path,
+                                                          .symlinkTarget = f.target,
+                                                          .size = f.size,
+                                                          .mode = f.mode,
+                                                          .mtime = 1700000000,
+                                                          .isDir = f.isDir,
+                                                          .isSymlink = f.isSymlink });
+            // A fixture with no path is then nulled out deliberately: the builder never emits a
+            // null slot, but a record built before FileInfo carried the field would read as one,
+            // and the renderer has to survive it.
+            if (f.path.empty())
+                record->setSlot(7, uintptr_t { 0 });
 
             auto* cons = _runner.allocObject(CoreVM::BuiltinTypeId::List);
             cons->tag = 1; // Cons
@@ -280,4 +282,51 @@ TEST_CASE("TableFormatter.hyperlinks.symlink_row_links_the_link_itself")
 
     CHECK(table.find("\033]8;;file://box/tmp/d/cfg\033\\") != std::string::npos);
     CHECK(table.find("file:///etc/real.conf") == std::string::npos);
+}
+
+TEST_CASE("TableFormatter.record_builder_fills_every_declared_field")
+{
+    // The guard the producers never had: nothing checked producer against registry, which is how
+    // `find` shipped records whose isSymlink/target slots were never written and read back as a
+    // null string. Now that one builder writes the layout, this asserts it covers all of it — add
+    // a field to FileInfo without teaching the builder and this fails.
+    RecordBuilder builder;
+    constexpr auto One = std::array {
+        FileFixture {
+            .name = "cfg", .size = 3, .isSymlink = true, .target = "/etc/real.conf", .path = "/tmp/d/cfg" },
+    };
+    auto* list = builder.makeFileInfoList(One);
+    auto* record = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(list->getSlot(0)));
+    REQUIRE(record != nullptr);
+
+    auto const* descriptor = CoreVM::builtinTypes().get(CoreVM::BuiltinTypeId::FileInfo);
+    REQUIRE(descriptor != nullptr);
+    REQUIRE_FALSE(descriptor->fields.empty());
+
+    for (auto const& field: descriptor->fields)
+    {
+        INFO("field: FileInfo." << field.name);
+        REQUIRE(field.offset < descriptor->slotCount);
+        auto const slot = record->getSlot(field.offset);
+
+        switch (field.type)
+        {
+            case CoreVM::LiteralType::String:
+                // Never null: a null CoreString misbehaves on read. Empty is fine.
+                CHECK(slot != 0);
+                break;
+            case CoreVM::LiteralType::Object: {
+                REQUIRE(builder.runner()->isKnownObject(slot));
+                auto const* nested =
+                    reinterpret_cast<CoreVM::TypedObject const*>(static_cast<uintptr_t>(slot));
+                auto const* expected = CoreVM::builtinTypes().getByName(field.nestedTypeName);
+                REQUIRE(expected != nullptr);
+                CHECK(nested->type->id == expected->id);
+                break;
+            }
+            default:
+                // Booleans and numbers carry no "unset" encoding to check.
+                break;
+        }
+    }
 }

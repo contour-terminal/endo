@@ -140,18 +140,15 @@ namespace
                 }
             }
 
-            auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
-            record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
-            auto* sizeObj = builtins::makeSizeFromBytes(runner, f.size);
-            record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
-            auto* modeObj = builtins::makeFileModeFromBits(runner, f.mode);
-            record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));
-            auto* mtimeObj = builtins::makeDateTimeFromEpoch(runner, f.mtime);
-            record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
-            record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
-            record->setSlot(5, static_cast<uint64_t>(f.isSymlink ? 1 : 0));
-            record->setSlot(6, reinterpret_cast<uintptr_t>(runner->newString(f.target)));
-            record->setSlot(7, reinterpret_cast<uintptr_t>(runner->newString(f.path)));
+            auto* record = builtins::makeFileInfoRecord(runner,
+                                                        { .name = f.name,
+                                                          .path = f.path,
+                                                          .symlinkTarget = f.target,
+                                                          .size = f.size,
+                                                          .mode = f.mode,
+                                                          .mtime = f.mtime,
+                                                          .isDir = f.isDir,
+                                                          .isSymlink = f.isSymlink });
             list =
                 runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }

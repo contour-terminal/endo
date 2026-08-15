@@ -1,139 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/sema/TypeRegistry.hpp>
 
+#include <CoreVM/types/TypeRegistry.hpp>
+
+#include <array>
+#include <string_view>
+
 namespace endo
 {
 
+namespace
+{
+    /// The builtin records the language exposes to type checking.
+    ///
+    /// Names only: each record's field layout is read from CoreVM's descriptor, which is where it
+    /// is declared and where the VM itself reads it from, so a field added there needs no edit
+    /// here. Kept an explicit list rather than "every Product type CoreVM knows", because
+    /// resolveRecordByFields() matches anonymous record literals against these — admitting
+    /// runtime shapes such as Tuple2, Markdown or Json would let a literal resolve to one.
+    constexpr auto ExposedBuiltinRecords = std::array {
+        std::string_view { "ProcessInfo" }, std::string_view { "DateTime" },
+        std::string_view { "Size" },        std::string_view { "TimeSpan" },
+        std::string_view { "FileMode" },    std::string_view { "FileInfo" },
+        std::string_view { "JobInfo" },     std::string_view { "KeyBindingInfo" },
+    };
+} // namespace
+
 void TypeDefinitionRegistry::registerBuiltins()
 {
-    // ProcessInfo: ps-style process information
-    {
-        RecordTypeInfo processInfoType;
-        processInfoType.typeId = CoreVM::BuiltinTypeId::ProcessInfo;
-        processInfoType.name = "ProcessInfo";
-        processInfoType.fields = {
-            { .name = "pid", .offset = 0, .type = CoreVM::LiteralType::Number },
-            { .name = "ppid", .offset = 1, .type = CoreVM::LiteralType::Number },
-            { .name = "user", .offset = 2, .type = CoreVM::LiteralType::String },
-            { .name = "cpu", .offset = 3, .type = CoreVM::LiteralType::Float },
-            { .name = "mem", .offset = 4, .type = CoreVM::LiteralType::Object },
-            { .name = "command", .offset = 5, .type = CoreVM::LiteralType::String },
-        };
-        for (auto const& f: processInfoType.fields)
-            processInfoType.fieldTypes[f.name] = f.type;
-        processInfoType.fieldObjectTypeIds["mem"] = CoreVM::BuiltinTypeId::Size;
-        _recordTypes["ProcessInfo"] = std::move(processInfoType);
-    }
+    auto const& runtime = CoreVM::builtinTypes();
 
-    // DateTime: date/time components
+    for (auto const name: ExposedBuiltinRecords)
     {
-        RecordTypeInfo dateTimeType;
-        dateTimeType.typeId = CoreVM::BuiltinTypeId::DateTime;
-        dateTimeType.name = "DateTime";
-        dateTimeType.fields = {
-            { .name = "year", .offset = 0, .type = CoreVM::LiteralType::Number },
-            { .name = "month", .offset = 1, .type = CoreVM::LiteralType::Number },
-            { .name = "day", .offset = 2, .type = CoreVM::LiteralType::Number },
-            { .name = "hour", .offset = 3, .type = CoreVM::LiteralType::Number },
-            { .name = "minute", .offset = 4, .type = CoreVM::LiteralType::Number },
-            { .name = "second", .offset = 5, .type = CoreVM::LiteralType::Number },
-            { .name = "epoch", .offset = 6, .type = CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: dateTimeType.fields)
-            dateTimeType.fieldTypes[f.name] = f.type;
-        _recordTypes["DateTime"] = std::move(dateTimeType);
-    }
+        auto const* descriptor = runtime.getByName(name);
+        if (descriptor == nullptr)
+            continue;
 
-    // Size: byte-count wrapper
-    {
-        RecordTypeInfo sizeType;
-        sizeType.typeId = CoreVM::BuiltinTypeId::Size;
-        sizeType.name = "Size";
-        sizeType.fields = {
-            { .name = "bytes", .offset = 0, .type = CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: sizeType.fields)
-            sizeType.fieldTypes[f.name] = f.type;
-        _recordTypes["Size"] = std::move(sizeType);
-    }
+        auto info = RecordTypeInfo {};
+        info.typeId = descriptor->id;
+        info.name = descriptor->name;
+        info.fields = descriptor->fields;
 
-    // TimeSpan: duration in milliseconds
-    {
-        RecordTypeInfo timeSpanType;
-        timeSpanType.typeId = CoreVM::BuiltinTypeId::TimeSpan;
-        timeSpanType.name = "TimeSpan";
-        timeSpanType.fields = {
-            { .name = "milliseconds", .offset = 0, .type = CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: timeSpanType.fields)
-            timeSpanType.fieldTypes[f.name] = f.type;
-        _recordTypes["TimeSpan"] = std::move(timeSpanType);
-    }
+        for (auto const& field: info.fields)
+        {
+            info.fieldTypes[field.name] = field.type;
+            // An Object-typed field names its record type in the descriptor; resolve that name to
+            // the id the type checker compares against.
+            if (!field.nestedTypeName.empty())
+                if (auto const* nested = runtime.getByName(field.nestedTypeName))
+                    info.fieldObjectTypeIds[field.name] = nested->id;
+        }
 
-    // FileMode: permission bits
-    {
-        RecordTypeInfo fileModeType;
-        fileModeType.typeId = CoreVM::BuiltinTypeId::FileMode;
-        fileModeType.name = "FileMode";
-        fileModeType.fields = {
-            { .name = "bits", .offset = 0, .type = CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: fileModeType.fields)
-            fileModeType.fieldTypes[f.name] = f.type;
-        _recordTypes["FileMode"] = std::move(fileModeType);
-    }
-
-    // FileInfo: file metadata from the ls builtin
-    {
-        RecordTypeInfo fileInfoType;
-        fileInfoType.typeId = CoreVM::BuiltinTypeId::FileInfo;
-        fileInfoType.name = "FileInfo";
-        fileInfoType.fields = {
-            { .name = "name", .offset = 0, .type = CoreVM::LiteralType::String },
-            { .name = "size", .offset = 1, .type = CoreVM::LiteralType::Object },
-            { .name = "mode", .offset = 2, .type = CoreVM::LiteralType::Object },
-            { .name = "mtime", .offset = 3, .type = CoreVM::LiteralType::Object },
-            { .name = "isDir", .offset = 4, .type = CoreVM::LiteralType::Boolean },
-            { .name = "isSymlink", .offset = 5, .type = CoreVM::LiteralType::Boolean },
-            { .name = "target", .offset = 6, .type = CoreVM::LiteralType::String },
-            { .name = "path", .offset = 7, .type = CoreVM::LiteralType::String },
-        };
-        for (auto const& f: fileInfoType.fields)
-            fileInfoType.fieldTypes[f.name] = f.type;
-        fileInfoType.fieldObjectTypeIds["mode"] = CoreVM::BuiltinTypeId::FileMode;
-        fileInfoType.fieldObjectTypeIds["mtime"] = CoreVM::BuiltinTypeId::DateTime;
-        fileInfoType.fieldObjectTypeIds["size"] = CoreVM::BuiltinTypeId::Size;
-        _recordTypes["FileInfo"] = std::move(fileInfoType);
-    }
-
-    // JobInfo: background job metadata
-    {
-        RecordTypeInfo jobInfoType;
-        jobInfoType.typeId = CoreVM::BuiltinTypeId::JobInfo;
-        jobInfoType.name = "JobInfo";
-        jobInfoType.fields = {
-            { .name = "id", .offset = 0, .type = CoreVM::LiteralType::Number },
-            { .name = "state", .offset = 1, .type = CoreVM::LiteralType::String },
-            { .name = "command", .offset = 2, .type = CoreVM::LiteralType::String },
-            { .name = "pid", .offset = 3, .type = CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: jobInfoType.fields)
-            jobInfoType.fieldTypes[f.name] = f.type;
-        _recordTypes["JobInfo"] = std::move(jobInfoType);
-    }
-
-    // KeyBindingInfo: keybinding metadata from the bind builtin
-    {
-        RecordTypeInfo keyBindingInfoType;
-        keyBindingInfoType.typeId = CoreVM::BuiltinTypeId::KeyBindingInfo;
-        keyBindingInfoType.name = "KeyBindingInfo";
-        keyBindingInfoType.fields = {
-            { .name = "key", .offset = 0, .type = CoreVM::LiteralType::String },
-            { .name = "action", .offset = 1, .type = CoreVM::LiteralType::String },
-        };
-        for (auto const& f: keyBindingInfoType.fields)
-            keyBindingInfoType.fieldTypes[f.name] = f.type;
-        _recordTypes["KeyBindingInfo"] = std::move(keyBindingInfoType);
+        _recordTypes[std::string { name }] = std::move(info);
     }
 }
 

@@ -32,28 +32,17 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
     // Build cons-cell list right-to-left so the result is in original order
     for (const auto& file: std::ranges::reverse_view(files))
     {
-        // Allocate a FileInfo record
-        auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
-        record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(file.name)));
-        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, file.size);
-        record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
-        auto* modeObj = endo::builtins::makeFileModeFromBits(&runner, file.mode);
-        record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));
-        auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, file.mtime);
-        record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
-        record->setSlot(4, static_cast<uint64_t>(file.isDir ? 1 : 0));
-        record->setSlot(5, static_cast<uint64_t>(file.isSymlink ? 1 : 0));
-        // Reuse the shared empty-string sentinel for the common non-symlink case to avoid a
-        // heap allocation + known-string insertion per directory entry on this listing path.
-        record->setSlot(6,
-                        reinterpret_cast<uintptr_t>(file.symlinkTarget.empty()
-                                                        ? runner.emptyString()
-                                                        : runner.newString(file.symlinkTarget)));
-        // Absolute path, so consumers can address the entry after the listing has been passed
-        // around, filtered, or concatenated with another listing.
-        record->setSlot(7,
-                        reinterpret_cast<uintptr_t>(file.path.empty() ? runner.emptyString()
-                                                                      : runner.newString(file.path)));
+        // The provider's absolute path travels with the record, so consumers can address the
+        // entry after the listing has been passed around, filtered, or concatenated.
+        auto* record = endo::builtins::makeFileInfoRecord(&runner,
+                                                          { .name = file.name,
+                                                            .path = file.path,
+                                                            .symlinkTarget = file.symlinkTarget,
+                                                            .size = file.size,
+                                                            .mode = file.mode,
+                                                            .mtime = file.mtime,
+                                                            .isDir = file.isDir,
+                                                            .isSymlink = file.isSymlink });
 
         // Cons this record onto the list
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
