@@ -6,14 +6,11 @@
 
 #include <crispy/LogStore.hpp>
 
-#include <cerrno>
 #include <clocale>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <print>
 #include <span>
-#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -28,6 +25,7 @@
 #endif
 #include <shell/EndoVersion.hpp>
 
+#include "CompileCommand.hpp"
 #include "FormatCommand.hpp"
 #include "HelpPrinter.hpp"
 #include "Shell.hpp"
@@ -78,6 +76,9 @@ struct ParsedArgs
     std::optional<std::string> logFile;        ///< Log file path for protocol messages (DAP, etc.).
     std::vector<std::string_view> modulePaths; ///< Additional module search paths (--module-path).
     bool noProfile = false;                    ///< Skip loading init.endo profile.
+    std::string_view outputFile;               ///< -o/--output: compile to .wasm/.wat instead of executing.
+    bool optimizeOutput = false;               ///< -O: optimize the compiled output module.
+    bool wasmNoTailCall = false;               ///< Lower tail calls as plain calls (older WASM runtimes).
 };
 
 /// Tries to extract the value for a long option.
@@ -171,6 +172,22 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.modulePaths.emplace_back(*val);
         }
+        else if (auto val = consumeOptionValue(arg, "-o", i, args))
+        {
+            result.outputFile = *val;
+        }
+        else if (auto val = consumeOptionValue(arg, "--output", i, args))
+        {
+            result.outputFile = *val;
+        }
+        else if (arg == "-O")
+        {
+            result.optimizeOutput = true;
+        }
+        else if (arg == "--wasm-no-tail-call")
+        {
+            result.wasmNoTailCall = true;
+        }
         else if (arg == "-c" && i + 1 < args.size())
         {
             result.command = args[++i];
@@ -210,34 +227,19 @@ int executeScript(endo::Shell& shell,
                   std::span<std::string_view const> scriptArgs,
                   std::string_view programName)
 {
-    // 1. Open and read file
-    auto const scriptPathStr = std::string(scriptPath);
-    std::ifstream file(scriptPathStr);
-    if (!file)
+    // 1. Read the file, stripping a leading shebang line
+    auto content = endo::compile::readScriptSource(scriptPath);
+    if (!content)
     {
-        std::print(stderr, "endo: {}: {}\n", scriptPath, strerror(errno));
+        std::print(stderr, "endo: {}\n", content.error());
         return EXIT_FAILURE;
-    }
-
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    std::string content = ss.str();
-
-    // 2. Strip shebang line if present
-    if (content.starts_with("#!"))
-    {
-        auto const pos = content.find('\n');
-        if (pos != std::string::npos)
-            content = content.substr(pos + 1);
-        else
-            content.clear(); // Script is only a shebang
     }
 
     // 3. Set up non-interactive mode
     shell.setInteractive(false);
 
     // 4. Set source file path for relative module resolution
-    shell.setSourceFile(std::filesystem::canonical(scriptPathStr));
+    shell.setSourceFile(std::filesystem::canonical(std::string(scriptPath)));
 
     // 5. Set positional parameters ($0 = script, $1... = args)
     std::vector<std::string> params;
@@ -247,7 +249,7 @@ int executeScript(endo::Shell& shell,
     shell.setPositionalParameters(std::move(params));
 
     // 6. Execute (parser validates entire script before execution)
-    return shell.execute(content);
+    return shell.execute(*content);
 }
 
 #if defined(_WIN32)
@@ -388,6 +390,22 @@ int main(int argc, char const* argv[])
     {
         std::print(stderr, "endo: --check requires -c <command> or a script file\n");
         return EXIT_FAILURE;
+    }
+
+    // Handle -o FILE: compile the script to WebAssembly instead of executing it
+    if (!parsed.outputFile.empty())
+    {
+        if (parsed.scriptFile.empty())
+        {
+            std::print(stderr, "endo: -o requires a script file to compile\n");
+            return EXIT_FAILURE;
+        }
+        return endo::compile::runCompileCommand({
+            .scriptFile = parsed.scriptFile,
+            .outputFile = parsed.outputFile,
+            .optimize = parsed.optimizeOutput,
+            .tailCalls = !parsed.wasmNoTailCall,
+        });
     }
 
     auto shell = endo::Shell {};

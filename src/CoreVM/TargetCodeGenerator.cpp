@@ -35,29 +35,8 @@ TargetCodeGenerator::TargetCodeGenerator() = default;
 
 std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
 {
-    // Register custom product types (records) in the TypeRegistry before code generation
-    for (auto const& customType: programIR->customProductTypes())
-    {
-        auto type = std::make_unique<TypeDescriptor>();
-        type->kind = TypeKind::Product;
-        type->id = customType.assignedId;
-        type->name = customType.name;
-        type->fields = customType.fields;
-        type->slotCount =
-            customType.slotCount > 0 ? customType.slotCount : static_cast<uint16_t>(customType.fields.size());
-        _cp.typeRegistry().registerProductType(std::move(type));
-    }
-
-    // Register custom sum types (discriminated unions) in the TypeRegistry before code generation
-    for (auto const& customType: programIR->customSumTypes())
-    {
-        auto type = std::make_unique<TypeDescriptor>();
-        type->kind = TypeKind::Sum;
-        type->id = customType.assignedId;
-        type->name = customType.name;
-        type->variants = customType.variants;
-        _cp.typeRegistry().registerSumType(std::move(type));
-    }
+    // Register custom product/sum types in the TypeRegistry before code generation
+    registerCustomTypes(*programIR, _cp.typeRegistry());
 
     // generate target code for global scope initialization, if any
     IRFunction* init = programIR->findFunction(GLOBAL_SCOPE_INIT_NAME);

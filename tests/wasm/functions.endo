@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed functions compile to WASM calls; deep recursion uses return_call
+# mode: wasm
+# expect: 42
+# expect: 0
+
+let add (a: int) (b: int) = a + b
+
+print (add 40 2)
+println ""
+
+let rec deep (n: int): int =
+    if n == 0 then 0
+    else deep (n - 1)
+
+print (deep 100000)
+println ""

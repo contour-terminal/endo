@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let-rec with match compiles via the dispatch loop
+# mode: wasm
+# expect: 3628800
+
+let rec factorial n acc =
+    match n with
+    | 0 -> acc
+    | _ -> factorial (n - 1) (n * acc)
+
+print (factorial 10 1)
+println ""

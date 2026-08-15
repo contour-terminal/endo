@@ -473,4 +473,11 @@ T* IRProgram::get(std::vector<T>& table, U&& literal)
     return &table.back();
 }
 
+class TypeRegistry;
+
+/// Registers the program's custom product and sum types (records and
+/// discriminated unions) into @p registry, resolving slot counts. Shared by
+/// every backend that needs type layout metadata (bytecode, WASM).
+void registerCustomTypes(IRProgram& program, TypeRegistry& registry);
+
 } // namespace CoreVM

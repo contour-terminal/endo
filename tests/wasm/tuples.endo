@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple construction and mixed-type display
+# mode: wasm
+# expect: (1, 2)
+# expect: ("a", 5, true)
+
+print (1, 2)
+println ""
+print ("a", 5, true)
+println ""

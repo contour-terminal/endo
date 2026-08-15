@@ -109,6 +109,7 @@ nav:
     - Builtins: shell/builtins.md
     - Completions: shell/completions.md
     - Structured Output: shell/structured-output.md
+    - WebAssembly Compilation: shell/wasm-compilation.md
   - Debugging:
     - Overview: debugging/index.md
     - Neovim (nvim-dap): debugging/neovim.md

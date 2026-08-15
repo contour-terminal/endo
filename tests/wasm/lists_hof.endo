@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List literals, HOF pipelines and display formatting
+# mode: wasm
+# expect: [1; 2; 3; 4; 5]
+# expect: [2; 4; 6; 8; 10]
+# expect: [2; 4]
+# expect: 15
+# expect: ["x"; "y"]
+
+let xs = [1; 2; 3; 4; 5]
+
+print xs
+println ""
+print (xs |> map (_ * 2))
+println ""
+print (xs |> filter (_ % 2 == 0))
+println ""
+print (xs |> fold 0 (fun acc v -> acc + v))
+println ""
+print ["x"; "y"]
+println ""

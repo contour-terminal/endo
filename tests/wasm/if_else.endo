@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If/else branching decides the exit code
+# mode: wasm
+# expect-exit: 2
+
+let x = 3
+
+let code =
+    if x > 5 then 1
+    else 2
+
+exit code

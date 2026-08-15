@@ -103,6 +103,10 @@ add_library(endo STATIC
     format/SourceFormatter.hpp
     format/SourceFormatter.cpp
 
+    # One-shot compilation driver (parse + IR generation, no execution)
+    CompileToIR.hpp
+    CompileToIR.cpp
+
     # Logging (used by parser tracing)
     LogCategories.hpp
     LogCategories.cpp

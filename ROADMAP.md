@@ -1531,6 +1531,18 @@ to deliver rich language intelligence outside the interactive shell.
   interactive shell (Phase 2.5 Tooltips, Phase 2.3 Completion) via in-process API calls, avoiding
   the need for duplicate logic between the interactive editor and external editor support
 
+### Phase 5.6: WebAssembly Compilation Backend (first iteration) ✅
+
+**Status:** Core complete — see `ROADMAP-WASM.md` for details and remaining gaps
+
+`endo -o script.wasm script.endo` compiles scripts to self-contained WASI
+command modules that run under wasmtime with VM-identical output and exit
+codes for the supported subset (arithmetic, strings, floats, functions with
+tail calls, Option/Result/tuples/lists, pattern matching, HOF pipelines).
+Built on the system binaryen library; unsupported constructs (shell
+execution, file I/O, regex, closures, lazy) fail with located compile-time
+errors. User docs: `docs/shell/wasm-compilation.md`.
+
 ---
 
 ## Feature Dependency Graph

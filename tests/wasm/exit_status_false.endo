@@ -1,0 +1,6 @@
+false
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare false sets the shell exit status
+# mode: wasm
+# expect-exit: 1

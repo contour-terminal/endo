@@ -167,6 +167,10 @@ add_library(endo-shell STATIC
     FormatCommand.hpp
     FormatCommand.cpp
 
+    # Compile-to-WebAssembly (self-gated on ENDO_HAS_WASM)
+    CompileCommand.hpp
+    CompileCommand.cpp
+
     # Help
     HelpPrinter.hpp
     HelpPrinter.cpp
@@ -233,6 +237,10 @@ else()
 endif()
 
 target_link_libraries(endo-shell PUBLIC endo-platform net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+if(ENDO_HAS_WASM)
+    # Brings in the ENDO_HAS_WASM=1 compile definition (INTERFACE) and binaryen.
+    target_link_libraries(endo-shell PUBLIC CoreVM-wasm)
+endif()
 if(ENDO_ENABLE_AGENT)
     target_sources(endo-shell PRIVATE AgentModeSession.cpp)
     target_link_libraries(endo-shell PUBLIC endo-agent)
@@ -356,6 +364,15 @@ if(ENDO_TESTING)
 endif()
 
 # Installation
+
+# Installing discards the build-tree RPATH, so libraries that live outside the
+# dynamic loader's search path must be re-declared here or the installed shell
+# fails to start.  Binaryen is the only such dependency; FindBinaryen.cmake
+# leaves Binaryen_INSTALL_RPATH empty when the loader finds it unaided.
+if(ENDO_HAS_WASM AND Binaryen_INSTALL_RPATH)
+    set_property(TARGET endo-bin APPEND PROPERTY INSTALL_RPATH "${Binaryen_INSTALL_RPATH}")
+endif()
+
 install(TARGETS endo-bin RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install runtime DLL dependencies alongside the executable (Windows/vcpkg).
@@ -369,6 +386,20 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/completers)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/stdlib/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/stdlib)
+
+# Guards the RPATH above: the build-tree binary resolves its libraries even when
+# the installed one cannot, so only an installed binary can prove the install is
+# usable. Unix-only, where RPATH is the mechanism being tested.
+if(ENDO_TESTING AND UNIX AND NOT EMSCRIPTEN)
+    add_test(
+        NAME installed-binary
+        COMMAND ${CMAKE_COMMAND}
+            -DBUILD_DIR=${CMAKE_BINARY_DIR}
+            -DCONFIG=$<CONFIG>
+            -P ${CMAKE_SOURCE_DIR}/cmake/tests/TestInstalledBinary.cmake
+    )
+    set_tests_properties(installed-binary PROPERTIES TIMEOUT 120)
+endif()
 
 # Enable sanitizers and clang-tidy for all targets
 enable_sanitizers(endo-shell)

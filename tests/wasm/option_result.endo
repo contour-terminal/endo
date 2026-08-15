@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option/Result construction, display and pattern matching
+# mode: wasm
+# expect: Some 42
+# expect: 42
+# expect: Ok 7
+# expect: boom
+
+let o = Some 42
+
+print o
+println ""
+
+let x =
+    match o with
+    | Some v -> v
+    | None -> 0
+
+print x
+println ""
+print (Ok 7)
+println ""
+
+let r = Error "boom"
+
+match r with
+| Ok v -> println "ok"
+| Error e -> println e

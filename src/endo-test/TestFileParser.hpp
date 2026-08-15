@@ -19,6 +19,7 @@ enum class TestMode : std::uint8_t
     ParseOnly,  ///< Parse only, no IR generation
     Structured, ///< Execute with pre-populated structured command state
     Shell,      ///< Execute through a real Shell instance (for script/module e2e tests)
+    Wasm,       ///< Compile to WebAssembly and execute under wasmtime
 };
 
 /// Parsed metadata and source from an .endo test file.
