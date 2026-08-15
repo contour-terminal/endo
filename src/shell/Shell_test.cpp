@@ -13,6 +13,7 @@
 #include <thread>
 
 #include <platform/PathUtils.hpp>
+#include <platform/SystemInfo.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -5415,4 +5416,133 @@ TEST_CASE("shell.builtin.cat_non_markdown_is_unaffected")
 
     CHECK(shell.exitCode == 0);
     CHECK(std::string(shell.output()).find("hello world") != std::string::npos);
+}
+
+// ============================================================================
+// OSC 8 clickable paths in ls output
+// ============================================================================
+
+namespace
+{
+
+/// @brief Creates a directory with known entries and returns its path.
+///
+/// `structured_ls` reads the real filesystem (it constructs the platform provider directly
+/// rather than taking the injected FileSystem), so an ls test needs real files.
+auto writeLsFixture(std::string_view caseName) -> std::filesystem::path
+{
+    namespace fs = std::filesystem;
+    // Per-case directory so the three ls cases cannot observe each other's entries.
+    auto const dir = fs::temp_directory_path() / std::format("endo_ls_links_{}", caseName);
+    fs::remove_all(dir);
+    fs::create_directories(dir / "subdir");
+    auto plain = std::ofstream(dir / "plain.txt", std::ios::binary);
+    plain << "x";
+    auto spaced = std::ofstream(dir / "with space.txt", std::ios::binary);
+    spaced << "y";
+    return dir;
+}
+
+} // namespace
+
+TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
+{
+    auto const dir = writeLsFixture("emits");
+
+    TestShell shell;
+    shell(std::format("ls {}", dir.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(shell.exitCode == 0);
+#if !defined(_WIN32)
+    // Assert on the resolved absolute target, not merely that some escape appeared — that is
+    // what proves the FileInfo path slot is actually plumbed through.
+    CHECK(
+        output.find(std::format("]8;;file://{}{}/plain.txt", endo::platform::cachedHostName(), dir.string()))
+        != std::string::npos);
+    // A space in the name must be percent-encoded inside the URI.
+    CHECK(output.find("with%20space.txt") != std::string::npos);
+    CHECK(output.find("\033]8;;\033\\") != std::string::npos);
+#endif
+    CHECK(output.find("plain.txt") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
+{
+    auto const dir = writeLsFixture("disabled");
+
+    TestShell shell;
+    shell("shell_hyperlinks <- false");
+    shell(std::format("ls {}", dir.string()));
+    auto const output = std::string(shell.output());
+
+    CHECK(output.find("]8;;file://") == std::string::npos);
+    // The switch is independent of styling: the table chrome is still colorized.
+    CHECK(output.find("plain.txt") != std::string::npos);
+#if !defined(_WIN32)
+    CHECK(output.find("\033[") != std::string::npos);
+#endif
+}
+
+TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
+{
+    // The URI comes from each record, so it stays correct after the listing is reshaped.
+    auto const dir = writeLsFixture("filtered");
+
+    TestShell shell;
+    shell(std::format("ls {} |> filter _.isDir", dir.string()));
+    auto const output = std::string(shell.output());
+
+#if !defined(_WIN32)
+    CHECK(output.find(std::format("]8;;file://{}{}/subdir", endo::platform::cachedHostName(), dir.string()))
+          != std::string::npos);
+#endif
+    CHECK(output.find("subdir") != std::string::npos);
+}
+
+// ============================================================================
+// Property descriptors vs. shell registrations
+// ============================================================================
+
+#include <endo-language/builtins/PropertyDescriptors.hpp>
+
+#include <CoreVM/vm/Runtime.hpp>
+
+#include <set>
+
+TEST_CASE("shell.properties.descriptors_and_registrations_agree")
+{
+    // PropertyDescriptors.hpp calls itself the single source of truth for property metadata, but
+    // the shell's registrations are hand-written in Registration.cpp and until now nothing checked
+    // that the two agree. Both directions fail silently, which is why a test is worth having: a
+    // descriptor with no registration type-checks and then does nothing at runtime, and a
+    // registration with no descriptor is invisible to hover, completion and the LSP.
+    TestShell shell;
+    auto const& runtime = shell.shell.runtime();
+
+    auto declared = std::set<std::string> {};
+    for (auto const descriptors: { endo::promptPropertyDescriptors(), endo::agentPropertyDescriptors() })
+    {
+        for (auto const& descriptor: descriptors)
+        {
+            declared.emplace(descriptor.name);
+
+            INFO("property: " << descriptor.name);
+            auto const* registered = runtime.findProperty(std::string { descriptor.name });
+            REQUIRE(registered != nullptr);
+            CHECK(registered->type() == descriptor.type);
+            CHECK(registered->hasGetter());
+            // A read-only property must reject assignment at the VM layer too, not only in sema.
+            CHECK(registered->hasSetter() == !descriptor.readOnly);
+        }
+    }
+
+    for (auto const& registered: runtime.properties())
+    {
+        auto const& name = registered->name();
+        if (!name.starts_with("shell_") && !name.starts_with("agent_"))
+            continue;
+        INFO("property: " << name);
+        CHECK(declared.contains(name));
+    }
 }

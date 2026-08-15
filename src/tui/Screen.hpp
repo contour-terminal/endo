@@ -345,6 +345,16 @@ class Screen // NOLINT(clang-analyzer-optin.performance.Padding)
     void flushFullscreen();
     void flushInline();
     void flushFixed();
+
+    /// @brief Repaints @p area by absolute cursor motion, cell by cell.
+    ///
+    /// The shared body of flushFullscreen() and flushFixed(), which differ only in the rectangle
+    /// they cover. flushInline() deliberately does not come through here: it moves the cursor
+    /// sequentially, erases to end of line and maintains scroll bookkeeping, so it shares the loop
+    /// shape but almost none of the emission.
+    ///
+    /// @param area Rectangle to repaint, in buffer coordinates. Clipped to the buffer.
+    void flushArea(Rect area);
     void applyCursorShape(); ///< Applies cursor shape based on focused component.
 
     // Hit testing

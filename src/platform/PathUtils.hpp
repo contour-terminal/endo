@@ -55,11 +55,74 @@ inline constexpr bool FilesystemCaseInsensitive =
 ///
 /// Convenience overload that converts a std::filesystem::path to a normalized string.
 ///
+/// Goes through generic_u8string() rather than generic_string(): the latter narrows to the
+/// platform's native narrow encoding, which on Windows is the ANSI code page and throws on any
+/// path the code page cannot represent. Every path string in endo is UTF-8, so producing UTF-8
+/// here is what the callers already assume. Identical output on POSIX.
+///
 /// @param p The filesystem path to normalize
 /// @return The normalized path string
 [[nodiscard]] inline auto normalizePath(std::filesystem::path const& p) -> std::string
 {
-    return p.generic_string();
+    auto const generic = p.generic_u8string();
+    return std::string { reinterpret_cast<char const*>(generic.data()), generic.size() };
+}
+
+/// @brief Joins a directory and an entry name with a single `/`.
+///
+/// Tolerates @p dir already ending in a separator, which is what a filesystem root does.
+///
+/// @param dir Directory path (may be empty, in which case @p name is returned).
+/// @param name Entry name to append.
+/// @return The joined path.
+[[nodiscard]] inline auto joinPath(std::string_view dir, std::string_view name) -> std::string
+{
+    if (dir.empty())
+        return std::string { name };
+
+    auto joined = std::string {};
+    joined.reserve(dir.size() + 1 + name.size());
+    joined += dir;
+    if (!joined.ends_with('/'))
+        joined += '/';
+    joined += name;
+    return joined;
+}
+
+/// @brief Resolves @p dir to an absolute, forward-slash normalized directory path.
+///
+/// Intended to be called once per directory listing rather than once per entry: fs::absolute()
+/// consults the process working directory, so per-entry resolution costs a syscall per file.
+///
+/// @param dir Directory to resolve; empty is treated as the working directory.
+/// @return The absolute directory, or an empty string if it could not be resolved.
+[[nodiscard]] inline auto absoluteDirectory(std::filesystem::path const& dir) -> std::string
+{
+    auto ec = std::error_code {};
+    auto const absolute = std::filesystem::absolute(dir.empty() ? std::filesystem::path { "." } : dir, ec);
+    if (ec)
+        return {};
+    return normalizePath(absolute.lexically_normal());
+}
+
+/// @brief Resolves @p path against @p base, without touching the filesystem.
+///
+/// A path that is already absolute is returned normalized and otherwise untouched. A relative
+/// one is joined onto @p base and lexically normalized, so `./x` and `a/../b` collapse. Purely
+/// lexical by design: callers resolving thousands of entries cannot afford a syscall each, and
+/// symlinks must not be followed.
+///
+/// @param path The path to resolve.
+/// @param base Absolute directory to resolve against. Empty returns @p path normalized only,
+///             since there is nothing to resolve against.
+/// @return The resolved, forward-slash normalized path.
+[[nodiscard]] inline auto absolutePath(std::string_view path, std::string_view base) -> std::string
+{
+    auto const candidate = std::filesystem::path { path };
+    if (base.empty() || candidate.is_absolute())
+        return normalizePath(candidate.lexically_normal());
+
+    return normalizePath((std::filesystem::path { base } / candidate).lexically_normal());
 }
 
 /// @brief Returns a path with its real on-disk capitalization and forward slashes.

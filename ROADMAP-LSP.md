@@ -37,6 +37,10 @@ Foundation for a useful editing experience. All features here are implemented.
 
 - [x] `textDocument/hover`: keywords, constructors, operators, builtins, function signatures, record types, pipeline operators
 - [x] Markdown-formatted content via shared `endo::computeHover()` engine
+- [x] Configuration properties (`shell_*`, `agent_*`) hovered from their descriptor table, so every
+      declared property is covered and the text cannot drift from completion
+- [x] Builtin record field lists (`FileInfo`, `ProcessInfo`, `Size`, …) rendered from the runtime
+      type descriptors, so hover shows each field's actual type and cannot go stale when one changes
 
 ### Go to Definition
 

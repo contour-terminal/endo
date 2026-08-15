@@ -93,7 +93,7 @@ class RecordingOutput: public TerminalOutput
         ops.push_back({ .kind = OpKind::Hyperlink, .text = std::string(t), .url = std::string(u) });
     }
 
-    void beginHyperlink(std::string_view u) override
+    void beginHyperlink(std::string_view u, std::string_view) override
     {
         ops.push_back({ .kind = OpKind::BeginHyperlink, .url = std::string(u) });
     }

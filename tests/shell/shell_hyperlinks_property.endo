@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_hyperlinks is readable and settable from init.endo-style code
+# mode: shell
+# expect: ok
+
+shell_hyperlinks <- false
+shell_hyperlinks <- true
+println "ok"

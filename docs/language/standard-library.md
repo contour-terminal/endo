@@ -1349,10 +1349,20 @@ Lists directory contents as structured records.
 | `isDir` | `bool` | Whether entry is a directory |
 | `isSymlink` | `bool` | Whether entry is a symbolic link |
 | `target` | `str` | Symbolic link target (empty for non-symlinks) |
+| `path` | `str` | Absolute path of the entry |
 
-The `isDir`, `isSymlink`, and `target` fields are available for field access and
-pipelines but are not shown as columns in the default `ls` table; a symlink is
+The `isDir`, `isSymlink`, `target`, and `path` fields are available for field access
+and pipelines but are not shown as columns in the default `ls` table; a symlink is
 instead rendered inline as `name -> target`.
+
+`name` is only the final path component, so use `path` whenever you need to address
+the file itself rather than display it -- it stays correct after the listing has been
+filtered, mapped, or concatenated with another listing:
+
+<!-- endo-no-check -->
+```endo
+ls /etc |> filter _.isDir |> map _.path
+```
 
 <!-- endo-no-check -->
 ```endo

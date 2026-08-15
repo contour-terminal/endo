@@ -4,6 +4,7 @@
 #include <endo-language/builtins/BuiltinImpls.hpp>
 
 #include <tui/Box.hpp>
+#include <tui/TerminalProtocols.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include "FileTypeStyle.hpp"
+#include <platform/FileUri.hpp>
 
 namespace endo
 {
@@ -255,6 +257,20 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     auto const& fields = resolvedFields.empty() ? records[0]->type->fields : resolvedFields;
     auto const numCols = fields.size();
     bool const decorateFiles = isFileInfo && config.useColor;
+    // Hoisted rather than respelled at each of the four places that need it: the icon's width has
+    // to agree between the column-width arithmetic and the rendering, and a condition duplicated
+    // per site is one that can disagree.
+    constexpr int IconDisplayWidth = 2; // 1 glyph (1 cell) + 1 space
+    bool const showIcons = decorateFiles && config.showIcons;
+    int const nameIconWidth = showIcons ? IconDisplayWidth : 0;
+    // The link target is looked up by name, once, rather than by slot literal: reordering
+    // FileInfo's hidden fields would otherwise retarget every hyperlink to whatever landed at
+    // that slot, with the tests — which only assert that some file:// URI appears — still green.
+    auto const* const pathField = isFileInfo ? records[0]->type->getFieldByName("path") : nullptr;
+    // Kept separate from decorateFiles, which conflates terminal-ness, SGR and icons: turning
+    // icons or colors off must not cost the user clickable names. Plain style pads inline and
+    // never reaches renderDataCell, so excluding it here only skips the wasted URI building.
+    bool const linkFiles = pathField != nullptr && config.useHyperlinks && config.style != TableStyle::Plain;
 
     // Determine per-column alignment and FileMode columns from the first record's runtime types
     std::vector<bool> rightAligned(numCols, false);
@@ -287,13 +303,15 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     rows.reserve(records.size());
     std::vector<int> colWidths(numCols, 0);
     std::vector<FileDecoration> fileDecorations; // one per row (only when decorateFiles)
+    std::vector<std::string> fileUris;           // one per row (only when linkFiles; may be empty)
+    if (linkFiles)
+        fileUris.reserve(records.size());
 
     for (size_t col = 0; col < numCols; ++col)
         colWidths[col] = static_cast<int>(headers[col].size());
 
     // When showing icons, reserve space for "icon " prefix in the name column header width
-    constexpr int IconDisplayWidth = 2; // 1 glyph (1 cell) + 1 space
-    if (decorateFiles && config.showIcons)
+    if (showIcons)
         colWidths[0] = std::max(colWidths[0], static_cast<int>(headers[0].size()) + IconDisplayWidth);
 
     for (auto* record: records)
@@ -301,7 +319,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         std::vector<std::string> row;
         row.reserve(numCols);
 
-        // FileInfo hidden slots that drive visuals: isDir (4), isSymlink (5), target (6).
+        // FileInfo hidden slots: isDir (4), isSymlink (5) and target (6) drive visuals; the
+        // hyperlink target comes from pathField, resolved by name above.
         auto const isDir = isFileInfo && record->getSlot(4) != 0;
         auto const isSymlink = isFileInfo && record->getSlot(5) != 0;
         if (decorateFiles)
@@ -322,6 +341,21 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
                 getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode, isSymlink));
         }
 
+        if (linkFiles)
+        {
+            // Built from the raw path slot before the name cell gains its '/' suffix,
+            // " -> target" suffix, or ellipsis truncation — a truncated name stays clickable
+            // to the right file precisely because the URI never comes from the cell text.
+            // A record with no path (one built before FileInfo carried it) yields an empty URI
+            // and is simply not linked.
+            auto const pathSlot = record->getSlot(pathField->offset);
+            auto const* pathStr =
+                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(pathSlot));
+            fileUris.push_back(pathStr != nullptr && !pathStr->empty()
+                                   ? platform::fileUri(*pathStr, config.uriHost)
+                                   : std::string {});
+        }
+
         for (size_t col = 0; col < numCols; ++col)
         {
             auto slotVal = record->getSlot(fields[col].offset);
@@ -340,8 +374,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             if (std::cmp_not_equal(col, config.autoGrowColumn))
                 cell = truncate(cell, config.maxColumnWidth);
             auto cellDisplayWidth = displayWidth(cell);
-            if (decorateFiles && config.showIcons && col == 0)
-                cellDisplayWidth += IconDisplayWidth;
+            if (col == 0)
+                cellDisplayWidth += nameIconWidth;
             colWidths[col] = std::max(colWidths[col], cellDisplayWidth);
             row.push_back(std::move(cell));
         }
@@ -386,7 +420,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     if (config.autoGrowColumn >= 0 && std::cmp_less(config.autoGrowColumn, numCols))
     {
         auto const col = static_cast<size_t>(config.autoGrowColumn);
-        auto const iconOffset = (decorateFiles && config.showIcons && col == 0) ? IconDisplayWidth : 0;
+        auto const iconOffset = col == 0 ? nameIconWidth : 0;
         auto const maxWidth = colWidths[col] - iconOffset;
         for (auto& row: rows)
             row[col] = truncate(row[col], maxWidth);
@@ -394,35 +428,39 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
 
     std::string result;
 
-    // Helper: render a data cell, applying file decoration (icon prefix + SGR color) for the name
-    // column. The cell text is padded to the column width. SGR sequences wrap the padded content so
-    // they don't affect alignment. The icon (when shown) is part of the visible content and included
-    // in the padding calculation.
+    // Helper: render a data cell, applying file decoration (icon prefix, SGR color, OSC 8
+    // hyperlink) for the name column. Escapes are emitted only here, wrapping content that was
+    // already padded from the plain text in `rows`, so none of the width arithmetic above can be
+    // inflated by them. The icon (when shown) is visible content and counts toward the padding.
     auto renderDataCell = [&](std::string& out, size_t rowIdx, size_t col, int width, bool rightAlign) {
         auto const& cellText = rows[rowIdx][col];
-        if (decorateFiles && col == 0)
+        if ((decorateFiles || linkFiles) && col == 0)
         {
-            auto const& deco = fileDecorations[rowIdx];
-            auto const sgr = sgrSequence(deco.style);
-            auto const sgrReset = sgr.empty() ? std::string {} : std::string { "\033[m" };
+            auto const sgr = decorateFiles ? sgrSequence(fileDecorations[rowIdx].style) : std::string {};
+            auto const* const sgrReset = sgr.empty() ? "" : "\033[m";
+            // A conditional mixing an lvalue with a prvalue yields a prvalue, so binding this by
+            // reference would copy the vector element per row; a view aliases it.
+            auto const uri = linkFiles ? std::string_view { fileUris[rowIdx] } : std::string_view {};
 
-            if (config.showIcons)
+            // Padding sits outside both the link and the SGR span, so clicking the blank filler
+            // does nothing and the highlight stops at the name. Same total width as padCell():
+            // nameIconWidth + displayWidth(cellText) + pad == width. Always trailing, since the name
+            // column is never right-aligned (isRightAlignedColumn says so only for numeric ones).
+            auto const pad = std::max(0, width - (displayWidth(cellText) + nameIconWidth));
+
+            if (!uri.empty())
+                tui::protocols::appendHyperlinkOpen(out, uri);
+            out += sgr;
+            if (showIcons)
             {
-                // Pad name alone, then prepend the icon + space so that
-                // icon (1 col) + space (1 col) + paddedName (width-2 cols) = width cols.
-                auto paddedName = padCell(cellText, width - IconDisplayWidth, rightAlign);
-                out += sgr;
-                out += std::string(deco.icon);
+                out += fileDecorations[rowIdx].icon;
                 out += ' ';
-                out += paddedName;
-                out += sgrReset;
             }
-            else
-            {
-                out += sgr;
-                out += padCell(cellText, width, rightAlign);
-                out += sgrReset;
-            }
+            out += cellText;
+            out += sgrReset;
+            if (!uri.empty())
+                out += tui::protocols::HyperlinkClose;
+            out.append(static_cast<size_t>(pad), ' ');
         }
         else if (config.useColor && isFileModeCol[col])
         {

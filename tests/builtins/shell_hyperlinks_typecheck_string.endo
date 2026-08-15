@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_hyperlinks rejects a non-boolean assignment at compile time
+# expect-error: shell_hyperlinks
+# mode: ir-only
+
+shell_hyperlinks <- "yes"

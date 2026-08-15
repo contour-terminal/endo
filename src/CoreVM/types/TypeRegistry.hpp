@@ -95,4 +95,12 @@ class TypeRegistry
     TypeDescriptor* addType(std::unique_ptr<TypeDescriptor> type);
 };
 
+/// @brief Returns a shared registry holding only the builtin types.
+///
+/// Builtin descriptors are immutable once registered, so consumers that merely need to read a
+/// builtin's layout — the frontend's TypeDefinitionRegistry, hover, tests — can share one
+/// instance instead of each constructing its own. A registry that will also hold program types
+/// (a Runner's) must still be constructed per program.
+[[nodiscard]] TypeRegistry const& builtinTypes();
+
 } // namespace CoreVM

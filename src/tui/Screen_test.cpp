@@ -1369,3 +1369,166 @@ TEST_CASE("Screen.inlineHover_contentGrowth_correctMapping")
         CHECK(content.find("row2") != std::string::npos);
     }
 }
+
+// ============================================================================
+// OSC 8 hyperlink regions
+// ============================================================================
+
+namespace
+{
+
+/// @brief Renders one row of single-grapheme segments under an optional hyperlink region.
+///
+/// Drawing each grapheme with its own putString() reproduces how a gradient-coloured prompt
+/// path reaches the buffer — one Cell per cluster — which is exactly the case a hyperlink has
+/// to survive as a single logical link.
+struct LinkedTextComponent: Component
+{
+    std::string text = "abcdefgh";
+    std::string uri = "file://box/a";
+    bool linked = true;
+
+    void render(Canvas& canvas) override
+    {
+        auto col = 0;
+        for (auto const ch: text)
+            col += canvas.putString(0, col, std::string(1, ch), {});
+        if (linked)
+            canvas.addHyperlink(0, 0, col, uri);
+    }
+
+    [[nodiscard]] Size preferredSize() const override { return { .width = 80, .height = 1 }; }
+};
+
+/// @brief Attaches @p component to @p screen as a single full-width row.
+void attachSingleRow(Screen& screen, Component& component)
+{
+    screen.root().addChild(component, LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 1 } });
+}
+
+} // namespace
+
+TEST_CASE("Screen.hyperlink_emittedOnceAcrossPerCellWrites_andClosed")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+
+    auto comp = LinkedTextComponent {};
+    attachSingleRow(screen, comp);
+    screen.draw();
+
+    // Eight separate one-grapheme writes under one region must yield one logical link.
+    REQUIRE(mock->hyperlinkRuns().size() == 1);
+    CHECK(mock->hyperlinkRuns()[0].url == "file://box/a");
+    CHECK(mock->hyperlinkRuns()[0].text == "abcdefgh");
+    CHECK_FALSE(mock->hyperlinkRuns()[0].id.empty());
+
+    // Framing must never leak past the flush.
+    CHECK_FALSE(mock->hyperlinkOpen());
+    CHECK(mock->unbalancedHyperlinkCloses() == 0);
+}
+
+TEST_CASE("Screen.hyperlink_absentWhenNoRegionRegistered")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+
+    auto comp = LinkedTextComponent {};
+    comp.linked = false;
+    attachSingleRow(screen, comp);
+    screen.draw();
+
+    CHECK(mock->hyperlinkRuns().empty());
+}
+
+TEST_CASE("Screen.hyperlink_uriChangeWithIdenticalCells_forcesRewrite")
+{
+    // Regression guard for the diff term in Screen's flush loops. The URI lives beside the
+    // cell rather than in it, so Cell equality cannot see it: without an explicit URI
+    // comparison, a link retargeted while its text stayed byte-identical would never be
+    // repainted and the terminal would keep opening the stale target forever.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+
+    auto comp = LinkedTextComponent {};
+    comp.uri = "file://box/before";
+    attachSingleRow(screen, comp);
+    screen.draw();
+
+    REQUIRE(mock->hyperlinkRuns().size() == 1);
+    CHECK(mock->hyperlinkRuns()[0].url == "file://box/before");
+
+    // Same text, same styles, different target.
+    comp.uri = "file://box/after";
+    screen.draw();
+
+    REQUIRE(mock->hyperlinkRuns().size() == 2);
+    CHECK(mock->hyperlinkRuns()[1].url == "file://box/after");
+    CHECK(mock->hyperlinkRuns()[1].text == "abcdefgh");
+    CHECK(mock->hyperlinkRuns()[1].id != mock->hyperlinkRuns()[0].id);
+}
+
+TEST_CASE("Screen.hyperlink_unchangedFrameEmitsNoFraming")
+{
+    // A frame whose cells and URI are all unchanged is fully diffed away, so it should cost
+    // no framing bytes at all.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+
+    auto comp = LinkedTextComponent {};
+    attachSingleRow(screen, comp);
+    screen.draw();
+    auto const afterFirst = mock->hyperlinkRuns().size();
+
+    screen.draw();
+    CHECK(mock->hyperlinkRuns().size() == afterFirst);
+}
+
+TEST_CASE("Screen.hyperlink_idIsStableAcrossRedrawsOfSameUri")
+{
+    // The id must be derived from the URI, not minted per frame: a terminal that groups by id
+    // would otherwise treat each repaint as a brand-new link.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+
+    auto comp = LinkedTextComponent {};
+    attachSingleRow(screen, comp);
+    screen.draw();
+    screen.invalidate(); // force a full repaint rather than a diff
+    screen.draw();
+
+    REQUIRE(mock->hyperlinkRuns().size() == 2);
+    CHECK(mock->hyperlinkRuns()[0].id == mock->hyperlinkRuns()[1].id);
+}
+
+TEST_CASE("Screen.fixedViewport_repaintsItsAreaAndClosesFraming")
+{
+    // Viewport::Fixed had no coverage at all, and its repaint is now the same routine fullscreen
+    // uses (flushArea), so this pins that the shared body still serves the fixed case: the area is
+    // painted, the link inside it is emitted once, and no framing leaks past the flush.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+    screen.setViewport(Rect { .x = 0, .y = 0, .width = 80, .height = 1 });
+
+    auto comp = LinkedTextComponent {};
+    attachSingleRow(screen, comp);
+    screen.draw();
+
+    REQUIRE(mock->hyperlinkRuns().size() == 1);
+    CHECK(mock->hyperlinkRuns()[0].url == "file://box/a");
+    CHECK(mock->hyperlinkRuns()[0].text == "abcdefgh");
+    CHECK_FALSE(mock->hyperlinkOpen());
+    CHECK(mock->unbalancedHyperlinkCloses() == 0);
+}

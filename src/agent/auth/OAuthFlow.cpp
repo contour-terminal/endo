@@ -20,6 +20,7 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
+#include <platform/FileUri.hpp>
 #include <platform/UserPaths.hpp>
 
 namespace endo::agent
@@ -252,26 +253,13 @@ namespace
 
     // ── URL Encoding ─────────────────────────────────────────────────────────
 
+    /// Percent-encodes a query-parameter value.
+    ///
+    /// Delegated rather than reimplemented: this used to classify bytes with std::isalnum, which
+    /// is locale-dependent and leaves high bytes unencoded under some locales.
     auto urlEncode(std::string_view input) -> std::string
     {
-        static constexpr auto HexChars = "0123456789ABCDEF";
-        auto result = std::string {};
-        result.reserve(input.size());
-        for (auto const ch: input)
-        {
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '-' || ch == '_' || ch == '.'
-                || ch == '~')
-            {
-                result += ch;
-            }
-            else
-            {
-                result += '%';
-                result += HexChars[(static_cast<unsigned char>(ch) >> 4) & 0x0F];
-                result += HexChars[static_cast<unsigned char>(ch) & 0x0F];
-            }
-        }
-        return result;
+        return platform::percentEncode(input);
     }
 
     // ── Random Bytes ─────────────────────────────────────────────────────────

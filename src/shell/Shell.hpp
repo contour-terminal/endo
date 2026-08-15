@@ -103,6 +103,12 @@ class Shell final: public SignalCallback
 
     [[nodiscard]] FileSystem const& fs() const noexcept { return _fs; }
 
+    /// @brief The VM runtime holding this shell's registered builtins and properties.
+    ///
+    /// Read-only, and exposed so a test can check the registrations against the descriptor table
+    /// they are supposed to mirror.
+    [[nodiscard]] CoreVM::Runtime const& runtime() const noexcept { return _runtime; }
+
     void setOptimize(bool optimize);
 
     /// Set check-only mode (compile without executing).
@@ -696,6 +702,7 @@ class Shell final: public SignalCallback
     bool _unusedValueDetection = false; ///< Detect unused F# bindings (script mode only)
     bool _lsIcons = true;               ///< Show Nerd Font icons in ls output
     bool _lsDirectorySlash = true;      ///< Append trailing '/' to directory names
+    bool _hyperlinks = true;            ///< Emit OSC 8 hyperlinks in shell-generated output
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0;          ///< Shell's process group ID
     int _signalFd = -1;                ///< signalfd for Linux, -1 otherwise

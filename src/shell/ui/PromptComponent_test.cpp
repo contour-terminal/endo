@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/completion/Completer.hpp>
+#include <shell/ui/PromptPresets.hpp>
 
+#include <tui/Buffer.hpp>
+#include <tui/Canvas.hpp>
 #include <tui/InputEvent.hpp>
+#include <tui/Theme.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -528,4 +532,125 @@ TEST_CASE("PromptComponent.onHover_belowInputLine_returnsNullopt", "[prompt]")
     // y=2 is below the single input line (at y=1)
     auto const result = comp.onHover(5, 2);
     CHECK_FALSE(result.has_value());
+}
+
+// ============================================================================
+// OSC 8 hyperlink regions on the prompt path
+// ============================================================================
+
+TEST_CASE("PromptComponent.gradient_path_registers_a_single_hyperlink_region", "[prompt]")
+{
+    // The load-bearing case: the default preset gradients the path, and gradient() rebuilds the
+    // segments from scratch — one per grapheme cluster. If the URI were not propagated across
+    // that split the link would vanish; if it were propagated but not coalesced, the path would
+    // become one link per character.
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.infoLineModules = { "path" };
+    config.colorOverrides.path =
+        ColorSpec { .colors = { tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF },
+                                tui::RgbColor { .r = 0x00, .g = 0xDC, .b = 0xC8 } } };
+    comp.setPromptConfig(std::move(config));
+
+    auto ctx = PromptContext {};
+    ctx.cwd = "/home/alice/projects";
+    ctx.homePath = "/home/alice";
+    ctx.hostname = "box";
+    ctx.hyperlinks = true;
+    comp.setPromptContext(std::move(ctx));
+
+    auto buffer = tui::Buffer(8, 80);
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    comp.render(canvas);
+
+    auto const links = buffer.hyperlinks();
+    REQUIRE(links.size() == 1);
+    CHECK(links[0].uri == "file://box/home/alice/projects");
+    CHECK(links[0].cellArea.height == 1);
+    // "~/projects" is 10 columns wide.
+    CHECK(links[0].cellArea.width == 10);
+
+    // Prove the gradient split really happened, so the single region is not an artifact of the
+    // path having been rendered as one solid segment.
+    auto const& first = buffer.at(links[0].cellArea.y, links[0].cellArea.x);
+    auto const& last = buffer.at(links[0].cellArea.y, links[0].cellArea.right() - 1);
+    CHECK(first.style.fg != last.style.fg);
+}
+
+TEST_CASE("PromptComponent.path_hyperlink_omitted_when_disabled", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.infoLineModules = { "path" };
+    comp.setPromptConfig(std::move(config));
+
+    auto ctx = PromptContext {};
+    ctx.cwd = "/home/alice/projects";
+    ctx.hostname = "box";
+    ctx.hyperlinks = false;
+    comp.setPromptContext(std::move(ctx));
+
+    auto buffer = tui::Buffer(8, 80);
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    comp.render(canvas);
+
+    CHECK(buffer.hyperlinks().empty());
+}
+
+TEST_CASE("PromptComponent.solid_color_path_registers_one_region", "[prompt]")
+{
+    // Without a gradient the path is a single segment; the region must still be exactly one.
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.infoLineModules = { "path" };
+    config.colorOverrides.path =
+        ColorSpec { .colors = { tui::RgbColor { .r = 0xFF, .g = 0x66, .b = 0x00 } } };
+    comp.setPromptConfig(std::move(config));
+
+    auto ctx = PromptContext {};
+    ctx.cwd = "/tmp/x";
+    ctx.hostname = "box";
+    ctx.hyperlinks = true;
+    comp.setPromptContext(std::move(ctx));
+
+    auto buffer = tui::Buffer(8, 80);
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    comp.render(canvas);
+
+    auto const links = buffer.hyperlinks();
+    REQUIRE(links.size() == 1);
+    CHECK(links[0].uri == "file://box/tmp/x");
+    CHECK(links[0].cellArea.width == 6); // "/tmp/x"
+}
+
+TEST_CASE("PromptComponent.preset_switch_does_not_resurrect_disabled_hyperlinks", "[prompt]")
+{
+    // Switching presets replaces the whole PromptConfig. If the enable flag lived there it would
+    // silently come back on, re-enabling links the user had turned off — so it lives on the
+    // context, which the shell refreshes from its own state each prompt cycle.
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.infoLineModules = { "path" };
+    comp.setPromptConfig(std::move(config));
+
+    auto ctx = PromptContext {};
+    ctx.cwd = "/tmp/x";
+    ctx.hostname = "box";
+    ctx.hyperlinks = false;
+    comp.setPromptContext(std::move(ctx));
+
+    // A preset switch, as `shell_prompt_preset <- ...` performs it.
+    auto preset = promptPreset("powerline", tui::ColorScheme::Dark);
+    preset.infoLineModules = { "path" };
+    comp.setPromptConfig(std::move(preset));
+
+    auto buffer = tui::Buffer(8, 80);
+    auto canvas =
+        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    comp.render(canvas);
+
+    CHECK(buffer.hyperlinks().empty());
 }

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileInfo.path exposes the entry's absolute path, not just its basename
+# mode: structured
+# expect: /tmp/docs
+
+match head ls with
+| Some f -> print f.path
+| None -> print "empty"

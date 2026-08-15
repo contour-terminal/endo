@@ -708,7 +708,7 @@ void MarkdownRenderer::renderInline(std::string_view text, Style const* baseStyl
                         auto const label = text.substr(tag->endPos, close);
                         auto const clickable = isAbsoluteUrl(*href);
                         if (clickable)
-                            _output.beginHyperlink(*href);
+                            _output.beginHyperlink(*href, {});
                         renderInline(label, &effectiveLink, boldStyle);
                         if (clickable)
                             _output.endHyperlink();
@@ -759,7 +759,7 @@ void MarkdownRenderer::renderInline(std::string_view text, Style const* baseStyl
                     // fragments would produce broken links in a terminal.
                     // Recursing over the label renders the README badge idiom
                     // [![alt](badge.svg)](target) as its alt text, hyperlinked.
-                    _output.beginHyperlink(span->url);
+                    _output.beginHyperlink(span->url, {});
                     renderInline(span->label, &effectiveLink, boldStyle);
                     _output.endHyperlink();
                 }

@@ -287,6 +287,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-shell
         test_main.cpp
         Shell_test.cpp
+        output/TableFormatter_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
         builtins/CatRenderMode_test.cpp

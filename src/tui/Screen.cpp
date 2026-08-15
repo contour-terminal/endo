@@ -2,6 +2,7 @@
 #include "Screen.hpp"
 
 #include <tui/Canvas.hpp>
+#include <tui/HyperlinkEmitter.hpp>
 #include <tui/Terminal.hpp>
 
 #include <algorithm>
@@ -549,17 +550,22 @@ void Screen::flush()
     _dirtyComponents.clear();
 }
 
-void Screen::flushFullscreen()
+void Screen::flushArea(Rect area)
 {
     auto& out = _terminal.output();
     bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
 
+    auto links = FlushLinks { out, _current, useDiff ? &_previous : nullptr };
+
     // Hide cursor during update
     out.hideCursor();
 
-    for (auto const row: std::views::iota(0, _current.rows()))
+    auto const lastRow = std::min(area.bottom(), _current.rows());
+    auto const lastCol = std::min(area.right(), _current.cols());
+
+    for (auto const row: std::views::iota(std::max(0, area.y), std::max(0, lastRow)))
     {
-        for (int col = 0; col < _current.cols();)
+        for (int col = std::max(0, area.x); col < lastCol;)
         {
             Cell const& cell = _current.at(row, col);
 
@@ -575,17 +581,21 @@ void Screen::flushFullscreen()
             if (useDiff && _previous.inBounds(row, col))
             {
                 Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
+                needsUpdate = (cell != prevCell) || links.retargeted(row, col);
             }
 
             if (needsUpdate)
             {
                 out.moveTo(row + 1, col + 1); // Terminal is 1-based
+                links.emitter.beforeWrite(row, col);
                 out.writeText(cell.grapheme, cell.style);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
         }
+        // Never hold framing open across a row boundary: the next row's cells are reached by
+        // absolute cursor motion, which the terminal does not treat as ending a link.
+        links.emitter.close();
     }
 
     // Restore cursor
@@ -597,6 +607,11 @@ void Screen::flushFullscreen()
     }
 
     out.flush();
+}
+
+void Screen::flushFullscreen()
+{
+    flushArea(Rect { .x = 0, .y = 0, .width = _current.cols(), .height = _current.rows() });
 }
 
 void Screen::flushInline()
@@ -732,6 +747,8 @@ void Screen::flushInline()
     // Now render each line
     bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
 
+    auto links = FlushLinks { out, _current, useDiff ? &_previous : nullptr };
+
     out.hideCursor();
 
     // Build image row coverage: for each row, the image (if any) that starts there
@@ -808,23 +825,28 @@ void Screen::flushInline()
             if (useDiff && _previous.inBounds(row, col))
             {
                 Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
+                needsUpdate = (cell != prevCell) || links.retargeted(row, col);
             }
 
             if (needsUpdate)
             {
                 // For inline mode, we render sequentially
+                links.emitter.beforeWrite(row, col);
                 out.writeText(cell.grapheme, cell.style);
             }
             else
             {
-                // Move cursor past unchanged cells
+                // Move cursor past unchanged cells. Cursor motion does not carry the link
+                // attribute, and skipped cells already hold the link recorded when they were
+                // last written — which is the link we would otherwise have re-emitted.
                 out.moveRight(cell.width > 0 ? cell.width : 1);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
         }
 
+        // Close before the erase so the cleared tail is not attributed to the link.
+        links.emitter.close();
         out.clearToEndOfLine();
 
         if (row < contentHeight - 1)
@@ -870,50 +892,8 @@ void Screen::flushInline()
 
 void Screen::flushFixed()
 {
-    // Similar to fullscreen but only within the fixed area
-    auto& out = _terminal.output();
-    Rect area = _config.fixedArea;
-    bool useDiff = (_renderMode == RenderMode::Diff) && !_needsFullRedraw;
-
-    out.hideCursor();
-
-    for (int row = area.y; row < area.bottom() && row < _current.rows(); ++row)
-    {
-        for (int col = area.x; col < area.right() && col < _current.cols();)
-        {
-            Cell const& cell = _current.at(row, col);
-
-            if (cell.isContinuation())
-            {
-                ++col;
-                continue;
-            }
-
-            bool needsUpdate = !useDiff;
-            if (useDiff && _previous.inBounds(row, col))
-            {
-                Cell const& prevCell = _previous.at(row, col);
-                needsUpdate = (cell != prevCell);
-            }
-
-            if (needsUpdate)
-            {
-                out.moveTo(row + 1, col + 1);
-                out.writeText(cell.grapheme, cell.style);
-            }
-
-            col += std::max(1, static_cast<int>(cell.width));
-        }
-    }
-
-    if (_current.cursorVisible())
-    {
-        Point cursor = _current.cursor();
-        out.moveTo(cursor.y + 1, cursor.x + 1);
-        out.showCursor();
-    }
-
-    out.flush();
+    // Fullscreen's repaint, restricted to the configured area.
+    flushArea(_config.fixedArea);
 }
 
 void Screen::applyCursorShape()

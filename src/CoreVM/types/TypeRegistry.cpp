@@ -120,9 +120,10 @@ void TypeRegistry::registerBuiltins()
         { .name = "ppid", .offset = 1, .type = LiteralType::Number },
         { .name = "user", .offset = 2, .type = LiteralType::String },
         { .name = "cpu", .offset = 3, .type = LiteralType::Float },
-        { .name = "mem", .offset = 4, .type = LiteralType::Object },
+        { .name = "mem", .offset = 4, .type = LiteralType::Object, .nestedTypeName = "Size" },
         { .name = "command", .offset = 5, .type = LiteralType::String },
     };
+    processInfoType->languageRecord = true;
     processInfoType->producingCommand = "ps";
     // SlotTraceInfo: slot 4 (mem) is Object (Size)
     processInfoType->traceInfo.fixedObjectSlots = { 4 };
@@ -143,6 +144,7 @@ void TypeRegistry::registerBuiltins()
         { .name = "second", .offset = 5, .type = LiteralType::Number },
         { .name = "epoch", .offset = 6, .type = LiteralType::Number },
     };
+    dateTimeType->languageRecord = true;
     dateTimeType->moduleFunctions = {
         { .name = "now", .signature = "DateTime.now -> DateTime (current UTC time)" },
         { .name = "fromEpoch", .signature = "DateTime.fromEpoch epoch -> DateTime" },
@@ -154,7 +156,7 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->kind = TypeKind::Product;
     fileInfoType->id = BuiltinTypeId::FileInfo;
     fileInfoType->name = "FileInfo";
-    fileInfoType->slotCount = 7;
+    fileInfoType->slotCount = 8;
     fileInfoType->fields = {
         { .name = "name", .offset = 0, .type = LiteralType::String },
         { .name = "size", .offset = 1, .type = LiteralType::Object, .nestedTypeName = "Size" },
@@ -165,10 +167,15 @@ void TypeRegistry::registerBuiltins()
         { .name = "isDir", .offset = 4, .type = LiteralType::Boolean, .display = false },
         { .name = "isSymlink", .offset = 5, .type = LiteralType::Boolean, .display = false },
         { .name = "target", .offset = 6, .type = LiteralType::String, .display = false },
+        // The entry's absolute path. `name` is only a basename, so anything that must address
+        // the file rather than display it (OSC 8 hyperlinks, passing an entry to another
+        // command) needs this. Hidden from the default table so `ls` output is unchanged.
+        { .name = "path", .offset = 7, .type = LiteralType::String, .display = false },
     };
+    fileInfoType->languageRecord = true;
     fileInfoType->producingCommand = "ls";
     // SlotTraceInfo: slots 1 (Size), 2 (FileMode), 3 (DateTime) are always objects.
-    // Slots 0 (name) and 6 (target) are Strings: CoreString lives in the Runner's
+    // Slots 0 (name), 6 (target) and 7 (path) are Strings: CoreString lives in the Runner's
     // separate string arena (not the GC object pool), so String slots are intentionally
     // NOT traced and must stay out of fixedObjectSlots.
     fileInfoType->traceInfo.fixedObjectSlots = { 1, 2, 3 };
@@ -186,6 +193,7 @@ void TypeRegistry::registerBuiltins()
         { .name = "command", .offset = 2, .type = LiteralType::String },
         { .name = "pid", .offset = 3, .type = LiteralType::Number },
     };
+    jobInfoType->languageRecord = true;
     jobInfoType->producingCommand = "jobs";
     addType(std::move(jobInfoType));
 
@@ -199,6 +207,7 @@ void TypeRegistry::registerBuiltins()
         { .name = "key", .offset = 0, .type = LiteralType::String },
         { .name = "action", .offset = 1, .type = LiteralType::String },
     };
+    keyBindingInfoType->languageRecord = true;
     keyBindingInfoType->producingCommand = "bind";
     addType(std::move(keyBindingInfoType));
 
@@ -211,6 +220,7 @@ void TypeRegistry::registerBuiltins()
     sizeType->fields = {
         { .name = "bytes", .offset = 0, .type = LiteralType::Number },
     };
+    sizeType->languageRecord = true;
     sizeType->moduleFunctions = {
         { .name = "fromBytes", .signature = "Size.fromBytes n -> Size" },
         { .name = "fromKB", .signature = "Size.fromKB n -> Size (n * 1024 bytes)" },
@@ -229,6 +239,7 @@ void TypeRegistry::registerBuiltins()
     fileModeType->fields = {
         { .name = "bits", .offset = 0, .type = LiteralType::Number },
     };
+    fileModeType->languageRecord = true;
     fileModeType->moduleFunctions = {
         { .name = "fromBits", .signature = "FileMode.fromBits n -> FileMode" },
     };
@@ -259,6 +270,7 @@ void TypeRegistry::registerBuiltins()
     timeSpanType->fields = {
         { .name = "milliseconds", .offset = 0, .type = LiteralType::Number },
     };
+    timeSpanType->languageRecord = true;
     timeSpanType->moduleFunctions = {
         { .name = "fromMilliseconds", .signature = "TimeSpan.fromMilliseconds n -> TimeSpan" },
         { .name = "fromSeconds", .signature = "TimeSpan.fromSeconds n -> TimeSpan (n * 1000 ms)" },
@@ -574,6 +586,12 @@ const TypeDescriptor* TypeRegistry::getByName(std::string_view name) const
     if (it != _nameToId.end())
         return get(it->second);
     return nullptr;
+}
+
+TypeRegistry const& builtinTypes()
+{
+    static TypeRegistry const registry;
+    return registry;
 }
 
 TypeDescriptor* TypeRegistry::addType(std::unique_ptr<TypeDescriptor> type)

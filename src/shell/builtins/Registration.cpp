@@ -656,8 +656,7 @@ void Shell::registerStructuredBuiltins()
             if (!parsed.has_value())
             {
                 // On parse error, return empty list
-                auto* list = _runner->allocObject(CoreVM::BuiltinTypeId::List);
-                list->tag = 0; // Nil
+                auto* list = _runner->makeNilList(CoreVM::LiteralType::Object);
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
                 return;
             }
@@ -686,8 +685,7 @@ void Shell::registerStructuredBuiltins()
                     auto pipeResult = createPipe();
                     if (!pipeResult.has_value())
                     {
-                        auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                        nil->tag = 0;
+                        auto* nil = args.caller()->makeNilList(CoreVM::LiteralType::Object);
                         args.setResult(
                             static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
                         return;
@@ -1074,6 +1072,14 @@ void Shell::registerPromptBuiltins()
     _runtime.registerProperty("shell_ls_directory_slash", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_lsDirectorySlash); })
         .onSet([this](CoreVM::Params& args) { _lsDirectorySlash = args.getBool(1); });
+
+    // One switch for every clickable path the shell emits: the prompt's working directory and
+    // the file names in ls/find/grep output. This member is the only copy — the prompt reads it
+    // through PromptContext, refreshed each prompt cycle, so a preset switch cannot resurrect
+    // links the user turned off.
+    _runtime.registerProperty("shell_hyperlinks", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_hyperlinks); })
+        .onSet([this](CoreVM::Params& args) { _hyperlinks = args.getBool(1); });
 
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });

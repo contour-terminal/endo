@@ -28,6 +28,16 @@ struct TableConfig
     int maxColumnWidth = 40;                 ///< Max width per column
     int terminalWidth = 0;                   ///< Terminal width in columns (0 = no constraint)
     int autoGrowColumn = -1;                 ///< Column index exempt from maxColumnWidth (-1 = none)
+
+    /// Wrap file names in OSC 8 hyperlinks to the file they name. Deliberately independent of
+    /// useColor: clickability is a terminal capability, not a styling preference, so disabling
+    /// colors or icons must not disable it. Defaults to off so only callers that know their
+    /// output reaches a terminal opt in.
+    bool useHyperlinks = false;
+
+    /// Authority for the `file://` URIs, normally platform::hostName(). Passed in rather than
+    /// queried so this formatter performs no OS access of its own.
+    std::string uriHost;
 };
 
 /// Checks if a TypedObject is a non-empty list where all elements are Product-type records.

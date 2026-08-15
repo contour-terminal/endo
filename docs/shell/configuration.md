@@ -248,6 +248,39 @@ shell_ls_directory_slash <- false
 shell_ls_directory_slash <- true
 ```
 
+### Clickable Paths
+
+Endo emits [OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
+hyperlinks so paths are clickable in terminals that support them, which is most modern
+ones (kitty, foot, WezTerm, VTE-based terminals, iTerm2, Windows Terminal, and the
+VS Code terminal). This covers:
+
+- the working directory in the prompt
+- file and directory names in `ls` and `find` output
+- the `filename:line` prefixes in `grep` output
+
+It is on by default and can be turned off:
+
+```endo
+# Disable clickable paths
+shell_hyperlinks <- false
+
+# Re-enable (default)
+shell_hyperlinks <- true
+```
+
+Links are only ever written to a terminal -- piping or redirecting output produces plain
+text, so `ls > files.txt` and `ls | grep foo` are unaffected. Turning `shell_ls_icons` off
+keeps names clickable, since that setting is only about icons. For `grep`, passing
+`--color=never` suppresses links along with the colors, as it is the conventional way to ask
+for wholly undecorated output.
+
+!!! note
+    How a click is handled is up to the terminal, and so is whether `grep`'s line-number
+    fragment (`file://host/path#42`) is honoured -- kitty, WezTerm and the VS Code terminal
+    jump to the line, while others ignore the fragment. Terminal multiplexers may also need
+    passthrough enabled to forward the sequences; turn this off if yours does not.
+
 ### Interactive Mode Detection
 
 The read-only property `shell_is_interactive` indicates whether the shell is running

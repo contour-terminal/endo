@@ -21,6 +21,8 @@ add_library(endo-platform STATIC
     UserPaths.hpp
     PathUtils.hpp
     PathUtils.cpp
+    FileUri.hpp
+    FileUri.cpp
     SystemInfo.hpp
     SystemInfo.cpp
     ProcessProvider.hpp
@@ -118,6 +120,7 @@ if(ENDO_TESTING)
         Pipe_test.cpp
         EnvironmentProvider_test.cpp
         FileInfoProvider_test.cpp
+        FileUri_test.cpp
         Wakeup_test.cpp
         MessageQueue_test.cpp
         ProjectFileTree_test.cpp

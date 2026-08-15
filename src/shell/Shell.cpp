@@ -32,6 +32,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <crispy/Assert.hpp>
 
@@ -100,6 +101,7 @@
     #include <agent/ui/ToolStatusComponent.hpp>
 #endif
 #include <nlohmann/json.hpp>
+#include <platform/FileUri.hpp>
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/PathUtils.hpp>
@@ -576,7 +578,7 @@ namespace
     TypeRegistryCachedData const& cachedTypeRegistryData()
     {
         static auto const instance = [] {
-            CoreVM::TypeRegistry registry;
+            auto const& registry = CoreVM::builtinTypes();
             TypeRegistryCachedData data;
             data.recordTypeFields = endo::builtinRecordFields(registry);
             data.moduleFunctions = endo::builtinModuleFunctions(registry);
@@ -939,21 +941,8 @@ void Shell::emitCurrentWorkingDirectory()
 
     auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
 
-    // Percent-encode the path for the file:// URI
-    auto encoded = std::string();
-    for (auto const ch: cwd)
-    {
-        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '/' || ch == '-' || ch == '_' || ch == '.'
-            || ch == '~')
-            encoded += ch;
-        else
-            encoded += std::format("%{:02X}", static_cast<unsigned char>(ch));
-    }
-
-    // Get hostname for the file:// URI
-    auto const hostname = platform::hostName();
-
-    _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname, encoded));
+    _tty.writeToStdout(std::format(
+        "\033]7;{}\033\\", platform::fileUri(platform::normalizePath(cwd), platform::cachedHostName())));
 }
 
 void Shell::emitWindowTitle(std::string_view title)
@@ -1305,8 +1294,9 @@ void Shell::updatePromptContext()
     ctx.terminalWidth = prompt.terminal().columns();
     ctx.isSSH = _env.get("SSH_CONNECTION").has_value();
     // Populate identity unconditionally so the prompt can show user@host in every session.
-    ctx.hostname = platform::hostName();
+    ctx.hostname = platform::cachedHostName();
     ctx.username = _env.userName().value_or("");
+    ctx.hyperlinks = _hyperlinks;
     ctx.theme = &tui::currentTheme();
     ctx.fsharpState = &_fsharpState;
     ctx.outputDefs = &_outputDefinitions;

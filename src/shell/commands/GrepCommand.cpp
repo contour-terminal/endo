@@ -2,6 +2,8 @@
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
+#include <tui/TerminalProtocols.hpp>
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -12,6 +14,9 @@
 #include <ranges>
 #include <regex>
 #include <utility>
+
+#include <platform/FileUri.hpp>
+#include <platform/PathUtils.hpp>
 
 namespace endo::grep
 {
@@ -549,15 +554,71 @@ std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
     return result;
 }
 
+FilenamePrefix::FilenamePrefix(std::string_view filename, GrepRenderOptions const& render):
+    _filename(filename), _useColor(render.useColor)
+{
+    if (!render.useHyperlinks || filename.empty())
+        return;
+
+    // Resolve the path and build the URI up to (but not including) the fragment, once. Only the
+    // `#line` suffix varies per output line, so per-line work reduces to appending digits.
+    auto const uri =
+        platform::fileUri(platform::absolutePath(filename, render.baseDirectory), render.uriHost);
+    if (uri.empty())
+        return;
+
+    _linkOpenPrefix = std::string { tui::protocols::HyperlinkOpenPrefix };
+    _linkOpenPrefix += uri;
+}
+
+void FilenamePrefix::appendTo(std::string& out, int lineNumber) const
+{
+    auto const linked = !_linkOpenPrefix.empty();
+    if (linked)
+    {
+        out += _linkOpenPrefix;
+        if (lineNumber > 0)
+        {
+            out += '#';
+            out += std::to_string(lineNumber);
+        }
+        out += tui::protocols::StringTerminator;
+    }
+    if (_useColor)
+        out += ColorFilename;
+    out += _filename;
+    if (_useColor)
+        out += ColorReset;
+    if (linked)
+        out += tui::protocols::HyperlinkClose;
+}
+
+std::string FilenamePrefix::render() const
+{
+    auto out = std::string {};
+    appendTo(out);
+    return out;
+}
+
 size_t searchLines(std::vector<std::string> const& lines,
                    std::regex const& regex,
                    GrepOptions const& opts,
                    std::string_view filename,
                    bool showFilename,
-                   bool useColor,
+                   GrepRenderOptions const& render,
                    OutputWriter const& writer,
                    platform::InterruptThrottle* throttle)
 {
+    auto const useColor = render.useColor;
+    // Built once per file: a single grep hit can print thousands of lines, and everything but the
+    // line number is identical across them. Skipped altogether when nothing below will print a
+    // name — plain single-file grep, or -q — since an empty name disables the prefix and saves
+    // resolving a URI for output that never happens. Note -l/-L print the name whatever
+    // showFilename says, so they have to be asked separately.
+    auto const printsFilename =
+        !opts.quiet && (showFilename || opts.filesWithMatches || opts.filesWithoutMatch);
+    auto const namePrefix = FilenamePrefix { printsFilename ? filename : std::string_view {}, render };
+
     auto const beforeCtx = opts.effectiveBeforeContext();
     auto const afterCtx = opts.effectiveAfterContext();
     auto const hasContext = beforeCtx > 0 || afterCtx > 0;
@@ -593,10 +654,8 @@ size_t searchLines(std::vector<std::string> const& lines,
         std::string output;
         if (showFilename)
         {
-            if (useColor)
-                output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset) + ":";
-            else
-                output += std::string(filename) + ":";
+            namePrefix.appendTo(output);
+            output += ':';
         }
         output += std::to_string(matchCount) + "\n";
         writer(output);
@@ -607,7 +666,7 @@ size_t searchLines(std::vector<std::string> const& lines,
     if (opts.filesWithMatches)
     {
         if (matchCount > 0)
-            writer(std::string(filename) + "\n");
+            writer(namePrefix.render() + "\n");
         return matchCount;
     }
 
@@ -615,7 +674,7 @@ size_t searchLines(std::vector<std::string> const& lines,
     if (opts.filesWithoutMatch)
     {
         if (matchCount == 0)
-            writer(std::string(filename) + "\n");
+            writer(namePrefix.render() + "\n");
         return matchCount;
     }
 
@@ -687,11 +746,8 @@ size_t searchLines(std::vector<std::string> const& lines,
                 std::string output;
                 if (showFilename)
                 {
-                    if (useColor)
-                        output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset)
-                                  + ":";
-                    else
-                        output += std::string(filename) + ":";
+                    namePrefix.appendTo(output, lineIndex + 1);
+                    output += ':';
                 }
                 if (opts.lineNumbers)
                 {
@@ -718,10 +774,7 @@ size_t searchLines(std::vector<std::string> const& lines,
         std::string output;
         if (showFilename)
         {
-            if (useColor)
-                output += std::string(ColorFilename) + std::string(filename) + std::string(ColorReset);
-            else
-                output += std::string(filename);
+            namePrefix.appendTo(output, lineIndex + 1);
 
             // Use : for match lines, - for context lines
             if (hasContext && !isMatch)

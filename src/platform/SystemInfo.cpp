@@ -26,4 +26,10 @@ std::string hostName()
     return {};
 }
 
+std::string const& cachedHostName()
+{
+    static std::string const cached = hostName();
+    return cached;
+}
+
 } // namespace endo::platform

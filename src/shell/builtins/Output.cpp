@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <format>
 
+#include <platform/SystemInfo.hpp>
 #include <platform/Types.hpp>
 
 #if !defined(_WIN32)
@@ -234,6 +235,10 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.useColor = useColor;
             config.showIcons = _lsIcons;
             config.showDirectorySlash = _lsDirectorySlash;
+            // Gated on terminal-ness alone, not on color: escapes must not reach a pipe or a
+            // redirect, but disabling colors or icons must not cost the user clickable names.
+            config.useHyperlinks = _hyperlinks && isTerminal(outputFd);
+            config.uriHost = platform::cachedHostName();
             // Let the name column auto-grow for FileInfo records (ls output)
             auto* firstElem = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(obj->getSlot(0)));
             if (firstElem->type->id == CoreVM::BuiltinTypeId::FileInfo)

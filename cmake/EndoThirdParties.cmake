@@ -145,7 +145,14 @@ endif()
 # ==============================================================================
 # libunicode - Unicode library
 # ==============================================================================
-set(LIBUNICODE_REQUIRED_VERSION "0.9.0")
+# 0.9.3 fixes a scan_text() bug that drops a zero-width codepoint following an ASCII base:
+# scan_text() splits a run at the ASCII/non-ASCII boundary, and the zero-width codepoint arrives in
+# the non-ASCII half alone, joining the cluster the ASCII half left open without widening it — so
+# the reported end lags state.next and those bytes are never emitted. Endo is downstream of that
+# scanner through both its own grapheme handling and the vendored vtparser, whose
+# Parser.BulkText_ZeroWidthAfterAsciiBase case exists to catch it. Keep this at or above the
+# LIBUNICODE_MINIMAL_VERSION that contour declares, since the vendored sources are built against it.
+set(LIBUNICODE_REQUIRED_VERSION "0.9.3")
 if(NOT ENABLE_STATIC_LINKING)
     find_package(libunicode ${LIBUNICODE_REQUIRED_VERSION} QUIET)
 endif()

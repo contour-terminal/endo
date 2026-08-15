@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Buffer.hpp"
 
+#include <tui/HyperlinkEmitter.hpp>
 #include <tui/TerminalOutput.hpp>
 
+#include <crispy/FNV.hpp>
+
 #include <algorithm>
+#include <cstdint>
+#include <format>
 #include <ranges>
 #include <stdexcept>
 
@@ -69,6 +74,7 @@ void Buffer::resize(int rows, int cols)
     _rows = rows;
     _cols = cols;
     clearImages();
+    clearHyperlinks();
 
     // Clamp cursor to new bounds
     _cursor.x = std::min(_cursor.x, _cols - 1);
@@ -110,6 +116,7 @@ void Buffer::clear(Style const& style)
     for (auto& cell: _cells)
         cell.reset(style);
     clearImages();
+    clearHyperlinks();
 }
 
 void Buffer::clearRect(Rect area, Style const& style)
@@ -242,8 +249,45 @@ void Buffer::clearImages() noexcept
     _images.clear();
 }
 
+void Buffer::addHyperlink(Rect cellArea, std::string uri)
+{
+    if (uri.empty() || cellArea.empty())
+        return;
+
+    // The OSC 8 `id` is derived from the URI so it is identical for every region pointing at the
+    // same target and stable across frames — a redraw must not mint a new link identity. FNV
+    // rather than std::hash because the value goes on the wire and must not vary between runs or
+    // standard-library versions. Hashed as bytes so any byte >= 0x80 does not sign-extend.
+    auto const hash = crispy::FNV<std::uint8_t, std::uint32_t> {}(
+        reinterpret_cast<std::uint8_t const*>(uri.data()), uri.size());
+
+    _hyperlinks.push_back(HyperlinkRegion {
+        .cellArea = cellArea,
+        .uri = std::move(uri),
+        // Rendered here rather than at every link open: a region is registered once per frame but
+        // opened once per row it spans, and a multi-row link would re-format it per row.
+        .linkId = std::format("endo-{:x}", hash),
+    });
+}
+
+std::span<HyperlinkRegion const> Buffer::hyperlinks() const noexcept
+{
+    return _hyperlinks;
+}
+
+void Buffer::clearHyperlinks() noexcept
+{
+    _hyperlinks.clear();
+}
+
 void Buffer::writeTo(TerminalOutput& out) const
 {
+    // Honour hyperlink regions here too, not just in Screen's flush loops: the payload lives at
+    // this layer, so a component that registers a link and renders through writeTo() would
+    // otherwise lose it silently, with nothing to hint why.
+    auto const linkIndex = HyperlinkIndex { *this };
+    auto linkEmitter = HyperlinkEmitter { out, linkIndex };
+
     for (auto const row: std::views::iota(0, _rows))
     {
         out.carriageReturn();
@@ -255,9 +299,11 @@ void Buffer::writeTo(TerminalOutput& out) const
                 ++col;
                 continue;
             }
+            linkEmitter.beforeWrite(row, col);
             out.writeText(cell.grapheme, cell.style);
             col += std::max(1, static_cast<int>(cell.width));
         }
+        linkEmitter.close();
         out.clearToEndOfLine();
         if (row < _rows - 1)
             out.linefeed();

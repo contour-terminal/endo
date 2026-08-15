@@ -42,6 +42,7 @@
 #include <platform/Process.hpp>
 #include <platform/ProcessProvider.hpp>
 #include <platform/SignalHandler.hpp>
+#include <platform/SystemInfo.hpp>
 #include <platform/Types.hpp>
 
 #if defined(_WIN32)
@@ -2452,6 +2453,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     // Determine color mode
+    auto const toTerminal = isTerminal(outputFd);
     bool useColor = false;
     if (opts.colorMode == grep::ColorMode::Always)
     {
@@ -2459,8 +2461,21 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     }
     else if (opts.colorMode == grep::ColorMode::Auto)
     {
-        useColor = isTerminal(outputFd);
+        useColor = toTerminal;
     }
+
+    // `--color=never` is grep's conventional "give me plain output" switch, so it suppresses
+    // hyperlinks too — a caller asking for undecorated text means all decoration, not just SGR.
+    // Terminal-ness gates them independently of the resolved color mode, so `--color=always`
+    // into a pipe still yields no OSC 8 bytes in the captured output.
+    auto const useHyperlinks = _hyperlinks && toTerminal && opts.colorMode != grep::ColorMode::Never;
+    auto const render = grep::GrepRenderOptions {
+        .useColor = useColor,
+        .useHyperlinks = useHyperlinks,
+        .uriHost = platform::cachedHostName(),
+        // Gated because resolving the base directory is a getcwd; the host name is already cached.
+        .baseDirectory = useHyperlinks ? platform::normalizePath(_fs.currentPath()) : std::string {},
+    };
 
     // Output + error writer lambdas
     auto const writer = [outputFd](std::string_view sv) {
@@ -2520,7 +2535,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             lines.push_back(std::move(currentLine));
 
         totalMatches = grep::searchLines(
-            lines, *regex, opts, "(standard input)", showFilename, useColor, writer, &throttle);
+            lines, *regex, opts, "(standard input)", showFilename, render, writer, &throttle);
         if (interrupted())
             return 130;
     }
@@ -2565,7 +2580,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
                                                    opts,
                                                    platform::normalizePath(filePath),
                                                    showFilename,
-                                                   useColor,
+                                                   render,
                                                    writer,
                                                    &throttle);
             if (interrupted())

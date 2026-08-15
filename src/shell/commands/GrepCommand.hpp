@@ -32,6 +32,56 @@ enum class FilenameMode : uint8_t
     Never,  ///< Never show (-h)
 };
 
+/// How grep decorates its output.
+///
+/// Grouped into one struct rather than threaded as parallel bool parameters, since the
+/// decorations are resolved together at the call site and consumed together per output line.
+struct GrepRenderOptions
+{
+    bool useColor = false;      ///< Emit SGR color sequences.
+    bool useHyperlinks = false; ///< Wrap filenames in OSC 8 hyperlinks (terminal only).
+    std::string uriHost;        ///< Authority for `file://` URIs, normally platform::hostName().
+    std::string baseDirectory;  ///< Absolute directory that relative filenames resolve against.
+};
+
+/// A file's decorated name prefix, prepared once and reused across its output lines.
+///
+/// Everything but the line number is invariant per file, and one grep hit can print thousands of
+/// lines — resolving the path and rebuilding the URI per line would repeat a path normalization
+/// and a dozen allocations for each of them.
+///
+/// The link target is the file itself, resolved against GrepRenderOptions::baseDirectory when the
+/// reported name is relative.
+class FilenamePrefix
+{
+  public:
+    /// @brief Prepares the prefix for @p filename.
+    /// @param filename The file being reported; empty disables hyperlinking. Must outlive this
+    ///        object, which borrows it.
+    /// @param render How to decorate.
+    FilenamePrefix(std::string_view filename, GrepRenderOptions const& render);
+
+    /// @brief Appends the decorated name to @p out.
+    ///
+    /// A non-zero @p lineNumber becomes a URI fragment, so terminals that understand one (kitty,
+    /// WezTerm, the VS Code terminal) open the file at that line; the rest ignore it.
+    ///
+    /// @param out Destination to append to.
+    /// @param lineNumber 1-based line to target as a fragment; 0 for none.
+    void appendTo(std::string& out, int lineNumber = 0) const;
+
+    /// @brief Returns the decorated name as a fresh string, with no line fragment.
+    ///
+    /// For the `-l`/`-L` listings, which report a file without a line to point at. Everything
+    /// that does have one appends through appendTo().
+    [[nodiscard]] std::string render() const;
+
+  private:
+    std::string_view _filename;
+    std::string _linkOpenPrefix; ///< OSC 8 opener up to where a `#line` fragment goes; empty = no link.
+    bool _useColor = false;
+};
+
 /// All parsed grep command-line options.
 struct GrepOptions
 {
@@ -132,7 +182,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
 /// @param opts The grep options controlling output format.
 /// @param filename The filename for output prefixing (empty for stdin).
 /// @param showFilename Whether to prefix output with filename.
-/// @param useColor Whether to colorize the output.
+/// @param render How to decorate the output (colors, hyperlinks).
 /// @param writer Callback for writing output.
 /// @param throttle Optional throttled, non-consuming interrupt poll; when non-null, searching
 ///                 stops early once a pending Ctrl+C is observed (the flag is left set for the
@@ -143,7 +193,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
                                  GrepOptions const& opts,
                                  std::string_view filename,
                                  bool showFilename,
-                                 bool useColor,
+                                 GrepRenderOptions const& render,
                                  OutputWriter const& writer,
                                  platform::InterruptThrottle* throttle = nullptr);
 

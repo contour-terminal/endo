@@ -233,7 +233,7 @@ return typed records:
 | Command | Record Type | Fields |
 |---------|------------|--------|
 | `ps` | `ProcessInfo` | `pid`, `ppid`, `user`, `cpu`, `mem`, `command` |
-| `ls` | `FileInfo` | `name`, `size`, `mode`, `mtime`, `isDir` |
+| `ls` | `FileInfo` | `name`, `size`, `mode`, `mtime`, `isDir`, `isSymlink`, `target`, `path` |
 | `jobs` | `JobInfo` | `id`, `state`, `command`, `pid` |
 
 These builtins work seamlessly with pipelines:

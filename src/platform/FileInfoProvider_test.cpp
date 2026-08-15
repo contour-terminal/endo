@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 
+#include <platform/PathUtils.hpp>
 #include <platform/testing/MockFileInfoProvider.hpp>
 
 #if !defined(_WIN32)
@@ -308,6 +309,46 @@ TEST_CASE("LinuxFileInfoProvider.siblings_share_device", "[platform][linux]")
     REQUIRE(entries.size() == 2);
     CHECK(entries[0].dev == entries[1].dev);
     CHECK(entries[0].ino != entries[1].ino); // distinct files -> distinct inodes
+}
+
+TEST_CASE("LinuxFileInfoProvider.populates_absolute_path", "[platform][linux]")
+{
+    // FileEntry::name is only a basename, so anything that needs to address the entry rather
+    // than display it depends on this field being absolute.
+    TempDir tmp;
+    tmp.createFile("a.txt", "a");
+
+    LinuxFileInfoProvider provider;
+    auto const entries = provider.listDirectory(tmp.path.string());
+
+    REQUIRE(entries.size() == 1);
+    CHECK(entries[0].path == normalizePath(tmp.path / "a.txt"));
+}
+
+TEST_CASE("LinuxFileInfoProvider.absolute_path_from_relative_listing", "[platform][linux]")
+{
+    // Listing a relative directory must still yield absolute entry paths.
+    TempDir tmp;
+    tmp.createFile("rel.txt", "x");
+
+    auto const previous = fs::current_path();
+    fs::current_path(tmp.path);
+    LinuxFileInfoProvider provider;
+    auto const entries = provider.listDirectory(".");
+    auto const globbed = provider.listDirectory("*.txt");
+    auto const single = provider.listDirectory("rel.txt");
+    fs::current_path(previous);
+
+    auto const expected = normalizePath(fs::canonical(tmp.path) / "rel.txt");
+
+    REQUIRE(entries.size() == 1);
+    CHECK(normalizePath(fs::canonical(entries[0].path)) == expected);
+
+    REQUIRE(globbed.size() == 1);
+    CHECK(normalizePath(fs::canonical(globbed[0].path)) == expected);
+
+    REQUIRE(single.size() == 1);
+    CHECK(normalizePath(fs::canonical(single[0].path)) == expected);
 }
 
 TEST_CASE("LinuxFileInfoProvider.listDirectory_nonexistent", "[platform][linux]")

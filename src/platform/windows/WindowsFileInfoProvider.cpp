@@ -7,9 +7,11 @@
     #include <chrono>
     #include <filesystem>
     #include <string>
+    #include <string_view>
     #include <vector>
 
     #include <platform/GlobMatch.hpp>
+    #include <platform/PathUtils.hpp>
 
 namespace endo::platform
 {
@@ -19,27 +21,21 @@ namespace
 
     namespace fs = std::filesystem;
 
-    /// Losslessly renders a path as a UTF-8 std::string.
-    ///
-    /// path::string() converts to the process's narrow (ANSI) code page and throws
-    /// std::system_error on any character the code page cannot represent — fatal when
-    /// listing a directory that holds such a name. path::u8string() encodes the full
-    /// Unicode path as UTF-8 and never throws, so we use it and reinterpret the bytes.
-    /// @param p The path to convert.
-    /// @return The path encoded as UTF-8.
-    [[nodiscard]] std::string toUtf8(fs::path const& p)
-    {
-        auto const u8 = p.u8string();
-        return std::string { reinterpret_cast<char const*>(u8.data()), u8.size() };
-    }
-
     /// Populates a FileEntry from a filesystem directory_entry.
+    /// @param dirEntry The entry to inspect.
+    /// @param absoluteParent Absolute, normalized directory holding the entry, used to build
+    ///                       FileEntry::path. Empty leaves the path empty.
+    /// @param fileEntry Output entry to populate.
     /// @return true on success, false if the entry could not be stat'd.
-    [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry, FileEntry& fileEntry)
+    [[nodiscard]] bool statEntry(fs::directory_entry const& dirEntry,
+                                 std::string_view absoluteParent,
+                                 FileEntry& fileEntry)
     {
         std::error_code ec;
 
-        fileEntry.name = toUtf8(dirEntry.path().filename());
+        fileEntry.name = normalizePath(dirEntry.path().filename());
+        if (!absoluteParent.empty())
+            fileEntry.path = joinPath(absoluteParent, fileEntry.name);
 
         // status() follows reparse points. App Execution Aliases (winget, Microsoft Store
         // python, …) are reparse points that cannot be opened or followed through normal
@@ -63,7 +59,7 @@ namespace
             // required privilege; on failure leave the target empty (graceful degradation).
             auto const target = fs::read_symlink(dirEntry.path(), ec);
             if (!ec)
-                fileEntry.symlinkTarget = toUtf8(target);
+                fileEntry.symlinkTarget = normalizePath(target);
             ec.clear();
         }
         fileEntry.size = 0;
@@ -123,21 +119,25 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     {
         auto const patternPath = fs::path(path);
         auto parentDir = patternPath.parent_path();
-        auto const filePattern = patternPath.filename().string();
+        // normalizePath(), not path::string(): the latter converts to the ANSI code page and throws
+        // on any name it cannot represent, which would take the whole listing down.
+        auto const filePattern = normalizePath(patternPath.filename());
 
         if (parentDir.empty())
             parentDir = ".";
+
+        auto const absoluteParent = absoluteDirectory(parentDir);
 
         for (auto const& entry: fs::directory_iterator(parentDir, ec))
         {
             if (ec)
                 break;
 
-            auto const filename = entry.path().filename().string();
+            auto const filename = normalizePath(entry.path().filename());
             if (endo::globMatchFilename(filename, filePattern))
             {
                 FileEntry fileEntry {};
-                if (statEntry(entry, fileEntry))
+                if (statEntry(entry, absoluteParent, fileEntry))
                     result.push_back(std::move(fileEntry));
             }
         }
@@ -150,13 +150,15 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     auto const dir = fs::path(path);
     if (fs::is_directory(dir, ec) && !ec)
     {
+        auto const absoluteParent = absoluteDirectory(dir);
+
         for (auto const& entry: fs::directory_iterator(dir, ec))
         {
             if (ec)
                 break;
 
             FileEntry fileEntry {};
-            if (statEntry(entry, fileEntry))
+            if (statEntry(entry, absoluteParent, fileEntry))
                 result.push_back(std::move(fileEntry));
         }
 
@@ -168,7 +170,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
     {
         FileEntry fileEntry {};
-        if (statEntry(dirEntry, fileEntry))
+        if (statEntry(dirEntry, absoluteDirectory(dir.parent_path()), fileEntry))
             result.push_back(std::move(fileEntry));
     }
 

@@ -3,8 +3,20 @@
 
 #include <tui/TerminalOutput.hpp>
 
+#include <span>
+#include <string>
+#include <vector>
+
 namespace tui
 {
+
+/// @brief A run of text written while one OSC 8 hyperlink was open.
+struct HyperlinkRun
+{
+    std::string url;  ///< URL passed to beginHyperlink().
+    std::string id;   ///< OSC 8 `id=` value (empty when none was given).
+    std::string text; ///< Concatenated writeText() payloads while the link was open.
+};
 
 /// @brief Mock terminal output for testing.
 ///
@@ -57,7 +69,7 @@ class MockTerminalOutput: public TerminalOutput
     void resetScrollRegion() override;
     void writeSixel(std::string_view sixelData) override;
     void copyToClipboard(std::string_view text) override;
-    void beginHyperlink(std::string_view url) override;
+    void beginHyperlink(std::string_view url, std::string_view id) override;
     void endHyperlink() override;
     void writeHyperlink(std::string_view text, std::string_view url, Style const& style) override;
     void unscroll(int n) override;
@@ -87,6 +99,15 @@ class MockTerminalOutput: public TerminalOutput
     /// @brief Returns the text most recently passed to copyToClipboard (empty if never called).
     [[nodiscard]] std::string const& clipboardText() const noexcept;
 
+    /// @brief Returns every hyperlink run recorded since construction, in emission order.
+    [[nodiscard]] std::span<HyperlinkRun const> hyperlinkRuns() const noexcept;
+
+    /// @brief Whether a hyperlink is still open, i.e. a flush leaked its framing.
+    [[nodiscard]] bool hyperlinkOpen() const noexcept;
+
+    /// @brief Number of endHyperlink() calls with no matching open (framing imbalance).
+    [[nodiscard]] int unbalancedHyperlinkCloses() const noexcept;
+
   private:
     int _cols;
     int _rows;
@@ -98,6 +119,9 @@ class MockTerminalOutput: public TerminalOutput
     int _scrollCount = 0;
     int _flushCount = 0;
     std::string _clipboard;
+    std::vector<HyperlinkRun> _hyperlinkRuns;
+    bool _hyperlinkOpen = false;
+    int _unbalancedHyperlinkCloses = 0;
 };
 
 } // namespace tui

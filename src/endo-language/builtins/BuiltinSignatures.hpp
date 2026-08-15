@@ -42,7 +42,7 @@ void registerInternalBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resol
 void registerStructuredBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
 /// Registers prompt configuration properties: shell_prompt_*, shell_exit_confirm_timeout,
-/// shell_ls_icons, shell_ls_directory_slash.
+/// shell_ls_icons, shell_ls_directory_slash, shell_hyperlinks.
 void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
 /// Registers agent configuration properties: agent_*, agent_claude_*, agent_openai_*,

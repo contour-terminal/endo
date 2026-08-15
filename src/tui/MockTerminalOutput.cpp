@@ -17,6 +17,12 @@ auto MockTerminalOutput::initialize() -> VoidResult
 
 void MockTerminalOutput::writeText(std::string_view text, [[maybe_unused]] Style const& style)
 {
+    // Accumulate into the open hyperlink run, if any. Only text actually written counts, so a
+    // frame whose diff skipped cells yields a run holding just the rewritten graphemes —
+    // which is precisely what such a test wants to assert about.
+    if (_hyperlinkOpen)
+        _hyperlinkRuns.back().text += text;
+
     // Advance cursor column by display width of text.
     // No auto-wrap: real terminals use "deferred wrap" at column boundary,
     // and inline rendering uses \r at each row start to reset the column.
@@ -258,21 +264,33 @@ bool MockTerminalOutput::supportsUnscroll() const noexcept
     return false;
 }
 
-void MockTerminalOutput::beginHyperlink([[maybe_unused]] std::string_view url)
+void MockTerminalOutput::beginHyperlink(std::string_view url, std::string_view id)
 {
-    // No-op: hyperlink framing occupies no cells.
+    // Framing occupies no cells, so the cursor does not move; the run is recorded so tests
+    // can assert on logical links rather than on raw escape bytes.
+    _hyperlinkRuns.push_back(HyperlinkRun {
+        .url = std::string { url },
+        .id = std::string { id },
+        .text = {},
+    });
+    _hyperlinkOpen = true;
 }
 
 void MockTerminalOutput::endHyperlink()
 {
-    // No-op: hyperlink framing occupies no cells.
+    if (!_hyperlinkOpen)
+    {
+        ++_unbalancedHyperlinkCloses;
+        return;
+    }
+    _hyperlinkOpen = false;
 }
 
-void MockTerminalOutput::writeHyperlink(std::string_view text,
-                                        [[maybe_unused]] std::string_view url,
-                                        Style const& style)
+void MockTerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
 {
+    beginHyperlink(url, {});
     writeText(text, style);
+    endHyperlink();
 }
 
 void MockTerminalOutput::flush()
@@ -318,6 +336,21 @@ int MockTerminalOutput::scrollCount() const noexcept
 int MockTerminalOutput::flushCount() const noexcept
 {
     return _flushCount;
+}
+
+auto MockTerminalOutput::hyperlinkRuns() const noexcept -> std::span<HyperlinkRun const>
+{
+    return _hyperlinkRuns;
+}
+
+bool MockTerminalOutput::hyperlinkOpen() const noexcept
+{
+    return _hyperlinkOpen;
+}
+
+int MockTerminalOutput::unbalancedHyperlinkCloses() const noexcept
+{
+    return _unbalancedHyperlinkCloses;
 }
 
 } // namespace tui

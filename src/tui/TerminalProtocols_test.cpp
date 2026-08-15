@@ -32,6 +32,19 @@ TEST_CASE("TerminalProtocols.hyperlink_round_trip")
     CHECK(sequence == "\033]8;;https://a.b/c?d=1#e\033\\label\033]8;;\033\\");
 }
 
+TEST_CASE("TerminalProtocols.buildHyperlinkOpen_with_id_byte_exact")
+{
+    CHECK(buildHyperlinkOpen("file:///a", "endo-1f2e") == "\033]8;id=endo-1f2e;file:///a\033\\");
+}
+
+TEST_CASE("TerminalProtocols.buildHyperlinkOpen_empty_id_matches_id_less_form")
+{
+    // An empty id must emit no parameters at all, so callers that do not care about link
+    // identity keep producing the exact bytes the id-less overload always produced.
+    CHECK(buildHyperlinkOpen("https://x.com", "") == buildHyperlinkOpen("https://x.com"));
+    CHECK(buildHyperlinkOpen("https://x.com", "") == "\033]8;;https://x.com\033\\");
+}
+
 // ============================================================================
 // DA1 (Primary Device Attributes) Sixel detection
 // ============================================================================

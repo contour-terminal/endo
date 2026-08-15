@@ -17,26 +17,6 @@ namespace endo
 
 namespace
 {
-    /// Creates a Nil list node.
-    CoreVM::TypedObject* createNilList(CoreVM::Runner& runner)
-    {
-        auto* nil = runner.allocObject(CoreVM::BuiltinTypeId::List);
-        nil->tag = 0;
-        return nil;
-    }
-
-    /// Creates a Cons cell prepending value to tail.
-    CoreVM::TypedObject* createCons(CoreVM::Runner& runner,
-                                    CoreVM::TypedObject* value,
-                                    CoreVM::TypedObject* tail)
-    {
-        auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
-        cons->tag = 1;
-        cons->setSlot(0, reinterpret_cast<uintptr_t>(value));
-        cons->setSlot(1, reinterpret_cast<uintptr_t>(tail));
-        return cons;
-    }
-
     /// Creates a record object from a JSON object according to the schema.
     CoreVM::TypedObject* createRecordFromJson(CoreVM::Runner& runner,
                                               nlohmann::json const& obj,
@@ -218,9 +198,9 @@ CoreVM::TypedObject* OutputParser::parseJson(CoreVM::Runner& runner,
     }
 
     // Build cons-cell list right-to-left
-    auto* list = createNilList(runner);
+    auto* list = runner.makeNilList(CoreVM::LiteralType::Object);
     for (auto& record: std::ranges::reverse_view(records))
-        list = createCons(runner, record, list);
+        list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
 
     return list;
 }
@@ -249,9 +229,9 @@ CoreVM::TypedObject* OutputParser::parseFields(CoreVM::Runner& runner,
     }
 
     // Build cons-cell list right-to-left
-    auto* list = createNilList(runner);
+    auto* list = runner.makeNilList(CoreVM::LiteralType::Object);
     for (auto& record: std::ranges::reverse_view(records))
-        list = createCons(runner, record, list);
+        list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
 
     return list;
 }

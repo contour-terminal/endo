@@ -294,6 +294,9 @@ Returned by `ls`. Represents a file or directory entry.
 | `mode` | `FileMode` | Unix file permissions |
 | `mtime` | `DateTime` | Last modification time |
 | `isDir` | `bool` | Whether entry is a directory |
+| `isSymlink` | `bool` | Whether entry is a symbolic link |
+| `target` | `str` | Symbolic link target (empty for non-symlinks) |
+| `path` | `str` | Absolute path of the entry |
 
 #### `FileMode`
 

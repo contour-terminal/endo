@@ -5,6 +5,8 @@
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
+#include <CoreVM/types/TypeRegistry.hpp>
+
 #include <algorithm>
 
 #include "SymbolCollector.hpp"
@@ -105,7 +107,7 @@ nlohmann::json computeCompletion(std::string const& source, Position position)
 
     // Merge builtin type data from TypeRegistry (ProcessInfo, FileInfo, DateTime, etc.)
     {
-        static CoreVM::TypeRegistry const builtinRegistry;
+        auto const& builtinRegistry = CoreVM::builtinTypes();
         auto builtinFields = endo::builtinRecordFields(builtinRegistry);
         for (auto& [name, fields]: builtinFields)
         {

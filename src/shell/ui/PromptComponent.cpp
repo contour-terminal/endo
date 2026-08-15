@@ -190,6 +190,29 @@ std::vector<PromptSegments> PromptComponent::buildModuleVector(
             // Transfer style attributes (bold, etc.) from original segments
             for (auto& seg: gradientSegments)
                 seg.style.bold = true;
+            // gradient() returns fresh segments, one per grapheme cluster, so any hyperlink on
+            // the sources would be dropped. Stamp each source's URI onto its own share of the
+            // output; the renderer then coalesces the equal-URI run back into a single link.
+            // Byte counts are enough to realign the two, because the gradient's segments
+            // concatenate back to combinedText exactly.
+            //
+            // Skipped outright when links are off: this runs on every rebuild — which includes
+            // every keystroke, since an input change rebuilds the vector from the module cache —
+            // and would otherwise copy the URI once per grapheme for nothing.
+            if (_context.hyperlinks)
+            {
+                auto out = gradientSegments.begin();
+                for (auto const& src: it->second.segments)
+                {
+                    auto covered = std::size_t { 0 };
+                    while (out != gradientSegments.end() && covered < src.text.size())
+                    {
+                        covered += out->text.size();
+                        out->hyperlink = src.hyperlink;
+                        ++out;
+                    }
+                }
+            }
             results.push_back(std::move(gradientSegments));
         }
         else
@@ -518,6 +541,42 @@ void PromptComponent::render(tui::Canvas& canvas)
             ++col;
         }
 
+        // Draws one module's segments and registers an OSC 8 region per maximal run of segments
+        // sharing a URI. A gradient-coloured path arrives here as N one-grapheme segments all
+        // carrying the same URI, so it yields exactly one region — the link stays whole without
+        // depending on how a terminal groups adjacent same-URI runs.
+        //
+        // Gated on the context rather than on PromptConfig: a preset switch replaces the whole
+        // PromptConfig, which would silently re-enable links the user had turned off. The context
+        // is refreshed from the shell every prompt cycle, so it is the authoritative value.
+        auto const renderSegments = [&](int row, int startCol, PromptSegments const& segments) {
+            // Named `cursor` rather than `col` so it cannot be confused with the enclosing
+            // render()'s `col`, which the callers below advance by this lambda's return value.
+            auto cursor = startCol;
+            auto runStart = startCol;
+            auto runUri = std::string_view {};
+
+            auto const flushRun = [&](int endCol) {
+                if (_context.hyperlinks && !runUri.empty() && endCol > runStart)
+                    canvas.addHyperlink(row, runStart, endCol - runStart, runUri);
+            };
+
+            for (auto const& seg: segments)
+            {
+                if (seg.hyperlink != runUri)
+                {
+                    flushRun(cursor);
+                    runStart = cursor;
+                    runUri = seg.hyperlink;
+                }
+                auto segStyle = seg.style;
+                applyBg(segStyle, bgAt(cursor));
+                cursor += canvas.putString(row, cursor, seg.text, segStyle);
+            }
+            flushRun(cursor);
+            return cursor - startCol;
+        };
+
         // Render info modules
         for (std::size_t i = 0; i < infoModules.size(); ++i)
         {
@@ -547,12 +606,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                     ++col;
                 }
             }
-            for (auto const& seg: infoModules[i])
-            {
-                auto segStyle = seg.style;
-                applyBg(segStyle, bgAt(col));
-                col += canvas.putString(infoLineRow, col, seg.text, segStyle);
-            }
+            col += renderSegments(infoLineRow, col, infoModules[i]);
         }
 
         // Right-aligned modules on info line
@@ -580,12 +634,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                         canvas.put(infoLineRow, rightCol, " ", spStyle);
                         ++rightCol;
                     }
-                    for (auto const& seg: rightModules[i])
-                    {
-                        auto segStyle = seg.style;
-                        applyBg(segStyle, bgAt(rightCol));
-                        rightCol += canvas.putString(infoLineRow, rightCol, seg.text, segStyle);
-                    }
+                    rightCol += renderSegments(infoLineRow, rightCol, rightModules[i]);
                 }
             }
         }

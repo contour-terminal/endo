@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/FileManager.hpp>
+#include <endo-language/builtins/RecordWriter.hpp>
 #include <endo-language/builtins/StdlibDescriptors.hpp>
 #include <endo-language/builtins/TypeFormatters.hpp>
 
@@ -817,6 +818,22 @@ CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode)
     auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::FileMode);
     obj->setSlot(0, static_cast<uint64_t>(mode));
     return obj;
+}
+
+CoreVM::TypedObject* makeFileInfoRecord(CoreVM::Runner* runner, FileInfoFields const& fields)
+{
+    // The typed façade over RecordWriter for the record with the most producers. Field names, not
+    // slot numbers: the layout is CoreVM's to declare.
+    auto writer = RecordWriter { runner, CoreVM::BuiltinTypeId::FileInfo };
+    writer.set("name", fields.name)
+        .set("size", makeSizeFromBytes(runner, fields.size))
+        .set("mode", makeFileModeFromBits(runner, fields.mode))
+        .set("mtime", makeDateTimeFromEpoch(runner, fields.mtime))
+        .set("isDir", fields.isDir)
+        .set("isSymlink", fields.isSymlink)
+        .set("target", fields.symlinkTarget)
+        .set("path", fields.path);
+    return writer.record();
 }
 
 void fileModeFromBits(CoreVM::Params& args)
