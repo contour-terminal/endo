@@ -70,9 +70,11 @@ class FilenamePrefix
     /// @param lineNumber 1-based line to target as a fragment; 0 for none.
     void appendTo(std::string& out, int lineNumber = 0) const;
 
-    /// @brief Returns the decorated name as a fresh string.
-    /// @param lineNumber 1-based line to target as a fragment; 0 for none.
-    [[nodiscard]] std::string render(int lineNumber = 0) const;
+    /// @brief Returns the decorated name as a fresh string, with no line fragment.
+    ///
+    /// For the `-l`/`-L` listings, which report a file without a line to point at. Everything
+    /// that does have one appends through appendTo().
+    [[nodiscard]] std::string render() const;
 
   private:
     std::string_view _filename;

@@ -227,8 +227,7 @@ std::vector<CompletionCandidate> shellKeywordCandidates()
 
 std::vector<CompletionCandidate> constructorCandidates()
 {
-    static CoreVM::TypeRegistry const builtinRegistry;
-    return constructorCandidatesFromRegistry(builtinRegistry);
+    return constructorCandidatesFromRegistry(CoreVM::builtinTypes());
 }
 
 std::vector<CompletionCandidate> dotAccessCandidates(

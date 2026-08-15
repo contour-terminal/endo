@@ -3,37 +3,21 @@
 
 #include <CoreVM/types/TypeRegistry.hpp>
 
-#include <array>
-#include <string_view>
-
 namespace endo
 {
 
-namespace
-{
-    /// The builtin records the language exposes to type checking.
-    ///
-    /// Names only: each record's field layout is read from CoreVM's descriptor, which is where it
-    /// is declared and where the VM itself reads it from, so a field added there needs no edit
-    /// here. Kept an explicit list rather than "every Product type CoreVM knows", because
-    /// resolveRecordByFields() matches anonymous record literals against these — admitting
-    /// runtime shapes such as Tuple2, Markdown or Json would let a literal resolve to one.
-    constexpr auto ExposedBuiltinRecords = std::array {
-        std::string_view { "ProcessInfo" }, std::string_view { "DateTime" },
-        std::string_view { "Size" },        std::string_view { "TimeSpan" },
-        std::string_view { "FileMode" },    std::string_view { "FileInfo" },
-        std::string_view { "JobInfo" },     std::string_view { "KeyBindingInfo" },
-    };
-} // namespace
-
 void TypeDefinitionRegistry::registerBuiltins()
 {
+    // Both which records the language exposes and their field layouts come from CoreVM's
+    // descriptors — the former from TypeDescriptor::languageRecord, the latter from `fields` — so
+    // adding a builtin record or a field to one needs no edit here. A name list would leave the
+    // set to drift silently: a record dropped from it keeps working at runtime while losing type
+    // checking, which nothing would report.
     auto const& runtime = CoreVM::builtinTypes();
 
-    for (auto const name: ExposedBuiltinRecords)
+    for (auto const& descriptor: runtime.allTypes())
     {
-        auto const* descriptor = runtime.getByName(name);
-        if (descriptor == nullptr)
+        if (!descriptor->languageRecord)
             continue;
 
         auto info = RecordTypeInfo {};
@@ -51,7 +35,7 @@ void TypeDefinitionRegistry::registerBuiltins()
                     info.fieldObjectTypeIds[field.name] = nested->id;
         }
 
-        _recordTypes[std::string { name }] = std::move(info);
+        _recordTypes[descriptor->name] = std::move(info);
     }
 }
 

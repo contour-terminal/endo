@@ -37,9 +37,9 @@ struct ImageRegion
 /// Cell per grapheme cluster — a single logical link rather than N adjacent ones.
 struct HyperlinkRegion
 {
-    Rect cellArea;        ///< Which cells this link covers (buffer coordinates).
-    std::string uri;      ///< Absolute URI, e.g. "file://host/home/me/src".
-    std::uint32_t id = 0; ///< Stable OSC 8 `id=` derived from uri (0 = emit no id).
+    Rect cellArea;      ///< Which cells this link covers (buffer coordinates).
+    std::string uri;    ///< Absolute URI, e.g. "file://host/home/me/src".
+    std::string linkId; ///< Stable OSC 8 `id=` derived from uri (empty = emit no id).
 };
 
 /// A 2D grid of terminal cells representing a virtual screen buffer.

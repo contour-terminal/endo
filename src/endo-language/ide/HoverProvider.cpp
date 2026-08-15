@@ -3,9 +3,12 @@
 #include <endo-language/builtins/PropertyDescriptors.hpp>
 #include <endo-language/builtins/StubRuntime.hpp>
 #include <endo-language/ide/HoverProvider.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
+
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <algorithm>
 #include <format>
@@ -17,6 +20,34 @@ namespace endo
 
 namespace
 {
+
+    /// Renders a builtin record's fields as a hover `**Fields:**` list, e.g. "`name: str`, `size:
+    /// Size`".
+    ///
+    /// Derived from CoreVM's descriptors rather than written out per entry, so a field added or
+    /// retyped there cannot leave this text stale. It had been: two entries described ProcessInfo's
+    /// `mem` as a float long after it became a Size, and FileInfo's new `path` had to be pasted
+    /// into two places by hand.
+    ///
+    /// @param recordName Builtin record to describe.
+    /// @return The rendered field list, or an empty string for a name CoreVM does not know.
+    [[nodiscard]] std::string fieldList(std::string const& recordName)
+    {
+        static auto const byRecord = builtinRecordFields(CoreVM::builtinTypes());
+
+        auto const it = byRecord.find(recordName);
+        if (it == byRecord.end())
+            return {};
+
+        auto rendered = std::string {};
+        for (auto const& field: it->second)
+        {
+            if (!rendered.empty())
+                rendered += ", ";
+            rendered += std::format("`{}: {}`", field.name, field.typeName);
+        }
+        return rendered;
+    }
 
     /// Returns hover markdown for a keyword token.
     [[nodiscard]] std::optional<std::string> keywordHover(Token token)
@@ -175,13 +206,14 @@ namespace
               "`env` : `string -> option<string>`\n\nReturns `Some value` if the environment variable is "
               "set, `None` if not found." },
             { "Size",
-              "`Size` \u2014 Record type for byte sizes with human-readable display\n\n"
-              "**Fields:** `bytes`\n\n"
-              "```endo\nSize.fromBytes 1024  // 1 KB\n"
-              "Size.fromKB 5       // 5 KB\n"
-              "1MB                  // size literal: 1 MB\n"
-              "3.5KB                // float literal: 3584 bytes\n"
-              "s.bytes              // raw byte count\n```" },
+              std::format("`Size` \u2014 Record type for byte sizes with human-readable display\n\n"
+                          "**Fields:** {}\n\n"
+                          "```endo\nSize.fromBytes 1024  // 1 KB\n"
+                          "Size.fromKB 5       // 5 KB\n"
+                          "1MB                  // size literal: 1 MB\n"
+                          "3.5KB                // float literal: 3584 bytes\n"
+                          "s.bytes              // raw byte count\n```",
+                          fieldList("Size")) },
             { "Size.fromBytes", "`Size.fromBytes` : `int -> Size`\n\nCreates a Size from a raw byte count." },
             { "Size.fromKB",
               "`Size.fromKB` : `int -> Size`\n\nCreates a Size from kilobytes (n \u00d7 1024)." },
@@ -192,15 +224,16 @@ namespace
             { "Size.fromTB",
               "`Size.fromTB` : `int -> Size`\n\nCreates a Size from terabytes (n \u00d7 1024\u2074)." },
             { "TimeSpan",
-              "`TimeSpan` \u2014 Record type for time durations\n\n"
-              "**Fields:** `milliseconds: int`\n\n"
-              "```endo\n100ms                    // 100 milliseconds\n"
-              "5s                       // 5 seconds\n"
-              "2min                     // 2 minutes\n"
-              "1h                       // 1 hour\n"
-              "1.5h                     // 1h 30m\n"
-              "TimeSpan.fromSeconds 5   // 5s\n"
-              "t.milliseconds           // raw millisecond count\n```" },
+              std::format("`TimeSpan` \u2014 Record type for time durations\n\n"
+                          "**Fields:** {}\n\n"
+                          "```endo\n100ms                    // 100 milliseconds\n"
+                          "5s                       // 5 seconds\n"
+                          "2min                     // 2 minutes\n"
+                          "1h                       // 1 hour\n"
+                          "1.5h                     // 1h 30m\n"
+                          "TimeSpan.fromSeconds 5   // 5s\n"
+                          "t.milliseconds           // raw millisecond count\n```",
+                          fieldList("TimeSpan")) },
             { "TimeSpan.fromMilliseconds",
               "`TimeSpan.fromMilliseconds` : `int -> TimeSpan`\n\nCreates a TimeSpan from "
               "milliseconds." },
@@ -217,57 +250,62 @@ namespace
               "`TimeSpan.fromDays` : `int -> TimeSpan`\n\nCreates a TimeSpan from days (n \u00d7 "
               "86400000 ms)." },
             { "FileMode",
-              "`FileMode` \u2014 Record type for Unix file permissions\n\n"
-              "**Fields:** `bits: int`\n\n"
-              "**Properties:** `isReadable`, `isWritable`, `isExecutable`, `owner`, `group`, `other`\n\n"
-              "```endo\nlet m = FileMode.fromBits 0o755\n"
-              "print m              // rwxr-xr-x\n"
-              "print m.isExecutable // true\n"
-              "print m.owner        // 7\n```" },
+              std::format(
+                  "`FileMode` \u2014 Record type for Unix file permissions\n\n"
+                  "**Fields:** {}\n\n"
+                  "**Properties:** `isReadable`, `isWritable`, `isExecutable`, `owner`, `group`, `other`\n\n"
+                  "```endo\nlet m = FileMode.fromBits 0o755\n"
+                  "print m              // rwxr-xr-x\n"
+                  "print m.isExecutable // true\n"
+                  "print m.owner        // 7\n```",
+                  fieldList("FileMode")) },
             { "FileMode.fromBits",
               "`FileMode.fromBits` : `int -> FileMode`\n\nCreates a FileMode from raw Unix permission "
               "bits." },
             { "DateTime",
-              "`DateTime` \u2014 Record type for date/time values (UTC)\n\n"
-              "**Fields:** `year`, `month`, `day`, `hour`, `minute`, `second`, `epoch`\n\n"
-              "```endo\nDateTime.now         // current UTC time\n"
-              "DateTime.fromEpoch n // DateTime from Unix epoch\n"
-              "d.year               // access individual fields\n```" },
+              std::format("`DateTime` \u2014 Record type for date/time values (UTC)\n\n"
+                          "**Fields:** {}\n\n"
+                          "```endo\nDateTime.now         // current UTC time\n"
+                          "DateTime.fromEpoch n // DateTime from Unix epoch\n"
+                          "d.year               // access individual fields\n```",
+                          fieldList("DateTime")) },
             { "DateTime.now", "`DateTime.now` : `DateTime`\n\nReturns the current UTC date and time." },
             { "DateTime.fromEpoch",
               "`DateTime.fromEpoch` : `int -> DateTime`\n\nConverts a Unix epoch timestamp to a "
               "DateTime record." },
             { "FileInfo",
-              "`FileInfo` \u2014 Record type for file/directory information\n\n"
-              "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`, `isSymlink: bool`, `target: str`, `path: str`\n\n"
-              "Returned by `ls`. Supports dot access and pattern matching.\n\n"
-              "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```" },
+              std::format("`FileInfo` \u2014 Record type for file/directory information\n\n"
+                          "**Fields:** {}\n\n"
+                          "Returned by `ls`. Supports dot access and pattern matching.\n\n"
+                          "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```",
+                          fieldList("FileInfo")) },
             { "ProcessInfo",
-              "`ProcessInfo` \u2014 Record type for process information\n\n"
-              "**Fields:** `pid: int`, `ppid: int`, `user: str`, `cpu: float`, `mem: float`, "
-              "`command: str`\n\n"
-              "Returned by `ps`. Supports dot access and pattern matching.\n\n"
-              "```endo\nps |> filter (_.cpu > 5.0) |> sortBy _.cpu\n```" },
+              std::format("`ProcessInfo` \u2014 Record type for process information\n\n"
+                          "**Fields:** {}\n\n"
+                          "Returned by `ps`. Supports dot access and pattern matching.\n\n"
+                          "```endo\nps |> filter (_.cpu > 5.0) |> sortBy _.cpu\n```",
+                          fieldList("ProcessInfo")) },
             { "JobInfo",
-              "`JobInfo` \u2014 Record type for background job information\n\n"
-              "**Fields:** `id: int`, `state: str`, `command: str`, `pid: int`\n\n"
-              "Returned by `jobs`. Supports dot access and pattern matching.\n\n"
-              "```endo\njobs |> filter (_.state == \"Running\")\n```" },
+              std::format("`JobInfo` \u2014 Record type for background job information\n\n"
+                          "**Fields:** {}\n\n"
+                          "Returned by `jobs`. Supports dot access and pattern matching.\n\n"
+                          "```endo\njobs |> filter (_.state == \"Running\")\n```",
+                          fieldList("JobInfo")) },
             { "ls",
-              "`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
-              "Lists directory contents as structured FileInfo records.\n\n"
-              "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
-              "bool`, `isSymlink: bool`, `target: str`, `path: str`" },
+              std::format("`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
+                          "Lists directory contents as structured FileInfo records.\n\n"
+                          "**Fields:** {}",
+                          fieldList("FileInfo")) },
             { "ps",
-              "`ps` : `list<ProcessInfo>`\n\n"
-              "Lists running processes as structured ProcessInfo records.\n\n"
-              "**Fields:** `pid: int`, `ppid: int`, `user: str`, `cpu: float`, `mem: float`, "
-              "`command: str`" },
+              std::format("`ps` : `list<ProcessInfo>`\n\n"
+                          "Lists running processes as structured ProcessInfo records.\n\n"
+                          "**Fields:** {}",
+                          fieldList("ProcessInfo")) },
             { "jobs",
-              "`jobs` : `list<JobInfo>`\n\n"
-              "Lists background jobs as structured JobInfo records.\n\n"
-              "**Fields:** `id: int`, `state: str`, `command: str`, `pid: int`" },
+              std::format("`jobs` : `list<JobInfo>`\n\n"
+                          "Lists background jobs as structured JobInfo records.\n\n"
+                          "**Fields:** {}",
+                          fieldList("JobInfo")) },
             { "fetch",
               "`fetch` : `str -> result<str, str>`\n\n"
               "Fetches content from a URL. Returns `Ok body` on success, `Error message` on failure." },

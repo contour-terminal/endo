@@ -9,6 +9,8 @@
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 
+#include <CoreVM/types/TypeRegistry.hpp>
+
 namespace endo
 {
 
@@ -168,9 +170,8 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
             deduplicateInto(results, filterByPrefix(standardLibraryCandidates(), prefix));
             {
                 // Module function stdlib candidates (DateTime.now, Size.fromBytes, etc.)
-                static CoreVM::TypeRegistry const builtinRegistry;
-                deduplicateInto(results,
-                                filterByPrefix(moduleFunctionStdLibCandidates(builtinRegistry), prefix));
+                deduplicateInto(
+                    results, filterByPrefix(moduleFunctionStdLibCandidates(CoreVM::builtinTypes()), prefix));
             }
             deduplicateInto(results, filterByPrefix(dataSource.additionalCandidates, prefix));
             break;

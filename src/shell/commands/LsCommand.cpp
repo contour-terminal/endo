@@ -25,9 +25,7 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
 {
     auto const files = _provider.listDirectory(_path);
 
-    // Start with Nil (empty list)
-    auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
-    list->tag = 0; // Nil
+    auto* list = runner.makeNilList(CoreVM::LiteralType::Object);
 
     // Build cons-cell list right-to-left so the result is in original order
     for (const auto& file: std::ranges::reverse_view(files))
@@ -44,12 +42,7 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
                                                             .isDir = file.isDir,
                                                             .isSymlink = file.isSymlink });
 
-        // Cons this record onto the list
-        auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
-        cons->tag = 1; // Cons
-        cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-        cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-        list = cons;
+        list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
     }
 
     return list;

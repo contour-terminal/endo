@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <array>
-#include <format>
 
 #include <platform/FileUri.hpp>
 
@@ -23,6 +22,8 @@ namespace
 
     constexpr auto HexDigits = std::string_view { "0123456789ABCDEF" };
 
+    constexpr auto SchemePrefix = std::string_view { "file://" };
+
     /// @brief Whether @p path starts with a Windows drive specifier such as `C:`.
     [[nodiscard]] constexpr bool hasDriveSpecifier(std::string_view path) noexcept
     {
@@ -33,24 +34,29 @@ namespace
     }
 } // namespace
 
-auto percentEncodeUriPath(std::string_view path) -> std::string
+void appendPercentEncodedUriPath(std::string& out, std::string_view path)
 {
-    auto encoded = std::string {};
-    encoded.reserve(path.size());
     for (auto const ch: path)
     {
         auto const byte = static_cast<unsigned char>(ch);
         if (UriPathSafe[byte])
         {
-            encoded += ch;
+            out += ch;
         }
         else
         {
-            encoded += '%';
-            encoded += HexDigits[byte >> 4U];
-            encoded += HexDigits[byte & 0x0FU];
+            out += '%';
+            out += HexDigits[byte >> 4U];
+            out += HexDigits[byte & 0x0FU];
         }
     }
+}
+
+auto percentEncodeUriPath(std::string_view path) -> std::string
+{
+    auto encoded = std::string {};
+    encoded.reserve(path.size());
+    appendPercentEncodedUriPath(encoded, path);
     return encoded;
 }
 
@@ -72,7 +78,12 @@ auto fileUri(std::string_view absolutePath, std::string_view host, std::string_v
         path = slash == std::string_view::npos ? std::string_view {} : path.substr(slash);
     }
 
-    auto uri = std::format("file://{}", authority);
+    auto uri = std::string {};
+    // Worst case every path byte triples; the common case is no encoding at all, so reserve for
+    // the plain length and let the rare escape grow it.
+    uri.reserve(SchemePrefix.size() + authority.size() + path.size() + fragment.size() + 4);
+    uri += SchemePrefix;
+    uri += authority;
 
     if (hasDriveSpecifier(path))
     {
@@ -85,12 +96,12 @@ auto fileUri(std::string_view absolutePath, std::string_view host, std::string_v
         path.remove_prefix(2);
     }
 
-    uri += percentEncodeUriPath(path);
+    appendPercentEncodedUriPath(uri, path);
 
     if (!fragment.empty())
     {
         uri += '#';
-        uri += percentEncodeUriPath(fragment);
+        appendPercentEncodedUriPath(uri, fragment);
     }
 
     return uri;

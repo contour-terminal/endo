@@ -55,11 +55,17 @@ inline constexpr bool FilesystemCaseInsensitive =
 ///
 /// Convenience overload that converts a std::filesystem::path to a normalized string.
 ///
+/// Goes through generic_u8string() rather than generic_string(): the latter narrows to the
+/// platform's native narrow encoding, which on Windows is the ANSI code page and throws on any
+/// path the code page cannot represent. Every path string in endo is UTF-8, so producing UTF-8
+/// here is what the callers already assume. Identical output on POSIX.
+///
 /// @param p The filesystem path to normalize
 /// @return The normalized path string
 [[nodiscard]] inline auto normalizePath(std::filesystem::path const& p) -> std::string
 {
-    return p.generic_string();
+    auto const generic = p.generic_u8string();
+    return std::string { reinterpret_cast<char const*>(generic.data()), generic.size() };
 }
 
 /// @brief Joins a directory and an entry name with a single `/`.

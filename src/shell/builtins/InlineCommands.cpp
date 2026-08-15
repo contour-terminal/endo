@@ -2472,8 +2472,8 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const render = grep::GrepRenderOptions {
         .useColor = useColor,
         .useHyperlinks = useHyperlinks,
-        // Only the linking path reads these, and resolving the base directory is a getcwd.
-        .uriHost = useHyperlinks ? platform::cachedHostName() : std::string {},
+        .uriHost = platform::cachedHostName(),
+        // Gated because resolving the base directory is a getcwd; the host name is already cached.
         .baseDirectory = useHyperlinks ? platform::normalizePath(_fs.currentPath()) : std::string {},
     };
 

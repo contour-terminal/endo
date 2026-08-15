@@ -32,6 +32,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <crispy/Assert.hpp>
 
@@ -577,7 +578,7 @@ namespace
     TypeRegistryCachedData const& cachedTypeRegistryData()
     {
         static auto const instance = [] {
-            CoreVM::TypeRegistry registry;
+            auto const& registry = CoreVM::builtinTypes();
             TypeRegistryCachedData data;
             data.recordTypeFields = endo::builtinRecordFields(registry);
             data.moduleFunctions = endo::builtinModuleFunctions(registry);

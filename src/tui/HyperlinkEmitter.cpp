@@ -3,18 +3,14 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <algorithm>
-#include <format>
 
 namespace tui
 {
 
 auto HyperlinkIndex::at(int row, int col) const noexcept -> HyperlinkRegion const*
 {
-    auto const covers = [row, col](HyperlinkRegion const& region) {
-        return row >= region.cellArea.y && row < region.cellArea.bottom() && col >= region.cellArea.x
-               && col < region.cellArea.right();
-    };
-    auto const it = std::ranges::find_if(_regions, covers);
+    auto const it = std::ranges::find_if(
+        _regions, [row, col](HyperlinkRegion const& region) { return region.cellArea.contains(col, row); });
     return it != _regions.end() ? &*it : nullptr;
 }
 
@@ -44,7 +40,7 @@ void HyperlinkEmitter::syncTo(int row, int col)
 
     if (region != nullptr)
     {
-        _out->beginHyperlink(region->uri, std::format("endo-{:x}", region->id));
+        _out->beginHyperlink(region->uri, region->linkId);
         _open = region;
     }
 }

@@ -272,8 +272,6 @@ void MockTerminalOutput::beginHyperlink(std::string_view url, std::string_view i
         .url = std::string { url },
         .id = std::string { id },
         .text = {},
-        .row = _cursorRow,
-        .col = _cursorCol,
     });
     _hyperlinkOpen = true;
 }
@@ -290,7 +288,7 @@ void MockTerminalOutput::endHyperlink()
 
 void MockTerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
 {
-    beginHyperlink(url);
+    beginHyperlink(url, {});
     writeText(text, style);
     endHyperlink();
 }

@@ -5,7 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
+#include <cstddef>
 
 using namespace endo;
 
@@ -40,9 +40,8 @@ TEST_CASE("TypeRegistry.derived.records_match_corevm_layout")
         for (auto const& field: frontendType.fields)
         {
             INFO("field: " << name << "." << field.name);
-            auto const runtimeField = std::ranges::find_if(
-                runtimeType->fields, [&](auto const& f) { return f.name == field.name; });
-            REQUIRE(runtimeField != runtimeType->fields.end());
+            auto const* runtimeField = runtimeType->getFieldByName(field.name);
+            REQUIRE(runtimeField != nullptr);
             CHECK(runtimeField->offset == field.offset);
             CHECK(runtimeField->type == field.type);
             // Reachable by the type checker, or field access compiles and reads the wrong slot.
@@ -54,27 +53,29 @@ TEST_CASE("TypeRegistry.derived.records_match_corevm_layout")
     }
 }
 
-TEST_CASE("TypeRegistry.derived.covers_the_records_the_language_exposes")
+TEST_CASE("TypeRegistry.derived.covers_every_descriptor_marked_as_a_language_record")
 {
-    // The set is a list in TypeRegistry.cpp, so a record dropped from it silently loses type
-    // checking rather than failing to build. FileInfo carries the hidden fields the ls table and
-    // the hyperlink target read, so it is the one worth naming explicitly.
+    // Asserted in both directions against the descriptors themselves rather than against a list of
+    // names: restating the names here would only pin this test against itself, while what can
+    // actually go wrong is the derivation skipping a marked descriptor (the record keeps working at
+    // runtime and silently loses type checking) or admitting an unmarked one.
+    auto const& runtime = CoreVM::builtinTypes();
     auto frontend = TypeDefinitionRegistry {};
     frontend.registerBuiltins();
 
-    for (auto const* name: { "ProcessInfo",
-                             "DateTime",
-                             "Size",
-                             "TimeSpan",
-                             "FileMode",
-                             "FileInfo",
-                             "JobInfo",
-                             "KeyBindingInfo" })
+    auto marked = size_t { 0 };
+    for (auto const& descriptor: runtime.allTypes())
     {
-        INFO("record: " << name);
-        CHECK(frontend.lookupRecord(name) != nullptr);
+        if (!descriptor->languageRecord)
+            continue;
+        ++marked;
+        INFO("record: " << descriptor->name);
+        CHECK(frontend.lookupRecord(descriptor->name) != nullptr);
     }
+    CHECK(marked == frontend.records().size());
 
+    // FileInfo carries the hidden fields the ls table and the hyperlink target read, so it is the
+    // one worth naming explicitly.
     auto const* fileInfo = frontend.lookupRecord("FileInfo");
     REQUIRE(fileInfo != nullptr);
     for (auto const* field: { "name", "size", "mode", "mtime", "isDir", "isSymlink", "target", "path" })
@@ -109,8 +110,9 @@ TEST_CASE("TypeRegistry.derived.nested_record_types_resolve")
 TEST_CASE("TypeRegistry.derived.excludes_runtime_only_shapes")
 {
     // resolveRecordByFields() matches anonymous record literals against every registered record, so
-    // deriving from "every Product type CoreVM knows" would let a literal resolve to Tuple2 or
-    // Markdown. These are runtime shapes, not record types users write.
+    // marking these would let `{ content = "x" }` resolve to Markdown. They are runtime shapes, not
+    // record types users write — which is why languageRecord is opt-in rather than "every Product
+    // type CoreVM knows". Named explicitly, since this pins the intent behind the flag.
     auto frontend = TypeDefinitionRegistry {};
     frontend.registerBuiltins();
 

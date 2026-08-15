@@ -54,8 +54,7 @@ class RecordBuilder
     /// @brief Builds a cons-list of FileInfo records, in fixture order.
     [[nodiscard]] CoreVM::TypedObject* makeFileInfoList(std::span<FileFixture const> fixtures)
     {
-        auto* list = _runner.allocObject(CoreVM::BuiltinTypeId::List);
-        list->tag = 0; // Nil
+        auto* list = _runner.makeNilList(CoreVM::LiteralType::Object);
 
         for (auto const& f: fixtures | std::views::reverse)
         {
@@ -76,11 +75,8 @@ class RecordBuilder
             if (f.path.empty())
                 record->setSlot(7, uintptr_t { 0 });
 
-            auto* cons = _runner.allocObject(CoreVM::BuiltinTypeId::List);
-            cons->tag = 1; // Cons
-            cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-            cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-            list = cons;
+            list =
+                _runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         return list;
     }
@@ -149,6 +145,11 @@ constexpr auto Fixtures = std::array {
     FileFixture { .name = "hello.txt", .size = 42, .path = "/tmp/d/hello.txt" },
 };
 
+constexpr auto SymlinkFixture = std::array {
+    FileFixture {
+        .name = "cfg", .size = 3, .isSymlink = true, .target = "/etc/real.conf", .path = "/tmp/d/cfg" },
+};
+
 [[nodiscard]] TableConfig linkedConfig()
 {
     return TableConfig {
@@ -160,13 +161,22 @@ constexpr auto Fixtures = std::array {
     };
 }
 
+/// @brief Renders @p fixtures as a table under @p config.
+///
+/// The Runner only has to outlive the format call, so it lives and dies inside this helper —
+/// every case below would otherwise repeat the same three lines to say so.
+[[nodiscard]] std::string renderTable(std::span<FileFixture const> fixtures,
+                                      TableConfig const& config = linkedConfig())
+{
+    auto builder = RecordBuilder {};
+    return formatRecordTable(builder.makeFileInfoList(fixtures), builder.runner(), config);
+}
+
 } // namespace
 
 TEST_CASE("TableFormatter.hyperlinks.emitted_for_each_file")
 {
-    RecordBuilder builder;
-    auto* list = builder.makeFileInfoList(Fixtures);
-    auto const table = formatRecordTable(list, builder.runner(), linkedConfig());
+    auto const table = renderTable(Fixtures);
 
     CHECK(table.find("\033]8;;file://box/tmp/d/docs\033\\") != std::string::npos);
     CHECK(table.find("\033]8;;file://box/tmp/d/hello.txt\033\\") != std::string::npos);
@@ -175,11 +185,9 @@ TEST_CASE("TableFormatter.hyperlinks.emitted_for_each_file")
 
 TEST_CASE("TableFormatter.hyperlinks.absent_when_disabled")
 {
-    RecordBuilder builder;
-    auto* list = builder.makeFileInfoList(Fixtures);
     auto config = linkedConfig();
     config.useHyperlinks = false;
-    auto const table = formatRecordTable(list, builder.runner(), config);
+    auto const table = renderTable(Fixtures, config);
 
     CHECK(table.find("]8;;") == std::string::npos);
     // Colors and icons are unaffected: the switch is independent of styling.
@@ -190,12 +198,10 @@ TEST_CASE("TableFormatter.hyperlinks.absent_in_plain_style")
 {
     // Plain is what a pipe or redirect gets; it must stay free of escape sequences even if a
     // caller sets useHyperlinks.
-    RecordBuilder builder;
-    auto* list = builder.makeFileInfoList(Fixtures);
     auto config = linkedConfig();
     config.style = TableStyle::Plain;
     config.useColor = false;
-    auto const table = formatRecordTable(list, builder.runner(), config);
+    auto const table = renderTable(Fixtures, config);
 
     CHECK(table.find('\033') == std::string::npos);
 }
@@ -204,14 +210,10 @@ TEST_CASE("TableFormatter.hyperlinks.preserve_column_alignment")
 {
     // The invariant most likely to be broken by a later edit: escapes must not change layout.
     // Rendering with and without links and stripping all escapes must yield identical text.
-    RecordBuilder builder;
-    auto* linkedList = builder.makeFileInfoList(Fixtures);
-    auto* plainList = builder.makeFileInfoList(Fixtures);
-
     auto config = linkedConfig();
-    auto const linked = formatRecordTable(linkedList, builder.runner(), config);
+    auto const linked = renderTable(Fixtures, config);
     config.useHyperlinks = false;
-    auto const unlinked = formatRecordTable(plainList, builder.runner(), config);
+    auto const unlinked = renderTable(Fixtures, config);
 
     CHECK(stripEscapes(linked) == stripEscapes(unlinked));
 }
@@ -219,9 +221,7 @@ TEST_CASE("TableFormatter.hyperlinks.preserve_column_alignment")
 TEST_CASE("TableFormatter.hyperlinks.padding_is_outside_the_link")
 {
     // Trailing filler must not be clickable, so the close sequence has to come before the pad.
-    RecordBuilder builder;
-    auto* list = builder.makeFileInfoList(Fixtures);
-    auto const table = formatRecordTable(list, builder.runner(), linkedConfig());
+    auto const table = renderTable(Fixtures);
 
     auto const open = table.find("\033]8;;file://box/tmp/d/docs\033\\");
     REQUIRE(open != std::string::npos);
@@ -238,12 +238,10 @@ TEST_CASE("TableFormatter.hyperlinks.missing_path_slot_is_not_linked")
 {
     // A record built before FileInfo carried a path (or by a producer that forgot it) must
     // render normally rather than emitting a bogus link or crashing.
-    RecordBuilder builder;
     constexpr auto Pathless = std::array {
         FileFixture { .name = "orphan.txt", .size = 7 },
     };
-    auto* list = builder.makeFileInfoList(Pathless);
-    auto const table = formatRecordTable(list, builder.runner(), linkedConfig());
+    auto const table = renderTable(Pathless);
 
     CHECK(table.find("]8;;") == std::string::npos);
     CHECK(table.find("orphan.txt") != std::string::npos);
@@ -253,16 +251,14 @@ TEST_CASE("TableFormatter.hyperlinks.truncated_name_keeps_full_uri")
 {
     // The URI comes from the path slot, not from the rendered cell, so a name clipped to fit the
     // column still points at the right file.
-    RecordBuilder builder;
     constexpr auto LongName = std::array {
         FileFixture { .name = "a-very-long-file-name-that-will-certainly-be-truncated.txt",
                       .size = 1,
                       .path = "/tmp/d/a-very-long-file-name-that-will-certainly-be-truncated.txt" },
     };
-    auto* list = builder.makeFileInfoList(LongName);
     auto config = linkedConfig();
     config.maxColumnWidth = 20;
-    auto const table = formatRecordTable(list, builder.runner(), config);
+    auto const table = renderTable(LongName, config);
 
     CHECK(table.find("file://box/tmp/d/a-very-long-file-name-that-will-certainly-be-truncated.txt")
           != std::string::npos);
@@ -272,13 +268,7 @@ TEST_CASE("TableFormatter.hyperlinks.truncated_name_keeps_full_uri")
 TEST_CASE("TableFormatter.hyperlinks.symlink_row_links_the_link_itself")
 {
     // The whole "name -> target" cell is one region pointing at the link, not its target.
-    RecordBuilder builder;
-    constexpr auto Symlink = std::array {
-        FileFixture {
-            .name = "cfg", .size = 3, .isSymlink = true, .target = "/etc/real.conf", .path = "/tmp/d/cfg" },
-    };
-    auto* list = builder.makeFileInfoList(Symlink);
-    auto const table = formatRecordTable(list, builder.runner(), linkedConfig());
+    auto const table = renderTable(SymlinkFixture);
 
     CHECK(table.find("\033]8;;file://box/tmp/d/cfg\033\\") != std::string::npos);
     CHECK(table.find("file:///etc/real.conf") == std::string::npos);
@@ -291,11 +281,7 @@ TEST_CASE("TableFormatter.record_builder_fills_every_declared_field")
     // null string. Now that one builder writes the layout, this asserts it covers all of it — add
     // a field to FileInfo without teaching the builder and this fails.
     RecordBuilder builder;
-    constexpr auto One = std::array {
-        FileFixture {
-            .name = "cfg", .size = 3, .isSymlink = true, .target = "/etc/real.conf", .path = "/tmp/d/cfg" },
-    };
-    auto* list = builder.makeFileInfoList(One);
+    auto* list = builder.makeFileInfoList(SymlinkFixture);
     auto* record = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(list->getSlot(0)));
     REQUIRE(record != nullptr);
 

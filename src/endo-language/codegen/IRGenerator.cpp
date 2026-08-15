@@ -226,14 +226,9 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     generator._builder.setInsertPoint(generator._builder.createBlock("EntryPoint"));
 
     // Populate dispose callback map from the type registry for `let use` enforcement.
-    {
-        CoreVM::TypeRegistry registry;
-        for (auto const& type: registry.allTypes())
-        {
-            if (type->disposeCallbackName)
-                generator._disposeCallbacks[type->id] = *type->disposeCallbackName;
-        }
-    }
+    for (auto const& type: CoreVM::builtinTypes().allTypes())
+        if (type->disposeCallbackName)
+            generator._disposeCallbacks[type->id] = *type->disposeCallbackName;
 
     // Initialize F# root scope
     generator.pushFSharpScope();

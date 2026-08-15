@@ -257,6 +257,12 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     auto const& fields = resolvedFields.empty() ? records[0]->type->fields : resolvedFields;
     auto const numCols = fields.size();
     bool const decorateFiles = isFileInfo && config.useColor;
+    // Hoisted rather than respelled at each of the four places that need it: the icon's width has
+    // to agree between the column-width arithmetic and the rendering, and a condition duplicated
+    // per site is one that can disagree.
+    constexpr int IconDisplayWidth = 2; // 1 glyph (1 cell) + 1 space
+    bool const showIcons = decorateFiles && config.showIcons;
+    int const nameIconWidth = showIcons ? IconDisplayWidth : 0;
     // The link target is looked up by name, once, rather than by slot literal: reordering
     // FileInfo's hidden fields would otherwise retarget every hyperlink to whatever landed at
     // that slot, with the tests — which only assert that some file:// URI appears — still green.
@@ -305,8 +311,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         colWidths[col] = static_cast<int>(headers[col].size());
 
     // When showing icons, reserve space for "icon " prefix in the name column header width
-    constexpr int IconDisplayWidth = 2; // 1 glyph (1 cell) + 1 space
-    if (decorateFiles && config.showIcons)
+    if (showIcons)
         colWidths[0] = std::max(colWidths[0], static_cast<int>(headers[0].size()) + IconDisplayWidth);
 
     for (auto* record: records)
@@ -369,8 +374,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             if (std::cmp_not_equal(col, config.autoGrowColumn))
                 cell = truncate(cell, config.maxColumnWidth);
             auto cellDisplayWidth = displayWidth(cell);
-            if (decorateFiles && config.showIcons && col == 0)
-                cellDisplayWidth += IconDisplayWidth;
+            if (col == 0)
+                cellDisplayWidth += nameIconWidth;
             colWidths[col] = std::max(colWidths[col], cellDisplayWidth);
             row.push_back(std::move(cell));
         }
@@ -415,7 +420,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     if (config.autoGrowColumn >= 0 && std::cmp_less(config.autoGrowColumn, numCols))
     {
         auto const col = static_cast<size_t>(config.autoGrowColumn);
-        auto const iconOffset = (decorateFiles && config.showIcons && col == 0) ? IconDisplayWidth : 0;
+        auto const iconOffset = col == 0 ? nameIconWidth : 0;
         auto const maxWidth = colWidths[col] - iconOffset;
         for (auto& row: rows)
             row[col] = truncate(row[col], maxWidth);
@@ -433,22 +438,20 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         {
             auto const sgr = decorateFiles ? sgrSequence(fileDecorations[rowIdx].style) : std::string {};
             auto const* const sgrReset = sgr.empty() ? "" : "\033[m";
-            auto const showIcon = decorateFiles && config.showIcons;
-            auto const iconWidth = showIcon ? IconDisplayWidth : 0;
             // A conditional mixing an lvalue with a prvalue yields a prvalue, so binding this by
             // reference would copy the vector element per row; a view aliases it.
             auto const uri = linkFiles ? std::string_view { fileUris[rowIdx] } : std::string_view {};
 
             // Padding sits outside both the link and the SGR span, so clicking the blank filler
             // does nothing and the highlight stops at the name. Same total width as padCell():
-            // iconWidth + displayWidth(cellText) + pad == width. Always trailing, since the name
+            // nameIconWidth + displayWidth(cellText) + pad == width. Always trailing, since the name
             // column is never right-aligned (isRightAlignedColumn says so only for numeric ones).
-            auto const pad = std::max(0, width - (displayWidth(cellText) + iconWidth));
+            auto const pad = std::max(0, width - (displayWidth(cellText) + nameIconWidth));
 
             if (!uri.empty())
-                out += tui::protocols::buildHyperlinkOpen(uri);
+                tui::protocols::appendHyperlinkOpen(out, uri);
             out += sgr;
-            if (showIcon)
+            if (showIcons)
             {
                 out += fileDecorations[rowIdx].icon;
                 out += ' ';

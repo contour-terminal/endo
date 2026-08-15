@@ -20,6 +20,15 @@ namespace endo::platform
 /// @return The percent-encoded path.
 [[nodiscard]] auto percentEncodeUriPath(std::string_view path) -> std::string;
 
+/// @brief Appends percentEncodeUriPath(@p path) to @p out.
+///
+/// The in-place form, for callers assembling a URI piecewise — a URI built from several encoded
+/// parts otherwise allocates a throwaway string per part.
+///
+/// @param out Destination to append to.
+/// @param path Path with `/` separators (see normalizePath()).
+void appendPercentEncodedUriPath(std::string& out, std::string_view path);
+
 /// @brief Builds an RFC 8089 `file://` URI for an absolute filesystem path.
 ///
 /// Examples:

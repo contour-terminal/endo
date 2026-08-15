@@ -16,8 +16,6 @@ struct HyperlinkRun
     std::string url;  ///< URL passed to beginHyperlink().
     std::string id;   ///< OSC 8 `id=` value (empty when none was given).
     std::string text; ///< Concatenated writeText() payloads while the link was open.
-    int row = 0;      ///< Cursor row when the link was opened.
-    int col = 0;      ///< Cursor column when the link was opened.
 };
 
 /// @brief Mock terminal output for testing.
@@ -71,7 +69,7 @@ class MockTerminalOutput: public TerminalOutput
     void resetScrollRegion() override;
     void writeSixel(std::string_view sixelData) override;
     void copyToClipboard(std::string_view text) override;
-    void beginHyperlink(std::string_view url, std::string_view id = {}) override;
+    void beginHyperlink(std::string_view url, std::string_view id) override;
     void endHyperlink() override;
     void writeHyperlink(std::string_view text, std::string_view url, Style const& style) override;
     void unscroll(int n) override;

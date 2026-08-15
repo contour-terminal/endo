@@ -567,8 +567,7 @@ FilenamePrefix::FilenamePrefix(std::string_view filename, GrepRenderOptions cons
     if (uri.empty())
         return;
 
-    _linkOpenPrefix = std::string { tui::protocols::HyperlinkIntroducer };
-    _linkOpenPrefix += ';';
+    _linkOpenPrefix = std::string { tui::protocols::HyperlinkOpenPrefix };
     _linkOpenPrefix += uri;
 }
 
@@ -594,10 +593,10 @@ void FilenamePrefix::appendTo(std::string& out, int lineNumber) const
         out += tui::protocols::HyperlinkClose;
 }
 
-std::string FilenamePrefix::render(int lineNumber) const
+std::string FilenamePrefix::render() const
 {
     auto out = std::string {};
-    appendTo(out, lineNumber);
+    appendTo(out);
     return out;
 }
 

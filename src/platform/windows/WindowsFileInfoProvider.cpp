@@ -21,37 +21,6 @@ namespace
 
     namespace fs = std::filesystem;
 
-    /// Losslessly renders a path as a UTF-8 std::string.
-    ///
-    /// path::string() converts to the process's narrow (ANSI) code page and throws
-    /// std::system_error on any character the code page cannot represent — fatal when
-    /// listing a directory that holds such a name. path::u8string() encodes the full
-    /// Unicode path as UTF-8 and never throws, so we use it and reinterpret the bytes.
-    /// @param p The path to convert.
-    /// @return The path encoded as UTF-8.
-    [[nodiscard]] std::string toUtf8(fs::path const& p)
-    {
-        auto const u8 = p.u8string();
-        return std::string { reinterpret_cast<char const*>(u8.data()), u8.size() };
-    }
-
-    /// Returns @p dir as an absolute, UTF-8, forward-slash normalized directory path.
-    ///
-    /// Not platform::absoluteDirectory(): that goes through normalizePath(fs::path), which uses
-    /// generic_string() and so narrows to the ANSI code page — throwing on any directory name the
-    /// code page cannot represent. Resolved once per listing, as the shared helper is.
-    ///
-    /// @param dir Directory to resolve; empty is treated as the working directory.
-    /// @return The absolute directory, or an empty string if it could not be resolved.
-    [[nodiscard]] std::string absoluteDirectoryUtf8(fs::path const& dir)
-    {
-        std::error_code ec;
-        auto const resolved = fs::absolute(dir.empty() ? fs::path { "." } : dir, ec);
-        if (ec)
-            return {};
-        return normalizePath(toUtf8(resolved.lexically_normal()));
-    }
-
     /// Populates a FileEntry from a filesystem directory_entry.
     /// @param dirEntry The entry to inspect.
     /// @param absoluteParent Absolute, normalized directory holding the entry, used to build
@@ -64,7 +33,7 @@ namespace
     {
         std::error_code ec;
 
-        fileEntry.name = toUtf8(dirEntry.path().filename());
+        fileEntry.name = normalizePath(dirEntry.path().filename());
         if (!absoluteParent.empty())
             fileEntry.path = joinPath(absoluteParent, fileEntry.name);
 
@@ -90,7 +59,7 @@ namespace
             // required privilege; on failure leave the target empty (graceful degradation).
             auto const target = fs::read_symlink(dirEntry.path(), ec);
             if (!ec)
-                fileEntry.symlinkTarget = toUtf8(target);
+                fileEntry.symlinkTarget = normalizePath(target);
             ec.clear();
         }
         fileEntry.size = 0;
@@ -155,7 +124,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
         if (parentDir.empty())
             parentDir = ".";
 
-        auto const absoluteParent = absoluteDirectoryUtf8(parentDir);
+        auto const absoluteParent = absoluteDirectory(parentDir);
 
         for (auto const& entry: fs::directory_iterator(parentDir, ec))
         {
@@ -179,7 +148,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     auto const dir = fs::path(path);
     if (fs::is_directory(dir, ec) && !ec)
     {
-        auto const absoluteParent = absoluteDirectoryUtf8(dir);
+        auto const absoluteParent = absoluteDirectory(dir);
 
         for (auto const& entry: fs::directory_iterator(dir, ec))
         {
@@ -199,7 +168,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     if (auto const dirEntry = fs::directory_entry(dir, ec); !ec)
     {
         FileEntry fileEntry {};
-        if (statEntry(dirEntry, absoluteDirectoryUtf8(dir.parent_path()), fileEntry))
+        if (statEntry(dirEntry, absoluteDirectory(dir.parent_path()), fileEntry))
             result.push_back(std::move(fileEntry));
     }
 

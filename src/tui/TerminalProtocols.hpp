@@ -77,9 +77,14 @@ constexpr auto HyperlinkIntroducer = "\033]8;"sv;   ///< Opens an OSC 8 hyperlin
 constexpr auto StringTerminator = "\033\\"sv;       ///< ST, terminating an OSC/DCS string.
 constexpr auto HyperlinkClose = "\033]8;;\033\\"sv; ///< Closes the current OSC 8 hyperlink.
 
-/// @brief Builds the OSC 8 sequence that opens a hyperlink to @p url.
+/// Everything an OSC 8 open needs before the URI, with no parameters: `ESC ] 8 ; ;`.
+/// For callers that must splice the URI themselves — grep appends a `#line` fragment per output
+/// line — so that the parameter-list structure is still spelled only here.
+constexpr auto HyperlinkOpenPrefix = "\033]8;;"sv;
+
+/// @brief Appends the OSC 8 sequence that opens a hyperlink to @p url.
 ///
-/// Shared by the platform TerminalOutput implementations and HelpPrinter so the
+/// Shared by the platform TerminalOutput implementations, HelpPrinter and the ls table so the
 /// escape is spelled in exactly one place.
 ///
 /// Passing an @p id makes every run carrying that same id part of one logical link, which
@@ -87,21 +92,36 @@ constexpr auto HyperlinkClose = "\033]8;;\033\\"sv; ///< Closes the current OSC 
 /// the cells that changed, so one visual link can reach the terminal as multiple runs.
 /// Without an id, terminals group only immediately adjacent runs sharing a URI.
 ///
+/// @param out Destination to append to.
 /// @param url The link target.
 /// @param id Optional OSC 8 `id=` value. Empty emits no parameters, keeping the sequence
 ///           byte-identical to the id-less form.
+inline void appendHyperlinkOpen(std::string& out, std::string_view url, std::string_view id = {})
+{
+    out.append(HyperlinkIntroducer);
+    if (!id.empty())
+    {
+        out.append("id="sv);
+        out.append(id);
+    }
+    out.append(";"sv);
+    out.append(url);
+    out.append(StringTerminator);
+}
+
+/// @brief Returns the OSC 8 sequence that opens a hyperlink to @p url.
+///
+/// Prefer appendHyperlinkOpen() when the result goes straight into an output buffer; this
+/// overload exists for callers that need the sequence as a value.
+///
+/// @param url The link target.
+/// @param id Optional OSC 8 `id=` value.
 /// @return The complete opening sequence: `ESC ] 8 ; [id=<id>] ; <url> ESC \`.
 [[nodiscard]] inline auto buildHyperlinkOpen(std::string_view url, std::string_view id = {}) -> std::string
 {
-    auto result = std::string { HyperlinkIntroducer };
-    if (!id.empty())
-    {
-        result.append("id="sv);
-        result.append(id);
-    }
-    result.append(";"sv);
-    result.append(url);
-    result.append(StringTerminator);
+    auto result = std::string {};
+    result.reserve(HyperlinkIntroducer.size() + id.size() + url.size() + StringTerminator.size() + 4);
+    appendHyperlinkOpen(result, url, id);
     return result;
 }
 

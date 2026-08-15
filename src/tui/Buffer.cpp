@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <format>
 #include <ranges>
 #include <stdexcept>
 
@@ -250,7 +251,7 @@ void Buffer::clearImages() noexcept
 
 void Buffer::addHyperlink(Rect cellArea, std::string uri)
 {
-    if (uri.empty() || cellArea.width <= 0 || cellArea.height <= 0)
+    if (uri.empty() || cellArea.empty())
         return;
 
     // The OSC 8 `id` is derived from the URI so it is identical for every region pointing at the
@@ -263,8 +264,9 @@ void Buffer::addHyperlink(Rect cellArea, std::string uri)
     _hyperlinks.push_back(HyperlinkRegion {
         .cellArea = cellArea,
         .uri = std::move(uri),
-        // 0 is the "no id" sentinel, so fold it away rather than losing the grouping.
-        .id = hash != 0 ? hash : 1,
+        // Rendered here rather than at every link open: a region is registered once per frame but
+        // opened once per row it spans, and a multi-row link would re-format it per row.
+        .linkId = std::format("endo-{:x}", hash),
     });
 }
 

@@ -452,7 +452,7 @@ bool TerminalOutput::supportsUnscroll() const noexcept
 
 void TerminalOutput::beginHyperlink(std::string_view url, std::string_view id)
 {
-    _buffer += protocols::buildHyperlinkOpen(url, id);
+    protocols::appendHyperlinkOpen(_buffer, url, id);
 }
 
 void TerminalOutput::endHyperlink()
@@ -462,7 +462,7 @@ void TerminalOutput::endHyperlink()
 
 void TerminalOutput::writeHyperlink(std::string_view text, std::string_view url, Style const& style)
 {
-    beginHyperlink(url);
+    beginHyperlink(url, {});
     writeText(text, style);
     endHyperlink();
 }

@@ -183,7 +183,7 @@ class HelpBuilder
 
         // OSC 8 hyperlink open (terminal-only, independent of color)
         if (_useHyperlinks)
-            _out += tui::protocols::buildHyperlinkOpen(url);
+            tui::protocols::appendHyperlinkOpen(_out, url);
 
         if (_useColor)
         {
@@ -204,7 +204,7 @@ class HelpBuilder
 
         // Show the URL text as well (hyperlinked when on a terminal)
         if (_useHyperlinks)
-            _out += tui::protocols::buildHyperlinkOpen(url);
+            tui::protocols::appendHyperlinkOpen(_out, url);
 
         if (_useColor)
         {

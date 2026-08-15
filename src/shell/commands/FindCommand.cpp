@@ -131,8 +131,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
     }
 
     // Build cons-cell list right-to-left (same pattern as LsCommand)
-    auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
-    list->tag = 0; // Nil
+    auto* list = runner.makeNilList(CoreVM::LiteralType::Object);
 
     // Hoisted out of the loop: resolving the working directory is a syscall, and `find` can match
     // many thousands of entries.
@@ -153,11 +152,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
                                                             .mtime = match.mtime,
                                                             .isDir = match.isDir });
 
-        auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
-        cons->tag = 1; // Cons
-        cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-        cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-        list = cons;
+        list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
     }
 
     return list;

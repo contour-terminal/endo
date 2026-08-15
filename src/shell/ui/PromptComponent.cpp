@@ -195,15 +195,22 @@ std::vector<PromptSegments> PromptComponent::buildModuleVector(
             // output; the renderer then coalesces the equal-URI run back into a single link.
             // Byte counts are enough to realign the two, because the gradient's segments
             // concatenate back to combinedText exactly.
-            auto out = gradientSegments.begin();
-            for (auto const& src: it->second.segments)
+            //
+            // Skipped outright when links are off: this runs on every rebuild — which includes
+            // every keystroke, since an input change rebuilds the vector from the module cache —
+            // and would otherwise copy the URI once per grapheme for nothing.
+            if (_context.hyperlinks)
             {
-                auto covered = std::size_t { 0 };
-                while (out != gradientSegments.end() && covered < src.text.size())
+                auto out = gradientSegments.begin();
+                for (auto const& src: it->second.segments)
                 {
-                    covered += out->text.size();
-                    out->hyperlink = src.hyperlink;
-                    ++out;
+                    auto covered = std::size_t { 0 };
+                    while (out != gradientSegments.end() && covered < src.text.size())
+                    {
+                        covered += out->text.size();
+                        out->hyperlink = src.hyperlink;
+                        ++out;
+                    }
                 }
             }
             results.push_back(std::move(gradientSegments));

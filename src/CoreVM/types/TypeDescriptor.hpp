@@ -110,6 +110,16 @@ struct TypeDescriptor
     /// Shell command that produces this type (e.g., "ls" for FileInfo).
     std::string producingCommand;
 
+    /// Whether the language surfaces this Product type as a named record type.
+    ///
+    /// Set it on a type whose fields the type checker should resolve (`f.size`) and whose shape an
+    /// anonymous record literal may be matched against. Leave it false for runtime-only shapes —
+    /// tuples, List cells, and module-style types such as `Markdown` or `Json` whose single field
+    /// is an implementation detail — since admitting those would let `{ content = "x" }` resolve to
+    /// `Markdown`. Completion offers dot-access on a wider set, which is deliberate: knowing a
+    /// value's type is enough to suggest its fields, without making the shape resolvable by name.
+    bool languageRecord = false;
+
     /// For Function types: number of captured variables.
     uint16_t captureCount = 0;
 
