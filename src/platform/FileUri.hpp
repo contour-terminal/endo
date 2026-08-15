@@ -7,24 +7,40 @@
 namespace endo::platform
 {
 
-/// @brief Percent-encodes a filesystem path for the path component of a URI.
+/// @brief Percent-encodes @p input per RFC 3986.
 ///
-/// Every byte outside the RFC 3986 unreserved set (`A-Za-z0-9` plus `-._~`) is replaced by
-/// an uppercase `%XX` triplet; `/` is preserved as the path separator. Encoding operates on
-/// raw bytes, so UTF-8 names are encoded per RFC 3986 (`ä` becomes `%C3%A4`).
+/// Every byte outside the unreserved set (`A-Za-z0-9` plus `-._~`) and outside @p extraSafe is
+/// replaced by an uppercase `%XX` triplet. Encoding operates on raw bytes, so UTF-8 text is
+/// encoded per RFC 3986 (`ä` becomes `%C3%A4`).
 ///
 /// Byte classification uses a compile-time table rather than `std::isalnum`, which is
 /// locale-dependent and would leave high bytes unencoded under some locales.
+///
+/// @param input Text to encode.
+/// @param extraSafe Additional bytes to pass through unencoded, e.g. `/` for a path component.
+///        Keep it short: membership is a linear scan per input byte.
+/// @return The percent-encoded text.
+[[nodiscard]] auto percentEncode(std::string_view input, std::string_view extraSafe = {}) -> std::string;
+
+/// @brief Appends percentEncode(@p input, @p extraSafe) to @p out.
+///
+/// The in-place form, for callers assembling a URI piecewise — a URI built from several encoded
+/// parts otherwise allocates a throwaway string per part.
+///
+/// @param out Destination to append to.
+/// @param input Text to encode.
+/// @param extraSafe Additional bytes to pass through unencoded.
+void appendPercentEncoded(std::string& out, std::string_view input, std::string_view extraSafe = {});
+
+/// @brief Percent-encodes a filesystem path for the path component of a URI.
+///
+/// percentEncode() with `/` kept as the separator.
 ///
 /// @param path Path with `/` separators (see normalizePath()).
 /// @return The percent-encoded path.
 [[nodiscard]] auto percentEncodeUriPath(std::string_view path) -> std::string;
 
 /// @brief Appends percentEncodeUriPath(@p path) to @p out.
-///
-/// The in-place form, for callers assembling a URI piecewise — a URI built from several encoded
-/// parts otherwise allocates a throwaway string per part.
-///
 /// @param out Destination to append to.
 /// @param path Path with `/` separators (see normalizePath()).
 void appendPercentEncodedUriPath(std::string& out, std::string_view path);

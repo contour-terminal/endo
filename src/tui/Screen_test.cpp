@@ -1510,3 +1510,25 @@ TEST_CASE("Screen.hyperlink_idIsStableAcrossRedrawsOfSameUri")
     REQUIRE(mock->hyperlinkRuns().size() == 2);
     CHECK(mock->hyperlinkRuns()[0].id == mock->hyperlinkRuns()[1].id);
 }
+
+TEST_CASE("Screen.fixedViewport_repaintsItsAreaAndClosesFraming")
+{
+    // Viewport::Fixed had no coverage at all, and its repaint is now the same routine fullscreen
+    // uses (flushArea), so this pins that the shared body still serves the fixed case: the area is
+    // painted, the link inside it is emitted once, and no framing leaks past the flush.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 4);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+    auto screen = Screen(terminal, ScreenConfig { .viewport = Viewport::Fullscreen });
+    screen.setViewport(Rect { .x = 0, .y = 0, .width = 80, .height = 1 });
+
+    auto comp = LinkedTextComponent {};
+    attachSingleRow(screen, comp);
+    screen.draw();
+
+    REQUIRE(mock->hyperlinkRuns().size() == 1);
+    CHECK(mock->hyperlinkRuns()[0].url == "file://box/a");
+    CHECK(mock->hyperlinkRuns()[0].text == "abcdefgh");
+    CHECK_FALSE(mock->hyperlinkOpen());
+    CHECK(mock->unbalancedHyperlinkCloses() == 0);
+}

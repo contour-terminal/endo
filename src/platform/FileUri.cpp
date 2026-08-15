@@ -8,17 +8,19 @@ namespace endo::platform
 
 namespace
 {
-    /// @brief Bytes that need no percent-encoding in a URI path.
+    /// @brief Bytes that need no percent-encoding under RFC 3986.
     ///
-    /// The RFC 3986 unreserved set plus `/`, spelled once as data. Built at compile time so
-    /// classification is a single indexed load and, unlike a ctype call, cannot vary with locale.
-    constexpr auto UriPathSafe = [] {
+    /// The unreserved set, spelled once as data. Built at compile time so classification is a
+    /// single indexed load and, unlike a ctype call, cannot vary with locale.
+    constexpr auto Unreserved = [] {
         auto table = std::array<bool, 256> {};
         for (auto const ch:
-             std::string_view { "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~/" })
+             std::string_view { "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~" })
             table[static_cast<unsigned char>(ch)] = true;
         return table;
     }();
+
+    constexpr auto PathSeparator = std::string_view { "/" };
 
     constexpr auto HexDigits = std::string_view { "0123456789ABCDEF" };
 
@@ -34,12 +36,12 @@ namespace
     }
 } // namespace
 
-void appendPercentEncodedUriPath(std::string& out, std::string_view path)
+void appendPercentEncoded(std::string& out, std::string_view input, std::string_view extraSafe)
 {
-    for (auto const ch: path)
+    for (auto const ch: input)
     {
         auto const byte = static_cast<unsigned char>(ch);
-        if (UriPathSafe[byte])
+        if (Unreserved[byte] || extraSafe.find(ch) != std::string_view::npos)
         {
             out += ch;
         }
@@ -52,12 +54,22 @@ void appendPercentEncodedUriPath(std::string& out, std::string_view path)
     }
 }
 
-auto percentEncodeUriPath(std::string_view path) -> std::string
+auto percentEncode(std::string_view input, std::string_view extraSafe) -> std::string
 {
     auto encoded = std::string {};
-    encoded.reserve(path.size());
-    appendPercentEncodedUriPath(encoded, path);
+    encoded.reserve(input.size());
+    appendPercentEncoded(encoded, input, extraSafe);
     return encoded;
+}
+
+void appendPercentEncodedUriPath(std::string& out, std::string_view path)
+{
+    appendPercentEncoded(out, path, PathSeparator);
+}
+
+auto percentEncodeUriPath(std::string_view path) -> std::string
+{
+    return percentEncode(path, PathSeparator);
 }
 
 auto fileUri(std::string_view absolutePath, std::string_view host, std::string_view fragment) -> std::string

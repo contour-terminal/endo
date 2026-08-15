@@ -656,8 +656,7 @@ void Shell::registerStructuredBuiltins()
             if (!parsed.has_value())
             {
                 // On parse error, return empty list
-                auto* list = _runner->allocObject(CoreVM::BuiltinTypeId::List);
-                list->tag = 0; // Nil
+                auto* list = _runner->makeNilList(CoreVM::LiteralType::Object);
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
                 return;
             }
@@ -686,8 +685,7 @@ void Shell::registerStructuredBuiltins()
                     auto pipeResult = createPipe();
                     if (!pipeResult.has_value())
                     {
-                        auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                        nil->tag = 0;
+                        auto* nil = args.caller()->makeNilList(CoreVM::LiteralType::Object);
                         args.setResult(
                             static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
                         return;

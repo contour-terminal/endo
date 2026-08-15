@@ -103,6 +103,12 @@ class Shell final: public SignalCallback
 
     [[nodiscard]] FileSystem const& fs() const noexcept { return _fs; }
 
+    /// @brief The VM runtime holding this shell's registered builtins and properties.
+    ///
+    /// Read-only, and exposed so a test can check the registrations against the descriptor table
+    /// they are supposed to mirror.
+    [[nodiscard]] CoreVM::Runtime const& runtime() const noexcept { return _runtime; }
+
     void setOptimize(bool optimize);
 
     /// Set check-only mode (compile without executing).

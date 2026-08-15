@@ -78,6 +78,8 @@ add_library(endo STATIC
     builtins/BuiltinSignatures.cpp
     builtins/BuiltinImpls.hpp
     builtins/BuiltinImpls.cpp
+    builtins/RecordWriter.hpp
+    builtins/RecordWriter.cpp
     builtins/PropertyDescriptors.hpp
     builtins/PropertyDescriptors.cpp
     builtins/StdlibDescriptors.hpp
@@ -136,6 +138,7 @@ if(ENDO_TESTING)
         codegen/StringBuiltins_test.cpp
         codegen/HttpServeCodegen_test.cpp
         builtins/JsonQuery_test.cpp
+        builtins/RecordWriter_test.cpp
         builtins/StdlibDescriptors_test.cpp
         module/Module_test.cpp
 

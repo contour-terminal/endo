@@ -119,7 +119,9 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
     {
         auto const patternPath = fs::path(path);
         auto parentDir = patternPath.parent_path();
-        auto const filePattern = patternPath.filename().string();
+        // normalizePath(), not path::string(): the latter converts to the ANSI code page and throws
+        // on any name it cannot represent, which would take the whole listing down.
+        auto const filePattern = normalizePath(patternPath.filename());
 
         if (parentDir.empty())
             parentDir = ".";
@@ -131,7 +133,7 @@ std::vector<FileEntry> WindowsFileInfoProvider::listDirectory(std::string const&
             if (ec)
                 break;
 
-            auto const filename = entry.path().filename().string();
+            auto const filename = normalizePath(entry.path().filename());
             if (endo::globMatchFilename(filename, filePattern))
             {
                 FileEntry fileEntry {};

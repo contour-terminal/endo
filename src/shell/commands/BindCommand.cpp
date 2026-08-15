@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "BindCommand.hpp"
 
+#include <endo-language/builtins/RecordWriter.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
@@ -22,25 +24,16 @@ CoreVM::TypedObject* BindCommand::execute(CoreVM::Runner& runner) const
 {
     auto const bindings = _bindings.bindings();
 
-    // Start with Nil (empty list)
-    auto* list = runner.allocObject(CoreVM::BuiltinTypeId::List);
-    list->tag = 0; // Nil
+    auto* list = runner.makeNilList(CoreVM::LiteralType::Object);
 
     // Build cons-cell list right-to-left so the result is in original order
     for (auto const& [chord, action]: std::ranges::reverse_view(bindings))
     {
-        // Allocate a KeyBindingInfo record
-        auto* record = runner.allocObject(CoreVM::BuiltinTypeId::KeyBindingInfo);
-        record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(chord.toString())));
-        record->setSlot(
-            1, reinterpret_cast<uintptr_t>(runner.newString(std::string(tui::editActionToString(action)))));
+        auto writer = builtins::RecordWriter { &runner, CoreVM::BuiltinTypeId::KeyBindingInfo };
+        auto* record =
+            writer.set("key", chord.toString()).set("action", tui::editActionToString(action)).record();
 
-        // Cons this record onto the list
-        auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);
-        cons->tag = 1; // Cons
-        cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-        cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-        list = cons;
+        list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
     }
 
     return list;

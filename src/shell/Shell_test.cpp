@@ -5499,3 +5499,50 @@ TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
 #endif
     CHECK(output.find("subdir") != std::string::npos);
 }
+
+// ============================================================================
+// Property descriptors vs. shell registrations
+// ============================================================================
+
+#include <endo-language/builtins/PropertyDescriptors.hpp>
+
+#include <CoreVM/vm/Runtime.hpp>
+
+#include <set>
+
+TEST_CASE("shell.properties.descriptors_and_registrations_agree")
+{
+    // PropertyDescriptors.hpp calls itself the single source of truth for property metadata, but
+    // the shell's registrations are hand-written in Registration.cpp and until now nothing checked
+    // that the two agree. Both directions fail silently, which is why a test is worth having: a
+    // descriptor with no registration type-checks and then does nothing at runtime, and a
+    // registration with no descriptor is invisible to hover, completion and the LSP.
+    TestShell shell;
+    auto const& runtime = shell.shell.runtime();
+
+    auto declared = std::set<std::string> {};
+    for (auto const descriptors: { endo::promptPropertyDescriptors(), endo::agentPropertyDescriptors() })
+    {
+        for (auto const& descriptor: descriptors)
+        {
+            declared.emplace(descriptor.name);
+
+            INFO("property: " << descriptor.name);
+            auto const* registered = runtime.findProperty(std::string { descriptor.name });
+            REQUIRE(registered != nullptr);
+            CHECK(registered->type() == descriptor.type);
+            CHECK(registered->hasGetter());
+            // A read-only property must reject assignment at the VM layer too, not only in sema.
+            CHECK(registered->hasSetter() == !descriptor.readOnly);
+        }
+    }
+
+    for (auto const& registered: runtime.properties())
+    {
+        auto const& name = registered->name();
+        if (!name.starts_with("shell_") && !name.starts_with("agent_"))
+            continue;
+        INFO("property: " << name);
+        CHECK(declared.contains(name));
+    }
+}

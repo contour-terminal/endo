@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/FileManager.hpp>
+#include <endo-language/builtins/RecordWriter.hpp>
 #include <endo-language/builtins/StdlibDescriptors.hpp>
 #include <endo-language/builtins/TypeFormatters.hpp>
 
@@ -821,32 +822,18 @@ CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode)
 
 CoreVM::TypedObject* makeFileInfoRecord(CoreVM::Runner* runner, FileInfoFields const& fields)
 {
-    // The slot numbers below are FileInfo's layout as declared in CoreVM's TypeRegistry, and this
-    // is the only code that spells them out — every producer of ls-shaped records comes through
-    // here. String slots use the runner's shared empty-string sentinel rather than nullptr, both
-    // because a null CoreString misbehaves on read and because it saves an allocation per entry.
-    auto const intern = [runner](std::string_view text) -> CoreVM::CoreString const* {
-        return text.empty() ? runner->emptyString() : runner->newString(std::string { text });
-    };
-
-    auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
-    auto const* const nameString = intern(fields.name);
-    record->setSlot(0, reinterpret_cast<uintptr_t>(nameString));
-    record->setSlot(1, reinterpret_cast<uintptr_t>(makeSizeFromBytes(runner, fields.size)));
-    record->setSlot(2, reinterpret_cast<uintptr_t>(makeFileModeFromBits(runner, fields.mode)));
-    record->setSlot(3, reinterpret_cast<uintptr_t>(makeDateTimeFromEpoch(runner, fields.mtime)));
-    record->setSlot(4, static_cast<uint64_t>(fields.isDir ? 1 : 0));
-    record->setSlot(5, static_cast<uint64_t>(fields.isSymlink ? 1 : 0));
-    record->setSlot(6, reinterpret_cast<uintptr_t>(intern(fields.symlinkTarget)));
-
-    // A producer whose name already is the absolute path (`find /abs`, or a listing addressed
-    // absolutely) shares the one string instead of allocating an identical second one.
-    auto const* pathString = nameString;
-    if (fields.path != fields.name)
-        pathString = intern(fields.path);
-    record->setSlot(7, reinterpret_cast<uintptr_t>(pathString));
-
-    return record;
+    // The typed façade over RecordWriter for the record with the most producers. Field names, not
+    // slot numbers: the layout is CoreVM's to declare.
+    auto writer = RecordWriter { runner, CoreVM::BuiltinTypeId::FileInfo };
+    writer.set("name", fields.name)
+        .set("size", makeSizeFromBytes(runner, fields.size))
+        .set("mode", makeFileModeFromBits(runner, fields.mode))
+        .set("mtime", makeDateTimeFromEpoch(runner, fields.mtime))
+        .set("isDir", fields.isDir)
+        .set("isSymlink", fields.isSymlink)
+        .set("target", fields.symlinkTarget)
+        .set("path", fields.path);
+    return writer.record();
 }
 
 void fileModeFromBits(CoreVM::Params& args)
