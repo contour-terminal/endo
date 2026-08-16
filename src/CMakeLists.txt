@@ -47,8 +47,6 @@ if(_need_fetch)
     endif()
 endif()
 
-add_subdirectory(coro)
-set_target_properties(coro PROPERTIES SYSTEM TRUE)
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
 set_target_properties(crispy-core PROPERTIES SYSTEM TRUE)
@@ -59,6 +57,12 @@ if(NOT EMSCRIPTEN)
     add_subdirectory(vtparser)
     set_target_properties(vtparser PROPERTIES SYSTEM TRUE)
     add_subdirectory(platform)
+    # Only net and tui link coro, and both are native-only. Configuring it under
+    # Emscripten would buy nothing and cost the build: coro fails configure
+    # outright when the standard library has no <stop_token>, which is exactly
+    # what Emscripten's libc++ reports.
+    add_subdirectory(coro)
+    set_target_properties(coro PROPERTIES SYSTEM TRUE)
     # net sits below tui now: it drives its own net::EventLoop reactor rather than
     # borrowing the TUI runtime's, so it depends on coro alone.
     add_subdirectory(net)

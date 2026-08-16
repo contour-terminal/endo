@@ -177,8 +177,17 @@ cmake --build --preset clang-release
 `USE_COMPILER_CACHE` (default ON, `cmake/CompileCache.cmake`) fronts the compiler with a caching
 launcher. It picks the first of these that is installed and usable:
 
-1. `fastcache-cc` — only when `FASTCACHE_ADDR=host:port` names a running fastcached daemon. Its
-   cache entries are portable across checkout paths, so CI and local builds share hits.
+1. `fastcache-cc` — picked whenever a fastcached daemon actually answers. The address defaults to
+   fastcached's own port, `127.0.0.1:6674`, so an installed daemon needs no configuration;
+   `FASTCACHE_ADDR=host:port` in the environment points it at any other daemon, local or remote,
+   and takes effect on the next configure of an existing build tree too, rather than being frozen
+   at what the first one saw; `-DFASTCACHE_ADDR=host:port` overrides even that for the run it is
+   passed on, and an empty value opts out. Configure
+   verifies the cache end to end by compiling one tiny file through the launcher — ~0.1 s when a
+   daemon answers, capped at 10 s when none does — and falls through to the next launcher when
+   nothing answers, naming the address it tried. `fastcache-cc` never fails a build, it just stops
+   caching, so being told is the point. Its cache entries are portable across checkout paths, so
+   CI and local builds share hits.
 2. `sccache`
 3. `ccache`
 
