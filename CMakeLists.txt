@@ -136,8 +136,9 @@ endif()
 
 # Set up the compiler-cache launcher before EndoThirdParties, so the sources CPM
 # and FetchContent pull in get cached too. CompileCache.cmake prefers fastcache-cc
-# when FASTCACHE_ADDR points at a daemon, else sccache, else ccache, and silently
-# no-ops when none is usable or USE_COMPILER_CACHE=OFF.
+# when a fastcached daemon answers (127.0.0.1:6674 unless FASTCACHE_ADDR says
+# otherwise), else sccache, else ccache, and silently no-ops when none is usable
+# or USE_COMPILER_CACHE=OFF.
 include(CompileCache)
 include(StaticLinking)
 include(EndoThirdParties)

@@ -1382,6 +1382,10 @@ and — as the flagship language consumer — a builtin HTTP server.
   - [x] CPM-built dependencies when static: yaml-cpp, libunicode, CURL with mbedTLS backend
   - [x] Guard `-rdynamic` when static (incompatible with `-static`)
   - [x] CI workflow for static build artifact (`static-build.yml`)
+- [x] Compiler-cache launcher selection (`USE_COMPILER_CACHE`, `cmake/CompileCache.cmake`)
+  - [x] Prefer `fastcache-cc`, then `sccache`, then `ccache`; respect a launcher set externally
+  - [x] Select `fastcache-cc` only when a fastcached daemon answers — `127.0.0.1:6674` unless `FASTCACHE_ADDR` says otherwise — verified at configure time by compiling one file through it
+  - [x] Disable precompiled headers and C++20 module scanning, and force MSVC `/Z7`, while a launcher is active
 - [x] Add Windows CMake preset (4 presets: cl-debug, cl-release, clangcl-debug, clangcl-release)
 - [x] Configure MSVC and Clang-cl support (`PedanticCompiler.cmake` handles both)
 - [x] Set up Windows CI pipeline (`build.yml` has `windows-clangcl` job)
