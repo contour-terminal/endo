@@ -45,15 +45,41 @@ find_program(FASTCACHE_CC fastcache-cc DOC "fastcache-cc tool path; needs a fast
 find_program(SCCACHE sccache DOC "sccache tool path")
 find_program(CCACHE ccache DOC "ccache tool path")
 
-# An address in the environment wins; otherwise fastcached's own port, which a
-# stock daemon (and the service the installers register) listens on. An empty
-# -DFASTCACHE_ADDR= opts out of fastcache-cc entirely.
-set(_fc_addr_initial "$ENV{FASTCACHE_ADDR}")
-if(_fc_addr_initial STREQUAL "")
-    set(_fc_addr_initial "127.0.0.1:6674")
+# Where the daemon is: FASTCACHE_ADDR from the environment, else fastcached's
+# own port, which a stock daemon (and the service the installers register)
+# listens on. An empty -DFASTCACHE_ADDR= opts out of fastcache-cc entirely.
+set(_fc_addr_env "$ENV{FASTCACHE_ADDR}")
+if(_fc_addr_env STREQUAL "")
+    set(_fc_addr_wanted "127.0.0.1:6674")
+else()
+    set(_fc_addr_wanted "${_fc_addr_env}")
 endif()
-set(FASTCACHE_ADDR "${_fc_addr_initial}" CACHE STRING
-    "host:port of the fastcached compile-cache daemon, 127.0.0.1:6674 by default (empty disables the fastcache-cc launcher)")
+
+# Ordinary cache semantics would freeze the address at whatever the first
+# configure saw, so exporting FASTCACHE_ADDR to reach a remote daemon would do
+# nothing until the build tree was wiped. Track the environment across
+# configures instead and let a *change* to it retarget the cache entry — while
+# leaving a -D from this very run alone, which is the one instruction more
+# deliberate than the environment. The two are told apart by whether the cache
+# still holds what this module last put there, which is also why the retarget
+# needs a previous configure to compare against: on a first configure there is
+# no bookkeeping yet, both tests hold vacuously, and a -DFASTCACHE_ADDR= meant
+# to opt out would be overwritten by an address merely left in the environment.
+if(NOT DEFINED CACHE{FASTCACHE_ADDR})
+    set(FASTCACHE_ADDR "${_fc_addr_wanted}" CACHE STRING
+        "host:port of the fastcached compile-cache daemon, 127.0.0.1:6674 by default (empty disables the fastcache-cc launcher)")
+elseif(DEFINED CACHE{_FASTCACHE_ADDR_APPLIED}
+       AND NOT _fc_addr_env STREQUAL "${_FASTCACHE_ADDR_ENV_SEEN}"
+       AND FASTCACHE_ADDR STREQUAL "${_FASTCACHE_ADDR_APPLIED}")
+    message(STATUS "[cache] FASTCACHE_ADDR changed in the environment; retargeting to ${_fc_addr_wanted}")
+    set(FASTCACHE_ADDR "${_fc_addr_wanted}" CACHE STRING
+        "host:port of the fastcached compile-cache daemon, 127.0.0.1:6674 by default (empty disables the fastcache-cc launcher)"
+        FORCE)
+endif()
+set(_FASTCACHE_ADDR_ENV_SEEN "${_fc_addr_env}" CACHE INTERNAL
+    "FASTCACHE_ADDR as the environment last presented it, to notice a change on reconfigure")
+set(_FASTCACHE_ADDR_APPLIED "${FASTCACHE_ADDR}" CACHE INTERNAL
+    "the address this module last applied, to tell its own value from one set externally")
 
 # How fastcache-cc is configured, in one place: the probe below must test the
 # very environment the build will use, or it would vouch for a configuration
