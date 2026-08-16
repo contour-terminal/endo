@@ -92,6 +92,15 @@ function(_fc_probe_fastcache_cc outVar reasonVar)
         set(_args -c "${_src}" -o "${_dir}/probe.o")
     endif()
 
+    # A probe that answers takes ~0.1s locally and little more over a LAN, so ten
+    # seconds is generous for a working daemon and a bounded wait for a broken
+    # one. The cap has to live here: FASTCACHE_TIMEOUT_MS bounds the launcher's
+    # send/recv but not its connect(), so an address that drops packets rather
+    # than refusing them — a firewall, a downed VPN, a host that is simply gone —
+    # stalls on the TCP connect timeout instead (measured: 2m30s), and every
+    # configure would pay it.
+    set(_timeoutSeconds 10)
+
     # NO_STATS keeps the probe out of `fastcache-cc --show-stats`, where it would
     # read as a build that never hits. TIMEOUT_MS bounds a daemon that accepts
     # the connection and then stalls; builds keep the launcher's own default.
@@ -103,11 +112,14 @@ function(_fc_probe_fastcache_cc outVar reasonVar)
                 "FASTCACHE_TIMEOUT_MS=2000"
                 "${FASTCACHE_CC}" "${CMAKE_CXX_COMPILER}" ${_args}
         WORKING_DIRECTORY "${_dir}"
+        TIMEOUT ${_timeoutSeconds}
         RESULT_VARIABLE _rc
         OUTPUT_QUIET
         ERROR_VARIABLE _err)
 
-    if(NOT _rc EQUAL 0)
+    if(_rc MATCHES "[Tt]imeout")
+        set(${reasonVar} "no answer within ${_timeoutSeconds}s" PARENT_SCOPE)
+    elseif(NOT _rc EQUAL 0)
         set(${reasonVar} "probe compile failed (${_rc})" PARENT_SCOPE)
     elseif(_err MATCHES "fastcache-cc: (HIT|MISS) key=")
         set(${outVar} TRUE PARENT_SCOPE)
@@ -131,6 +143,19 @@ endfunction()
 #   _fc_cache_<id>_detail    extra words for the status message (empty for none)
 # Supporting a fourth launcher is adding an id here plus its six variables.
 set(_fc_cache_candidates fastcache_cc sccache ccache)
+
+# Render "<label>[ <detail>]" for a row, so a launcher and where it points are
+# named the same way whether it won or was passed over. Diagnosing a daemon that
+# did not answer starts with knowing which address was tried.
+# @param id Row id from _fc_cache_candidates.
+# @param outVar Receives the rendered text.
+function(_fc_cache_describe id outVar)
+    set(_text "${_fc_cache_${id}_label}")
+    if(_fc_cache_${id}_detail)
+        string(APPEND _text " ${_fc_cache_${id}_detail}")
+    endif()
+    set(${outVar} "${_text}" PARENT_SCOPE)
+endfunction()
 
 set(_fc_cache_fastcache_cc_label "fastcache-cc")
 set(_fc_cache_fastcache_cc_program "${FASTCACHE_CC}")
@@ -165,7 +190,8 @@ if(USE_COMPILER_CACHE)
             if(NOT _fc_cache_usable)
                 # Remember why, so a fall-through to a slower launcher explains
                 # itself rather than looking like the faster one was never there.
-                list(APPEND _fc_cache_rejected "${_fc_cache_${_id}_label}: ${_fc_cache_why_not}")
+                _fc_cache_describe("${_id}" _fc_cache_desc)
+                list(APPEND _fc_cache_rejected "${_fc_cache_desc}: ${_fc_cache_why_not}")
                 continue()
             endif()
         endif()
@@ -181,7 +207,6 @@ foreach(_rejection IN LISTS _fc_cache_rejected)
 endforeach()
 
 if(_fc_cache_chosen)
-    set(_fc_cache_label "${_fc_cache_${_fc_cache_chosen}_label}")
     set(_fc_cache_program "${_fc_cache_${_fc_cache_chosen}_program}")
 
     # `cmake -E env NAME=VALUE ... <program>` is the only way to attach
@@ -196,12 +221,8 @@ if(_fc_cache_chosen)
         set(_fc_cache_launcher "${_fc_cache_program}")
     endif()
 
-    set(_fc_cache_detail "${_fc_cache_${_fc_cache_chosen}_detail}")
-    if(_fc_cache_detail)
-        string(PREPEND _fc_cache_detail " ")
-    endif()
-    message(STATUS "[cache] Enabling ${_fc_cache_label} (${_fc_cache_program})${_fc_cache_detail} "
-                   "for C/C++ compilation")
+    _fc_cache_describe("${_fc_cache_chosen}" _fc_cache_desc)
+    message(STATUS "[cache] Enabling ${_fc_cache_desc} (${_fc_cache_program}) for C/C++ compilation")
     set(CMAKE_C_COMPILER_LAUNCHER ${_fc_cache_launcher})
     set(CMAKE_CXX_COMPILER_LAUNCHER ${_fc_cache_launcher})
 

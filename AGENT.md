@@ -179,11 +179,13 @@ launcher. It picks the first of these that is installed and usable:
 
 1. `fastcache-cc` — picked whenever a fastcached daemon actually answers. The address defaults to
    fastcached's own port, `127.0.0.1:6674`, so an installed daemon needs no configuration;
-   `FASTCACHE_ADDR=host:port` (environment or `-DFASTCACHE_ADDR=`) points it elsewhere, and an
-   empty value opts out. Configure verifies the cache end to end by compiling one tiny file
-   through the launcher (~0.1 s), and falls through to the next launcher when nothing answers —
-   `fastcache-cc` never fails a build, it just stops caching, so being told is the point. Its
-   cache entries are portable across checkout paths, so CI and local builds share hits.
+   `FASTCACHE_ADDR=host:port` in the environment points it at any other daemon, local or remote,
+   and `-DFASTCACHE_ADDR=host:port` overrides even that (an empty value opts out). Configure
+   verifies the cache end to end by compiling one tiny file through the launcher — ~0.1 s when a
+   daemon answers, capped at 10 s when none does — and falls through to the next launcher when
+   nothing answers, naming the address it tried. `fastcache-cc` never fails a build, it just stops
+   caching, so being told is the point. Its cache entries are portable across checkout paths, so
+   CI and local builds share hits.
 2. `sccache`
 3. `ccache`
 
