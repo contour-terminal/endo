@@ -226,6 +226,15 @@ if(EMSCRIPTEN)
     endif()
 endif()
 
+# The vendored crispy and net link Threads::Threads from their own CMakeLists, but
+# neither calls find_package(Threads) -- upstream contour does it once at its top level.
+# find_package imported targets are scoped to the directory that created them and its
+# subdirectories, so the calls further down in src/platform and src/shell come both too
+# late and in the wrong scope for crispy and net. Do it here, above add_subdirectory(src),
+# where every subdirectory can see the target.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 add_subdirectory(src)
 EndoThirdPartiesSummary2()
 message(STATUS "==============================================================================")
