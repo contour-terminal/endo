@@ -945,6 +945,20 @@ endo::CommandSpecCompleter createProcessNameCompleter(endo::ProcessProvider cons
 
 } // namespace
 
+TEST_CASE("CommandSpecCompleter.top_level_dynamic_query_is_exclusive")
+{
+    // Specs generated from InlineCommandDescriptor keep their positionals at the *top level*
+    // (no subcommands), which isExclusiveFor() used to ignore -- so FileCompleter mixed local
+    // filenames into pgrep/pidof/pkill (and `which`) results. Path-shaped prefixes must still
+    // opt out, since those commands accept a path too.
+    auto const provider = createMockProcessProvider();
+    auto completer = createProcessNameCompleter(provider, "pidof", /*repeatable=*/true);
+
+    CHECK(completer.isExclusiveFor(makeGitContext("pidof sle", "sle", "pidof")));
+    CHECK_FALSE(completer.isExclusiveFor(makeGitContext("pidof ./sle", "./sle", "pidof")));
+    CHECK_FALSE(completer.isExclusiveFor(makeGitContext("pidof /usr/bin/sle", "/usr/bin/sle", "pidof")));
+}
+
 TEST_CASE("CommandSpecCompleter.pidof_completes_process_names")
 {
     auto const provider = createMockProcessProvider();

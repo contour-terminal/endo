@@ -93,14 +93,18 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         return !optDef || optDef->valueKind != OptionValueKind::Path;
     }
 
-    // Exclusive when completing DynamicQuery positional arguments (unless prefix looks like a file path)
+    // Exclusive when completing DynamicQuery positional arguments (unless prefix looks like a file path).
+    // Specs without subcommands keep their positionals at the top level, so fall back to those --
+    // the same fallback completeArgument() makes. Without it every generated builtin spec (pgrep,
+    // pidof, pkill) and `which` would let FileCompleter mix local filenames into the results.
     if (state->phase == CompletionPhase::Argument)
     {
         auto const* sub = resolveSubcommand(cmd.spec, state->subcommandChain);
-        if (sub && !sub->positionalArgs.empty())
+        auto const& argDefs = sub ? sub->positionalArgs : cmd.spec.positionalArgs;
+        if (!argDefs.empty())
         {
-            auto argIdx = std::min(state->positionalArgIndex, sub->positionalArgs.size() - 1);
-            auto const& argDef = sub->positionalArgs[argIdx];
+            auto argIdx = std::min(state->positionalArgIndex, argDefs.size() - 1);
+            auto const& argDef = argDefs[argIdx];
             if (argDef.kind == ArgKind::Subcommand)
                 return true;
             if (argDef.kind == ArgKind::DynamicQuery)
