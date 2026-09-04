@@ -23,6 +23,27 @@ $ gi<Tab>
   git   gist   gimp   ...
 ```
 
+### Program Name Completion
+
+Some arguments name a *program* rather than a file. `which` is the clearest case: its
+arguments are looked up in `$PATH`, so completing them against the current directory would
+offer names it cannot resolve. There, endo completes `$PATH` executables instead, annotated
+with the path each one resolves to:
+
+```
+$ which gi<Tab>
+  git       /usr/bin/git
+  git-lfs   /usr/bin/git-lfs
+  gio       /usr/bin/gio
+```
+
+File-path suggestions are suppressed while the prefix looks like a program name. Because
+`which` also accepts a path argument, a path-shaped prefix (`./`, `/`, `~`) switches back to
+file completion.
+
+The same applies to commands whose arguments name a running process -- `pgrep`, `pidof` and
+`pkill` complete against live process names.
+
 ### File Path Completion
 
 Anywhere an argument is expected, endo completes file and directory paths. Tilde expansion

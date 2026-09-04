@@ -282,17 +282,38 @@ quoted strings like `which "git"` or parenthesized expressions like `which (name
 **Syntax:**
 
 ```
-which command
+which [OPTIONS] PROGRAM...
 ```
 
-Searches `$PATH` for *command* and prints its absolute path to stdout. Returns exit code `0`
-on success or `1` if the command is not found.
+Searches `$PATH` for each *PROGRAM* and prints its absolute path to stdout. An argument
+containing a path separator is treated as a path and reported as-is if it exists, rather
+than being looked up in `$PATH`. Returns exit code `0` only if every program was found,
+`1` if any was not.
+
+Called with no program names, `which` prints its help.
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-a`, `--all` | Print all matching executables in `$PATH`, not just the first |
+| `-i`, `--read-alias` | Also show aliases (not yet implemented -- warns and continues) |
+| `-h`, `--help` | Display help |
+
+Note that the shell form searches `$PATH` only: it does not report shell builtins, so
+`which cd` fails even though `cd` is a valid command.
+
+**Completion:** the argument completes to program names on `$PATH`, each annotated with the
+path it resolves to. A path-shaped prefix (`./`, `/`, `~`) completes as a file path instead.
 
 **Examples:**
 
 ```endo
 which git
 # /usr/bin/git
+
+# Several programs in one call; exit code is 0 only if all were found
+which git cargo
 
 which nonexistent
 # (returns exit code 1)
