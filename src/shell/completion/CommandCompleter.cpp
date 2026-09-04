@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CommandCompleter.hpp"
-#include <shell/Shell.hpp>
 #include <shell/completion/CompletionAdapter.hpp>
+#include <shell/history/RequiredPaths.hpp>
 
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
@@ -28,14 +28,14 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
 
     // Build PATH command candidates with resolved path as description
     auto const& pathCommands = _pathCommands.entries();
-    auto const home = homeDirectory(_env);
+    auto const home = normalizedHomeDirectory(_env);
 
     std::vector<CompletionCandidate> pathCandidates;
     pathCandidates.reserve(pathCommands.size());
     for (auto const& [cmd, fullPath]: pathCommands)
         pathCandidates.push_back(CompletionCandidate { .text = cmd,
                                                        .displayText = cmd,
-                                                       .description = collapseHomePrefix(fullPath, home),
+                                                       .description = canonicalizeForHistory(fullPath, home),
                                                        .detail = {},
                                                        .kind = CompletionKind::Command });
 
@@ -95,11 +95,6 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
 bool CommandCompleter::canHandle(CompletionContextType type) const
 {
     return type == CompletionContextType::Command;
-}
-
-std::vector<std::string> CommandCompleter::builtinNames()
-{
-    return endo::userFacingBuiltinNames();
 }
 
 } // namespace endo

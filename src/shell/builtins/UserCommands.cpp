@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/builtins/InlineArgParser.hpp>
 #include <shell/builtins/WhichDescriptor.hpp>
 #include <shell/commands/BindCommand.hpp>
 #include <shell/output/TableFormatter.hpp>
@@ -213,43 +214,33 @@ void Shell::builtinWhich(CoreVM::Params& context)
             args.push_back(i);
     }
 
-    // Parse flags against whichDescriptor()'s option table -- the same declaration that
-    // drives the help text below and the completion spec, so a new flag is one new row.
-    auto const& options = whichDescriptor().options;
+    // Parse against whichDescriptor()'s option table through the shared parser, so `which`
+    // accepts the same forms as every other descriptor-driven builtin -- bundled shorts
+    // (-ai), --flag=value and a `--` end-of-options marker -- from one declaration that also
+    // drives the help text below and the completion spec.
+    auto argv = CoreVM::CoreStringArray {};
+    argv.reserve(args.size() + 1);
+    argv.emplace_back("which"); // parseInlineArgs() skips argv[0] as the command name
+    argv.insert(argv.end(), args.begin(), args.end());
 
-    bool showAll = false;
-    bool showHelp = false;
-    bool readAlias = false;
-    std::vector<std::string> programs;
+    auto const parsed = parseInlineArgs(argv, whichDescriptor().options);
+    auto const& programs = parsed.positionalArgs;
+    bool const showAll = parsed.hasFlag("-a");
+    bool const readAlias = parsed.hasFlag("-i");
 
-    for (auto const& arg: args)
+    // parseInlineArgs() demotes an unrecognised flag to a positional argument. `which` reports
+    // it rather than searching $PATH for a program literally named "-x" -- except after `--`,
+    // where a leading dash is part of a genuine file name.
+    if (std::ranges::find(args, "--") == args.end())
     {
-        if (arg == "-h" || arg == "--help")
+        auto const unknown = std::ranges::find_if(programs, [](auto const& p) { return p.starts_with('-'); });
+        if (unknown != programs.end())
         {
-            showHelp = true;
-            continue;
-        }
-
-        if (!arg.starts_with("-"))
-        {
-            programs.push_back(arg);
-            continue;
-        }
-
-        auto const opt = std::ranges::find_if(
-            options, [&](InlineOptionDef const& o) { return arg == o.shortFlag || arg == o.longFlag; });
-        if (opt == options.end())
-        {
-            error("which: invalid option: {}", arg);
+            error("which: invalid option: {}", *unknown);
             _exitCode = 1;
             context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
-
-        if (opt->shortFlag == "-a")
-            showAll = true;
-        else if (opt->shortFlag == "-i")
-            readAlias = true;
     }
 
     // Helper to write output to the effective stdout (respects redirects and test environments)
@@ -260,7 +251,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
     };
 
     // Show help if requested or no arguments given
-    if (showHelp || programs.empty())
+    if (parsed.helpRequested || programs.empty())
     {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);

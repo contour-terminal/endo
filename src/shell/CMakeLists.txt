@@ -106,6 +106,7 @@ add_library(endo-shell STATIC
     completion/HistorySpec.cpp
     completion/BuiltinSpecs.hpp
     completion/BuiltinSpecs.cpp
+    completion/CompositeQueryProvider.hpp
     completion/PathCommandIndex.hpp
     completion/PathCommandIndex.cpp
     completion/PathCommandQueryProvider.hpp
@@ -322,6 +323,7 @@ if(ENDO_TESTING)
         completion/CommandSpecCompleter_test.cpp
         completion/CompleterFunctionRegistry_test.cpp
         completion/ScriptedCompleter_test.cpp
+        completion/CompletionTestSupport.hpp
         completion/WhichCompletion_test.cpp
         history/History_test.cpp
         history/PersistentHistory_test.cpp

@@ -22,7 +22,6 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
     auto options = FuzzySearchOptions {
         .currentCwd = _env.currentDirectory(),
         .home = normalizedHomeDirectory(_env),
-        .validateRequiredPaths = true,
         .fs = &_fs,
     };
     auto matches = _history.searchFuzzy(context.fullInput, 10, options);

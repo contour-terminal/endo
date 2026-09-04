@@ -34,8 +34,6 @@ class CommandCompleter: public CompletionProvider
     PathCommandIndex const& _pathCommands;
     EnvironmentProvider const& _env;
     History const& _history;
-
-    [[nodiscard]] static std::vector<std::string> builtinNames();
 };
 
 } // namespace endo

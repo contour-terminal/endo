@@ -10,6 +10,7 @@
 
 #include "CommandLineParser.hpp"
 #include "CommandSpecCompleter.hpp"
+#include "CompletionTestSupport.hpp"
 #include "GitSpec.hpp"
 #include "QueryCache.hpp"
 #include <platform/testing/MockProcessProvider.hpp>
@@ -19,48 +20,23 @@ using namespace std::string_literals;
 namespace
 {
 
-/// @brief Helper to create an Argument-type CompletionContext for git commands.
+/// @brief Argument-type CompletionContext, defaulting to a git command line.
 endo::CompletionContext makeGitContext(std::string fullInput,
-                                       std::string prefix = "",
+                                       std::string const& prefix = "",
                                        std::string command = "git")
 {
-    auto const cursor = fullInput.size();
-    auto const prefixStart = cursor - prefix.size();
-    return endo::CompletionContext {
-        .type = endo::CompletionContextType::Argument,
-        .prefix = std::move(prefix),
-        .prefixStart = prefixStart,
-        .cursorPosition = cursor,
-        .command = std::move(command),
-        .fullInput = std::move(fullInput),
-    };
+    return endo::test::makeArgumentContext(std::move(fullInput), prefix, std::move(command));
 }
 
-/// @brief Helper to create an Option-type CompletionContext.
+/// @brief Option-type CompletionContext, defaulting to a git command line.
 endo::CompletionContext makeOptionContext(std::string fullInput,
-                                          std::string prefix,
+                                          std::string const& prefix,
                                           std::string command = "git")
 {
-    auto const cursor = fullInput.size();
-    auto const prefixStart = cursor - prefix.size();
-    return endo::CompletionContext {
-        .type = endo::CompletionContextType::Option,
-        .prefix = std::move(prefix),
-        .prefixStart = prefixStart,
-        .cursorPosition = cursor,
-        .command = std::move(command),
-        .fullInput = std::move(fullInput),
-    };
+    return endo::test::makeOptionContext(std::move(fullInput), prefix, std::move(command));
 }
 
-/// @brief Helper to check if a specific text is in the completions.
-bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string const& text)
-{
-    for (auto const& item: items)
-        if (item.text == text)
-            return true;
-    return false;
-}
+using endo::test::hasCompletion;
 
 /// @brief Mock query provider for testing without running git commands.
 class MockQueryProvider: public endo::CommandQueryProvider

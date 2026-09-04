@@ -138,27 +138,13 @@ std::vector<std::string> CommandResolver::findAllInPath(std::string_view command
 
 std::vector<std::string> CommandResolver::search(std::string_view command, bool firstOnly) const
 {
-    auto const pathEnv = _env.get("PATH");
-    if (!pathEnv)
-        return {};
-
-#if defined(_WIN32)
-    auto const pathSep = ';';
-#else
-    auto const pathSep = ':';
-#endif
-
     // Candidate file names are independent of the PATH directory, so compute them once.
     auto const names = candidateNames(_env, command);
 
     auto results = std::vector<std::string> {};
 
-    for (auto const& pathStr: crispy::split(*pathEnv, pathSep))
+    for (auto const& dir: pathDirectories(_env))
     {
-        if (pathStr.empty())
-            continue;
-
-        auto const dir = std::filesystem::path(pathStr);
         if (!_fs.exists(dir) || !_fs.isDirectory(dir))
             continue;
 
@@ -183,7 +169,7 @@ std::vector<std::string> CommandResolver::search(std::string_view command, bool 
 
 void CommandResolver::refreshCacheIfNeeded() const
 {
-    auto const currentKey = computeCacheKey();
+    auto const currentKey = resolutionCacheKey(_env);
 
     if (currentKey != _cacheKey)
     {
@@ -192,15 +178,34 @@ void CommandResolver::refreshCacheIfNeeded() const
     }
 }
 
-std::string CommandResolver::computeCacheKey() const
+std::string CommandResolver::resolutionCacheKey(EnvironmentProvider const& env)
 {
-    auto key = _env.get("PATH").value_or(std::string {});
+    auto key = env.get("PATH").value_or(std::string {});
 #if defined(_WIN32)
     // PATHEXT also governs resolution on Windows, so a change to it must invalidate the
     // cache too. '\x1f' (unit separator) cannot occur in a PATH/PATHEXT value.
-    key.append("\x1f").append(_env.get("PATHEXT").value_or(std::string {}));
+    key.append("\x1f").append(env.get("PATHEXT").value_or(std::string {}));
 #endif
     return key;
+}
+
+std::vector<std::filesystem::path> CommandResolver::pathDirectories(EnvironmentProvider const& env)
+{
+    auto const pathEnv = env.get("PATH");
+    if (!pathEnv)
+        return {};
+
+#if defined(_WIN32)
+    auto const pathSep = ';';
+#else
+    auto const pathSep = ':';
+#endif
+
+    auto directories = std::vector<std::filesystem::path> {};
+    for (auto const& pathStr: crispy::split(*pathEnv, pathSep))
+        if (!pathStr.empty())
+            directories.emplace_back(pathStr);
+    return directories;
 }
 
 std::set<std::string> const& CommandResolver::builtinNames()

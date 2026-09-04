@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <filesystem>
 #include <set>
 #include <string>
 #include <string_view>
@@ -73,6 +74,24 @@ class CommandResolver
     /// @return Lower-cased extensions including the leading dot, or empty on POSIX.
     [[nodiscard]] static std::vector<std::string> executableExtensions(EnvironmentProvider const& env);
 
+    /// @brief Splits $PATH into its directory entries, dropping empty ones.
+    ///
+    /// Shared with callers that *enumerate* $PATH rather than resolve a single name, so the
+    /// separator and the empty-entry rule are stated once.
+    ///
+    /// @param env Environment provider, used to read PATH.
+    /// @return The $PATH directories in order; empty when PATH is unset.
+    [[nodiscard]] static std::vector<std::filesystem::path> pathDirectories(EnvironmentProvider const& env);
+
+    /// @brief Returns the cache key for the environment that governs $PATH resolution.
+    ///
+    /// Shared so that every cache built on $PATH invalidates on the same conditions; if a
+    /// third variable ever joins them, one edit here updates every such cache at once.
+    ///
+    /// @param env Environment provider, used to read PATH and PATHEXT.
+    /// @return $PATH on POSIX; "$PATH\\x1f$PATHEXT" on Windows.
+    [[nodiscard]] static std::string resolutionCacheKey(EnvironmentProvider const& env);
+
     /// @brief Searches $PATH for the first executable matching @p command.
     ///
     /// On POSIX, also verifies execute permission bits.
@@ -102,10 +121,6 @@ class CommandResolver
 
     /// @brief Refreshes the PATH cache if $PATH (or, on Windows, $PATHEXT) has changed.
     void refreshCacheIfNeeded() const;
-
-    /// @brief Computes the cache key from the resolution-relevant environment.
-    /// @return $PATH on POSIX; "$PATH\\x1f$PATHEXT" on Windows.
-    [[nodiscard]] std::string computeCacheKey() const;
 
     /// @brief Searches $PATH for executables matching @p command.
     /// @param command   Bare command name (no path separators).

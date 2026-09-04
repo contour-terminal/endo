@@ -7,6 +7,7 @@
 
 #include "BuiltinSpecs.hpp"
 #include "CommandSpecCompleter.hpp"
+#include "CompletionTestSupport.hpp"
 #include "PathCommandIndex.hpp"
 #include "PathCommandQueryProvider.hpp"
 #include <platform/testing/InMemoryFileSystem.hpp>
@@ -29,40 +30,11 @@ endo::InMemoryFileSystem makePathFilesystem()
         { .path = "/usr/local/bin", .isDirectory = true },
         { .path = "/usr/local/bin/git", .isExecutable = true },
         { .path = "/usr/local/bin/gio", .isExecutable = true },
+        { .path = "/home/testuser/bin", .isDirectory = true },
+        { .path = "/home/testuser/bin/mytool", .isExecutable = true },
+        { .path = "/home/testuserx/bin", .isDirectory = true },
+        { .path = "/home/testuserx/bin/othertool", .isExecutable = true },
     };
-}
-
-/// @brief Creates an Argument-type context for a `which` command line.
-endo::CompletionContext makeWhichContext(std::string fullInput, std::string const& prefix = "")
-{
-    auto const cursor = fullInput.size();
-    return endo::CompletionContext {
-        .type = endo::CompletionContextType::Argument,
-        .prefix = prefix,
-        .prefixStart = cursor - prefix.size(),
-        .cursorPosition = cursor,
-        .command = "which",
-        .fullInput = std::move(fullInput),
-    };
-}
-
-/// @brief Creates an Option-type context for a `which` command line.
-endo::CompletionContext makeWhichOptionContext(std::string fullInput, std::string const& prefix)
-{
-    auto const cursor = fullInput.size();
-    return endo::CompletionContext {
-        .type = endo::CompletionContextType::Option,
-        .prefix = prefix,
-        .prefixStart = cursor - prefix.size(),
-        .cursorPosition = cursor,
-        .command = "which",
-        .fullInput = std::move(fullInput),
-    };
-}
-
-bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string const& text)
-{
-    return std::ranges::any_of(items, [&](auto const& item) { return item.text == text; });
 }
 
 /// @brief Filesystem, environment and index with a shared lifetime.
@@ -156,15 +128,6 @@ TEST_CASE("PathCommandIndex.tolerates_empty_and_missing_path_entries")
     }
 }
 
-TEST_CASE("PathCommandIndex.invalidateCache_forces_rescan")
-{
-    PathFixture fx { "/usr/bin" };
-    CHECK(fx.names().size() == 2);
-
-    fx.index.invalidateCache();
-    CHECK(fx.names() == std::vector<std::string> { "git", "git-lfs" });
-}
-
 // =============================================================================
 // PathCommandQueryProvider
 // =============================================================================
@@ -193,21 +156,28 @@ TEST_CASE("PathCommandQueryProvider.reports_names_with_resolved_paths")
 
 TEST_CASE("PathCommandQueryProvider.collapses_home_prefix_in_description")
 {
-    auto const fs = endo::InMemoryFileSystem {
-        { .path = "/home/testuser/bin", .isDirectory = true },
-        { .path = "/home/testuser/bin/mytool", .isExecutable = true },
-    };
-    endo::TestEnvironment env;
-    env.set("HOME", "/home/testuser");
-    env.set("PATH", "/home/testuser/bin");
-    endo::PathCommandIndex index(env, fs);
+    PathFixture fx { "/home/testuser/bin" };
+    fx.env.set("HOME", "/home/testuser");
+    endo::PathCommandQueryProvider provider(fx.index, fx.env);
 
-    endo::PathCommandQueryProvider provider(index, env);
     auto const results = provider.query("path-commands");
 
     REQUIRE(results.size() == 1);
     CHECK(results[0].text == "mytool");
     CHECK(results[0].description == "~/bin/mytool");
+}
+
+TEST_CASE("PathCommandQueryProvider.leaves_paths_outside_home_untouched")
+{
+    // Component-aware: /home/testuserx is not inside /home/testuser.
+    PathFixture fx { "/home/testuserx/bin" };
+    fx.env.set("HOME", "/home/testuser");
+    endo::PathCommandQueryProvider provider(fx.index, fx.env);
+
+    auto const results = provider.query("path-commands");
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].description == "/home/testuserx/bin/othertool");
 }
 
 // =============================================================================
@@ -219,11 +189,11 @@ TEST_CASE("WhichCompletion.completes_program_names_not_files")
     PathFixture const fx { "/usr/bin:/usr/local/bin" };
     auto completer = fx.whichCompleter();
 
-    auto const results = completer.complete(makeWhichContext("which gi", "gi"));
+    auto const results = completer.complete(endo::test::makeArgumentContext("which gi", "gi", "which"));
 
-    CHECK(hasCompletion(results, "git"));
-    CHECK(hasCompletion(results, "git-lfs"));
-    CHECK(hasCompletion(results, "gio"));
+    CHECK(endo::test::hasCompletion(results, "git"));
+    CHECK(endo::test::hasCompletion(results, "git-lfs"));
+    CHECK(endo::test::hasCompletion(results, "gio"));
 }
 
 TEST_CASE("WhichCompletion.positional_is_repeatable")
@@ -232,10 +202,10 @@ TEST_CASE("WhichCompletion.positional_is_repeatable")
     auto completer = fx.whichCompleter();
 
     // A second program name must still complete against $PATH, not fall through to files.
-    auto const results = completer.complete(makeWhichContext("which git gi", "gi"));
+    auto const results = completer.complete(endo::test::makeArgumentContext("which git gi", "gi", "which"));
 
-    CHECK(hasCompletion(results, "git-lfs"));
-    CHECK(hasCompletion(results, "gio"));
+    CHECK(endo::test::hasCompletion(results, "git-lfs"));
+    CHECK(endo::test::hasCompletion(results, "gio"));
 }
 
 TEST_CASE("WhichCompletion.completes_flags")
@@ -243,11 +213,11 @@ TEST_CASE("WhichCompletion.completes_flags")
     PathFixture const fx { "/usr/bin" };
     auto completer = fx.whichCompleter();
 
-    auto const results = completer.complete(makeWhichOptionContext("which -", "-"));
+    auto const results = completer.complete(endo::test::makeOptionContext("which -", "-", "which"));
 
-    CHECK(hasCompletion(results, "--all"));
-    CHECK(hasCompletion(results, "--read-alias"));
-    CHECK(hasCompletion(results, "--help"));
+    CHECK(endo::test::hasCompletion(results, "--all"));
+    CHECK(endo::test::hasCompletion(results, "--read-alias"));
+    CHECK(endo::test::hasCompletion(results, "--help"));
 }
 
 TEST_CASE("WhichCompletion.exclusive_for_bare_prefix_but_not_for_paths")
@@ -256,10 +226,10 @@ TEST_CASE("WhichCompletion.exclusive_for_bare_prefix_but_not_for_paths")
     auto completer = fx.whichCompleter();
 
     // A bare name is a program lookup: suppress FileCompleter so no local filenames leak in.
-    CHECK(completer.isExclusiveFor(makeWhichContext("which gi", "gi")));
+    CHECK(completer.isExclusiveFor(endo::test::makeArgumentContext("which gi", "gi", "which")));
 
     // `which` also accepts a path argument, so path-shaped prefixes must keep file completion.
-    CHECK_FALSE(completer.isExclusiveFor(makeWhichContext("which ./gi", "./gi")));
-    CHECK_FALSE(completer.isExclusiveFor(makeWhichContext("which /usr/b", "/usr/b")));
-    CHECK_FALSE(completer.isExclusiveFor(makeWhichContext("which ~/b", "~/b")));
+    CHECK_FALSE(completer.isExclusiveFor(endo::test::makeArgumentContext("which ./gi", "./gi", "which")));
+    CHECK_FALSE(completer.isExclusiveFor(endo::test::makeArgumentContext("which /usr/b", "/usr/b", "which")));
+    CHECK_FALSE(completer.isExclusiveFor(endo::test::makeArgumentContext("which ~/b", "~/b", "which")));
 }

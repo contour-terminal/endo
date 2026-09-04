@@ -89,7 +89,7 @@ class Completer
 
     /// The single $PATH scan, shared by CommandCompleter and PathCommandQueryProvider.
     /// Declared before _providers so it outlives everything that borrows it.
-    std::unique_ptr<PathCommandIndex> _pathCommands;
+    PathCommandIndex _pathCommands;
 
     std::vector<std::unique_ptr<CompletionProvider>> _providers;
     CompletionConfig _config;

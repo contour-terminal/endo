@@ -2,7 +2,6 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -11,21 +10,6 @@
 
 namespace endo
 {
-
-/// @brief Replaces a leading @p home in @p path with "~", for compact display.
-///
-/// Takes @p home as a value rather than reading it from the environment so that callers
-/// shortening a whole list of paths look it up once instead of per entry.
-///
-/// @param path The absolute path to shorten.
-/// @param home The home directory to collapse; an empty value leaves @p path untouched.
-/// @return The path with its home prefix collapsed.
-[[nodiscard]] std::string collapseHomePrefix(std::string path, std::string_view home);
-
-/// @brief Returns $HOME, or an empty string when it is unset.
-/// @param env Environment provider to read HOME from.
-/// @return The home directory path.
-[[nodiscard]] std::string homeDirectory(EnvironmentProvider const& env);
 
 /// @brief Enumerates the executables reachable through $PATH.
 ///
@@ -49,12 +33,9 @@ class PathCommandIndex
     /// Names are unique: when several $PATH directories provide the same command, the first
     /// one wins, so the reported path is the one that would actually run.
     ///
-    /// @return Reference to the cached entries; invalidated by invalidateCache() or an
-    ///         environment change, so callers must not hold it across those.
+    /// @return Reference to the cached entries; a later call re-scans when the environment
+    ///         changed, so callers must not hold it across one.
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> const& entries() const;
-
-    /// @brief Drops the cached scan, forcing the next entries() call to re-read $PATH.
-    void invalidateCache();
 
   private:
     EnvironmentProvider const& _env;
@@ -63,10 +44,6 @@ class PathCommandIndex
     // Mutable so that entries() can stay const while refreshing on demand.
     mutable std::vector<std::pair<std::string, std::string>> _entries;
     mutable std::string _cacheKey;
-
-    /// @brief Computes the cache key from the resolution-relevant environment.
-    /// @return $PATH on POSIX; "$PATH\x1f$PATHEXT" on Windows.
-    [[nodiscard]] std::string computeCacheKey() const;
 
     /// @brief Scans every $PATH directory for executables.
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> scan() const;

@@ -16,8 +16,8 @@ namespace endo
 ///
 /// Uses the supplied environment provider to read the current working directory
 /// on each completion request so `searchFuzzy` can boost entries whose stored
-/// CWD matches or ancestors the current CWD. When a filesystem is supplied,
-/// entries whose `requiredPaths` no longer exist are suppressed.
+/// CWD matches or ancestors the current CWD. Entries whose `requiredPaths` no
+/// longer exist are suppressed.
 class HistoryCompleter: public CompletionProvider
 {
   public:

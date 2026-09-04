@@ -30,9 +30,15 @@ class QueryCache
     QueryCache& operator=(QueryCache&&) noexcept = default;
 
     /// @brief Queries with caching. Returns cached data if still valid.
+    ///
+    /// Returned by reference: a result set can hold thousands of entries (every executable
+    /// on $PATH), and copying it on every call — cache hits included — dominated the cost
+    /// of the lookup it was meant to avoid.
+    ///
     /// @param queryTag The query tag to resolve.
-    /// @return Cached or freshly queried results.
-    [[nodiscard]] std::vector<QueryResult> query(std::string_view queryTag);
+    /// @return Cached or freshly queried results, owned by this cache. Valid until the next
+    ///         query() or invalidateAll() call.
+    [[nodiscard]] std::vector<QueryResult> const& query(std::string_view queryTag);
 
     /// @brief Invalidates all cached entries.
     void invalidateAll();

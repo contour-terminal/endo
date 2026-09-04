@@ -71,6 +71,21 @@ class CommandSpecCompleter: public CompletionProvider
                                                                          CommandLineState const& state,
                                                                          std::string_view prefix);
 
+    /// @brief Resolves which positional ArgDef governs the cursor's position.
+    ///
+    /// Shared by completeArgument() and isExclusiveFor() so the two cannot disagree about
+    /// which argument is being completed -- they would otherwise offer candidates for one
+    /// ArgDef while deciding exclusivity from another.
+    ///
+    /// Falls back to the spec's top-level positionalArgs when no subcommand is active, and
+    /// honours `repeatable` so a repeating argument keeps applying past its own index.
+    ///
+    /// @param spec  The command specification.
+    /// @param state The parsed command line.
+    /// @return The governing ArgDef, or nullptr when the position takes no argument.
+    [[nodiscard]] static ArgDef const* applicableArgDef(CommandSpec const& spec,
+                                                        CommandLineState const& state);
+
     /// @brief Resolves the active SubcommandDef by walking subcommandChain.
     [[nodiscard]] static SubcommandDef const* resolveSubcommand(CommandSpec const& spec,
                                                                 std::vector<std::string> const& chain);

@@ -5,8 +5,8 @@
 #include <crispy/Utils.hpp>
 
 #include <algorithm>
-#include <filesystem>
 #include <map>
+#include <optional>
 
 #include <platform/PathUtils.hpp>
 
@@ -15,53 +15,48 @@ namespace endo
 
 namespace
 {
-    /// The separator between $PATH entries: ';' on Windows, ':' elsewhere.
-    constexpr char PathSeparator =
+    /// @brief Returns the command name a $PATH entry would be invoked by, if it is executable.
+    ///
+    /// This is the forward direction of CommandResolver::candidateNames(): that maps a typed
+    /// name to the files worth probing, this maps a file back to the name that reaches it.
+    ///
+    /// @param fs         Filesystem used to test executability.
+    /// @param entry      The directory entry to classify.
+    /// @param extensions Executable extensions from CommandResolver::executableExtensions();
+    ///                   empty on POSIX, where the permission bits decide instead.
+    /// @return The command name, or nullopt when @p entry cannot be run.
+    std::optional<std::string> commandNameFor(FileSystem const& fs,
+                                              FileSystem::DirectoryEntry const& entry,
+                                              [[maybe_unused]] std::vector<std::string> const& extensions)
+    {
+        // Not redundant with isExecutableFile(): a symlink to a directory passes that test.
+        if (entry.isDirectory)
+            return std::nullopt;
+
 #if defined(_WIN32)
-        ';';
+        // Windows executability is by extension, and the command is typed without it.
+        auto const extension = crispy::toLower(entry.path.extension().string());
+        if (std::ranges::find(extensions, extension) == extensions.end())
+            return std::nullopt;
+        auto name = entry.path.stem().string();
 #else
-        ':';
+        auto name = entry.path.filename().string();
 #endif
-
-    /// Separates $PATH from $PATHEXT in the cache key. A unit separator cannot occur in
-    /// either value, so no combination of them can collide with a different pair.
-    constexpr char CacheKeySeparator = '\x1f';
-
+        if (name.empty() || !fs.isExecutableFile(entry.path))
+            return std::nullopt;
+        return name;
+    }
 } // namespace
-
-std::string collapseHomePrefix(std::string path, std::string_view home)
-{
-    if (home.empty() || !path.starts_with(home))
-        return path;
-
-    path.replace(0, home.size(), "~");
-    return path;
-}
-
-std::string homeDirectory(EnvironmentProvider const& env)
-{
-    return env.get("HOME").value_or(std::string {});
-}
 
 PathCommandIndex::PathCommandIndex(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
 {
-}
-
-std::string PathCommandIndex::computeCacheKey() const
-{
-    auto key = std::string(_env.get("PATH").value_or(""));
-#if defined(_WIN32)
-    key += CacheKeySeparator;
-    key += _env.get("PATHEXT").value_or("");
-#endif
-    return key;
 }
 
 std::vector<std::pair<std::string, std::string>> const& PathCommandIndex::entries() const
 {
     // An unset or empty $PATH scans to nothing, which is exactly the initial state, so the
     // starting empty cache key needs no separate "not yet populated" flag.
-    if (auto currentKey = computeCacheKey(); currentKey != _cacheKey)
+    if (auto currentKey = CommandResolver::resolutionCacheKey(_env); currentKey != _cacheKey)
     {
         _cacheKey = std::move(currentKey);
         _entries = scan();
@@ -69,60 +64,24 @@ std::vector<std::pair<std::string, std::string>> const& PathCommandIndex::entrie
     return _entries;
 }
 
-void PathCommandIndex::invalidateCache()
-{
-    _entries.clear();
-    _cacheKey.clear();
-}
-
 std::vector<std::pair<std::string, std::string>> PathCommandIndex::scan() const
 {
-    auto const pathEnv = _env.get("PATH");
-    if (!pathEnv)
-        return {};
-
     // Sorted, and first occurrence wins: the reported path is the one that would run.
     auto commands = std::map<std::string, std::string> {};
 
-#if defined(_WIN32)
-    // Shared with CommandResolver so completion and resolution agree on what can run.
-    // POSIX needs no equivalent: there the permission bits decide, not the name.
     auto const extensions = CommandResolver::executableExtensions(_env);
-#endif
 
-    for (auto const& pathStr: crispy::split(*pathEnv, PathSeparator))
+    for (auto const& dir: CommandResolver::pathDirectories(_env))
     {
-        if (pathStr.empty())
-            continue;
-
-        auto const dir = std::filesystem::path(pathStr);
-        if (!_fs.exists(dir) || !_fs.isDirectory(dir))
-            continue;
-
+        // listDirectory() already fails for a missing or non-directory path, so no
+        // separate exists()/isDirectory() probe is needed.
         auto const listing = _fs.listDirectory(dir);
         if (!listing)
             continue;
 
         for (auto const& entry: *listing)
-        {
-            if (entry.isDirectory)
-                continue;
-
-#if defined(_WIN32)
-            // Windows executability is by extension; only %PATHEXT% names can run, and the
-            // command is typed without the extension, so key on the stem.
-            auto const extension = crispy::toLower(entry.path.extension().string());
-            if (std::ranges::find(extensions, extension) == extensions.end())
-                continue;
-            auto name = entry.path.stem().string();
-#else
-            auto name = entry.path.filename().string();
-#endif
-            if (name.empty() || !_fs.isExecutableFile(entry.path))
-                continue;
-
-            commands.try_emplace(std::move(name), platform::normalizePath(entry.path));
-        }
+            if (auto name = commandNameFor(_fs, entry, extensions))
+                commands.try_emplace(*std::move(name), platform::normalizePath(entry.path));
     }
 
     return { commands.begin(), commands.end() };
