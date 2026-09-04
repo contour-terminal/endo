@@ -82,7 +82,7 @@ static constexpr ParamDescriptor ProcessSignalParams[] = { { .name="signum", .ty
 /// Entries with non-empty vmName are registered as native callbacks by registerFSharpBuiltins().
 /// Entries with non-null sharedImpl are available via resolveStdlibImpl().
 /// Multi-arity overloads use separate entries; only the first carries completion data.
-static const std::array descriptors = {
+static const std::array Descriptors = {
     // -----------------------------------------------------------------------
     // Output (Shell builtins — not stdlib candidates, but need VM registration)
     // -----------------------------------------------------------------------
@@ -456,12 +456,12 @@ static const std::array descriptors = {
 
 std::span<StdlibDescriptor const> stdlibDescriptors()
 {
-    return descriptors;
+    return Descriptors;
 }
 
 std::optional<CoreVM::NativeCallback::Functor> resolveStdlibImpl(std::string_view vmName, size_t arity)
 {
-    for (auto const& desc: descriptors)
+    for (auto const& desc: Descriptors)
         if (desc.sharedImpl && desc.vmName == vmName && desc.params.size() == arity)
             return CoreVM::NativeCallback::Functor(desc.sharedImpl);
     return std::nullopt;
