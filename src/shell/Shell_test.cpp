@@ -584,6 +584,29 @@ TEST_CASE("shell.builtin.which_invalid_option")
     CHECK(shell.exitCode == 1);
 }
 
+TEST_CASE("shell.builtin.which_end_of_options_marker")
+{
+    TestShell shell;
+
+    // `--` protects a leading-dash operand from being read as a flag...
+    auto output = shell("which -- ls").output();
+    CHECK(output.find("ls") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+
+    // ...but only the operands after it. A bad flag before `--` is still a bad flag,
+    // not a program name to look up.
+    shell("which -x -- ls");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_bundled_short_flags")
+{
+    TestShell shell;
+    // Bundled shorts come from the shared inline argument parser; -ai is -a plus -i.
+    shell("which -ai ls");
+    CHECK(shell.exitCode == 0);
+}
+
 TEST_CASE("shell.builtin.which_read_alias_warning")
 {
     TestShell shell;

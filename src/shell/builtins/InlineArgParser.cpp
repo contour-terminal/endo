@@ -77,6 +77,7 @@ ParsedInlineArgs parseInlineArgs(CoreVM::CoreStringArray const& args,
         if (arg == "--")
         {
             endOfOptions = true;
+            result.endOfOptionsAt = result.positionalArgs.size();
             continue;
         }
 

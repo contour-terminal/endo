@@ -78,13 +78,18 @@ namespace
     /// ";;") and falling back to DefaultPathExt when none remain — an empty token would
     /// otherwise re-introduce the bare-name probe and let an extensionless shim shadow the
     /// real executable.
+    ///
+    /// Entries are lower-cased. Windows ships PATHEXT upper-cased (".COM;.EXE;..."), and
+    /// callers that *compare* an extension against this list need one canonical case;
+    /// callers that build file names from it are unaffected, since the filesystem is
+    /// case-insensitive.
     std::vector<std::string> pathExtList(EnvironmentProvider const& env)
     {
         auto extensions = std::vector<std::string> {};
         if (auto const pathext = env.get("PATHEXT"))
             for (auto const& raw: crispy::split(*pathext, ';'))
                 if (auto const ext = trim(raw); !ext.empty())
-                    extensions.emplace_back(ext);
+                    extensions.emplace_back(crispy::toLower(std::string(ext)));
 
         if (extensions.empty())
             for (auto const& ext: DefaultPathExt)

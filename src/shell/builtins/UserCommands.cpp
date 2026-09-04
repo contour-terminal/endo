@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <format>
+#include <ranges>
 
 #include <platform/Types.hpp>
 
@@ -229,18 +230,17 @@ void Shell::builtinWhich(CoreVM::Params& context)
     bool const readAlias = parsed.hasFlag("-i");
 
     // parseInlineArgs() demotes an unrecognised flag to a positional argument. `which` reports
-    // it rather than searching $PATH for a program literally named "-x" -- except after `--`,
-    // where a leading dash is part of a genuine file name.
-    if (std::ranges::find(args, "--") == args.end())
+    // it rather than searching $PATH for a program literally named "-x". Only operands before
+    // `--` are candidates: after the marker a leading dash is part of a genuine file name.
+    auto const unguarded = programs | std::views::take(parsed.endOfOptionsAt.value_or(programs.size()));
+    if (auto const unknown =
+            std::ranges::find_if(unguarded, [](auto const& p) { return p.starts_with('-'); });
+        unknown != unguarded.end())
     {
-        auto const unknown = std::ranges::find_if(programs, [](auto const& p) { return p.starts_with('-'); });
-        if (unknown != programs.end())
-        {
-            error("which: invalid option: {}", *unknown);
-            _exitCode = 1;
-            context.setResult(static_cast<CoreVM::CoreNumber>(1));
-            return;
-        }
+        error("which: invalid option: {}", *unknown);
+        _exitCode = 1;
+        context.setResult(static_cast<CoreVM::CoreNumber>(1));
+        return;
     }
 
     // Helper to write output to the effective stdout (respects redirects and test environments)
