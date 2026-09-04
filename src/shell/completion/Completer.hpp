@@ -44,12 +44,12 @@ class Completer
     /// @param env The environment for variable and command completion.
     /// @param history The history for history-based suggestions.
     /// @param fsharpState The persistent F# state for let binding completion.
-    /// @param fs Optional filesystem used for required-paths validation in
-    ///           history-based suggestions. Pass nullptr to disable validation.
+    /// @param fs Filesystem used to enumerate $PATH executables and to validate
+    ///           required paths in history-based suggestions.
     Completer(EnvironmentProvider const& env,
               History const& history,
               FSharpPersistentState const& fsharpState,
-              FileSystem const* fs = nullptr);
+              FileSystem const& fs);
 
     /// @brief Registers an additional completion provider.
     /// @param provider The provider to add.
@@ -86,6 +86,11 @@ class Completer
     /// Owned platform process provider used by the pkill process-name query.
     /// Kept alive for the lifetime of the CommandSpecCompleter that references it.
     std::unique_ptr<ProcessProvider> _processProvider;
+
+    /// The single $PATH scan, shared by CommandCompleter and PathCommandQueryProvider.
+    /// Declared before _providers so it outlives everything that borrows it.
+    std::unique_ptr<PathCommandIndex> _pathCommands;
+
     std::vector<std::unique_ptr<CompletionProvider>> _providers;
     CompletionConfig _config;
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/builtins/WhichDescriptor.hpp>
 #include <shell/commands/BindCommand.hpp>
 #include <shell/output/TableFormatter.hpp>
 #include <shell/util/CommandResolver.hpp>
@@ -7,6 +8,7 @@
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/TerminalOutput.hpp>
 
+#include <algorithm>
 #include <format>
 
 #include <platform/Types.hpp>
@@ -211,7 +213,10 @@ void Shell::builtinWhich(CoreVM::Params& context)
             args.push_back(i);
     }
 
-    // Parse flags
+    // Parse flags against whichDescriptor()'s option table -- the same declaration that
+    // drives the help text below and the completion spec, so a new flag is one new row.
+    auto const& options = whichDescriptor().options;
+
     bool showAll = false;
     bool showHelp = false;
     bool readAlias = false;
@@ -222,26 +227,29 @@ void Shell::builtinWhich(CoreVM::Params& context)
         if (arg == "-h" || arg == "--help")
         {
             showHelp = true;
+            continue;
         }
-        else if (arg == "-a" || arg == "--all")
+
+        if (!arg.starts_with("-"))
         {
-            showAll = true;
+            programs.push_back(arg);
+            continue;
         }
-        else if (arg == "-i" || arg == "--read-alias")
-        {
-            readAlias = true;
-        }
-        else if (arg.starts_with("-"))
+
+        auto const opt = std::ranges::find_if(
+            options, [&](InlineOptionDef const& o) { return arg == o.shortFlag || arg == o.longFlag; });
+        if (opt == options.end())
         {
             error("which: invalid option: {}", arg);
             _exitCode = 1;
             context.setResult(static_cast<CoreVM::CoreNumber>(1));
             return;
         }
-        else
-        {
-            programs.push_back(arg);
-        }
+
+        if (opt->shortFlag == "-a")
+            showAll = true;
+        else if (opt->shortFlag == "-i")
+            readAlias = true;
     }
 
     // Helper to write output to the effective stdout (respects redirects and test environments)
@@ -256,30 +264,16 @@ void Shell::builtinWhich(CoreVM::Params& context)
     {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        (void) renderMarkdownHelp(
-            outputFd,
-            "# which\n"
-            "\n"
-            "Locate executables in the PATH.\n"
-            "\n"
-            "## Usage\n"
-            "\n"
-            "`which [OPTIONS] PROGRAM...`\n"
-            "\n"
-            "## Options\n"
-            "\n"
-            "| Option | Description |\n"
-            "|--------|-------------|\n"
-            "| `-a`, `--all` | Print all matching executables in PATH, not just the first |\n"
-            "| `-h`, `--help` | Show this help message |\n"
-            "| `-i`, `--read-alias` | Also show aliases (not yet implemented) |\n"
-            "\n"
-            "## Exit Status\n"
-            "\n"
-            "| Code | Meaning |\n"
-            "|------|----------|\n"
-            "| `0` | All programs were found |\n"
-            "| `1` | One or more programs were not found |\n");
+        // Title, usage and the options table come from the descriptor; generateInlineHelp()
+        // has no notion of exit status, so that section is appended here.
+        (void) renderMarkdownHelp(outputFd,
+                                  generateInlineHelp(whichDescriptor())
+                                      + "\n## Exit Status\n"
+                                        "\n"
+                                        "| Code | Meaning |\n"
+                                        "|------|----------|\n"
+                                        "| `0` | All programs were found |\n"
+                                        "| `1` | One or more programs were not found |\n");
         _exitCode = 0;
         context.setResult(static_cast<CoreVM::CoreNumber>(0));
         return;

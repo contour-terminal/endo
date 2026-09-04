@@ -16,6 +16,7 @@
 
 #include "PromptComponent.hpp"
 #include <platform/PathUtils.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace endo;
@@ -117,7 +118,8 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fileSystem;
+    endo::Completer completer(env, history, fsharpState, fileSystem);
 
     // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
     // The inserted prefix carries the directory's real on-disk capitalization, so the
@@ -155,7 +157,8 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fileSystem;
+    endo::Completer completer(env, history, fsharpState, fileSystem);
 
     auto const typed = "cd " + endo::platform::normalizePath((base / "space").string());
     auto const expected = "cd \"" + endo::platform::canonicalCasePath(base) + "/space dir/";

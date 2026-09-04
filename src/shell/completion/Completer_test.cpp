@@ -2,11 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include "Completer.hpp"
 #include "ScriptedCompleter.hpp"
+#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
-
-#include <algorithm>
 
 using namespace std::string_literals;
 
@@ -19,7 +20,8 @@ TEST_CASE("Completer.suggest.empty_input_returns_nullopt")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     auto result = completer.suggest("", 0);
     CHECK_FALSE(result.has_value());
@@ -31,7 +33,8 @@ TEST_CASE("Completer.suggest.command_with_history_match")
     history.add("git push origin main");
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     auto result = completer.suggest("git p", 5);
     REQUIRE(result.has_value());
@@ -45,7 +48,8 @@ TEST_CASE("Completer.suggest.variable_context_word_level")
     env.set("PATH", "/usr/bin");
     env.set("PAGER", "less");
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // $PA should suggest TH (completing PATH) or GER — we get whichever sorts first
     auto result = completer.suggest("$PA", 3);
@@ -60,7 +64,8 @@ TEST_CASE("Completer.suggest.argument_context_history_match")
     history.add("echo hello world");
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // Typing "echo he" in argument position — Phase 1 should match full line from history
     auto result = completer.suggest("echo he", 7);
@@ -73,7 +78,8 @@ TEST_CASE("Completer.suggest.argument_context_no_match_returns_nullopt")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     auto result = completer.suggest("echo xyznonexistent", 19);
     CHECK_FALSE(result.has_value());
@@ -88,7 +94,8 @@ TEST_CASE("Completer.suggest.let_binding_word_level_fallback")
         .parameters = { "x" },
         .parameterTypes = { std::nullopt },
     };
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // In command position, "myFun" should match the let binding via Phase 2
     auto result = completer.suggest("myFun", 5);
@@ -102,7 +109,8 @@ TEST_CASE("Completer.suggest.history_preferred_over_word_level")
     history.add("git commit -m \"fix bug\"");
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // Phase 1 should match the full history line "git commit -m ..." before Phase 2
     auto result = completer.suggest("git co", 6);
@@ -117,7 +125,8 @@ TEST_CASE("Completer.suggest.history_full_line_over_variable_word")
     endo::TestEnvironment env;
     env.set("PATH", "/usr/bin");
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // History has a full line starting with $PATH — Phase 1 should find it
     auto result = completer.suggest("$PATH", 5);
@@ -142,7 +151,8 @@ TEST_CASE("Completer.complete.exclusive_provider_suppresses_higher_priority_resu
         .parameterTypes = { std::nullopt },
     };
 
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     // Register a scripted completer for "testcmd" that claims exclusivity
     endo::CompleterFunctionRegistry registry;
@@ -175,7 +185,8 @@ TEST_CASE("Completer.complete.recency_boosts_command_score")
     endo::TestEnvironment env;
     env.set("PATH", ""); // No real PATH — only builtins will appear plus history boost
     endo::FSharpPersistentState fsharpState;
-    endo::Completer completer(env, history, fsharpState);
+    endo::InMemoryFileSystem fs;
+    endo::Completer completer(env, history, fsharpState, fs);
 
     auto const results = completer.complete("g", 1);
 

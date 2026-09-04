@@ -59,6 +59,20 @@ class CommandResolver
     /// @brief Returns the list of builtin command names.
     [[nodiscard]] static std::set<std::string> const& builtinNames();
 
+    /// @brief Returns the file extensions that make a $PATH entry executable.
+    ///
+    /// On Windows this is %PATHEXT% (lower-cased, blank tokens dropped), falling back to
+    /// a built-in default list when it is unset, empty or all-blank. On POSIX it is empty:
+    /// executability there comes from the permission bits, not the name.
+    ///
+    /// Exposed so that callers which *enumerate* $PATH (completion) apply the same rule as
+    /// the resolution performed here; two different notions of "executable" would let
+    /// completion offer names that cannot be resolved, or hide ones that can.
+    ///
+    /// @param env Environment provider, used to read PATHEXT on Windows.
+    /// @return Lower-cased extensions including the leading dot, or empty on POSIX.
+    [[nodiscard]] static std::vector<std::string> executableExtensions(EnvironmentProvider const& env);
+
     /// @brief Searches $PATH for the first executable matching @p command.
     ///
     /// On POSIX, also verifies execute permission bits.

@@ -6,51 +6,38 @@
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <crispy/Utils.hpp>
-
 #include <algorithm>
-#include <cctype>
-#include <filesystem>
-#include <map>
-#include <set>
 #include <unordered_map>
-
-#include <platform/PathUtils.hpp>
 
 namespace endo
 {
 
-CommandCompleter::CommandCompleter(EnvironmentProvider const& env, History const& history):
-    _env(env), _history(history)
+CommandCompleter::CommandCompleter(PathCommandIndex const& pathCommands,
+                                   EnvironmentProvider const& env,
+                                   History const& history):
+    _pathCommands(pathCommands), _env(env), _history(history)
 {
 }
 
 std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& context)
 {
-    refreshCacheIfNeeded();
-
     auto const& prefix = context.prefix;
 
     // Get builtin candidates from shared engine
     auto builtins = builtinCandidates();
 
     // Build PATH command candidates with resolved path as description
-    auto const homeValue = _env.get("HOME");
-    auto const home = homeValue ? std::string(*homeValue) : std::string {};
+    auto const& pathCommands = _pathCommands.entries();
+    auto const home = homeDirectory(_env);
 
     std::vector<CompletionCandidate> pathCandidates;
-    pathCandidates.reserve(_cachedCommands.size());
-    for (auto const& [cmd, fullPath]: _cachedCommands)
-    {
-        auto description = fullPath;
-        if (!home.empty() && description.starts_with(home))
-            description.replace(0, home.size(), "~");
+    pathCandidates.reserve(pathCommands.size());
+    for (auto const& [cmd, fullPath]: pathCommands)
         pathCandidates.push_back(CompletionCandidate { .text = cmd,
                                                        .displayText = cmd,
-                                                       .description = std::move(description),
+                                                       .description = collapseHomePrefix(fullPath, home),
                                                        .detail = {},
                                                        .kind = CompletionKind::Command });
-    }
 
     // Apply fuzzy scoring: builtins at higher base score
     auto results = applyFuzzyScoring(builtins, prefix, 100);
@@ -108,115 +95,6 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
 bool CommandCompleter::canHandle(CompletionContextType type) const
 {
     return type == CompletionContextType::Command;
-}
-
-void CommandCompleter::invalidateCache()
-{
-    _cachedCommands.clear();
-    _cachedPath.clear();
-}
-
-void CommandCompleter::refreshCacheIfNeeded() const
-{
-    auto pathValue = _env.get("PATH");
-    std::string currentPath = pathValue ? std::string(*pathValue) : "";
-
-    if (currentPath != _cachedPath)
-    {
-        _cachedPath = currentPath;
-        _cachedCommands = scanPath();
-    }
-}
-
-std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() const
-{
-    std::map<std::string, std::string> commands; // name → full path, keeps first occurrence (PATH priority)
-
-    auto pathValue = _env.get("PATH");
-    if (!pathValue)
-        return {};
-
-#if defined(_WIN32)
-    auto const pathSep = ';';
-#else
-    auto const pathSep = ':';
-#endif
-
-    auto const paths = crispy::split(*pathValue, pathSep);
-
-#if defined(_WIN32)
-    // Build PATHEXT set for recognizing executable extensions
-    auto execExts = std::set<std::string> {};
-    if (auto const pathext = _env.get("PATHEXT"))
-    {
-        auto const exts = crispy::split(*pathext, ';');
-        for (auto const& ext: exts)
-        {
-            std::string lower(ext);
-            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            execExts.insert(lower);
-        }
-    }
-    else
-    {
-        execExts = { ".exe", ".cmd", ".bat", ".com" };
-    }
-#endif
-
-    for (auto const& pathStr: paths)
-    {
-        if (pathStr.empty())
-            continue;
-
-        std::error_code ec;
-        std::filesystem::path dir(pathStr);
-
-        if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
-            continue;
-
-        for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
-        {
-            if (ec)
-                break;
-
-            if (!entry.is_regular_file(ec) && !entry.is_symlink(ec))
-                continue;
-
-            auto const& path = entry.path();
-
-#if defined(_WIN32)
-            // On Windows, check file extension against PATHEXT
-            auto ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            if (!execExts.contains(ext))
-                continue;
-
-            // Use stem (without extension) as command name
-            auto const cmdName = path.stem().string();
-            commands.try_emplace(cmdName, platform::normalizePath(path));
-#else
-            // Check if executable (on POSIX)
-            auto status = std::filesystem::status(path, ec);
-            if (ec)
-                continue;
-
-            auto perms = status.permissions();
-            auto const isExecutable =
-                (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none
-                || (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none
-                || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
-
-            if (isExecutable)
-                commands.try_emplace(path.filename().string(), platform::normalizePath(path));
-#endif
-        }
-    }
-
-    return { commands.begin(), commands.end() };
 }
 
 std::vector<std::string> CommandCompleter::builtinNames()

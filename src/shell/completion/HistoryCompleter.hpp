@@ -25,8 +25,7 @@ class HistoryCompleter: public CompletionProvider
     /// @param history The history to search.
     /// @param env     Environment provider (for current CWD and $HOME).
     /// @param fs      Filesystem used for required-paths validation.
-    ///                Pass nullptr to disable validation (e.g. in unit tests).
-    HistoryCompleter(History const& history, EnvironmentProvider const& env, FileSystem const* fs);
+    HistoryCompleter(History const& history, EnvironmentProvider const& env, FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -36,7 +35,7 @@ class HistoryCompleter: public CompletionProvider
   private:
     History const& _history;
     EnvironmentProvider const& _env;
-    FileSystem const* _fs;
+    FileSystem const& _fs;
 };
 
 } // namespace endo

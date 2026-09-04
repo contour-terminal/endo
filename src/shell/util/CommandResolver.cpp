@@ -95,6 +95,16 @@ namespace
 } // namespace
 #endif
 
+std::vector<std::string> CommandResolver::executableExtensions(
+    [[maybe_unused]] EnvironmentProvider const& env)
+{
+#if defined(_WIN32)
+    return pathExtList(env);
+#else
+    return {};
+#endif
+}
+
 std::vector<std::string> CommandResolver::candidateNames([[maybe_unused]] EnvironmentProvider const& env,
                                                          std::string_view command)
 {

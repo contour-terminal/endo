@@ -1174,7 +1174,7 @@ void Shell::ensureInteractiveReady()
     history.autoImportIfEmpty();
 
     // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history, _fsharpState, &_fs);
+    completer = std::make_unique<Completer>(_env, history, _fsharpState, _fs);
     prompt.setCompleter(completer.get());
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);

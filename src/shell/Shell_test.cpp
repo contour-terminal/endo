@@ -515,8 +515,16 @@ TEST_CASE("shell.builtin.which_help_flag")
     TestShell shell;
     auto output = shell("which --help").output();
     CHECK(output.find("## Usage") != std::string::npos);
-    CHECK(output.find("--all") != std::string::npos);
     CHECK(shell.exitCode == 0);
+
+    // The options table is generated from whichDescriptor(), so every declared flag has
+    // to show up here -- this is what catches a flag added to the table but not documented.
+    CHECK(output.find("--all") != std::string::npos);
+    CHECK(output.find("--read-alias") != std::string::npos);
+    CHECK(output.find("--help") != std::string::npos);
+
+    // generateInlineHelp() knows nothing about exit status; builtinWhich appends it.
+    CHECK(output.find("## Exit Status") != std::string::npos);
 }
 
 TEST_CASE("shell.builtin.which_find_existing_program")
@@ -5189,7 +5197,8 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer = std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    ts.shell.completer =
+        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();

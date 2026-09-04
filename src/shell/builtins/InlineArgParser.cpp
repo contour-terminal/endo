@@ -256,54 +256,56 @@ std::string generateInlineHelp(InlineCommandDescriptor const& desc)
 // Completion spec generation
 // ---------------------------------------------------------------------------
 
+CommandSpec specFromInlineDescriptor(InlineCommandDescriptor const& desc)
+{
+    CommandSpec spec;
+    spec.command = std::string(desc.name);
+    spec.description = std::string(desc.briefDescription);
+
+    // Convert options
+    for (auto const& opt: desc.options)
+    {
+        OptionDef optDef;
+        optDef.longName = std::string(opt.longFlag);
+        optDef.shortName = std::string(opt.shortFlag);
+        optDef.description = std::string(opt.description);
+        optDef.valueKind = opt.takesValue ? OptionValueKind::String : OptionValueKind::None;
+        spec.globalOptions.push_back(std::move(optDef));
+    }
+
+    // Always add --help
+    spec.globalOptions.push_back(
+        OptionDef { .longName = "--help", .shortName = "-h", .description = "Show help" });
+
+    // Positional args
+    if (!desc.positionalQuery.queryTag.empty())
+    {
+        auto overrides = std::vector<std::pair<std::string, std::string>> {};
+        if (!desc.positionalQuery.overrideFlag.empty())
+            overrides.emplace_back(std::string(desc.positionalQuery.overrideFlag),
+                                   std::string(desc.positionalQuery.overrideQueryTag));
+        spec.positionalArgs.push_back(ArgDef { .kind = ArgKind::DynamicQuery,
+                                               .description = std::string(desc.positionalQuery.description),
+                                               .queryTag = std::string(desc.positionalQuery.queryTag),
+                                               .repeatable = desc.positionalQuery.repeatable,
+                                               .optionQueryOverrides = std::move(overrides) });
+    }
+    else if (desc.acceptsFileArgs)
+    {
+        spec.positionalArgs.push_back(ArgDef {
+            .kind = ArgKind::Path, .description = "File(s)", .repeatable = desc.fileArgsRepeatable });
+    }
+
+    return spec;
+}
+
 std::vector<CommandSpec> generateBuiltinCompletionSpecs(std::span<InlineCommandDescriptor const> descriptors)
 {
     std::vector<CommandSpec> specs;
     specs.reserve(descriptors.size());
 
     for (auto const& desc: descriptors)
-    {
-        CommandSpec spec;
-        spec.command = std::string(desc.name);
-        spec.description = std::string(desc.briefDescription);
-
-        // Convert options
-        for (auto const& opt: desc.options)
-        {
-            OptionDef optDef;
-            optDef.longName = std::string(opt.longFlag);
-            optDef.shortName = std::string(opt.shortFlag);
-            optDef.description = std::string(opt.description);
-            optDef.valueKind = opt.takesValue ? OptionValueKind::String : OptionValueKind::None;
-            spec.globalOptions.push_back(std::move(optDef));
-        }
-
-        // Always add --help
-        spec.globalOptions.push_back(
-            OptionDef { .longName = "--help", .shortName = "-h", .description = "Show help" });
-
-        // Positional args
-        if (!desc.positionalQuery.queryTag.empty())
-        {
-            auto overrides = std::vector<std::pair<std::string, std::string>> {};
-            if (!desc.positionalQuery.overrideFlag.empty())
-                overrides.emplace_back(std::string(desc.positionalQuery.overrideFlag),
-                                       std::string(desc.positionalQuery.overrideQueryTag));
-            spec.positionalArgs.push_back(
-                ArgDef { .kind = ArgKind::DynamicQuery,
-                         .description = std::string(desc.positionalQuery.description),
-                         .queryTag = std::string(desc.positionalQuery.queryTag),
-                         .repeatable = desc.positionalQuery.repeatable,
-                         .optionQueryOverrides = std::move(overrides) });
-        }
-        else if (desc.acceptsFileArgs)
-        {
-            spec.positionalArgs.push_back(ArgDef {
-                .kind = ArgKind::Path, .description = "File(s)", .repeatable = desc.fileArgsRepeatable });
-        }
-
-        specs.push_back(std::move(spec));
-    }
+        specs.push_back(specFromInlineDescriptor(desc));
 
     return specs;
 }

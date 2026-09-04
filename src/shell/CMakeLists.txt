@@ -106,6 +106,10 @@ add_library(endo-shell STATIC
     completion/HistorySpec.cpp
     completion/BuiltinSpecs.hpp
     completion/BuiltinSpecs.cpp
+    completion/PathCommandIndex.hpp
+    completion/PathCommandIndex.cpp
+    completion/PathCommandQueryProvider.hpp
+    completion/PathCommandQueryProvider.cpp
     completion/GitSpec.hpp
     completion/GitSpec.cpp
 
@@ -147,6 +151,8 @@ add_library(endo-shell STATIC
     builtins/InlineCommandDescriptors.cpp
     builtins/InlineArgParser.hpp
     builtins/InlineArgParser.cpp
+    builtins/WhichDescriptor.hpp
+    builtins/WhichDescriptor.cpp
     builtins/InlineCommands.cpp
     builtins/Registration.cpp
     builtins/ProcessExecution.cpp
@@ -316,6 +322,7 @@ if(ENDO_TESTING)
         completion/CommandSpecCompleter_test.cpp
         completion/CompleterFunctionRegistry_test.cpp
         completion/ScriptedCompleter_test.cpp
+        completion/WhichCompletion_test.cpp
         history/History_test.cpp
         history/PersistentHistory_test.cpp
         history/RequiredPaths_test.cpp

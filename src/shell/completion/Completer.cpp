@@ -4,6 +4,7 @@
 #include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
 #include <shell/completion/HistorySpec.hpp>
+#include <shell/completion/PathCommandQueryProvider.hpp>
 #include <shell/completion/ProcessNameQueryProvider.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
@@ -19,13 +20,14 @@ namespace endo
 Completer::Completer(EnvironmentProvider const& env,
                      History const& history,
                      FSharpPersistentState const& fsharpState,
-                     FileSystem const* fs)
+                     FileSystem const& fs)
 {
     _processProvider = createNativeProcessProvider();
+    _pathCommands = std::make_unique<PathCommandIndex>(env, fs);
 
     // Register default providers in priority order
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
-    _providers.push_back(std::make_unique<CommandCompleter>(env, history));
+    _providers.push_back(std::make_unique<CommandCompleter>(*_pathCommands, env, history));
     _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
 
     // Git command spec completer (cmake/ssh/scp/ctest moved to scripted completers)
@@ -43,6 +45,10 @@ Completer::Completer(EnvironmentProvider const& env,
             queryProvider = std::make_unique<ProcessNameQueryProvider>(*_processProvider);
         specCompleter->registerCommand(std::move(spec), std::move(queryProvider));
     }
+    // `which` is a parser-level builtin, so createBuiltinSpecs() does not cover it; its
+    // positional argument names a program on $PATH rather than a file.
+    specCompleter->registerCommand(createWhichSpec(),
+                                   std::make_unique<PathCommandQueryProvider>(*_pathCommands, env));
     // Register after createBuiltinSpecs() to overwrite the auto-generated spec with subcommands
     specCompleter->registerCommand(createHistorySpec(), nullptr);
     _providers.push_back(std::move(specCompleter));
