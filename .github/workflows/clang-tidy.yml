@@ -78,12 +78,21 @@ jobs:
           echo "WASM backend disabled at configure time; skipping src/CoreVM/wasm in clang-tidy"
           WASM_EXCLUDES=(':!src/CoreVM/wasm/*' ':!src/endo-language/CompileToWasm.hpp')
         fi
+        # CrashHandler_test.cpp is only compiled when the built-in crash dumper is
+        # disabled (src/shell/CMakeLists.txt), so with the default ON it is absent
+        # from the compile database and would be analyzed without its include paths.
+        CRASH_EXCLUDES=()
+        if ! grep -sq "shell/CrashHandler_test.cpp" build/compile_commands.json; then
+          echo "CrashHandler_test.cpp not in compile database; skipping it in clang-tidy"
+          CRASH_EXCLUDES=(':!src/shell/CrashHandler_test.cpp')
+        fi
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
             ':!src/crispy/*' ':!src/vtparser/*' ':!src/coro/*' ':!src/net/*' \
             ':!src/shell/platform/Windows*' \
             ':!src/endo-language/wasm_bridge.cpp' \
             "${WASM_EXCLUDES[@]}" \
+            "${CRASH_EXCLUDES[@]}" \
           | python3 "$CLANG_TIDY_DIFF" \
               -p1 \
               -path build \
