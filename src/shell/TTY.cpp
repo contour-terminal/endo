@@ -11,6 +11,7 @@
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
 
+    #include <fcntl.h>
     #include <poll.h>
     #include <unistd.h>
     #if defined(__APPLE__)
@@ -183,15 +184,26 @@ TestPTY::TestPTY(): _windowSize { .ws_row = 25, .ws_col = 80, .ws_xpixel = 0, .w
     if (openpty(&_ptyMaster, &_ptySlave, name, &_baseTermios, &_windowSize) == -1)
         throw std::runtime_error("openpty: " + std::string(strerror(errno)));
 
+    // The reader polls for readability before every read, so a read should never block --
+    // O_NONBLOCK makes that a property of the descriptor rather than an assumption about
+    // what poll() reported a moment earlier.
+    if (auto const flags = fcntl(_ptyMaster, F_GETFL, 0); flags != -1)
+        (void) fcntl(_ptyMaster, F_SETFL, flags | O_NONBLOCK);
+
     _updateThread = std::thread { std::bind(&TestPTY::outputUpdateLoop, this) };
 }
 
 TestPTY::~TestPTY()
 {
     _closed = true;
-    pthread_cancel(_updateThread.native_handle());
-    _updateThread.join();
+
+    // Closing the slave makes the reader's poll() report POLLHUP, so it leaves its loop on
+    // its own within one 50ms timeout at worst. pthread_cancel() was doing this before, but
+    // it can fire while the reader holds _outputMutex, leaving it locked forever, and
+    // unwinding a C++ thread through cancellation is not something the standard promises.
     safeClose(&_ptySlave);
+    if (_updateThread.joinable())
+        _updateThread.join();
     safeClose(&_ptyMaster);
 }
 
@@ -295,10 +307,39 @@ void TestPTY::setSize(uint16_t rows, uint16_t cols)
     ioctl(_ptySlave, TIOCSWINSZ, &_windowSize);
 }
 
-std::string_view TestPTY::output() const noexcept
+namespace
 {
-    // Give the output thread time to read remaining data from the PTY
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    /// @brief Reports whether @p fd has data ready to read, without consuming it.
+    [[nodiscard]] bool hasPendingInput(NativeHandle fd) noexcept
+    {
+        auto descriptor = pollfd { .fd = fd, .events = POLLIN, .revents = 0 };
+        return poll(&descriptor, 1, 0) > 0 && (descriptor.revents & POLLIN) != 0;
+    }
+} // namespace
+
+std::string TestPTY::output() const
+{
+    // The caller has just finished a command, so everything it produced is already in the
+    // PTY and nothing new can arrive. Every byte is therefore in exactly one of three
+    // states, and this waits out the first two:
+    //
+    //   pending in the PTY          -- hasPendingInput() sees it
+    //   taken but not yet appended  -- _transferring covers read()..append()
+    //   appended to _output         -- done
+    //
+    // Checking only the PTY would miss the middle state, which is what made captures come
+    // back empty. The deadline is a safety net for a wedged reader, not the mechanism.
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+
+    while (hasPendingInput(_ptyMaster) || _transferring.load(std::memory_order_acquire))
+    {
+        if (!_readerRunning.load(std::memory_order_acquire) || _closed.load(std::memory_order_acquire)
+            || std::chrono::steady_clock::now() >= deadline)
+            break;
+
+        std::this_thread::yield();
+    }
+
     auto _ = std::scoped_lock { _outputMutex };
     return _output;
 }
@@ -307,26 +348,47 @@ void TestPTY::outputUpdateLoop()
 {
     while (!_closed)
     {
-        char buffer[1024] {};
-        ssize_t const writeResult = read(_ptyMaster, buffer, sizeof(buffer));
-        if (writeResult == 0)
+        // Wait for readability rather than blocking in read(), so that _transferring can be
+        // raised before the PTY is drained. The timeout only bounds how long shutdown waits.
+        auto descriptor = pollfd { .fd = _ptyMaster, .events = POLLIN, .revents = 0 };
+        int const ready = poll(&descriptor, 1, 50);
+
+        if (ready == 0)
+            continue; // Timed out; re-check _closed.
+        if (ready < 0)
         {
+            if (errno == EINTR)
+                continue;
             break;
         }
-        else if (writeResult > 0)
+        if ((descriptor.revents & POLLIN) == 0)
+            break; // POLLHUP/POLLERR: the slave is gone, so no more output can arrive.
+
+        // Raised before the read and cleared after the append, so the bytes are never
+        // invisible: while this is set, output() keeps waiting even though the PTY is empty.
+        _transferring.store(true, std::memory_order_release);
+
+        char buffer[1024] {};
+        ssize_t const readResult = read(_ptyMaster, buffer, sizeof(buffer));
+        if (readResult > 0)
         {
             auto _ = std::scoped_lock { _outputMutex };
-            _output.append(buffer, writeResult);
+            _output.append(buffer, static_cast<size_t>(readResult));
         }
-        else if (errno == EINTR || errno == EAGAIN)
-        {
+        _transferring.store(false, std::memory_order_release);
+
+        if (readResult > 0)
             continue;
-        }
-        else
-        {
-            throw std::runtime_error("read: " + std::string(strerror(errno)));
-        }
+        if (readResult < 0 && (errno == EINTR || errno == EAGAIN))
+            continue;
+
+        // EOF, or EIO once the slave closed -- ordinary shutdown. Throwing here would cross
+        // a thread boundary with nobody to catch it and abort the process, so just stop.
+        break;
     }
+
+    _transferring.store(false, std::memory_order_release);
+    _readerRunning.store(false, std::memory_order_release);
 }
 
 #endif // !_WIN32

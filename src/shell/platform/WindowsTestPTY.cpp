@@ -203,23 +203,26 @@ void WindowsTestPTY::setSize(uint16_t rows, uint16_t cols)
     _terminalSize = TerminalSize { .rows = rows, .cols = cols };
 }
 
-std::string_view WindowsTestPTY::output() const noexcept
+std::string WindowsTestPTY::output() const
 {
-    // Wait until the capture thread has drained all data from the pipe.
-    // After shell.execute() returns, all writes to the pipe are done.
-    // PeekNamedPipe reports 0 bytes once the capture thread has read everything.
+    // After shell.execute() returns, every write to the pipe is done, so "pipe empty and
+    // capture thread parked" is a stable end state. Both halves are needed: an empty pipe
+    // alone leaves the window where the thread has read the bytes but not yet appended
+    // them, which a fixed grace period could only paper over.
     auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (std::chrono::steady_clock::now() < deadline)
+    while (_readerRunning.load(std::memory_order_acquire) && !_closed.load(std::memory_order_acquire))
     {
         DWORD bytesAvailable = 0;
         if (!PeekNamedPipe(_readOutputHandle, nullptr, 0, nullptr, &bytesAvailable, nullptr))
             break; // Pipe error (broken/closed)
-        if (bytesAvailable == 0)
-            break; // All data consumed by capture thread
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        if (bytesAvailable == 0 && !_transferring.load(std::memory_order_acquire))
+            break;
+
+        if (std::chrono::steady_clock::now() >= deadline)
+            break; // Safety net only; the condition above is what normally ends this loop.
+        std::this_thread::yield();
     }
-    // Small grace period for the capture thread to finish appending under mutex
-    std::this_thread::sleep_for(std::chrono::milliseconds(2));
     auto _ = std::scoped_lock { _outputMutex };
     return _output;
 }
@@ -246,16 +249,27 @@ void WindowsTestPTY::outputCaptureLoop()
             continue;
         }
 
+        // Raised before the read and cleared after the append, so the bytes are never
+        // invisible: while this is set, output() keeps waiting even though the pipe is empty.
+        _transferring.store(true, std::memory_order_release);
+
         DWORD bytesRead = 0;
         BOOL const success =
             ReadFile(_readOutputHandle, buffer, std::min(BufferSize, bytesAvailable), &bytesRead, nullptr);
 
+        if (success && bytesRead > 0)
+        {
+            auto _ = std::lock_guard<std::mutex> { _outputMutex };
+            _output.append(buffer, bytesRead);
+        }
+        _transferring.store(false, std::memory_order_release);
+
         if (!success || bytesRead == 0)
             break; // EOF or error
-
-        auto _ = std::lock_guard<std::mutex> { _outputMutex };
-        _output.append(buffer, bytesRead);
     }
+
+    _transferring.store(false, std::memory_order_release);
+    _readerRunning.store(false, std::memory_order_release);
 }
 
 #endif // _WIN32

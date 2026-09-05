@@ -163,8 +163,14 @@ class WindowsTestPTY final: public TTY
     [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
-    /// Returns the output that was written to the TTY.
-    [[nodiscard]] std::string_view output() const noexcept;
+    /// @brief Returns everything written to the TTY so far.
+    ///
+    /// Blocks until the capture thread has drained the pipe, so a caller that has just
+    /// finished a command observes all of its output.
+    ///
+    /// @return A copy of the captured output. By value deliberately: the capture thread
+    ///         keeps appending to the buffer, so a view into it would race with reallocation.
+    [[nodiscard]] std::string output() const;
 
     /// Sets the terminal size for testing resize behavior.
     void setSize(uint16_t rows, uint16_t cols);
@@ -185,6 +191,14 @@ class WindowsTestPTY final: public TTY
     std::thread _captureThread;
     mutable std::mutex _outputMutex;
     std::atomic<bool> _closed = false;
+
+    /// Set while the capture thread is between taking bytes out of the pipe and appending
+    /// them to _output. During that window the pipe looks empty although the capture is
+    /// incomplete, so output() must keep waiting rather than conclude it has everything.
+    std::atomic<bool> _transferring = false;
+
+    /// Cleared once the capture loop exits, so a wait cannot spin forever.
+    std::atomic<bool> _readerRunning = true;
 
     // Terminal size (fixed for tests)
     TerminalSize _terminalSize { .rows = 25, .cols = 80 };
@@ -251,8 +265,15 @@ class TestPTY final: public TTY
     [[nodiscard]] bool isStderrTerminal() const noexcept override;
     void writeToStdin(std::string_view str) const override;
 
-    // Returns the output that was written to the TTY.
-    [[nodiscard]] std::string_view output() const noexcept;
+    /// @brief Returns everything written to the TTY so far.
+    ///
+    /// Blocks until the reader thread has drained the PTY, so a caller that has just
+    /// finished a command observes all of its output rather than whatever happened to be
+    /// captured by then.
+    ///
+    /// @return A copy of the captured output. By value deliberately: the reader thread
+    ///         keeps appending to the buffer, so a view into it would race with reallocation.
+    [[nodiscard]] std::string output() const;
 
     /// Sets the terminal size for testing resize behavior.
     void setSize(uint16_t rows, uint16_t cols);
@@ -263,6 +284,15 @@ class TestPTY final: public TTY
     std::string _output;
     std::thread _updateThread;
     mutable std::mutex _outputMutex;
+
+    /// Set while the reader is between taking bytes out of the PTY and appending them to
+    /// _output. During that window the PTY looks empty although the capture is incomplete,
+    /// so output() must keep waiting rather than conclude it has everything.
+    std::atomic<bool> _transferring = false;
+
+    /// Cleared once the reader loop exits, so a wait cannot spin forever on a thread that
+    /// will never consume anything again.
+    std::atomic<bool> _readerRunning = true;
 
     NativeHandle _ptyMaster = InvalidHandle;
     NativeHandle _ptySlave = InvalidHandle;
