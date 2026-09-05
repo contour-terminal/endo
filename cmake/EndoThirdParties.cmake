@@ -355,9 +355,17 @@ if(NOT EMSCRIPTEN AND ENDO_ENABLE_AGENT)
             SYSTEM YES
         )
         if(llama_cpp_ADDED)
-            # llama.cpp b5460 omits #include <algorithm> (std::fill) — needed on macOS Clang.
+            # llama.cpp b5460 omits two headers it relies on arriving transitively, and macOS
+            # Clang does not supply either: <algorithm> (std::fill) and <cstdlib> (getenv/atoi
+            # in src/llama-model-loader.cpp, which fails as "use of undeclared identifier
+            # 'getenv'"). The <cstdlib> omission is still unfixed upstream as of v0.4.0, so it
+            # outlives any pin bump.
             if(APPLE)
-                target_compile_options(llama PRIVATE "-include" "algorithm")
+                # SHELL: keeps CMake from de-duplicating the repeated "-include", which would
+                # otherwise collapse the two into "-include algorithm cstdlib" and make clang
+                # treat cstdlib as an input file.
+                target_compile_options(llama PRIVATE "SHELL:-include algorithm"
+                                                     "SHELL:-include cstdlib")
             endif()
             set(THIRDPARTY_BUILTIN_llama_cpp "CPM (b5460)")
             set(ENDO_HAS_LOCAL_LLM ON)

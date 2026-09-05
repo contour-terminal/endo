@@ -8,6 +8,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -29,6 +30,15 @@ struct ParsedInlineArgs
 
     /// @brief Non-flag positional arguments.
     std::vector<std::string> positionalArgs;
+
+    /// @brief Index into positionalArgs at which the `--` end-of-options marker appeared.
+    ///
+    /// Entries from this index on were protected by the marker, so a leading `-` there is
+    /// part of a genuine operand rather than a mistyped flag. Empty when no `--` was given.
+    /// Callers that reject unrecognised flags need this: parseInlineArgs() demotes an
+    /// unknown flag to a positional, and without the marker's position there is no way to
+    /// tell that from an operand the user deliberately protected.
+    std::optional<size_t> endOfOptionsAt;
 
     /// @brief Check whether a boolean flag was given.
     [[nodiscard]] bool hasFlag(std::string_view flag) const;

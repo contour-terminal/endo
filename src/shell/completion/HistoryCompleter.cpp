@@ -7,7 +7,7 @@ namespace endo
 
 HistoryCompleter::HistoryCompleter(History const& history,
                                    EnvironmentProvider const& env,
-                                   FileSystem const* fs):
+                                   FileSystem const& fs):
     _history(history), _env(env), _fs(fs)
 {
 }
@@ -22,8 +22,7 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
     auto options = FuzzySearchOptions {
         .currentCwd = _env.currentDirectory(),
         .home = normalizedHomeDirectory(_env),
-        .validateRequiredPaths = _fs != nullptr,
-        .fs = _fs,
+        .fs = &_fs,
     };
     auto matches = _history.searchFuzzy(context.fullInput, 10, options);
 

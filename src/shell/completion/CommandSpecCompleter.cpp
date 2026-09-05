@@ -25,7 +25,7 @@ void CommandSpecCompleter::registerCommand(CommandSpec spec,
     {
         stored.aliasResolver = [&cache =
                                     *stored.cache](std::string_view alias) -> std::optional<std::string> {
-            auto const aliases = cache.query("aliases");
+            auto const& aliases = cache.query("aliases");
             for (auto const& entry: aliases)
             {
                 if (entry.text != alias)
@@ -93,17 +93,15 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         return !optDef || optDef->valueKind != OptionValueKind::Path;
     }
 
-    // Exclusive when completing DynamicQuery positional arguments (unless prefix looks like a file path)
+    // Exclusive when completing DynamicQuery positional arguments, unless the prefix looks like
+    // a file path -- commands whose arguments name a process or a program accept a path too.
     if (state->phase == CompletionPhase::Argument)
     {
-        auto const* sub = resolveSubcommand(cmd.spec, state->subcommandChain);
-        if (sub && !sub->positionalArgs.empty())
+        if (auto const* argDef = applicableArgDef(cmd.spec, *state))
         {
-            auto argIdx = std::min(state->positionalArgIndex, sub->positionalArgs.size() - 1);
-            auto const& argDef = sub->positionalArgs[argIdx];
-            if (argDef.kind == ArgKind::Subcommand)
+            if (argDef->kind == ArgKind::Subcommand)
                 return true;
-            if (argDef.kind == ArgKind::DynamicQuery)
+            if (argDef->kind == ArgKind::DynamicQuery)
                 return !CompletionContextAnalyzer::looksLikeFilePath(context.prefix);
         }
     }
@@ -159,7 +157,7 @@ std::vector<CompletionItem> CommandSpecCompleter::completeSubcommand(RegisteredC
     // Also add aliases as subcommand completions if available
     if (cmd.cache)
     {
-        auto const aliases = cmd.cache->query("aliases");
+        auto const& aliases = cmd.cache->query("aliases");
         for (auto const& alias: aliases)
         {
             candidates.push_back(CompletionCandidate {
@@ -229,39 +227,9 @@ std::vector<CompletionItem> CommandSpecCompleter::completeArgument(RegisteredCom
                                                                    CommandLineState const& state,
                                                                    std::string_view prefix)
 {
-    auto const* sub = resolveSubcommand(cmd.spec, state.subcommandChain);
-    auto const& argDefs = sub ? sub->positionalArgs : cmd.spec.positionalArgs;
-
-    if (argDefs.empty())
-        return {};
-
-    // Determine which ArgDef applies
-    auto argIdx = state.positionalArgIndex;
-    ArgDef const* argDef = nullptr;
-
-    for (auto const& def: argDefs)
-    {
-        if (argIdx == 0)
-        {
-            argDef = &def;
-            break;
-        }
-        if (def.repeatable)
-        {
-            argDef = &def;
-            break;
-        }
-        --argIdx;
-    }
-
+    auto const* argDef = applicableArgDef(cmd.spec, state);
     if (!argDef)
-    {
-        // Past all defined args — check if last is repeatable
-        if (!argDefs.empty() && argDefs.back().repeatable)
-            argDef = &argDefs.back();
-        else
-            return {};
-    }
+        return {};
 
     switch (argDef->kind)
     {
@@ -278,7 +246,7 @@ std::vector<CompletionItem> CommandSpecCompleter::completeArgument(RegisteredCom
                     break;
                 }
             }
-            auto const results = cmd.cache->query(effectiveTag);
+            auto const& results = cmd.cache->query(effectiveTag);
             return queryToCompletions(results, prefix, 80);
         }
         case ArgKind::Subcommand: {
@@ -338,7 +306,7 @@ std::vector<CompletionItem> CommandSpecCompleter::completeOptionValue(Registered
         case OptionValueKind::DynamicQuery: {
             if (!cmd.cache || optDef->queryTag.empty())
                 return {};
-            auto const results = cmd.cache->query(optDef->queryTag);
+            auto const& results = cmd.cache->query(optDef->queryTag);
             return queryToCompletions(results, prefix, 80);
         }
         case OptionValueKind::Path:
@@ -346,6 +314,27 @@ std::vector<CompletionItem> CommandSpecCompleter::completeOptionValue(Registered
         case OptionValueKind::None: return {};
     }
     return {};
+}
+
+ArgDef const* CommandSpecCompleter::applicableArgDef(CommandSpec const& spec, CommandLineState const& state)
+{
+    auto const* sub = resolveSubcommand(spec, state.subcommandChain);
+    auto const& argDefs = sub ? sub->positionalArgs : spec.positionalArgs;
+
+    if (argDefs.empty())
+        return nullptr;
+
+    auto argIdx = state.positionalArgIndex;
+    for (auto const& def: argDefs)
+    {
+        // A repeatable ArgDef keeps applying to every position from its own onwards.
+        if (argIdx == 0 || def.repeatable)
+            return &def;
+        --argIdx;
+    }
+
+    // Past all defined args: only a trailing repeatable one still applies.
+    return argDefs.back().repeatable ? &argDefs.back() : nullptr;
 }
 
 SubcommandDef const* CommandSpecCompleter::resolveSubcommand(CommandSpec const& spec,

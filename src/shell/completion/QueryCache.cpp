@@ -9,7 +9,7 @@ QueryCache::QueryCache(std::unique_ptr<CommandQueryProvider> provider, std::chro
 {
 }
 
-std::vector<QueryResult> QueryCache::query(std::string_view queryTag)
+std::vector<QueryResult> const& QueryCache::query(std::string_view queryTag)
 {
     auto const key = std::string(queryTag);
     auto const now = std::chrono::steady_clock::now();
@@ -21,9 +21,10 @@ std::vector<QueryResult> QueryCache::query(std::string_view queryTag)
             return it->second.data;
     }
 
-    auto results = _provider->query(queryTag);
-    _entries[key] = CacheEntry { .data = results, .timestamp = now };
-    return results;
+    auto& entry = _entries[key];
+    entry.data = _provider->query(queryTag);
+    entry.timestamp = now;
+    return entry.data;
 }
 
 void QueryCache::invalidateAll()

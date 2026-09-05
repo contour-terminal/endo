@@ -90,6 +90,15 @@ struct InlineCommandDescriptor
 /// @brief Generates markdown help text from a command descriptor.
 [[nodiscard]] std::string generateInlineHelp(InlineCommandDescriptor const& desc);
 
+/// @brief Generates the completion CommandSpec for a single command descriptor.
+///
+/// Shared by generateBuiltinCompletionSpecs() and by commands that carry a descriptor
+/// without being in the dispatch table (see whichDescriptor()).
+///
+/// @param desc The command descriptor to convert.
+/// @return The completion spec: options (plus an implicit -h/--help) and positional args.
+[[nodiscard]] CommandSpec specFromInlineDescriptor(InlineCommandDescriptor const& desc);
+
 /// @brief Generates CommandSpec entries for completion from inline command descriptors.
 [[nodiscard]] std::vector<CommandSpec> generateBuiltinCompletionSpecs(
     std::span<InlineCommandDescriptor const> descriptors);

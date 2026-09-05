@@ -61,7 +61,7 @@ Reach for this pattern when you see:
 - Copy-pasted code blocks differing only in literal values (names, flags, descriptions, types)
 - Several features (dispatch, parsing, help text, completion, LSP) that must all be updated together whenever a case is added — a sign they should share one descriptor
 
-Canonical example: builtin metadata is declared once in `static constexpr` descriptor tables and consumed by many features. The `InlineOptionDef[]` tables in `src/shell/builtins/InlineCommandDescriptors.cpp` (e.g. `kRmOptions`, `kCpOptions`) declare each builtin's flags a single time, and that one declaration drives dispatch, argument parsing, help generation, completion, and LSP. To teach a builtin a new flag you add a row to its table — no new branching code. See "Adding a New Builtin Function" below for the practical workflow.
+Canonical example: builtin metadata is declared once in `static constexpr` descriptor tables and consumed by many features. The `InlineOptionDef[]` tables in `src/shell/builtins/InlineCommandDescriptors.cpp` (e.g. `RmOptions`, `CpOptions`) declare each builtin's flags a single time, and that one declaration drives dispatch, argument parsing, help generation, completion, and LSP. To teach a builtin a new flag you add a row to its table — no new branching code. See "Adding a New Builtin Function" below for the practical workflow.
 
 - Avoid hardcoding values; use configuration, tables, or descriptors
 - Prefer a descriptor table feeding many consumers over parallel hand-maintained code paths
@@ -109,6 +109,7 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
   /// @return Description.
   ```
 - Naming conventions and static analysis rules are defined in `.clang-tidy` (authoritative source); clang-tidy runs automatically in debug builds
+- Constants — including `static constexpr` descriptor tables and class constants — are `CamelCase` with **no prefix** (`WhichOptions`, `RmOptions`, `DefaultPathExt`). Never use the Google-style `k` prefix (`kWhichOptions`)
 - Code formatting rules are defined in `.clang-format`; run `clang-format` after changes
 - Do not suppress clang-tidy warnings with `NOLINT` comments; fix the underlying issue
 - Use smart pointers for ownership; do not use raw owning pointers

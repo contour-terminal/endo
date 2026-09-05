@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
 #include <shell/completion/BuiltinSpecs.hpp>
+#include <shell/completion/CompositeQueryProvider.hpp>
 #include <shell/completion/DirconfigSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
 #include <shell/completion/HistorySpec.hpp>
+#include <shell/completion/PathCommandQueryProvider.hpp>
 #include <shell/completion/ProcessNameQueryProvider.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
@@ -19,30 +21,41 @@ namespace endo
 Completer::Completer(EnvironmentProvider const& env,
                      History const& history,
                      FSharpPersistentState const& fsharpState,
-                     FileSystem const* fs)
+                     FileSystem const& fs):
+    _pathCommands(env, fs)
 {
     _processProvider = createNativeProcessProvider();
 
     // Register default providers in priority order
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
-    _providers.push_back(std::make_unique<CommandCompleter>(env, history));
+    _providers.push_back(std::make_unique<CommandCompleter>(_pathCommands, env, history));
     _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
 
     // Git command spec completer (cmake/ssh/scp/ctest moved to scripted completers)
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
     specCompleter->registerCommand(createDirconfigSpec(), nullptr);
+    // Builtin specs declare their dynamic queries by tag (InlineCommandDescriptor::positionalQuery),
+    // so hand each one every provider that builtins can draw on and let the tag pick. Selecting a
+    // single provider at this site would mean a spec declaring a tag the chosen provider does not
+    // serve completes to nothing -- silently, since exclusivity still suppresses FileCompleter.
+    auto builtinQueryProvider = [&] {
+        auto providers = std::vector<std::unique_ptr<CommandQueryProvider>> {};
+        providers.push_back(std::make_unique<ProcessNameQueryProvider>(*_processProvider));
+        providers.push_back(std::make_unique<PathCommandQueryProvider>(_pathCommands, env));
+        return std::make_unique<CompositeQueryProvider>(std::move(providers));
+    };
+
     for (auto& spec: createBuiltinSpecs())
     {
-        // Process names are the only dynamic query that builtins declare (via
-        // InlineCommandDescriptor::positionalQuery), so any DynamicQuery
-        // positional is served by the shared ProcessNameQueryProvider.
         auto queryProvider = std::unique_ptr<CommandQueryProvider> {};
         if (std::ranges::any_of(spec.positionalArgs,
                                 [](ArgDef const& arg) { return arg.kind == ArgKind::DynamicQuery; }))
-            queryProvider = std::make_unique<ProcessNameQueryProvider>(*_processProvider);
+            queryProvider = builtinQueryProvider();
         specCompleter->registerCommand(std::move(spec), std::move(queryProvider));
     }
+    // `which` is a parser-level builtin, so createBuiltinSpecs() does not cover it.
+    specCompleter->registerCommand(createWhichSpec(), builtinQueryProvider());
     // Register after createBuiltinSpecs() to overwrite the auto-generated spec with subcommands
     specCompleter->registerCommand(createHistorySpec(), nullptr);
     _providers.push_back(std::move(specCompleter));

@@ -116,6 +116,17 @@ CheckOptions:
     value:           'NULL'
   - key:             modernize-use-default-member-init.UseAssignment
     value:           '1'
+  # Naming conventions. Constants are CamelCase with NO prefix -- the Google-style
+  # `k` prefix (kFooBar) is not used anywhere in this project, and every *Prefix
+  # below is pinned to '' to say so explicitly. CamelCase already rejects a leading
+  # lowercase `k`; the pins and this comment exist so the intent is discoverable
+  # rather than inferred. StaticConstant is deliberately left unpinned: it covers
+  # function-local statics (`static auto const table = ...`), which are camelBack
+  # throughout this codebase, and is not where a `k` prefix would appear anyway.
+  # Note that these rules are only advisory in practice today:
+  # src/ reaches every TU via -isystem (the vendored crispy/vtparser/coro/net targets
+  # are marked SYSTEM TRUE and their include root is src/ itself), so clang-tidy
+  # reports nothing for declarations in first-party headers.
   - key:             readability-identifier-naming.EnumCase
     value:           CamelCase
   - key:             readability-identifier-naming.EnumConstantCase
@@ -144,3 +155,11 @@ CheckOptions:
     value:           CamelCase
   - key:             readability-identifier-naming.ClassConstantCase
     value:           CamelCase
+  - key:             readability-identifier-naming.ClassConstantPrefix
+    value:           ''
+  - key:             readability-identifier-naming.ConstexprVariablePrefix
+    value:           ''
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalConstantPrefix
+    value:           ''

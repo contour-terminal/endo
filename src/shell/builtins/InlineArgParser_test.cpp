@@ -413,3 +413,33 @@ TEST_CASE("InlineArgParser.generateHelp_with_options_includes_help_row", "[argpa
     CHECK(help.find("## Options") != std::string::npos);
     CHECK(help.find("`-h`, `--help`") != std::string::npos);
 }
+
+TEST_CASE("InlineArgParser.endOfOptionsAt_records_marker_position")
+{
+    constexpr InlineOptionDef Options[] = {
+        { .shortFlag = "-a", .longFlag = "--all", .description = "All" },
+    };
+
+    SECTION("absent when no marker was given")
+    {
+        auto const parsed = parseInlineArgs(makeArgs({ "cmd", "-a", "file" }), Options);
+        CHECK_FALSE(parsed.endOfOptionsAt.has_value());
+        CHECK(parsed.positionalArgs == std::vector<std::string> { "file" });
+    }
+
+    SECTION("marks how many operands preceded the marker")
+    {
+        auto const parsed = parseInlineArgs(makeArgs({ "cmd", "-x", "--", "-y" }), Options);
+        // -x is unrecognised and demoted to a positional; -y is protected by the marker.
+        REQUIRE(parsed.endOfOptionsAt.has_value());
+        CHECK(*parsed.endOfOptionsAt == 1);
+        CHECK(parsed.positionalArgs == std::vector<std::string> { "-x", "-y" });
+    }
+
+    SECTION("zero when the marker comes first")
+    {
+        auto const parsed = parseInlineArgs(makeArgs({ "cmd", "--", "-y" }), Options);
+        REQUIRE(parsed.endOfOptionsAt.has_value());
+        CHECK(*parsed.endOfOptionsAt == 0);
+    }
+}

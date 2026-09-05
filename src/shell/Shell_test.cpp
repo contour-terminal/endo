@@ -515,8 +515,16 @@ TEST_CASE("shell.builtin.which_help_flag")
     TestShell shell;
     auto output = shell("which --help").output();
     CHECK(output.find("## Usage") != std::string::npos);
-    CHECK(output.find("--all") != std::string::npos);
     CHECK(shell.exitCode == 0);
+
+    // The options table is generated from whichDescriptor(), so every declared flag has
+    // to show up here -- this is what catches a flag added to the table but not documented.
+    CHECK(output.find("--all") != std::string::npos);
+    CHECK(output.find("--read-alias") != std::string::npos);
+    CHECK(output.find("--help") != std::string::npos);
+
+    // generateInlineHelp() knows nothing about exit status; builtinWhich appends it.
+    CHECK(output.find("## Exit Status") != std::string::npos);
 }
 
 TEST_CASE("shell.builtin.which_find_existing_program")
@@ -574,6 +582,29 @@ TEST_CASE("shell.builtin.which_invalid_option")
     TestShell shell;
     shell("which --invalid-option ls");
     CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_end_of_options_marker")
+{
+    TestShell shell;
+
+    // `--` protects a leading-dash operand from being read as a flag...
+    auto output = shell("which -- ls").output();
+    CHECK(output.find("ls") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+
+    // ...but only the operands after it. A bad flag before `--` is still a bad flag,
+    // not a program name to look up.
+    shell("which -x -- ls");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_bundled_short_flags")
+{
+    TestShell shell;
+    // Bundled shorts come from the shared inline argument parser; -ai is -a plus -i.
+    shell("which -ai ls");
+    CHECK(shell.exitCode == 0);
 }
 
 TEST_CASE("shell.builtin.which_read_alias_warning")
@@ -5189,7 +5220,8 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer = std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState());
+    ts.shell.completer =
+        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();
