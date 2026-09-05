@@ -16,24 +16,55 @@
 namespace
 {
 
-/// @brief Builds a filesystem with two $PATH directories worth of executables.
+// $PATH is separated and executables are recognised differently per platform, and the code
+// under test deliberately follows CommandResolver on both counts. The fixture therefore has
+// to speak the host's dialect, or every lookup silently finds nothing.
+#if defined(_WIN32)
+constexpr auto PathSep = ";";
+constexpr auto ExeSuffix = ".exe"; // must be in DefaultPathExt; command names drop it
+#else
+constexpr auto PathSep = ":";
+constexpr auto ExeSuffix = "";
+#endif
+
+/// @brief Returns @p path with the host's executable suffix appended.
+std::string exe(std::string_view path)
+{
+    return std::string(path) + ExeSuffix;
+}
+
+/// @brief Joins $PATH entries with the host's separator.
+std::string pathList(std::initializer_list<std::string_view> dirs)
+{
+    auto result = std::string {};
+    for (auto const& dir: dirs)
+    {
+        if (!result.empty())
+            result += PathSep;
+        result += dir;
+    }
+    return result;
+}
+
+/// @brief Builds a filesystem with several $PATH directories worth of executables.
 ///
 /// /usr/bin holds git, git-lfs and a non-executable README; /usr/local/bin shadows git
-/// (so $PATH precedence can be observed) and adds gio.
+/// (so $PATH precedence can be observed) and adds gio. The two home directories exercise
+/// component-aware `~` collapsing.
 endo::InMemoryFileSystem makePathFilesystem()
 {
     return endo::InMemoryFileSystem {
         { .path = "/usr/bin", .isDirectory = true },
-        { .path = "/usr/bin/git", .isExecutable = true },
-        { .path = "/usr/bin/git-lfs", .isExecutable = true },
+        { .path = exe("/usr/bin/git"), .isExecutable = true },
+        { .path = exe("/usr/bin/git-lfs"), .isExecutable = true },
         { .path = "/usr/bin/README", .content = "not a program" },
         { .path = "/usr/local/bin", .isDirectory = true },
-        { .path = "/usr/local/bin/git", .isExecutable = true },
-        { .path = "/usr/local/bin/gio", .isExecutable = true },
+        { .path = exe("/usr/local/bin/git"), .isExecutable = true },
+        { .path = exe("/usr/local/bin/gio"), .isExecutable = true },
         { .path = "/home/testuser/bin", .isDirectory = true },
-        { .path = "/home/testuser/bin/mytool", .isExecutable = true },
+        { .path = exe("/home/testuser/bin/mytool"), .isExecutable = true },
         { .path = "/home/testuserx/bin", .isDirectory = true },
-        { .path = "/home/testuserx/bin/othertool", .isExecutable = true },
+        { .path = exe("/home/testuserx/bin/othertool"), .isExecutable = true },
     };
 }
 
@@ -47,8 +78,11 @@ struct PathFixture
     endo::TestEnvironment env;
     endo::PathCommandIndex index { env, fs };
 
-    /// @param path Value for $PATH; the index reads it lazily, on the first entries() call.
-    explicit PathFixture(std::string_view path) { env.set("PATH", path); }
+    /// @param dirs $PATH entries; the index reads them lazily, on the first entries() call.
+    explicit PathFixture(std::initializer_list<std::string_view> dirs) { env.set("PATH", pathList(dirs)); }
+
+    /// @brief Sets $PATH to a raw value, for the malformed-input cases.
+    void setRawPath(std::string_view value) { env.set("PATH", value); }
 
     /// @brief Returns the indexed command names, in order.
     [[nodiscard]] std::vector<std::string> names() const
@@ -85,7 +119,7 @@ struct PathFixture
 
 TEST_CASE("PathCommandIndex.enumerates_only_executables")
 {
-    PathFixture const fx { "/usr/bin:/usr/local/bin" };
+    PathFixture const fx { "/usr/bin", "/usr/local/bin" };
 
     // README has no execute bit, so it must not appear; git is deduplicated across the two
     // directories. Sorted by name: "gio" < "git" < "git-lfs".
@@ -95,8 +129,8 @@ TEST_CASE("PathCommandIndex.enumerates_only_executables")
 TEST_CASE("PathCommandIndex.earlier_path_entry_wins")
 {
     // The reported path must be the one that would actually run.
-    CHECK(PathFixture { "/usr/bin:/usr/local/bin" }.pathOf("git") == "/usr/bin/git");
-    CHECK(PathFixture { "/usr/local/bin:/usr/bin" }.pathOf("git") == "/usr/local/bin/git");
+    CHECK(PathFixture { "/usr/bin", "/usr/local/bin" }.pathOf("git") == exe("/usr/bin/git"));
+    CHECK(PathFixture { "/usr/local/bin", "/usr/bin" }.pathOf("git") == exe("/usr/local/bin/git"));
 }
 
 TEST_CASE("PathCommandIndex.rescans_when_path_changes")
@@ -112,7 +146,7 @@ TEST_CASE("PathCommandIndex.tolerates_empty_and_missing_path_entries")
 {
     SECTION("unset PATH")
     {
-        PathFixture fx { "" };
+        PathFixture fx { "/usr/bin" };
         fx.env.unset("PATH");
         CHECK(fx.names().empty());
     }
@@ -124,9 +158,32 @@ TEST_CASE("PathCommandIndex.tolerates_empty_and_missing_path_entries")
 
     SECTION("nonexistent and empty segments are skipped")
     {
-        CHECK(PathFixture { "::/nope:/usr/bin:" }.names() == std::vector<std::string> { "git", "git-lfs" });
+        auto fx = PathFixture { "/usr/bin" };
+        fx.setRawPath(pathList({ "", "", "/nope", "/usr/bin", "" }));
+        CHECK(fx.names() == std::vector<std::string> { "git", "git-lfs" });
     }
 }
+
+#if defined(_WIN32)
+TEST_CASE("PathCommandIndex.matches_uppercase_PATHEXT")
+{
+    // Windows ships PATHEXT upper-cased (".COM;.EXE;..."). The index lower-cases the file's
+    // extension before comparing, so the list has to be lower-cased too or nothing matches
+    // and $PATH completion silently returns nothing.
+    PathFixture fx { "/usr/bin" };
+    fx.env.set("PATHEXT", ".COM;.EXE;.BAT");
+
+    CHECK(fx.names() == std::vector<std::string> { "git", "git-lfs" });
+}
+
+TEST_CASE("PathCommandIndex.ignores_files_outside_PATHEXT")
+{
+    PathFixture fx { "/usr/bin" };
+    fx.env.set("PATHEXT", ".BAT");
+
+    CHECK(fx.names().empty());
+}
+#endif
 
 // =============================================================================
 // PathCommandQueryProvider
@@ -150,7 +207,7 @@ TEST_CASE("PathCommandQueryProvider.reports_names_with_resolved_paths")
 
     REQUIRE(results.size() == 2);
     CHECK(results[0].text == "git");
-    CHECK(results[0].description == "/usr/bin/git");
+    CHECK(results[0].description == exe("/usr/bin/git"));
     CHECK(results[1].text == "git-lfs");
 }
 
@@ -164,7 +221,7 @@ TEST_CASE("PathCommandQueryProvider.collapses_home_prefix_in_description")
 
     REQUIRE(results.size() == 1);
     CHECK(results[0].text == "mytool");
-    CHECK(results[0].description == "~/bin/mytool");
+    CHECK(results[0].description == exe("~/bin/mytool"));
 }
 
 TEST_CASE("PathCommandQueryProvider.leaves_paths_outside_home_untouched")
@@ -177,7 +234,7 @@ TEST_CASE("PathCommandQueryProvider.leaves_paths_outside_home_untouched")
     auto const results = provider.query("path-commands");
 
     REQUIRE(results.size() == 1);
-    CHECK(results[0].description == "/home/testuserx/bin/othertool");
+    CHECK(results[0].description == exe("/home/testuserx/bin/othertool"));
 }
 
 // =============================================================================
@@ -186,7 +243,7 @@ TEST_CASE("PathCommandQueryProvider.leaves_paths_outside_home_untouched")
 
 TEST_CASE("WhichCompletion.completes_program_names_not_files")
 {
-    PathFixture const fx { "/usr/bin:/usr/local/bin" };
+    PathFixture const fx { "/usr/bin", "/usr/local/bin" };
     auto completer = fx.whichCompleter();
 
     auto const results = completer.complete(endo::test::makeArgumentContext("which gi", "gi", "which"));
@@ -198,7 +255,7 @@ TEST_CASE("WhichCompletion.completes_program_names_not_files")
 
 TEST_CASE("WhichCompletion.positional_is_repeatable")
 {
-    PathFixture const fx { "/usr/bin:/usr/local/bin" };
+    PathFixture const fx { "/usr/bin", "/usr/local/bin" };
     auto completer = fx.whichCompleter();
 
     // A second program name must still complete against $PATH, not fall through to files.
