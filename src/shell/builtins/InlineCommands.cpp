@@ -4609,7 +4609,13 @@ namespace
         int exitCode = 0;
     };
 
-    ReadLinesResult readLinesFromInput(endo::NativeHandle stdinFd,
+    /// @brief Reads every line from stdin or from @p files.
+    ///
+    /// Takes the filesystem rather than opening an ifstream directly, so the six builtins
+    /// sharing this helper -- head, tail, wc, sort, uniq and cut -- read through the same
+    /// injected filesystem as the rest of the shell instead of going straight to disk.
+    ReadLinesResult readLinesFromInput(endo::platform::FileSystem const& fs,
+                                       endo::NativeHandle stdinFd,
                                        std::span<std::string const> files,
                                        auto const& errorFn)
     {
@@ -4661,14 +4667,14 @@ namespace
                 }
                 else
                 {
-                    std::ifstream ifs(platform::resolveDevicePath(file));
-                    if (!ifs)
+                    auto stream = fs.openRead(platform::resolveDevicePath(file));
+                    if (!stream || !*stream)
                     {
                         errorFn(std::format("{}: No such file or directory", file));
                         result.hadError = true;
                         continue;
                     }
-                    readFromStream(ifs);
+                    readFromStream(*stream);
                 }
             }
         }
@@ -4727,7 +4733,7 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("head: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -4857,7 +4863,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         auto const errorFn = [this](std::string const& msg) {
             error("tail: {}", msg);
         };
-        auto const result = readLinesFromInput(stdinFd, files, errorFn);
+        auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
         if (result.exitCode != 0)
             return result.exitCode;
         auto const& lines = result.lines;
@@ -4905,7 +4911,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("tail: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5195,7 +5201,7 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const errorFn = [this](std::string const& msg) {
         error("wc: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5316,7 +5322,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("sort: {}", msg);
     };
-    auto result = readLinesFromInput(stdinFd, files, errorFn);
+    auto result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5431,7 +5437,7 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("uniq: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5584,7 +5590,7 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
     auto const errorFn = [this](std::string const& msg) {
         error("cut: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)

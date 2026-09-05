@@ -143,6 +143,22 @@ inline constexpr bool FilesystemCaseInsensitive =
 /// @return The path with on-disk capitalization and forward slashes.
 [[nodiscard]] auto canonicalCasePath(std::filesystem::path const& p) -> std::string;
 
+/// @brief Reduces a path to its canonical lexical spelling without a trailing separator.
+///
+/// `lexically_normal()` keeps a trailing separator whenever the final component was `.`
+/// or `..`, so `foo/.` normalizes to `foo/` rather than `foo`. That distinction is never
+/// meaningful for identity — `foo/` and `foo` name the same entry — but it does break any
+/// comparison or map lookup keyed on the normalized spelling. This applies the
+/// normalization and drops the separator, leaving the root itself intact (`/` on POSIX,
+/// and `C:/` on Windows — `C:` would name the drive's current directory, not its root).
+///
+/// The result is spelled with forward slashes on every platform. The check is purely
+/// lexical and touches no filesystem.
+///
+/// @param path The path to reduce.
+/// @return The normalized path without a trailing separator.
+[[nodiscard]] std::string stripTrailingSeparator(std::filesystem::path const& path);
+
 /// @brief Tests whether two paths name the same directory entry differing only in
 /// the lettercase of their final component.
 ///

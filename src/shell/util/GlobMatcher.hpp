@@ -6,16 +6,30 @@
 #include <string_view>
 #include <vector>
 
+#include <platform/FileSystem.hpp>
 #include <platform/GlobMatch.hpp>
 
 namespace endo
 {
 
 /// Expands a glob pattern to matching file paths. Returns empty if no matches.
-[[nodiscard]] std::vector<std::string> expandGlobPattern(std::string_view pattern);
+///
+/// Enumerates @p fileSystem rather than the real filesystem: a shell told to operate on an injected
+/// filesystem must expand `*.txt` against the same one it will then act on, or it deletes
+/// files it never listed.
+///
+/// @param fileSystem Filesystem to enumerate.
+/// @param pattern The glob pattern.
+/// @return Matching paths, or empty when nothing matches.
+[[nodiscard]] std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSystem,
+                                                         std::string_view pattern);
 
 /// Expands a recursive glob pattern (containing **) to matching file paths.
-[[nodiscard]] std::vector<std::string> expandRecursiveGlob(std::string_view pattern);
+/// @param fileSystem Filesystem to enumerate.
+/// @param pattern The glob pattern.
+/// @return Matching paths, or empty when nothing matches.
+[[nodiscard]] std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem,
+                                                           std::string_view pattern);
 
 /// Matches text against a shell glob pattern (for parameter expansion).
 [[nodiscard]] inline bool globMatch(std::string_view text, std::string_view pattern)

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GlobMatcher.hpp"
 
-#include <platform/PathUtils.hpp>
-
 #include <algorithm>
 #include <filesystem>
 #include <ranges>
 #include <string>
 
+#include <platform/PathUtils.hpp>
+
 namespace endo
 {
 
-std::vector<std::string> expandGlobPattern(std::string_view pattern)
+std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSystem, std::string_view pattern)
 {
     namespace fs = std::filesystem;
     std::vector<std::string> results;
@@ -20,7 +20,7 @@ std::vector<std::string> expandGlobPattern(std::string_view pattern)
     auto const starstarPos = patternStr.find("**");
     if (starstarPos != std::string::npos)
     {
-        return expandRecursiveGlob(patternStr);
+        return expandRecursiveGlob(fileSystem, patternStr);
     }
 
     fs::path patternPath(patternStr);
@@ -38,24 +38,21 @@ std::vector<std::string> expandGlobPattern(std::string_view pattern)
         return {};
     }
 
-    std::error_code ec;
-    if (!fs::exists(dirPath, ec) || ec)
+    auto const listing = fileSystem.listDirectory(dirPath);
+    if (!listing)
     {
         return {};
     }
 
-    for (auto const& entry: fs::directory_iterator(dirPath, ec))
+    for (auto const& entry: *listing)
     {
-        if (ec)
-            break;
-
-        std::string filename = entry.path().filename().string();
+        std::string filename = entry.path.filename().string();
         if (globMatchFilename(filename, filePattern))
         {
             if (dirPath == ".")
                 results.push_back(filename);
             else
-                results.push_back(platform::normalizePath(entry.path()));
+                results.push_back(platform::normalizePath(entry.path));
         }
     }
 
@@ -64,9 +61,8 @@ std::vector<std::string> expandGlobPattern(std::string_view pattern)
     return results;
 }
 
-std::vector<std::string> expandRecursiveGlob(std::string_view pattern)
+std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem, std::string_view pattern)
 {
-    namespace fs = std::filesystem;
     std::vector<std::string> results;
     std::string patternStr(pattern);
 
@@ -84,20 +80,16 @@ std::vector<std::string> expandRecursiveGlob(std::string_view pattern)
     while (!suffixPattern.empty() && (suffixPattern.front() == '/' || suffixPattern.front() == '\\'))
         suffixPattern.erase(0, 1);
 
-    std::error_code ec;
-    if (!fs::exists(basePath, ec) || ec)
+    if (!fileSystem.isDirectory(basePath))
         return {};
 
-    for (auto const& entry: fs::recursive_directory_iterator(basePath, ec))
+    for (auto const& entry: fileSystem.walkDirectoryRecursive(basePath))
     {
-        if (ec)
-            break;
-
-        if (!entry.is_regular_file())
+        if (!entry.isRegularFile)
             continue;
 
-        std::string filePath = platform::normalizePath(entry.path());
-        std::string filename = entry.path().filename().string();
+        std::string filePath = platform::normalizePath(entry.path);
+        std::string filename = entry.path.filename().string();
 
         if (!suffixPattern.empty())
         {

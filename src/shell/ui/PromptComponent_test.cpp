@@ -15,8 +15,8 @@
 #include <thread>
 
 #include "PromptComponent.hpp"
+#include <platform/NativeFileSystem.hpp>
 #include <platform/PathUtils.hpp>
-#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 #include <testing/ScopedTempDir.hpp>
 
@@ -119,7 +119,9 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fileSystem;
+    // Real filesystem: these complete against directories created on disk above,
+    // and assert the on-disk capitalisation that only a real lookup can supply.
+    auto const& fileSystem = endo::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
     // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
@@ -156,7 +158,9 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fileSystem;
+    // Real filesystem: these complete against directories created on disk above,
+    // and assert the on-disk capitalisation that only a real lookup can supply.
+    auto const& fileSystem = endo::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
     auto const typed = "cd " + endo::platform::normalizePath((base / "space").string());

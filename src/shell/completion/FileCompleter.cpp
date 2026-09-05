@@ -17,7 +17,7 @@
 namespace endo
 {
 
-FileCompleter::FileCompleter(EnvironmentProvider const& env): _env(env)
+FileCompleter::FileCompleter(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
 {
 }
 
@@ -60,6 +60,10 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
 
     // Returns the on-disk capitalization of an existing absolute path so completions
     // echo the real case rather than the case the user typed (e.g. "D:/foo" -> "D:/Foo").
+    // This deliberately bypasses _fs: FileSystem models no case-canonicalization, and
+    // canonicalCasePath() is a Windows-only on-disk query (identity on POSIX). An injected
+    // filesystem addressed by a drive-letter path would therefore be asked about the real
+    // drive's casing -- add a FileSystem::canonicalCase() before writing such a test.
     // Relative and tilde-prefixed paths are left exactly as typed: canonicalCasePath()
     // resolves to an absolute path and would otherwise rewrite "foo/" into an absolute
     // path or expand "~/foo" into the literal home directory.
@@ -75,11 +79,10 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
             s += '/';
     };
 
-    std::error_code ec;
     std::filesystem::path dir;
     std::string filePrefix;
 
-    if (std::filesystem::is_directory(expandedPath, ec) && !ec)
+    if (_fs.isDirectory(expandedPath))
     {
         // If path is a directory and ends with /, list its contents
         if (!prefix.empty() && prefix.back() == '/')
@@ -133,6 +136,7 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
             {
                 // Use the on-disk capitalization (and upper-case drive letter on Windows)
                 // so the completed prefix matches the real path, not the user's typed case.
+                // Bypasses _fs for the same reason as caseCorrect() above.
                 // Only canonicalize absolute paths: canonicalCasePath() resolves to an
                 // absolute path, which would otherwise rewrite a relative prefix the user
                 // typed (e.g. "foo/") into an absolute one.
@@ -144,7 +148,7 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
     }
 
     // Check if directory exists
-    if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
+    if (!_fs.isDirectory(dir))
         return {};
 
     return listDirectory(dir, filePrefix, pathPrefix);
@@ -208,10 +212,9 @@ bool FileCompleter::isHidden(std::string_view name)
 
 std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path const& dir,
                                                          std::string_view prefix,
-                                                         std::string_view pathPrefix)
+                                                         std::string_view pathPrefix) const
 {
     std::vector<CompletionItem> results;
-    std::error_code ec;
 
     // Determine if we should show hidden files
     bool showHidden = !prefix.empty() && prefix[0] == '.';
@@ -227,12 +230,13 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     // smart-case matching is kept there.
     bool const caseInsensitive = platform::FilesystemCaseInsensitive;
 
-    for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
-    {
-        if (ec)
-            break;
+    auto const listing = _fs.listDirectory(dir);
+    if (!listing)
+        return results;
 
-        auto filename = entry.path().filename().string();
+    for (auto const& entry: *listing)
+    {
+        auto filename = entry.path.filename().string();
 
         // Skip hidden files unless prefix starts with dot
         if (isHidden(filename) && !showHidden)
@@ -260,7 +264,7 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         if (!isPrefixMatch && !isFuzzyMatch)
             continue;
 
-        bool isDir = entry.is_directory(ec);
+        bool const isDir = entry.isDirectory;
         std::string displayName = filename;
         std::string fullPath = std::string(pathPrefix) + filename;
 

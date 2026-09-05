@@ -288,11 +288,16 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
     auto entries = std::vector<DirectoryEntry> {};
     for (auto const& entry: fs::directory_iterator(path, ec))
     {
+        // error_code overloads: the throwing ones escape as filesystem_error whenever an
+        // entry cannot be stat'ed (EACCES on a readable-but-not-searchable directory, or a
+        // filesystem that reports DT_UNKNOWN), which would abort listing an otherwise
+        // perfectly readable directory. An unknown entry is reported as neither.
+        std::error_code entryEc;
         entries.push_back(DirectoryEntry {
             .path = entry.path(),
-            .isDirectory = entry.is_directory(),
-            .isRegularFile = entry.is_regular_file(),
-            .isSymlink = entry.is_symlink(),
+            .isDirectory = entry.is_directory(entryEc),
+            .isRegularFile = entry.is_regular_file(entryEc),
+            .isSymlink = entry.is_symlink(entryEc),
         });
     }
     if (ec)
@@ -317,11 +322,15 @@ Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
     for (; !ec && it != end; it.increment(ec))
     {
         auto const& entry = *it;
+        // error_code overloads, so an unstattable entry is reported as neither a directory
+        // nor a regular file instead of throwing filesystem_error out of the coroutine.
+        // `entryEc` is deliberately separate from `ec`, which drives the loop.
+        std::error_code entryEc;
         co_yield DirectoryEntry {
             .path = entry.path(),
-            .isDirectory = entry.is_directory(),
-            .isRegularFile = entry.is_regular_file(),
-            .isSymlink = entry.is_symlink(),
+            .isDirectory = entry.is_directory(entryEc),
+            .isRegularFile = entry.is_regular_file(entryEc),
+            .isSymlink = entry.is_symlink(entryEc),
             // recursive_directory_iterator::depth() is 0 for a direct child; +1 to match the
             // walk-root-relative convention (direct child = depth 1) consumers expect.
             .depth = it.depth() + 1,

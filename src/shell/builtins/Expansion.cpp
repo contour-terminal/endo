@@ -56,7 +56,7 @@ void Shell::builtinExpandGlob(CoreVM::Params& context)
 {
     auto const& pattern = context.getString(1);
 
-    auto matches = expandGlobPattern(pattern);
+    auto matches = expandGlobPattern(_fs, pattern);
     if (matches.empty())
     {
         cmdBuilderArgs().push_back(pattern);

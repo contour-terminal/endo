@@ -3,6 +3,7 @@
 #include <format>
 #include <sstream>
 
+#include <platform/PathUtils.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 
 namespace endo::platform::testing
@@ -140,11 +141,11 @@ InMemoryFileSystem::InMemoryFileSystem(std::initializer_list<FileEntry> entries)
 
 std::string InMemoryFileSystem::normalize(std::filesystem::path const& path) const
 {
-    auto result = path.is_relative() ? (_currentPath / path).lexically_normal().string()
-                                     : path.lexically_normal().string();
-    // Normalize to forward slashes for cross-platform consistency
-    std::ranges::replace(result, '\\', '/');
-    return result;
+    // stripTrailingSeparator() normalizes, spells the result with forward slashes for
+    // cross-platform consistency, and drops the trailing separator lexically_normal()
+    // leaves behind for a final "." or ".." -- without which "/test/." would never match
+    // the "/test" held in the directory set.
+    return platform::stripTrailingSeparator(path.is_relative() ? _currentPath / path : path);
 }
 
 void InMemoryFileSystem::ensureParentDirectories(std::filesystem::path const& path) const

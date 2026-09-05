@@ -273,6 +273,39 @@ TEST_CASE("platformRead.returns_zero_on_closed_pipe_eof", "[platform]")
 }
 
 // ============================================================================
+// stripTrailingSeparator
+// ============================================================================
+
+TEST_CASE("stripTrailingSeparator.drops_the_artifact_left_by_lexically_normal", "[platform]")
+{
+    // A final "." or ".." makes lexically_normal() keep a trailing separator, which would
+    // otherwise not compare equal to the same path spelled without one.
+    CHECK(stripTrailingSeparator("/test/.") == "/test");
+    CHECK(stripTrailingSeparator("/test/sub/..") == "/test");
+    CHECK(stripTrailingSeparator("/test/") == "/test");
+    CHECK(stripTrailingSeparator("/test") == "/test");
+    // Relative paths keep their spelling, minus the separator.
+    CHECK(stripTrailingSeparator("foo/") == "foo");
+    CHECK(stripTrailingSeparator("foo/.") == "foo");
+}
+
+TEST_CASE("stripTrailingSeparator.never_strips_into_the_root", "[platform]")
+{
+    // The root is the one path whose trailing separator carries meaning: "/" is the root
+    // directory, whereas "" is no path at all.
+    CHECK(stripTrailingSeparator("/") == "/");
+    CHECK(stripTrailingSeparator("/.") == "/");
+
+#if defined(_WIN32)
+    // Likewise a drive root: "C:/" is the root of drive C, while "C:" names that drive's
+    // current directory -- a different location entirely.
+    CHECK(stripTrailingSeparator("C:/") == "C:/");
+    CHECK(stripTrailingSeparator("C:/.") == "C:/");
+    CHECK(stripTrailingSeparator("C:/test/") == "C:/test");
+#endif
+}
+
+// ============================================================================
 // isCaseOnlyRename
 // ============================================================================
 

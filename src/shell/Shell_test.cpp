@@ -33,6 +33,7 @@ using crispy::escape;
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include <platform/InstallPaths.hpp>
+#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 #include <testing/ScopedTempDir.hpp>
@@ -1292,6 +1293,43 @@ TEST_CASE("shell.builtin.rm_dot_rejection")
 // ============================================================================
 // mkdir builtin
 // ============================================================================
+
+TEST_CASE("shell.expand.glob_expands_against_the_injected_filesystem")
+{
+    // Glob expansion used to enumerate the real disk while the builtin it fed then acted on
+    // the injected filesystem -- so `rm *.txt` listed one set of files and deleted another.
+    InMemoryShell shell;
+    shell.fs.addFile("/test/globbed/a.txt", "a");
+    shell.fs.addFile("/test/globbed/b.txt", "b");
+    shell.fs.addFile("/test/globbed/c.log", "c");
+
+    auto const listed = shell("echo /test/globbed/*.txt").output();
+    CHECK(listed.find("a.txt") != std::string::npos);
+    CHECK(listed.find("b.txt") != std::string::npos);
+    CHECK(listed.find("c.log") == std::string::npos);
+
+    // And what it expanded is what it removes.
+    shell("rm /test/globbed/*.txt");
+    CHECK(shell.exitCode == 0);
+    CHECK(!shell.fs.exists("/test/globbed/a.txt"));
+    CHECK(!shell.fs.exists("/test/globbed/b.txt"));
+    CHECK(shell.fs.exists("/test/globbed/c.log"));
+}
+
+TEST_CASE("shell.builtin.head_and_wc_read_through_the_injected_filesystem")
+{
+    // head/tail/wc/sort/uniq/cut/tr share readLinesFromInput, which now opens files through
+    // Shell's FileSystem rather than an ifstream. Without that these could only be tested
+    // against a real directory.
+    InMemoryShell shell;
+    shell.fs.addFile("/test/lines.txt", "one\ntwo\nthree\n");
+
+    CHECK(shell("head -n 2 /test/lines.txt").output() == "one\ntwo\n");
+    CHECK(shell.exitCode == 0);
+
+    auto const counted = shell("wc -l /test/lines.txt").output();
+    CHECK(counted.find('3') != std::string::npos);
+}
 
 TEST_CASE("shell.builtin.mkdir_help")
 {
@@ -2974,16 +3012,13 @@ TEST_CASE("shell.jobs.wait_with_job_id")
 TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
 {
     // Create a temporary directory with "src" and "scripts" subdirectories
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_test_completion" };
-    auto const& tempDir = tempDirGuard.path();
-    std::filesystem::create_directories(tempDir / "src");
-    std::filesystem::create_directories(tempDir / "scripts");
-
-    // Change to the temp directory for testing
-    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
+    auto fs = endo::InMemoryFileSystem {};
+    fs.addDirectory("/test/src");
+    fs.addDirectory("/test/scripts");
+    fs.setCurrentPath("/test");
 
     endo::TestEnvironment env;
-    endo::FileCompleter completer(env);
+    endo::FileCompleter completer(env, fs);
 
     // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
     endo::CompletionContext context {
@@ -3018,17 +3053,12 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     // Regression: a relative nested prefix (e.g. "sub/it") must keep its relative
     // form in the completion. On Windows, canonicalizing the parent directory would
     // resolve it to an absolute path and rewrite the user's typed relative prefix.
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_rel_completion" };
-    auto const& tempDir = tempDirGuard.path();
-    std::filesystem::create_directories(tempDir / "sub");
-    {
-        std::ofstream(tempDir / "sub" / "item.txt");
-    }
-
-    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
+    auto fs = endo::InMemoryFileSystem {};
+    fs.addFile("/test/sub/item.txt", "");
+    fs.setCurrentPath("/test");
 
     endo::TestEnvironment env;
-    endo::FileCompleter completer(env);
+    endo::FileCompleter completer(env, fs);
 
     endo::CompletionContext context {
         .type = endo::CompletionContextType::FilePath,
@@ -3048,12 +3078,14 @@ TEST_CASE("FileCompleter.absolute_directory_corrects_case")
     // On case-insensitive filesystems, completing an absolute directory typed in the
     // wrong case must echo the on-disk capitalization (".../foo" -> ".../Foo/") rather
     // than the case the user typed.
+    // Stays on the real filesystem: InMemoryFileSystem does not model case-insensitive
+    // lookup, so an injected one would make this pass without testing anything.
     auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_case_completion" };
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "Foo");
 
     endo::TestEnvironment env;
-    endo::FileCompleter completer(env);
+    endo::FileCompleter completer(env, endo::NativeFileSystem::instance());
 
     // Type the directory in lower-case; it resolves case-insensitively to "Foo".
     auto const typed = endo::platform::normalizePath((tempDir / "foo").string());
@@ -3076,12 +3108,13 @@ TEST_CASE("FileCompleter.partial_prefix_corrects_case")
     // A partial directory name typed in the wrong case (even with leading upper-case,
     // which would otherwise trigger smart-case) must still match and recase on a
     // case-insensitive filesystem (e.g. "Lastrada-to" -> "lastrada-tools/").
+    // Real filesystem, for the same reason as the test above.
     auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_partial_case_completion" };
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "lastrada-tools");
 
     endo::TestEnvironment env;
-    endo::FileCompleter completer(env);
+    endo::FileCompleter completer(env, endo::NativeFileSystem::instance());
 
     auto const typed = endo::platform::normalizePath((tempDir / "Lastrada-to").string());
     endo::CompletionContext context {
