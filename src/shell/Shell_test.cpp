@@ -33,9 +33,10 @@ using crispy::escape;
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include <platform/InstallPaths.hpp>
-#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
+#include <testing/ScopedTempDir.hpp>
+#include <testing/ScopedWorkingDirectory.hpp>
 
 namespace
 {
@@ -911,43 +912,44 @@ TEST_CASE("shell.builtin.cat_help_shows_image_options")
 
 TEST_CASE("shell.builtin.cat_raw_flag")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const rawPpmPath = (tempDir / "raw.ppm").generic_string();
     // Write a PPM image and cat it with --raw — should get raw bytes
     TestShell shell;
     // Create a minimal PPM file
-    shell(R"(echo -e 'P6\n1 1\n255\n' > /tmp/endo_test_cat_raw.ppm)");
-    auto output = shell("cat --raw /tmp/endo_test_cat_raw.ppm").output();
+    shell(std::format(R"(echo -e 'P6\n1 1\n255\n' > {})", rawPpmPath));
+    auto output = shell(std::format("cat --raw {}", rawPpmPath)).output();
     CHECK(output.find("P6") != std::string::npos);
-    std::filesystem::remove("/tmp/endo_test_cat_raw.ppm");
 }
 
 #if !defined(_WIN32)
 TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const binaryPath = (tempDir / "binary.dat").generic_string();
     // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
     {
-        std::ofstream f("/tmp/endo_test_binary.dat", std::ios::binary);
+        std::ofstream f(binaryPath, std::ios::binary);
         f << "hello" << '\0' << "world";
     }
     TestShell shell;
-    shell("cat /tmp/endo_test_binary.dat");
+    shell(std::format("cat {}", binaryPath));
     CHECK(shell.exitCode == 1);
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_binary.dat", ec);
 }
 
 TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const binaryRawPath = (tempDir / "binary.dat").generic_string();
     // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
     {
-        std::ofstream f("/tmp/endo_test_binary_raw.dat", std::ios::binary);
+        std::ofstream f(binaryRawPath, std::ios::binary);
         f << "hello" << '\0' << "world";
     }
     TestShell shell;
-    static_cast<void>(shell("cat --raw /tmp/endo_test_binary_raw.dat").output());
+    static_cast<void>(shell(std::format("cat --raw {}", binaryRawPath)).output());
     // With --raw, binary data should pass through (exit code 0)
     CHECK(shell.exitCode == 0);
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_binary_raw.dat", ec);
 }
 #endif
 
@@ -1160,15 +1162,15 @@ TEST_CASE("shell.builtin.rm_file")
 
 TEST_CASE("shell.builtin.rm_nonexistent")
 {
-    TestShell shell;
-    shell("rm /tmp/endo_rm_test_nonexistent_file_xyz");
+    InMemoryShell shell;
+    shell("rm /test/does_not_exist");
     CHECK(shell.exitCode == 1);
 }
 
 TEST_CASE("shell.builtin.rm_force_nonexistent")
 {
-    TestShell shell;
-    shell("rm -f /tmp/endo_rm_test_nonexistent_file_xyz");
+    InMemoryShell shell;
+    shell("rm -f /test/does_not_exist");
     CHECK(shell.exitCode == 0);
 }
 
@@ -1756,8 +1758,8 @@ TEST_CASE("shell.builtin.mv_double_dash")
 TEST_CASE("shell.builtin.mv_multiple_to_dir")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_multidir";
-    fs::remove_all(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_multidir" };
+    auto const& base = baseGuard.path();
     fs::create_directories(base / "target");
     auto const src1 = base / "a.txt";
     auto const src2 = base / "b.txt";
@@ -1774,16 +1776,13 @@ TEST_CASE("shell.builtin.mv_multiple_to_dir")
     CHECK(!fs::exists(src2));
     CHECK(fs::exists(base / "target" / "a.txt"));
     CHECK(fs::exists(base / "target" / "b.txt"));
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_multiple_to_file")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_multifile";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_multifile" };
+    auto const& base = baseGuard.path();
     auto const src1 = base / "a.txt";
     auto const src2 = base / "b.txt";
     auto const dst = base / "notadir.txt";
@@ -1797,15 +1796,13 @@ TEST_CASE("shell.builtin.mv_multiple_to_file")
     TestShell shell;
     shell(std::format("mv {} {} {}", src1.string(), src2.string(), dst.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_directory")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_dir";
-    fs::remove_all(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_dir" };
+    auto const& base = baseGuard.path();
     fs::create_directories(base / "srcdir" / "sub");
     auto const dst = base / "dstdir";
 
@@ -1820,16 +1817,13 @@ TEST_CASE("shell.builtin.mv_directory")
     CHECK(!fs::exists(base / "srcdir"));
     CHECK(fs::exists(dst / "file.txt"));
     CHECK(fs::exists(dst / "sub" / "nested.txt"));
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_combined_flags")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_combined";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_combined" };
+    auto const& base = baseGuard.path();
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
@@ -1843,8 +1837,6 @@ TEST_CASE("shell.builtin.mv_combined_flags")
     shell(std::format("mv -nv {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
     CHECK(fs::exists(src)); // Source still exists (no-clobber)
-
-    fs::remove_all(base);
 }
 
 namespace
@@ -1871,8 +1863,8 @@ std::filesystem::path onDiskName(std::filesystem::path const& parent, std::strin
 TEST_CASE("shell.builtin.mv_case_only_rename_directory")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_recase_dir";
-    fs::remove_all(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_recase_dir" };
+    auto const& base = baseGuard.path();
     fs::create_directories(base / "foo");
     std::ofstream(base / "foo" / "keep.txt") << "data";
 
@@ -1884,16 +1876,13 @@ TEST_CASE("shell.builtin.mv_case_only_rename_directory")
     CHECK(onDiskName(base, "foo") == "Foo");
     CHECK(fs::exists(base / "Foo" / "keep.txt"));
     CHECK(!fs::exists(base / "Foo" / "foo"));
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_case_only_rename_file")
 {
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_recase_file";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_recase_file" };
+    auto const& base = baseGuard.path();
     std::ofstream(base / "readme.txt") << "hello";
 
     TestShell shell;
@@ -1907,8 +1896,6 @@ TEST_CASE("shell.builtin.mv_case_only_rename_file")
         std::getline(ifs, content);
         CHECK(content == "hello");
     }
-
-    fs::remove_all(base);
 }
 
 // ============================================================================
@@ -2084,48 +2071,48 @@ TEST_CASE("shell.variable.single_char_name")
 
 TEST_CASE("shell.redirect.output_to_file")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const outputPath = (tempDir / "output.txt").generic_string();
     TestShell shell;
-    shell("echo hello > /tmp/endo_test_output.txt");
+    shell(std::format("echo hello > {}", outputPath));
     // Read the file to verify content
-    std::ifstream file("/tmp/endo_test_output.txt");
+    std::ifstream file(outputPath);
     std::string content;
     std::getline(file, content);
     CHECK(content == "hello");
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_output.txt", ec);
 }
 
 TEST_CASE("shell.redirect.output_append")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const appendPath = (tempDir / "append.txt").generic_string();
     TestShell shell;
     // Create initial file
-    shell("echo line1 > /tmp/endo_test_append.txt");
+    shell(std::format("echo line1 > {}", appendPath));
     // Append to it
-    shell("echo line2 >> /tmp/endo_test_append.txt");
+    shell(std::format("echo line2 >> {}", appendPath));
     // Verify both lines present
-    std::ifstream file("/tmp/endo_test_append.txt");
+    std::ifstream file(appendPath);
     auto line1 = std::string {};
     auto line2 = std::string {};
     std::getline(file, line1);
     std::getline(file, line2);
     CHECK(line1 == "line1");
     CHECK(line2 == "line2");
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_append.txt", ec);
 }
 
 TEST_CASE("shell.redirect.input_from_file")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const inputPath = (tempDir / "input.txt").generic_string();
     TestShell shell;
     // Create test file (binary mode to avoid \r\n on Windows)
     {
-        std::ofstream file("/tmp/endo_test_input.txt", std::ios::binary);
+        std::ofstream file(inputPath, std::ios::binary);
         file << "test input content\n";
     }
     // Use cat to read from file via redirect
-    CHECK(escape(shell("cat < /tmp/endo_test_input.txt").output()) == escape("test input content\n"));
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_input.txt", ec);
+    CHECK(escape(shell(std::format("cat < {}", inputPath)).output()) == escape("test input content\n"));
 }
 
 // ============================================================================
@@ -2165,7 +2152,8 @@ TEST_CASE("shell.redirect.stderr_to_stdout")
 TEST_CASE("shell.redirect.fd_to_file")
 {
     TestShell shell;
-    auto const tmpFile = std::filesystem::temp_directory_path() / "endo_test_stderr.txt";
+    auto const tmpDir = endo::testing::ScopedTempDir { "endo_test_stderr" };
+    auto const tmpFile = tmpDir / "stderr.txt";
     auto const tmpFileStr = tmpFile.generic_string();
     // Redirect stderr (fd 2) to a file
 #if defined(_WIN32)
@@ -2178,8 +2166,6 @@ TEST_CASE("shell.redirect.fd_to_file")
     std::string content;
     std::getline(file, content);
     CHECK(!content.empty()); // Should contain error message
-    std::error_code ec;
-    std::filesystem::remove(tmpFile, ec);
 }
 
 // ============================================================================
@@ -2188,22 +2174,22 @@ TEST_CASE("shell.redirect.fd_to_file")
 
 TEST_CASE("shell.redirect.multiple_redirects")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const multiInPath = (tempDir / "in.txt").generic_string();
+    auto const multiOutPath = (tempDir / "out.txt").generic_string();
     TestShell shell;
     // Create input file (binary mode to avoid \r\n on Windows)
     {
-        std::ofstream file("/tmp/endo_test_multi_in.txt", std::ios::binary);
+        std::ofstream file(multiInPath, std::ios::binary);
         file << "input text\n";
     }
     // Redirect both input and output
-    shell("cat < /tmp/endo_test_multi_in.txt > /tmp/endo_test_multi_out.txt");
+    shell(std::format("cat < {} > {}", multiInPath, multiOutPath));
     // Verify output
-    std::ifstream file("/tmp/endo_test_multi_out.txt");
+    std::ifstream file(multiOutPath);
     std::string content;
     std::getline(file, content);
     CHECK(content == "input text");
-    std::error_code ec;
-    std::filesystem::remove("/tmp/endo_test_multi_in.txt", ec);
-    std::filesystem::remove("/tmp/endo_test_multi_out.txt", ec);
 }
 
 // ============================================================================
@@ -2390,12 +2376,13 @@ TEST_CASE("shell.subst.process_read_basic")
 
 TEST_CASE("shell.subst.process_read_multiple_lines")
 {
+    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const procSubstPath = (tempDir / "procsubst.txt").generic_string();
     // Process substitution with multiple lines
     TestShell shell;
-    shell("echo line1 > /tmp/endo_test_procsubst.txt");
-    shell("echo line2 >> /tmp/endo_test_procsubst.txt");
-    CHECK(escape(shell("cat <(cat /tmp/endo_test_procsubst.txt)").output()) == escape("line1\nline2\n"));
-    std::filesystem::remove("/tmp/endo_test_procsubst.txt");
+    shell(std::format("echo line1 > {}", procSubstPath));
+    shell(std::format("echo line2 >> {}", procSubstPath));
+    CHECK(escape(shell(std::format("cat <(cat {})", procSubstPath)).output()) == escape("line1\nline2\n"));
 }
 #endif
 
@@ -2668,17 +2655,18 @@ TEST_CASE("shell.expand.param_remove_suffix_long")
 
 TEST_CASE("shell.expand.glob_star")
 {
+    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDir = globDirGuard.string();
     // *.txt should match .txt files in current directory
-    // We use /tmp to create test files
     TestShell shell;
 
     // Create test files
-    shell("echo test > /tmp/glob_test_a.txt");
-    shell("echo test > /tmp/glob_test_b.txt");
-    shell("echo test > /tmp/glob_test_c.log");
+    shell(std::format("echo test > {}/glob_test_a.txt", globDir));
+    shell(std::format("echo test > {}/glob_test_b.txt", globDir));
+    shell(std::format("echo test > {}/glob_test_c.log", globDir));
 
     // Run glob expansion
-    auto result = shell("echo /tmp/glob_test_*.txt").output();
+    auto result = shell(std::format("echo {}/glob_test_*.txt", globDir)).output();
 
     // Should contain both .txt files but not the .log file
     CHECK(result.find("glob_test_a.txt") != std::string::npos);
@@ -2686,43 +2674,47 @@ TEST_CASE("shell.expand.glob_star")
     CHECK(result.find("glob_test_c.log") == std::string::npos);
 
     // Cleanup
-    shell("rm /tmp/glob_test_*.txt /tmp/glob_test_*.log");
+    shell(std::format("rm {}/glob_test_*.txt {}/glob_test_*.log", globDir, globDir));
 }
 
 TEST_CASE("shell.expand.glob_question")
 {
+    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDir = globDirGuard.string();
     // ? matches single character
     TestShell shell;
 
     // Create test files
-    shell("echo test > /tmp/glob_qtest_a.txt");
-    shell("echo test > /tmp/glob_qtest_b.txt");
-    shell("echo test > /tmp/glob_qtest_aa.txt");
+    shell(std::format("echo test > {}/glob_qtest_a.txt", globDir));
+    shell(std::format("echo test > {}/glob_qtest_b.txt", globDir));
+    shell(std::format("echo test > {}/glob_qtest_aa.txt", globDir));
 
     // Run glob expansion - should match single character only
-    auto result = shell("echo /tmp/glob_qtest_?.txt").output();
+    auto result = shell(std::format("echo {}/glob_qtest_?.txt", globDir)).output();
 
     CHECK(result.find("glob_qtest_a.txt") != std::string::npos);
     CHECK(result.find("glob_qtest_b.txt") != std::string::npos);
     CHECK(result.find("glob_qtest_aa.txt") == std::string::npos);
 
     // Cleanup
-    shell("rm /tmp/glob_qtest_*.txt");
+    shell(std::format("rm {}/glob_qtest_*.txt", globDir));
 }
 
 TEST_CASE("shell.expand.glob_bracket")
 {
+    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDir = globDirGuard.string();
     // [abc] matches any character in set
     TestShell shell;
 
     // Create test files
-    shell("echo test > /tmp/glob_btest_a.txt");
-    shell("echo test > /tmp/glob_btest_b.txt");
-    shell("echo test > /tmp/glob_btest_c.txt");
-    shell("echo test > /tmp/glob_btest_d.txt");
+    shell(std::format("echo test > {}/glob_btest_a.txt", globDir));
+    shell(std::format("echo test > {}/glob_btest_b.txt", globDir));
+    shell(std::format("echo test > {}/glob_btest_c.txt", globDir));
+    shell(std::format("echo test > {}/glob_btest_d.txt", globDir));
 
     // Run glob expansion - should match a, b, c but not d
-    auto result = shell("echo /tmp/glob_btest_[abc].txt").output();
+    auto result = shell(std::format("echo {}/glob_btest_[abc].txt", globDir)).output();
 
     CHECK(result.find("glob_btest_a.txt") != std::string::npos);
     CHECK(result.find("glob_btest_b.txt") != std::string::npos);
@@ -2730,7 +2722,7 @@ TEST_CASE("shell.expand.glob_bracket")
     CHECK(result.find("glob_btest_d.txt") == std::string::npos);
 
     // Cleanup
-    shell("rm /tmp/glob_btest_*.txt");
+    shell(std::format("rm {}/glob_btest_*.txt", globDir));
 }
 
 TEST_CASE("shell.expand.glob_no_match")
@@ -2743,17 +2735,19 @@ TEST_CASE("shell.expand.glob_no_match")
 
 TEST_CASE("shell.expand.glob_bracket_range")
 {
+    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDir = globDirGuard.string();
     // [a-z] matches a range of characters
     TestShell shell;
 
     // Create test files with letters
-    shell("echo test > /tmp/glob_rtest_a.txt");
-    shell("echo test > /tmp/glob_rtest_c.txt");
-    shell("echo test > /tmp/glob_rtest_z.txt");
-    shell("echo test > /tmp/glob_rtest_1.txt");
+    shell(std::format("echo test > {}/glob_rtest_a.txt", globDir));
+    shell(std::format("echo test > {}/glob_rtest_c.txt", globDir));
+    shell(std::format("echo test > {}/glob_rtest_z.txt", globDir));
+    shell(std::format("echo test > {}/glob_rtest_1.txt", globDir));
 
     // Run glob expansion - should match a, c, z but not 1
-    auto result = shell("echo /tmp/glob_rtest_[a-z].txt").output();
+    auto result = shell(std::format("echo {}/glob_rtest_[a-z].txt", globDir)).output();
 
     CHECK(result.find("glob_rtest_a.txt") != std::string::npos);
     CHECK(result.find("glob_rtest_c.txt") != std::string::npos);
@@ -2761,23 +2755,25 @@ TEST_CASE("shell.expand.glob_bracket_range")
     CHECK(result.find("glob_rtest_1.txt") == std::string::npos);
 
     // Cleanup
-    shell("rm /tmp/glob_rtest_*.txt");
+    shell(std::format("rm {}/glob_rtest_*.txt", globDir));
 }
 
 TEST_CASE("shell.expand.glob_recursive_starstar")
 {
+    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDir = globDirGuard.string();
     // ** matches files recursively
     TestShell shell;
 
     // Create directory structure
-    shell("mkdir -p /tmp/glob_rec_test/sub1/sub2");
-    shell("echo test > /tmp/glob_rec_test/file1.cpp");
-    shell("echo test > /tmp/glob_rec_test/sub1/file2.cpp");
-    shell("echo test > /tmp/glob_rec_test/sub1/sub2/file3.cpp");
-    shell("echo test > /tmp/glob_rec_test/file4.txt");
+    shell(std::format("mkdir -p {}/glob_rec_test/sub1/sub2", globDir));
+    shell(std::format("echo test > {}/glob_rec_test/file1.cpp", globDir));
+    shell(std::format("echo test > {}/glob_rec_test/sub1/file2.cpp", globDir));
+    shell(std::format("echo test > {}/glob_rec_test/sub1/sub2/file3.cpp", globDir));
+    shell(std::format("echo test > {}/glob_rec_test/file4.txt", globDir));
 
     // Run recursive glob expansion
-    auto result = shell("echo /tmp/glob_rec_test/**/*.cpp").output();
+    auto result = shell(std::format("echo {}/glob_rec_test/**/*.cpp", globDir)).output();
 
     // Should find all .cpp files recursively
     CHECK(result.find("file1.cpp") != std::string::npos);
@@ -2786,7 +2782,7 @@ TEST_CASE("shell.expand.glob_recursive_starstar")
     CHECK(result.find("file4.txt") == std::string::npos);
 
     // Cleanup
-    shell("rm -rf /tmp/glob_rec_test");
+    shell(std::format("rm -rf {}/glob_rec_test", globDir));
 }
 
 // ========================================================================
@@ -2978,13 +2974,13 @@ TEST_CASE("shell.jobs.wait_with_job_id")
 TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
 {
     // Create a temporary directory with "src" and "scripts" subdirectories
-    auto tempDir = std::filesystem::temp_directory_path() / "endo_test_completion";
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_test_completion" };
+    auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "src");
     std::filesystem::create_directories(tempDir / "scripts");
 
     // Change to the temp directory for testing
-    auto originalDir = std::filesystem::current_path();
-    std::filesystem::current_path(tempDir);
+    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
 
     endo::TestEnvironment env;
     endo::FileCompleter completer(env);
@@ -2998,10 +2994,6 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     };
 
     auto results = completer.complete(context);
-
-    // Clean up
-    std::filesystem::current_path(originalDir);
-    std::filesystem::remove_all(tempDir);
 
     // Verify results
     REQUIRE(results.size() == 2);
@@ -3026,14 +3018,14 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     // Regression: a relative nested prefix (e.g. "sub/it") must keep its relative
     // form in the completion. On Windows, canonicalizing the parent directory would
     // resolve it to an absolute path and rewrite the user's typed relative prefix.
-    auto const tempDir = std::filesystem::temp_directory_path() / "endo_rel_completion";
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_rel_completion" };
+    auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "sub");
     {
         std::ofstream(tempDir / "sub" / "item.txt");
     }
 
-    auto const originalDir = std::filesystem::current_path();
-    std::filesystem::current_path(tempDir);
+    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
 
     endo::TestEnvironment env;
     endo::FileCompleter completer(env);
@@ -3046,9 +3038,6 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     };
     auto const results = completer.complete(context);
 
-    std::filesystem::current_path(originalDir);
-    std::filesystem::remove_all(tempDir);
-
     REQUIRE(results.size() == 1);
     CHECK(results[0].text == "sub/item.txt"); // Relative, not an absolute path.
 }
@@ -3059,8 +3048,8 @@ TEST_CASE("FileCompleter.absolute_directory_corrects_case")
     // On case-insensitive filesystems, completing an absolute directory typed in the
     // wrong case must echo the on-disk capitalization (".../foo" -> ".../Foo/") rather
     // than the case the user typed.
-    auto const tempDir = std::filesystem::temp_directory_path() / "endo_case_completion";
-    std::filesystem::remove_all(tempDir);
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_case_completion" };
+    auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "Foo");
 
     endo::TestEnvironment env;
@@ -3076,8 +3065,6 @@ TEST_CASE("FileCompleter.absolute_directory_corrects_case")
     };
     auto const results = completer.complete(context);
 
-    std::filesystem::remove_all(tempDir);
-
     REQUIRE(results.size() == 1);
     CHECK(results[0].displayText == "Foo/");
     CHECK(results[0].text.ends_with("/Foo/"));
@@ -3089,8 +3076,8 @@ TEST_CASE("FileCompleter.partial_prefix_corrects_case")
     // A partial directory name typed in the wrong case (even with leading upper-case,
     // which would otherwise trigger smart-case) must still match and recase on a
     // case-insensitive filesystem (e.g. "Lastrada-to" -> "lastrada-tools/").
-    auto const tempDir = std::filesystem::temp_directory_path() / "endo_partial_case_completion";
-    std::filesystem::remove_all(tempDir);
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_partial_case_completion" };
+    auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "lastrada-tools");
 
     endo::TestEnvironment env;
@@ -3104,8 +3091,6 @@ TEST_CASE("FileCompleter.partial_prefix_corrects_case")
         .fullInput = "cd " + typed,
     };
     auto const results = completer.complete(context);
-
-    std::filesystem::remove_all(tempDir);
 
     REQUIRE(results.size() == 1);
     CHECK(results[0].displayText == "lastrada-tools/");
@@ -3907,8 +3892,8 @@ TEST_CASE("shell.fsharp.fetch.unsupported_protocol")
 TEST_CASE("shell.fsharp.fetch.http_success")
 {
     // Local server returns 200 — fetch should return Ok(filename).
-    auto const tempDir = std::filesystem::temp_directory_path() / "endo_fetch_test";
-    std::filesystem::create_directories(tempDir);
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_fetch_test" };
+    auto const& tempDir = tempDirGuard.path();
 
     auto listener = endo::http::LocalTcpListener {};
     auto const port = listener.start();
@@ -3920,8 +3905,7 @@ TEST_CASE("shell.fsharp.fetch.http_success")
                                "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
     });
 
-    auto const prevDir = std::filesystem::current_path();
-    std::filesystem::current_path(tempDir);
+    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
 
     TestShell shell;
     shell.shell.setInteractive(false);
@@ -3931,9 +3915,6 @@ TEST_CASE("shell.fsharp.fetch.http_success")
     serverThread.join();
 
     CHECK(escape(shell.output()) == escape("ok"));
-
-    std::filesystem::current_path(prevDir);
-    std::filesystem::remove_all(tempDir);
 }
 
 TEST_CASE("shell.fsharp.fetch.http_error")
@@ -3974,10 +3955,12 @@ TEST_CASE("shell.exec.program_not_found_exit_code")
 TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
 {
     // Invalid commands must not be persisted to history.
-    auto dir = std::filesystem::current_path() / "tmp" / "shell_history_test";
-    std::filesystem::create_directories(dir);
+    // PersistentHistory takes FileSystem const&, so this needs no real directory -- and the
+    // previous one was build-directory-relative, i.e. shared by every run from that tree.
+    auto fs = endo::InMemoryFileSystem {};
+    auto const dir = std::filesystem::path { "/test/history" };
 
-    auto history = endo::PersistentHistory { endo::NativeFileSystem::instance() };
+    auto history = endo::PersistentHistory { fs };
     history.setFilePath(dir / "history.yml");
 
     // Simulate the shell flow: add command, then mark with exit code
@@ -3989,9 +3972,7 @@ TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
     CHECK(!history.richEntries().back().persisted); // must remain unpersisted
 
     // Verify it does not survive a roundtrip to disk
-    CHECK(!std::filesystem::exists(dir / "history.yml"));
-
-    std::filesystem::remove_all(dir);
+    CHECK(!fs.exists(dir / "history.yml"));
 }
 
 // ============================================================================
@@ -4214,8 +4195,8 @@ TEST_CASE("shell.builtin.find_not")
 TEST_CASE("shell.builtin.find_empty")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_empty";
-    fs::remove_all(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_find_test_empty" };
+    auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "emptydir");
     {
         std::ofstream ofs(testDir / "empty.txt");
@@ -4232,8 +4213,6 @@ TEST_CASE("shell.builtin.find_empty")
     CHECK(out.find("empty.txt") != std::string::npos);
     CHECK(out.find("emptydir") != std::string::npos);
     CHECK(out.find("notempty.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_print0")
@@ -4393,9 +4372,8 @@ TEST_CASE("shell.builtin.grep_file_no_match_exit_code")
 TEST_CASE("shell.builtin.grep_file_multiple_files")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_multi";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_multi" };
+    auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
     {
@@ -4410,16 +4388,13 @@ TEST_CASE("shell.builtin.grep_file_multiple_files")
     // With multiple files, filenames should be prefixed
     CHECK(out.find("a.txt:") != std::string::npos);
     CHECK(out.find("b.txt:") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_file_with_filename")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_Hflag";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_Hflag" };
+    auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "test.txt";
     {
         std::ofstream(file1) << "hello\n";
@@ -4430,16 +4405,13 @@ TEST_CASE("shell.builtin.grep_file_with_filename")
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("test.txt:") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_file_no_filename")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_hflag";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_hflag" };
+    auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
     {
@@ -4454,16 +4426,13 @@ TEST_CASE("shell.builtin.grep_file_no_filename")
     CHECK(out.find("a.txt:") == std::string::npos);
     CHECK(out.find("b.txt:") == std::string::npos);
     CHECK(out == "hello\nhello\n");
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_files_with_matches")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_lflag";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_lflag" };
+    auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
     {
@@ -4477,16 +4446,13 @@ TEST_CASE("shell.builtin.grep_files_with_matches")
     auto const out = std::string(shell.output());
     CHECK(out.find("a.txt") != std::string::npos);
     CHECK(out.find("b.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_files_without_match")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_Lflag";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_Lflag" };
+    auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
     {
@@ -4500,15 +4466,13 @@ TEST_CASE("shell.builtin.grep_files_without_match")
     auto const out = std::string(shell.output());
     CHECK(out.find("a.txt") == std::string::npos);
     CHECK(out.find("b.txt") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_recursive")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_recursive";
-    fs::remove_all(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_recursive" };
+    auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "sub");
     {
         std::ofstream(testDir / "top.txt") << "hello top\n";
@@ -4521,16 +4485,13 @@ TEST_CASE("shell.builtin.grep_recursive")
     auto const out = std::string(shell.output());
     CHECK(out.find("hello top") != std::string::npos);
     CHECK(out.find("hello nested") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_recursive_include")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_include";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_include" };
+    auto const& testDir = testDirGuard.path();
     {
         std::ofstream(testDir / "a.txt") << "hello\n";
         std::ofstream(testDir / "b.cpp") << "hello\n";
@@ -4542,15 +4503,13 @@ TEST_CASE("shell.builtin.grep_recursive_include")
     auto const out = std::string(shell.output());
     CHECK(out.find("a.txt") != std::string::npos);
     CHECK(out.find("b.cpp") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_recursive_exclude_dir")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_exdir";
-    fs::remove_all(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_exdir" };
+    auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "src");
     fs::create_directories(testDir / "build");
     {
@@ -4564,16 +4523,13 @@ TEST_CASE("shell.builtin.grep_recursive_exclude_dir")
     auto const out = std::string(shell.output());
     CHECK(out.find("main.cpp") != std::string::npos);
     CHECK(out.find("out.cpp") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_binary_skip")
 {
     namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_binary";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_binary" };
+    auto const& testDir = testDirGuard.path();
     auto const binFile = testDir / "binary.bin";
     auto const txtFile = testDir / "text.txt";
     {
@@ -4593,8 +4549,6 @@ TEST_CASE("shell.builtin.grep_binary_skip")
     CHECK(out.find("hello text") != std::string::npos);
     // Binary file should be skipped
     CHECK(out.find("binary.bin") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_line_regexp")
@@ -4658,7 +4612,8 @@ TEST_CASE("shell.builtin.source_env_bat", "[source-env][windows]")
     TestShell shell;
 
     // Create a temp .bat script that sets an environment variable
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_source_env.bat";
     {
         std::ofstream ofs(batPath);
@@ -4671,15 +4626,14 @@ TEST_CASE("shell.builtin.source_env_bat", "[source-env][windows]")
     INFO("shell output: " << escape(shell.output()));
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("ENDO_TEST_SRCENV").value_or("") == "hello_from_bat");
-
-    std::filesystem::remove(batPath);
 }
 
 TEST_CASE("shell.builtin.source_env_bat_with_args", "[source-env][windows]")
 {
     TestShell shell;
 
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_source_env_args.bat";
     {
         std::ofstream ofs(batPath);
@@ -4691,8 +4645,6 @@ TEST_CASE("shell.builtin.source_env_bat_with_args", "[source-env][windows]")
     shell(cmd);
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("ENDO_TEST_ARG").value_or("") == "my_arg_value");
-
-    std::filesystem::remove(batPath);
 }
 #endif
 
@@ -4701,7 +4653,8 @@ TEST_CASE("shell.builtin.source_env_sh", "[source-env][posix]")
 {
     TestShell shell;
 
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const shPath = tempDir / "endo_test_source_env.sh";
     {
         std::ofstream ofs(shPath);
@@ -4712,15 +4665,14 @@ TEST_CASE("shell.builtin.source_env_sh", "[source-env][posix]")
     shell(cmd);
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("ENDO_TEST_SRCENV").value_or("") == "hello_from_sh");
-
-    std::filesystem::remove(shPath);
 }
 
 TEST_CASE("shell.builtin.source_env_sh_with_args", "[source-env][posix]")
 {
     TestShell shell;
 
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const shPath = tempDir / "endo_test_source_env_args.sh";
     {
         std::ofstream ofs(shPath);
@@ -4731,15 +4683,14 @@ TEST_CASE("shell.builtin.source_env_sh_with_args", "[source-env][posix]")
     shell(cmd);
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("ENDO_TEST_ARG").value_or("") == "my_arg_value");
-
-    std::filesystem::remove(shPath);
 }
 
 TEST_CASE("shell.builtin.source_env_bat_rejected_on_posix", "[source-env][posix]")
 {
     TestShell shell;
 
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_rejected.bat";
     {
         std::ofstream ofs(batPath);
@@ -4749,8 +4700,6 @@ TEST_CASE("shell.builtin.source_env_bat_rejected_on_posix", "[source-env][posix]
     auto const cmd = std::format("source-env \"{}\"", batPath.string());
     shell(cmd);
     CHECK(shell.exitCode == 1);
-
-    std::filesystem::remove(batPath);
 }
 #endif
 
@@ -4765,7 +4714,8 @@ TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
 {
     TestShell shell;
 
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const unknownPath = tempDir / "endo_test_source_env.xyz";
     {
         std::ofstream ofs(unknownPath);
@@ -4775,8 +4725,6 @@ TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
     auto const cmd = std::format("source-env \"{}\"", unknownPath.string());
     shell(cmd);
     CHECK(shell.exitCode == 1);
-
-    std::filesystem::remove(unknownPath);
 }
 
 TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
@@ -4785,7 +4733,8 @@ TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
     shell.env.set("ENDO_TEST_EXISTING", "original_value");
 
 #if defined(_WIN32)
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const scriptPath = tempDir / "endo_test_source_env_noop.bat";
     {
         std::ofstream ofs(scriptPath);
@@ -4794,7 +4743,8 @@ TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
         ofs << "set ENDO_TEST_NEW=new_value\r\n";
     }
 #else
-    auto const tempDir = std::filesystem::temp_directory_path();
+    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const& tempDir = tempDirGuard.path();
     auto const scriptPath = tempDir / "endo_test_source_env_noop.sh";
     {
         std::ofstream ofs(scriptPath);
@@ -4810,8 +4760,6 @@ TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
     CHECK(shell.env.get("ENDO_TEST_EXISTING").value_or("") == "original_value");
     // New variable should be imported
     CHECK(shell.env.get("ENDO_TEST_NEW").value_or("") == "new_value");
-
-    std::filesystem::remove(scriptPath);
 }
 
 // ============================================================================
@@ -4961,12 +4909,17 @@ TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
 
 namespace
 {
-/// @brief Writes @p content to a uniquely named file and returns its path.
-auto writeMarkdownFixture(std::string_view name, std::string_view content) -> std::filesystem::path
+/// @brief Writes @p content into @p dir under @p name and returns the file's path.
+///
+/// The directory is the caller's, so its lifetime is visible at the call site: a guard
+/// created here would delete the file before the caller could read it.
+/// @param dir     Directory to write into; must outlive the returned path's use.
+/// @param name    File name to create inside @p dir.
+/// @param content Bytes to write.
+/// @return The path of the written file.
+auto writeMarkdownFixture(std::filesystem::path const& dir, std::string_view name, std::string_view content)
+    -> std::filesystem::path
 {
-    namespace fs = std::filesystem;
-    auto const dir = fs::temp_directory_path() / "endo_cat_markdown";
-    fs::create_directories(dir);
     auto const path = dir / name;
     auto stream = std::ofstream(path, std::ios::binary);
     stream.write(content.data(), static_cast<std::streamsize>(content.size()));
@@ -4978,7 +4931,8 @@ constexpr auto MarkdownFixture = "# Title\n\nSee [Docs](https://endo-lang.org/).
 
 TEST_CASE("shell.builtin.cat_markdown_renders_on_tty")
 {
-    auto const path = writeMarkdownFixture("render.md", MarkdownFixture);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "render.md", MarkdownFixture);
 
     TestShell shell;
     shell(std::format("cat {}", path.string()));
@@ -5001,7 +4955,8 @@ TEST_CASE("shell.builtin.cat_markdown_renders_on_tty")
 
 TEST_CASE("shell.builtin.cat_markdown_is_indented_by_default")
 {
-    auto const path = writeMarkdownFixture("indent_default.md", "Hello\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_default.md", "Hello\n"sv);
 
     TestShell shell;
     shell(std::format("cat {}", path.string()));
@@ -5015,7 +4970,8 @@ TEST_CASE("shell.builtin.cat_markdown_is_indented_by_default")
 
 TEST_CASE("shell.builtin.cat_markdown_indent_flag_overrides_the_default")
 {
-    auto const path = writeMarkdownFixture("indent_flag.md", "Hello\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_flag.md", "Hello\n"sv);
 
     TestShell shell;
     shell(std::format("cat --indent 5 {}", path.string()));
@@ -5029,7 +4985,8 @@ TEST_CASE("shell.builtin.cat_markdown_indent_flag_overrides_the_default")
 
 TEST_CASE("shell.builtin.cat_markdown_indent_zero_hugs_the_left_edge")
 {
-    auto const path = writeMarkdownFixture("indent_zero.md", "Hello\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_zero.md", "Hello\n"sv);
 
     TestShell shell;
     shell(std::format("cat --indent=0 {}", path.string()));
@@ -5044,7 +5001,8 @@ TEST_CASE("shell.builtin.cat_markdown_indent_zero_hugs_the_left_edge")
 
 TEST_CASE("shell.builtin.cat_indent_rejects_invalid_values")
 {
-    auto const path = writeMarkdownFixture("indent_bad.md", "Hello\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_bad.md", "Hello\n"sv);
 
     TestShell bad;
     bad(std::format("cat --indent abc {}", path.string()));
@@ -5061,7 +5019,8 @@ TEST_CASE("shell.builtin.cat_indent_rejects_invalid_values")
 
 TEST_CASE("shell.builtin.cat_indent_does_not_affect_raw_output")
 {
-    auto const path = writeMarkdownFixture("indent_raw.md", "Hello\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_raw.md", "Hello\n"sv);
 
     TestShell shell;
     shell(std::format("cat --raw --indent 5 {}", path.string()));
@@ -5072,7 +5031,8 @@ TEST_CASE("shell.builtin.cat_indent_does_not_affect_raw_output")
 
 TEST_CASE("shell.builtin.cat_markdown_raw_flag_emits_source_bytes")
 {
-    auto const path = writeMarkdownFixture("raw.md", MarkdownFixture);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "raw.md", MarkdownFixture);
 
     TestShell shell;
     shell(std::format("cat --raw {}", path.string()));
@@ -5086,7 +5046,8 @@ TEST_CASE("shell.builtin.cat_markdown_raw_flag_emits_source_bytes")
 
 TEST_CASE("shell.builtin.cat_markdown_piped_is_not_rendered")
 {
-    auto const path = writeMarkdownFixture("piped.md", MarkdownFixture);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "piped.md", MarkdownFixture);
 
     // The first `cat` writes into a pipe, so its output handle is not a terminal.
     TestShell shell;
@@ -5100,7 +5061,8 @@ TEST_CASE("shell.builtin.cat_markdown_piped_is_not_rendered")
 
 TEST_CASE("shell.builtin.cat_markdown_number_flag_shows_source")
 {
-    auto const path = writeMarkdownFixture("numbered.md", MarkdownFixture);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "numbered.md", MarkdownFixture);
 
     // -n asks for a literal view of the source, so rendering is suppressed.
     TestShell shell;
@@ -5116,7 +5078,8 @@ TEST_CASE("shell.builtin.cat_markdown_number_flag_shows_source")
 TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
 {
     namespace fs = std::filesystem;
-    auto const path = writeMarkdownFixture("redirect.md", MarkdownFixture);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "redirect.md", MarkdownFixture);
     auto const target = path.parent_path() / "redirect.out";
     fs::remove(target);
 
@@ -5131,7 +5094,8 @@ TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
 
 TEST_CASE("shell.builtin.cat_non_markdown_is_unaffected")
 {
-    auto const path = writeMarkdownFixture("plain.txt", "hello world\n"sv);
+    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const path = writeMarkdownFixture(markdownDir.path(), "plain.txt", "hello world\n"sv);
 
     TestShell shell;
     shell(std::format("cat {}", path.string()));
@@ -5147,16 +5111,15 @@ TEST_CASE("shell.builtin.cat_non_markdown_is_unaffected")
 namespace
 {
 
-/// @brief Creates a directory with known entries and returns its path.
+/// @brief Populates @p dir with the entries the ls link tests inspect, and returns it.
 ///
 /// `structured_ls` reads the real filesystem (it constructs the platform provider directly
 /// rather than taking the injected FileSystem), so an ls test needs real files.
-auto writeLsFixture(std::string_view caseName) -> std::filesystem::path
+/// @param dir Directory to populate; must outlive the returned path's use.
+/// @return @p dir, so call sites can chain.
+auto writeLsFixture(std::filesystem::path const& dir) -> std::filesystem::path
 {
     namespace fs = std::filesystem;
-    // Per-case directory so the three ls cases cannot observe each other's entries.
-    auto const dir = fs::temp_directory_path() / std::format("endo_ls_links_{}", caseName);
-    fs::remove_all(dir);
     fs::create_directories(dir / "subdir");
     auto plain = std::ofstream(dir / "plain.txt", std::ios::binary);
     plain << "x";
@@ -5169,7 +5132,8 @@ auto writeLsFixture(std::string_view caseName) -> std::filesystem::path
 
 TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 {
-    auto const dir = writeLsFixture("emits");
+    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_emits" };
+    auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
     shell(std::format("ls {}", dir.string()));
@@ -5191,7 +5155,8 @@ TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 
 TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 {
-    auto const dir = writeLsFixture("disabled");
+    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_disabled" };
+    auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
     shell("shell_hyperlinks <- false");
@@ -5209,7 +5174,8 @@ TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
 {
     // The URI comes from each record, so it stays correct after the listing is reshaped.
-    auto const dir = writeLsFixture("filtered");
+    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_filtered" };
+    auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
     shell(std::format("ls {} |> filter _.isDir", dir.string()));

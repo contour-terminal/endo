@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
+#include <testing/EnvHelper.hpp>
+#include <testing/ScopedTempDir.hpp>
+
 #if !defined(_WIN32)
+
     #include <sys/wait.h>
 
-    #include <csignal>
     #include <unistd.h>
 #else
     #include <stdlib.h> // _putenv_s
@@ -23,9 +25,8 @@
 TEST_CASE("CrashHandler.creates_crash_log_on_sigsegv", "[crash]")
 {
     // Use a temp directory as HOME so we don't pollute the real one.
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-crash-test";
-    std::filesystem::remove_all(tmpDir);
-    std::filesystem::create_directories(tmpDir);
+    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-test" };
+    auto const& tmpDir = tmpDirGuard.path();
 
     auto const pid = fork();
     REQUIRE(pid >= 0);
@@ -75,32 +76,23 @@ TEST_CASE("CrashHandler.creates_crash_log_on_sigsegv", "[crash]")
         CHECK(content.find("0.1.0-test") != std::string::npos);
         CHECK(content.find("Backtrace:") != std::string::npos);
     }
-
-    // Cleanup.
-    std::filesystem::remove_all(tmpDir);
 }
 
 TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
 {
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-crash-dir-test";
-    std::filesystem::remove_all(tmpDir);
+    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-dir-test" };
+    auto const& tmpDir = tmpDirGuard.path();
 
-    // Set HOME and initialize — should create the directory tree.
-    auto const* originalHome = std::getenv("HOME");
-    auto const savedHome = originalHome ? std::string(originalHome) : std::string();
-    setenv("HOME", tmpDir.c_str(), 1);
-
-    endo::CrashHandler::initialize("0.1.0-test");
-
-    // Restore HOME.
-    if (!savedHome.empty())
-        setenv("HOME", savedHome.c_str(), 1);
+    // Set HOME and initialize — should create the directory tree. Scoped, because $HOME is
+    // process-global and other fixtures read it while constructing a shell.
+    {
+        auto const scopedHome = endo::testing::ScopedEnv { "HOME", tmpDir.string() };
+        endo::CrashHandler::initialize("0.1.0-test");
+    }
 
     auto const crashDir = tmpDir / ".local" / "state" / "endo" / "crash";
     CHECK(std::filesystem::exists(crashDir));
     CHECK(std::filesystem::is_directory(crashDir));
-
-    std::filesystem::remove_all(tmpDir);
 }
 
 #else // _WIN32
@@ -181,9 +173,8 @@ static auto buildEnvironmentBlock(std::filesystem::path const& localAppData) -> 
 
 TEST_CASE("CrashHandler.creates_crash_log_on_access_violation", "[crash]")
 {
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-crash-test";
-    std::filesystem::remove_all(tmpDir);
-    std::filesystem::create_directories(tmpDir);
+    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-test" };
+    auto const& tmpDir = tmpDirGuard.path();
 
     // Build command line: run the hidden crash-child helper test.
     auto const exePath = getTestExecutablePath();
@@ -246,35 +237,25 @@ TEST_CASE("CrashHandler.creates_crash_log_on_access_violation", "[crash]")
         CHECK(content.find("0.1.0-test") != std::string::npos);
         CHECK(content.find("Backtrace:") != std::string::npos);
     }
-
-    // Cleanup.
-    std::filesystem::remove_all(tmpDir);
 }
 
 TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
 {
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-crash-dir-test";
-    std::filesystem::remove_all(tmpDir);
+    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-dir-test" };
+    auto const& tmpDir = tmpDirGuard.path();
 
-    // Save original LOCALAPPDATA and override it for the test.
-    auto const* originalLocalAppData = std::getenv("LOCALAPPDATA");
-    std::string savedLocalAppData;
-    if (originalLocalAppData)
-        savedLocalAppData = originalLocalAppData;
-
-    _putenv_s("LOCALAPPDATA", tmpDir.string().c_str());
-
-    endo::CrashHandler::initialize("0.1.0-test");
-
-    // Restore LOCALAPPDATA.
-    if (!savedLocalAppData.empty())
-        _putenv_s("LOCALAPPDATA", savedLocalAppData.c_str());
+    // Override %LOCALAPPDATA% and initialize — should create the directory tree. Scoped,
+    // because the environment is process-global: restoring by hand skipped the restore
+    // whenever the variable had been unset, and leaked the override entirely when an
+    // assertion threw first.
+    {
+        auto const scopedLocalAppData = endo::testing::ScopedEnv { "LOCALAPPDATA", tmpDir.string() };
+        endo::CrashHandler::initialize("0.1.0-test");
+    }
 
     auto const crashDir = tmpDir / "endo" / "crash";
     CHECK(std::filesystem::exists(crashDir));
     CHECK(std::filesystem::is_directory(crashDir));
-
-    std::filesystem::remove_all(tmpDir);
 }
 
 #endif

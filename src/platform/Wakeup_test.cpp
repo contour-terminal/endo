@@ -78,8 +78,10 @@ TEST_CASE("Wakeup.cross_thread_signal", "[platform][wakeup]")
 
     auto worker = std::jthread([&](const std::stop_token&) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        wakeup.signal();
+        // Store before signalling: poll() returns as soon as signal() lands, so the reader
+        // can observe the wakeup and check the flag before a later store became visible.
         signaled.store(true);
+        wakeup.signal();
     });
 
 #if !defined(_WIN32)

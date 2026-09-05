@@ -272,6 +272,9 @@
             "configurePreset": "clang-debug",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -279,6 +282,9 @@
             "configurePreset": "clang-release",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -286,6 +292,9 @@
             "configurePreset": "clang-release-native",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -293,6 +302,9 @@
             "configurePreset": "clang-release-static",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -300,6 +312,9 @@
             "configurePreset": "clang-coverage",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -307,6 +322,9 @@
             "configurePreset": "clang-tsan",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -314,6 +332,9 @@
             "configurePreset": "gcc-debug",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -321,6 +342,9 @@
             "configurePreset": "clang-pgo-instrument",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -328,6 +352,9 @@
             "configurePreset": "clang-pgo-optimize",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -335,6 +362,9 @@
             "configurePreset": "cl-debug",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -342,6 +372,9 @@
             "configurePreset": "cl-release",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -349,6 +382,9 @@
             "configurePreset": "clangcl-debug",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         },
         {
@@ -356,6 +392,9 @@
             "configurePreset": "clangcl-release",
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
         }
     ],

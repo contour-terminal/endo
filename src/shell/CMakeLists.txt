@@ -365,6 +365,13 @@ if(ENDO_TESTING)
                 --endo-path $<TARGET_FILE:endo-bin>
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
+        add_test(
+            NAME check-test-isolation
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check-test-isolation.py
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+        set_tests_properties(check-test-isolation PROPERTIES TIMEOUT 60)
+
         set_tests_properties(check-doc-snippets PROPERTIES
             TIMEOUT 120
             LABELS "docs"

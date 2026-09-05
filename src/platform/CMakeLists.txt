@@ -113,6 +113,7 @@ if(ENDO_TESTING)
         Clock_test.cpp
         SystemPipe_test.cpp
         FileSystem_test.cpp
+        ../testing/ScopedTempDir_test.cpp
         Generator_test.cpp
         InterruptThrottle_test.cpp
         PlatformError_test.cpp
