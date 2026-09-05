@@ -46,7 +46,7 @@ struct TestShell
 
     endo::Shell shell { pty, env };
 
-    std::string_view output() const noexcept { return pty.output(); }
+    std::string output() const { return pty.output(); }
 
     TestShell()
     {
