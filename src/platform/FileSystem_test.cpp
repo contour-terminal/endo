@@ -2,10 +2,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <system_error>
 #include <vector>
 
+#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 
 using endo::platform::FileSystem;
@@ -113,6 +115,40 @@ TEST_CASE("isExecutableFile rejects a regular file without an execute bit", "[Fi
 
     CHECK_FALSE(fs.isExecutableFile("/usr/bin/data"));
 }
+
+#if !defined(_WIN32)
+TEST_CASE("isExecutableFile agrees with the real filesystem on the execute bit", "[FileSystem]")
+{
+    // The tests above pin InMemoryFileSystem's behaviour, which on its own only proves the
+    // model is self-consistent. This one anchors it to the real thing: shell PATH resolution
+    // (CommandResolver) is tested entirely against the model, so if the two ever disagree
+    // about the execute bit, every one of those tests would agree with each other and be
+    // wrong together.
+    auto const& fs = endo::platform::NativeFileSystem::instance();
+
+    auto const path = fs.createTempFile("endo_execbit_test");
+    REQUIRE(path.has_value());
+
+    // A failing REQUIRE below throws out of the test case, so removal cannot be a trailing
+    // statement -- it would leave the file behind in the system temp directory.
+    struct Remover
+    {
+        FileSystem const& fs;
+        std::filesystem::path path;
+
+        ~Remover() { [[maybe_unused]] auto const removed = fs.remove(path); }
+    } const remover { .fs = fs, .path = *path };
+
+    REQUIRE(fs.setPermissions(*path, std::filesystem::perms::owner_read).has_value());
+    CHECK_FALSE(fs.isExecutableFile(*path));
+
+    REQUIRE(fs.setPermissions(*path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec)
+                .has_value());
+    CHECK(fs.isExecutableFile(*path));
+
+    CHECK(fs.remove(*path).has_value());
+}
+#endif
 
 TEST_CASE("isExecutableFile rejects directories and missing paths", "[FileSystem]")
 {

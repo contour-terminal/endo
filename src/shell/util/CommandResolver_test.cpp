@@ -5,10 +5,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
-#include <fstream>
 #include <string>
 
-#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
@@ -17,50 +15,33 @@ using namespace endo;
 namespace
 {
 
-/// @brief RAII helper that creates a temporary directory and removes it on destruction.
-struct TempDir
+/// @brief A $PATH directory populated inside a filesystem private to one test.
+///
+/// CommandResolver already takes FileSystem const&, so injecting an in-memory one is the
+/// designed seam: each test gets its own tree, with no shared path to collide over.
+struct PathDir
 {
-    std::filesystem::path path;
+    endo::InMemoryFileSystem fs;
+    std::filesystem::path path { "/test/bin" };
 
-    TempDir()
-    {
-        path = std::filesystem::temp_directory_path() / "endo_test_cmdresolver";
-        std::filesystem::create_directories(path);
-    }
+    PathDir() { fs.addDirectory(path); }
 
-    ~TempDir() { std::filesystem::remove_all(path); }
+    /// @brief Creates an executable file with the given name in the directory.
+    void createExecutable(std::string const& name) { fs.addExecutable(path / name); }
 
-    /// @brief Creates a zero-byte file with the given name inside the temp directory.
-    /// On POSIX, sets owner-execute permission.
-    [[nodiscard]] std::filesystem::path createExecutable(std::string const& name) const
-    {
-        auto const filePath = path / name;
-        std::ofstream { filePath }.flush();
-#if !defined(_WIN32)
-        std::filesystem::permissions(
-            filePath, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
-#endif
-        return filePath;
-    }
-
-    /// @brief Creates a zero-byte file without execute permission (POSIX only distinction).
-    [[nodiscard]] std::filesystem::path createNonExecutable(std::string const& name) const
-    {
-        auto const filePath = path / name;
-        std::ofstream { filePath }.flush();
-        return filePath;
-    }
+    /// @brief Creates a file without the execute bit.
+    void createNonExecutable(std::string const& name) { fs.addFile(path / name, ""); }
 };
 
 } // namespace
 
 TEST_CASE("CommandResolver.findInPath.bare_name_found")
 {
-    TempDir dir;
+    PathDir dir;
 #if defined(_WIN32)
-    (void) dir.createExecutable("testcmd.exe");
+    dir.createExecutable("testcmd.exe");
 #else
-    (void) dir.createExecutable("testcmd");
+    dir.createExecutable("testcmd");
 #endif
 
     platform::TestEnvironmentProvider env;
@@ -69,7 +50,7 @@ TEST_CASE("CommandResolver.findInPath.bare_name_found")
     env.set("PATHEXT", ".exe;.cmd;.bat");
 #endif
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("testcmd");
     REQUIRE(!result.empty());
     CHECK(std::filesystem::path(result).filename().string().starts_with("testcmd"));
@@ -77,7 +58,7 @@ TEST_CASE("CommandResolver.findInPath.bare_name_found")
 
 TEST_CASE("CommandResolver.findInPath.not_found")
 {
-    TempDir dir;
+    PathDir dir;
 
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());
@@ -85,7 +66,7 @@ TEST_CASE("CommandResolver.findInPath.not_found")
     env.set("PATHEXT", ".exe");
 #endif
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("nonexistent");
     CHECK(result.empty());
 }
@@ -95,28 +76,29 @@ TEST_CASE("CommandResolver.findInPath.missing_PATH")
     platform::TestEnvironmentProvider env;
     // No PATH set at all.
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const fs = endo::InMemoryFileSystem {};
+    auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("anything");
     CHECK(result.empty());
 }
 
 TEST_CASE("CommandResolver.findInPath.skips_nonexistent_directory")
 {
-    TempDir dir;
+    PathDir dir;
 #if defined(_WIN32)
-    (void) dir.createExecutable("mycmd.exe");
+    dir.createExecutable("mycmd.exe");
     auto const pathValue = std::string("C:\\no_such_dir_12345") + ";" + dir.path.string();
     platform::TestEnvironmentProvider env;
     env.set("PATH", pathValue);
     env.set("PATHEXT", ".exe");
 #else
-    (void) dir.createExecutable("mycmd");
+    dir.createExecutable("mycmd");
     auto const pathValue = std::string("/no_such_dir_12345") + ":" + dir.path.string();
     platform::TestEnvironmentProvider env;
     env.set("PATH", pathValue);
 #endif
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("mycmd");
     REQUIRE(!result.empty());
     CHECK(std::filesystem::path(result).filename().string().starts_with("mycmd"));
@@ -125,15 +107,15 @@ TEST_CASE("CommandResolver.findInPath.skips_nonexistent_directory")
 #if defined(_WIN32)
 TEST_CASE("CommandResolver.findInPath.PATHEXT_resolution")
 {
-    TempDir dir;
+    PathDir dir;
     // Create testapp.cmd — should be found when searching for "testapp"
-    (void) dir.createExecutable("testapp.cmd");
+    dir.createExecutable("testapp.cmd");
 
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());
     env.set("PATHEXT", ".exe;.cmd;.bat");
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("testapp");
     REQUIRE(!result.empty());
     CHECK(result.ends_with(".cmd"));
@@ -308,14 +290,20 @@ TEST_CASE("CommandResolver.resolve.invalidates_cache_on_PATHEXT_change")
 #if !defined(_WIN32)
 TEST_CASE("CommandResolver.findInPath.skips_non_executable")
 {
-    TempDir dir;
+    // POSIX-only, even though the in-memory model carries an execute bit everywhere:
+    // on Windows candidateNames() never probes the extensionless name (it expands "noexec"
+    // to noexec.exe/.cmd/.bat/.com/.ps1), so the search would come back empty whatever the
+    // execute bit says — and NativeFileSystem on Windows deliberately treats any existing
+    // non-directory entry as executable, so the assertion would not describe the real
+    // platform behaviour either.
+    PathDir dir;
     // Create a file without execute permission — should not be found.
-    (void) dir.createNonExecutable("noexec");
+    dir.createNonExecutable("noexec");
 
     platform::TestEnvironmentProvider env;
     env.set("PATH", dir.path.string());
 
-    auto const resolver = CommandResolver(env, platform::NativeFileSystem::instance());
+    auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("noexec");
     CHECK(result.empty());
 }

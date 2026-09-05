@@ -34,6 +34,7 @@ using crispy::escape;
 #include "TTY.hpp"
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
+#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
@@ -70,6 +71,65 @@ struct TestShell
         return *this;
     }
 };
+
+/// @brief A shell whose filesystem is private to the test case.
+///
+/// Builtins reach the filesystem through Shell's injected FileSystem, so pointing that at
+/// an in-memory implementation gives each test a private tree with nothing to clean up.
+/// This mirrors the wiring endo-test uses for `# mode: shell` tests
+/// (src/endo-test/TestExecutor.cpp).
+///
+/// Not usable by every test. A builtin whose output travels through a real file descriptor
+/// -- a redirection target, or anything inherited by a forked child -- cannot see this
+/// filesystem, because a child process cannot read an in-memory file through an fd. Those
+/// tests keep using TestShell and the real filesystem.
+///
+/// The in-memory model is also deliberately shallow in places: lastWriteTime() always
+/// reports "now", weaklyCanonical() never resolves symlinks, symlinks are metadata only,
+/// and permissions are not enforced beyond denyAccess(). A test whose assertion depends on
+/// any of those would pass vacuously here and belongs on TestShell.
+struct InMemoryShell
+{
+    endo::TestPTY pty;
+    endo::InMemoryFileSystem fs;
+    endo::TestEnvironment env { "/test" };
+    int exitCode = -1;
+
+    endo::Shell shell { pty, env, fs };
+
+    std::string output() const { return pty.output(); }
+
+    InMemoryShell()
+    {
+        fs.addDirectory("/test");
+        // Keep the filesystem's idea of the working directory in step with the
+        // environment's, so a relative path resolves the same way through both.
+        fs.setCurrentPath("/test");
+        env.set("HOME", "/test/home");
+        env.set("PWD", "/test");
+        shell.addModuleSearchPath("/test");
+        // Never probe the test PTY for Sixel support: the query would leak escape bytes
+        // into the captured output and stall on timeout.
+        shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
+    }
+
+    InMemoryShell& operator()(std::string_view cmd)
+    {
+        exitCode = shell.execute(std::string(cmd));
+        return *this;
+    }
+
+    /// @brief Returns a file's entire contents, or an empty string if it cannot be read.
+    ///
+    /// Whole contents rather than the first line: the fixtures these assertions replaced
+    /// used std::getline only because std::ifstream made that the easy call, so truncating
+    /// here would let a copy that dropped everything after the first newline pass.
+    [[nodiscard]] std::string content(std::filesystem::path const& path) const
+    {
+        return fs.readFile(path).value_or(std::string {});
+    }
+};
+
 } // namespace
 
 // ============================================================================
@@ -1086,22 +1146,16 @@ TEST_CASE("shell.builtin.rm_help")
 
 TEST_CASE("shell.builtin.rm_file")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_file";
-    fs::create_directories(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_file");
+    shell.fs.addDirectory(testDir);
     auto const filePath = testDir / "testfile.txt";
-    {
-        std::ofstream ofs(filePath);
-        ofs << "hello";
-    }
-    REQUIRE(fs::exists(filePath));
+    shell.fs.addFile(filePath, "hello");
+    REQUIRE(shell.fs.exists(filePath));
 
-    TestShell shell;
     shell(std::format("rm {}", filePath.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(filePath));
-
-    fs::remove_all(testDir);
+    CHECK(!shell.fs.exists(filePath));
 }
 
 TEST_CASE("shell.builtin.rm_nonexistent")
@@ -1120,84 +1174,64 @@ TEST_CASE("shell.builtin.rm_force_nonexistent")
 
 TEST_CASE("shell.builtin.rm_directory_without_recursive")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_dir_norec";
-    fs::create_directories(testDir);
-    REQUIRE(fs::exists(testDir));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_dir_norec");
+    shell.fs.addDirectory(testDir);
+    REQUIRE(shell.fs.exists(testDir));
 
-    TestShell shell;
     shell(std::format("rm {}", testDir.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.rm_recursive")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_recursive";
-    fs::create_directories(testDir / "subdir");
-    {
-        std::ofstream ofs(testDir / "subdir" / "file.txt");
-        ofs << "data";
-    }
-    REQUIRE(fs::exists(testDir / "subdir" / "file.txt"));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_recursive");
+    shell.fs.addFile(testDir / "subdir" / "file.txt", "data");
+    REQUIRE(shell.fs.exists(testDir / "subdir" / "file.txt"));
 
-    TestShell shell;
     shell(std::format("rm -r {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(testDir));
+    CHECK(!shell.fs.exists(testDir));
 }
 
 TEST_CASE("shell.builtin.rm_dir_flag")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_emptydir";
-    fs::create_directories(testDir);
-    REQUIRE(fs::exists(testDir));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_emptydir");
+    shell.fs.addDirectory(testDir);
+    REQUIRE(shell.fs.exists(testDir));
 
-    TestShell shell;
     shell(std::format("rm -d {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(testDir));
+    CHECK(!shell.fs.exists(testDir));
 }
 
 TEST_CASE("shell.builtin.rm_verbose")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_verbose";
-    fs::create_directories(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_verbose");
+    shell.fs.addDirectory(testDir);
     auto const filePath = testDir / "verbose_file.txt";
-    {
-        std::ofstream ofs(filePath);
-        ofs << "data";
-    }
-    REQUIRE(fs::exists(filePath));
+    shell.fs.addFile(filePath, "data");
+    REQUIRE(shell.fs.exists(filePath));
 
-    TestShell shell;
     auto output = shell(std::format("rm -v {}", filePath.string())).output();
     CHECK(shell.exitCode == 0);
     CHECK(output.find("removed") != std::string::npos);
-    CHECK(!fs::exists(filePath));
-
-    fs::remove_all(testDir);
+    CHECK(!shell.fs.exists(filePath));
 }
 
 TEST_CASE("shell.builtin.rm_verbose_recursive")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_verbose_recursive";
-    fs::create_directories(testDir / "subdir");
-    {
-        std::ofstream ofs(testDir / "subdir" / "file.txt");
-        ofs << "data";
-    }
-    REQUIRE(fs::exists(testDir / "subdir" / "file.txt"));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_verbose_recursive");
+    shell.fs.addFile(testDir / "subdir" / "file.txt", "data");
+    REQUIRE(shell.fs.exists(testDir / "subdir" / "file.txt"));
 
-    TestShell shell;
     auto output = shell(std::format("rm -vr {}", testDir.string())).output();
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(testDir));
+    CHECK(!shell.fs.exists(testDir));
 
     // Should list each removed entry (file, subdir, top-level dir)
     auto const lines = std::count(output.begin(), output.end(), '\n');
@@ -1208,39 +1242,28 @@ TEST_CASE("shell.builtin.rm_verbose_recursive")
 
 TEST_CASE("shell.builtin.rm_combined_flags")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_combined";
-    fs::create_directories(testDir / "inner");
-    {
-        std::ofstream ofs(testDir / "inner" / "f.txt");
-        ofs << "x";
-    }
-    REQUIRE(fs::exists(testDir / "inner" / "f.txt"));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_combined");
+    shell.fs.addFile(testDir / "inner" / "f.txt", "x");
+    REQUIRE(shell.fs.exists(testDir / "inner" / "f.txt"));
 
-    TestShell shell;
     shell(std::format("rm -rf {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(testDir));
+    CHECK(!shell.fs.exists(testDir));
 }
 
 TEST_CASE("shell.builtin.rm_double_dash")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_rm_test_ddash";
-    fs::create_directories(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/rm_ddash");
+    shell.fs.addDirectory(testDir);
     auto const filePath = testDir / "-weirdname";
-    {
-        std::ofstream ofs(filePath);
-        ofs << "data";
-    }
-    REQUIRE(fs::exists(filePath));
+    shell.fs.addFile(filePath, "data");
+    REQUIRE(shell.fs.exists(filePath));
 
-    TestShell shell;
     shell(std::format("rm -- {}", filePath.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(filePath));
-
-    fs::remove_all(testDir);
+    CHECK(!shell.fs.exists(filePath));
 }
 
 TEST_CASE("shell.builtin.rm_preserve_root")
@@ -1279,72 +1302,54 @@ TEST_CASE("shell.builtin.mkdir_help")
 
 TEST_CASE("shell.builtin.mkdir_basic")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_basic";
-    fs::remove_all(testDir); // ensure clean state
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_basic");
 
-    TestShell shell;
     shell(std::format("mkdir {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(testDir));
-
-    fs::remove_all(testDir);
+    CHECK(shell.fs.isDirectory(testDir));
 }
 
 TEST_CASE("shell.builtin.mkdir_already_exists")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_exists";
-    fs::create_directories(testDir);
-    REQUIRE(fs::exists(testDir));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_exists");
+    shell.fs.addDirectory(testDir);
+    REQUIRE(shell.fs.exists(testDir));
 
-    TestShell shell;
     shell(std::format("mkdir {}", testDir.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.mkdir_parents")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents" / "a" / "b" / "c";
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents");
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_parents") / "a" / "b" / "c";
 
-    TestShell shell;
     shell(std::format("mkdir -p {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(testDir));
-
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents");
+    CHECK(shell.fs.isDirectory(testDir));
 }
 
 TEST_CASE("shell.builtin.mkdir_parents_long")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents_long" / "x" / "y";
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents_long");
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_parents_long") / "x" / "y";
 
-    TestShell shell;
     shell(std::format("mkdir --parents {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(testDir));
-
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents_long");
+    CHECK(shell.fs.isDirectory(testDir));
 }
 
 TEST_CASE("shell.builtin.mkdir_parents_existing")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents_exist";
-    fs::create_directories(testDir);
-    REQUIRE(fs::exists(testDir));
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_parents_exist");
+    shell.fs.addDirectory(testDir);
+    REQUIRE(shell.fs.exists(testDir));
 
-    TestShell shell;
     shell(std::format("mkdir -p {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.mkdir_no_operand")
@@ -1356,67 +1361,51 @@ TEST_CASE("shell.builtin.mkdir_no_operand")
 
 TEST_CASE("shell.builtin.mkdir_verbose")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_verbose";
-    fs::remove_all(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_verbose");
 
-    TestShell shell;
     auto output = shell(std::format("mkdir -v {}", testDir.string())).output();
     CHECK(shell.exitCode == 0);
     CHECK(output.find("created directory") != std::string::npos);
-    CHECK(fs::is_directory(testDir));
-
-    fs::remove_all(testDir);
+    CHECK(shell.fs.isDirectory(testDir));
 }
 
 TEST_CASE("shell.builtin.mkdir_combined_flags")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_combined" / "sub";
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_combined");
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_combined") / "sub";
 
-    TestShell shell;
     auto output = shell(std::format("mkdir -pv {}", testDir.string())).output();
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(testDir));
+    CHECK(shell.fs.isDirectory(testDir));
     CHECK(output.find("created directory") != std::string::npos);
-
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_combined");
 }
 
 TEST_CASE("shell.builtin.mkdir_double_dash")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_ddash" / "-weirdname";
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_ddash");
-    fs::create_directories(fs::temp_directory_path() / "endo_mkdir_test_ddash");
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/mkdir_ddash") / "-weirdname";
+    shell.fs.addDirectory(std::filesystem::path("/test/mkdir_ddash"));
 
-    TestShell shell;
     shell(std::format("mkdir -- {}", testDir.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(testDir));
-
-    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_ddash");
+    CHECK(shell.fs.isDirectory(testDir));
 }
 
 TEST_CASE("shell.builtin.mkdir_multiple_dirs")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mkdir_test_multi";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mkdir_multi");
+    shell.fs.addDirectory(base);
     auto const dir1 = base / "dir1";
     auto const dir2 = base / "dir2";
     auto const dir3 = base / "dir3";
 
-    TestShell shell;
     shell(std::format("mkdir {} {} {}", dir1.string(), dir2.string(), dir3.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::is_directory(dir1));
-    CHECK(fs::is_directory(dir2));
-    CHECK(fs::is_directory(dir3));
-
-    fs::remove_all(base);
+    CHECK(shell.fs.isDirectory(dir1));
+    CHECK(shell.fs.isDirectory(dir2));
+    CHECK(shell.fs.isDirectory(dir3));
 }
 
 // ============================================================================
@@ -1434,312 +1423,186 @@ TEST_CASE("shell.builtin.cp_help")
 
 TEST_CASE("shell.builtin.cp_single_file")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_single";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_single");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
     // Create source file with content
-    {
-        std::ofstream ofs(src);
-        ofs << "hello world";
-    }
+    shell.fs.addFile(src, "hello world");
 
-    TestShell shell;
     shell(std::format("cp {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::exists(dst));
+    CHECK(shell.fs.exists(dst));
 
     // Verify content
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "hello world");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "hello world");
 }
 
 TEST_CASE("shell.builtin.cp_nonexistent_source")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_noexist";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_noexist");
+    shell.fs.addDirectory(base);
 
-    TestShell shell;
     shell(std::format("cp {}/nosuchfile {}/dest", base.string(), base.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.cp_overwrite_default")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_overwrite";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_overwrite");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "new content";
-    }
-    {
-        std::ofstream ofs(dst);
-        ofs << "old content";
-    }
+    shell.fs.addFile(src, "new content");
+    shell.fs.addFile(dst, "old content");
 
-    TestShell shell;
     shell(std::format("cp {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
 
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "new content");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "new content");
 }
 
 TEST_CASE("shell.builtin.cp_no_clobber")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_noclobber";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_noclobber");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "new content";
-    }
-    {
-        std::ofstream ofs(dst);
-        ofs << "old content";
-    }
+    shell.fs.addFile(src, "new content");
+    shell.fs.addFile(dst, "old content");
 
-    TestShell shell;
     shell(std::format("cp -n {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
 
     // Original content preserved
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "old content");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "old content");
 }
 
 TEST_CASE("shell.builtin.cp_force")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_force";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_force");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "forced content";
-    }
-    {
-        std::ofstream ofs(dst);
-        ofs << "old content";
-    }
+    shell.fs.addFile(src, "forced content");
+    shell.fs.addFile(dst, "old content");
 
-    TestShell shell;
     shell(std::format("cp -f {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
 
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "forced content");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "forced content");
 }
 
 TEST_CASE("shell.builtin.cp_directory_without_recursive")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_dir_norec";
-    fs::remove_all(base);
-    fs::create_directories(base / "srcdir");
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_dir_norec");
+    shell.fs.addDirectory(base / "srcdir");
 
-    TestShell shell;
     shell(std::format("cp {} {}", (base / "srcdir").string(), (base / "dstdir").string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.cp_recursive")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_recursive";
-    fs::remove_all(base);
-    fs::create_directories(base / "srcdir" / "sub");
-    {
-        std::ofstream ofs(base / "srcdir" / "file.txt");
-        ofs << "data";
-    }
-    {
-        std::ofstream ofs(base / "srcdir" / "sub" / "nested.txt");
-        ofs << "nested";
-    }
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_recursive");
+    shell.fs.addFile(base / "srcdir" / "file.txt", "data");
+    shell.fs.addFile(base / "srcdir" / "sub" / "nested.txt", "nested");
 
-    TestShell shell;
     shell(std::format("cp -r {} {}", (base / "srcdir").string(), (base / "dstdir").string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::exists(base / "dstdir" / "file.txt"));
-    CHECK(fs::exists(base / "dstdir" / "sub" / "nested.txt"));
+    CHECK(shell.fs.exists(base / "dstdir" / "file.txt"));
+    CHECK(shell.fs.exists(base / "dstdir" / "sub" / "nested.txt"));
 
-    {
-        std::ifstream ifs(base / "dstdir" / "sub" / "nested.txt");
-        std::string c;
-        std::getline(ifs, c);
-        CHECK(c == "nested");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(base / "dstdir" / "sub" / "nested.txt") == "nested");
 }
 
 TEST_CASE("shell.builtin.cp_verbose")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_verbose";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_verbose");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "hello";
-    }
+    shell.fs.addFile(src, "hello");
 
-    TestShell shell;
     auto output = shell(std::format("cp -v {} {}", src.string(), dst.string())).output();
     CHECK(shell.exitCode == 0);
     CHECK(output.find("->") != std::string::npos);
-    CHECK(fs::exists(dst));
-
-    fs::remove_all(base);
+    CHECK(shell.fs.exists(dst));
 }
 
 TEST_CASE("shell.builtin.cp_combined_flags")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_combined";
-    fs::remove_all(base);
-    fs::create_directories(base / "srcdir");
-    {
-        std::ofstream ofs(base / "srcdir" / "file.txt");
-        ofs << "data";
-    }
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_combined");
+    shell.fs.addFile(base / "srcdir" / "file.txt", "data");
 
-    TestShell shell;
     auto output =
         shell(std::format("cp -rv {} {}", (base / "srcdir").string(), (base / "dstdir").string())).output();
     CHECK(shell.exitCode == 0);
-    CHECK(fs::exists(base / "dstdir" / "file.txt"));
+    CHECK(shell.fs.exists(base / "dstdir" / "file.txt"));
     CHECK(output.find("->") != std::string::npos);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.cp_double_dash")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_ddash";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_ddash");
+    shell.fs.addDirectory(base);
     auto const src = base / "-weirdname.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "content";
-    }
+    shell.fs.addFile(src, "content");
 
-    TestShell shell;
     shell(std::format("cp -- {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::exists(dst));
-
-    fs::remove_all(base);
+    CHECK(shell.fs.exists(dst));
 }
 
 TEST_CASE("shell.builtin.cp_multiple_sources_to_dir")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_multi";
-    fs::remove_all(base);
-    fs::create_directories(base / "destdir");
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_multi");
+    shell.fs.addDirectory(base / "destdir");
     auto const src1 = base / "a.txt";
     auto const src2 = base / "b.txt";
 
-    {
-        std::ofstream ofs(src1);
-        ofs << "aaa";
-    }
-    {
-        std::ofstream ofs(src2);
-        ofs << "bbb";
-    }
+    shell.fs.addFile(src1, "aaa");
+    shell.fs.addFile(src2, "bbb");
 
-    TestShell shell;
     shell(std::format("cp {} {} {}", src1.string(), src2.string(), (base / "destdir").string()));
     CHECK(shell.exitCode == 0);
-    CHECK(fs::exists(base / "destdir" / "a.txt"));
-    CHECK(fs::exists(base / "destdir" / "b.txt"));
-
-    fs::remove_all(base);
+    CHECK(shell.fs.exists(base / "destdir" / "a.txt"));
+    CHECK(shell.fs.exists(base / "destdir" / "b.txt"));
 }
 
 TEST_CASE("shell.builtin.cp_multiple_sources_to_file")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_multi_fail";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_multi_fail");
+    shell.fs.addDirectory(base);
     auto const src1 = base / "a.txt";
     auto const src2 = base / "b.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src1);
-        ofs << "aaa";
-    }
-    {
-        std::ofstream ofs(src2);
-        ofs << "bbb";
-    }
-    {
-        std::ofstream ofs(dst);
-        ofs << "xxx";
-    }
+    shell.fs.addFile(src1, "aaa");
+    shell.fs.addFile(src2, "bbb");
+    shell.fs.addFile(dst, "xxx");
 
-    TestShell shell;
     shell(std::format("cp {} {} {}", src1.string(), src2.string(), dst.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.cp_no_operand")
@@ -1751,22 +1614,15 @@ TEST_CASE("shell.builtin.cp_no_operand")
 
 TEST_CASE("shell.builtin.cp_missing_destination")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_cp_test_missdest";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/cp_missdest");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "data";
-    }
+    shell.fs.addFile(src, "data");
 
-    TestShell shell;
     shell(std::format("cp {}", src.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 // ============================================================================
@@ -1784,68 +1640,45 @@ TEST_CASE("shell.builtin.mv_help")
 
 TEST_CASE("shell.builtin.mv_single_file")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_single";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_single");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "hello world";
-    }
+    shell.fs.addFile(src, "hello world");
 
-    TestShell shell;
     shell(std::format("mv {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(src));
-    CHECK(fs::exists(dst));
+    CHECK(!shell.fs.exists(src));
+    CHECK(shell.fs.exists(dst));
 
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "hello world");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "hello world");
 }
 
 TEST_CASE("shell.builtin.mv_to_directory")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_todir";
-    fs::remove_all(base);
-    fs::create_directories(base / "subdir");
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_todir");
+    shell.fs.addDirectory(base / "subdir");
     auto const src = base / "file.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "data";
-    }
+    shell.fs.addFile(src, "data");
 
-    TestShell shell;
     shell(std::format("mv {} {}", src.string(), (base / "subdir").string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(src));
-    CHECK(fs::exists(base / "subdir" / "file.txt"));
-
-    fs::remove_all(base);
+    CHECK(!shell.fs.exists(src));
+    CHECK(shell.fs.exists(base / "subdir" / "file.txt"));
 }
 
 TEST_CASE("shell.builtin.mv_nonexistent")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_noexist";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_noexist");
+    shell.fs.addDirectory(base);
 
-    TestShell shell;
     shell(std::format("mv {}/nosuchfile {}/dest", base.string(), base.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_no_operand")
@@ -1857,103 +1690,67 @@ TEST_CASE("shell.builtin.mv_no_operand")
 
 TEST_CASE("shell.builtin.mv_missing_destination")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_missdest";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_missdest");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "data";
-    }
+    shell.fs.addFile(src, "data");
 
-    TestShell shell;
     shell(std::format("mv {}", src.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("shell.builtin.mv_no_clobber")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_noclobber";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_noclobber");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "source content";
-    }
-    {
-        std::ofstream ofs(dst);
-        ofs << "existing content";
-    }
+    shell.fs.addFile(src, "source content");
+    shell.fs.addFile(dst, "existing content");
 
-    TestShell shell;
     shell(std::format("mv -n {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
     // Source should still exist (move was skipped)
-    CHECK(fs::exists(src));
+    CHECK(shell.fs.exists(src));
     // Destination should retain original content
-    {
-        std::ifstream ifs(dst);
-        std::string content;
-        std::getline(ifs, content);
-        CHECK(content == "existing content");
-    }
-
-    fs::remove_all(base);
+    CHECK(shell.content(dst) == "existing content");
 }
 
 TEST_CASE("shell.builtin.mv_verbose")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_verbose";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_verbose");
+    shell.fs.addDirectory(base);
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "data";
-    }
+    shell.fs.addFile(src, "data");
 
-    TestShell shell;
     auto output = shell(std::format("mv -v {} {}", src.string(), dst.string())).output();
     CHECK(shell.exitCode == 0);
     CHECK(output.find("->") != std::string::npos);
-    CHECK(!fs::exists(src));
-    CHECK(fs::exists(dst));
-
-    fs::remove_all(base);
+    CHECK(!shell.fs.exists(src));
+    CHECK(shell.fs.exists(dst));
 }
 
 TEST_CASE("shell.builtin.mv_double_dash")
 {
-    namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_mv_test_ddash";
-    fs::remove_all(base);
-    fs::create_directories(base);
+    InMemoryShell shell;
+    auto const base = std::filesystem::path("/test/mv_ddash");
+    shell.fs.addDirectory(base);
     auto const src = base / "-dashfile.txt";
     auto const dst = base / "dest.txt";
 
-    {
-        std::ofstream ofs(src);
-        ofs << "data";
-    }
+    shell.fs.addFile(src, "data");
 
-    TestShell shell;
     shell(std::format("mv -- {} {}", src.string(), dst.string()));
     CHECK(shell.exitCode == 0);
-    CHECK(!fs::exists(src));
-    CHECK(fs::exists(dst));
-
-    fs::remove_all(base);
+    CHECK(!shell.fs.exists(src));
+    CHECK(shell.fs.exists(dst));
 }
 
 TEST_CASE("shell.builtin.mv_multiple_to_dir")
@@ -4308,21 +4105,11 @@ TEST_CASE("module.shell_level.shows_correct_level")
 
 TEST_CASE("shell.builtin.find_basic")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_basic";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    fs::create_directories(testDir / "sub");
-    {
-        std::ofstream ofs(testDir / "a.txt");
-        ofs << "hello";
-    }
-    {
-        std::ofstream ofs(testDir / "sub" / "b.txt");
-        ofs << "world";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_basic");
+    shell.fs.addFile(testDir / "a.txt", "hello");
+    shell.fs.addFile(testDir / "sub" / "b.txt", "world");
 
-    TestShell shell;
     shell(std::format("find {}", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
@@ -4330,52 +4117,31 @@ TEST_CASE("shell.builtin.find_basic")
     CHECK(out.find("a.txt") != std::string::npos);
     CHECK(out.find("b.txt") != std::string::npos);
     CHECK(out.find("sub") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_name_pattern")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_name";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    {
-        std::ofstream ofs(testDir / "hello.cpp");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "world.hpp");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "other.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_name");
+    shell.fs.addFile(testDir / "hello.cpp", "x");
+    shell.fs.addFile(testDir / "world.hpp", "x");
+    shell.fs.addFile(testDir / "other.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -name '*.cpp'", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("hello.cpp") != std::string::npos);
     CHECK(out.find("world.hpp") == std::string::npos);
     CHECK(out.find("other.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_type_file")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_type";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir / "subdir");
-    {
-        std::ofstream ofs(testDir / "file.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_type");
+    shell.fs.addDirectory(testDir / "subdir");
+    shell.fs.addFile(testDir / "file.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -type f", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
@@ -4388,107 +4154,61 @@ TEST_CASE("shell.builtin.find_type_file")
 
 TEST_CASE("shell.builtin.find_type_directory")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_typed";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir / "subdir");
-    {
-        std::ofstream ofs(testDir / "file.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_typed");
+    shell.fs.addDirectory(testDir / "subdir");
+    shell.fs.addFile(testDir / "file.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -type d", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("subdir") != std::string::npos);
     CHECK(out.find("file.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_maxdepth")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_maxdepth";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir / "a" / "b");
-    {
-        std::ofstream ofs(testDir / "top.txt");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "a" / "mid.txt");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "a" / "b" / "deep.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_maxdepth");
+    shell.fs.addFile(testDir / "top.txt", "x");
+    shell.fs.addFile(testDir / "a" / "mid.txt", "x");
+    shell.fs.addFile(testDir / "a" / "b" / "deep.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -maxdepth 1", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("top.txt") != std::string::npos);
     CHECK(out.find("deep.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_or_grouping")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_or";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    {
-        std::ofstream ofs(testDir / "a.cpp");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "b.hpp");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "c.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_or");
+    shell.fs.addFile(testDir / "a.cpp", "x");
+    shell.fs.addFile(testDir / "b.hpp", "x");
+    shell.fs.addFile(testDir / "c.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} '(' -name '*.cpp' -o -name '*.hpp' ')'", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("a.cpp") != std::string::npos);
     CHECK(out.find("b.hpp") != std::string::npos);
     CHECK(out.find("c.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_not")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_not";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    {
-        std::ofstream ofs(testDir / "keep.cpp");
-        ofs << "x";
-    }
-    {
-        std::ofstream ofs(testDir / "remove.o");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_not");
+    shell.fs.addFile(testDir / "keep.cpp", "x");
+    shell.fs.addFile(testDir / "remove.o", "x");
 
-    TestShell shell;
     shell(std::format("find {} -type f -not -name '*.o'", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("keep.cpp") != std::string::npos);
     CHECK(out.find("remove.o") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_empty")
@@ -4518,45 +4238,29 @@ TEST_CASE("shell.builtin.find_empty")
 
 TEST_CASE("shell.builtin.find_print0")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_print0";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    {
-        std::ofstream ofs(testDir / "file.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_print0");
+    shell.fs.addFile(testDir / "file.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -name '*.txt' -print0", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     // Output should contain null byte instead of newline
     CHECK(out.find('\0') != std::string::npos);
     CHECK(out.find("file.txt") != std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.find_no_results")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_find_test_noresult";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
-    {
-        std::ofstream ofs(testDir / "file.txt");
-        ofs << "x";
-    }
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/find_noresult");
+    shell.fs.addFile(testDir / "file.txt", "x");
 
-    TestShell shell;
     shell(std::format("find {} -name '*.nonexistent'", testDir.string()));
     CHECK(shell.exitCode == 0);
     // Output should be empty (no matches, no error)
     auto const out = std::string(shell.output());
     CHECK(out.find("file.txt") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 // ============================================================================
@@ -4660,44 +4364,30 @@ TEST_CASE("shell.builtin.grep_pipe_multiple_e")
 
 TEST_CASE("shell.builtin.grep_file_basic")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_file";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/grep_file");
+    shell.fs.addDirectory(testDir);
     auto const file1 = testDir / "test.txt";
-    {
-        std::ofstream ofs(file1);
-        ofs << "hello world\ngoodbye world\nhello again\n";
-    }
+    shell.fs.addFile(file1, "hello world\ngoodbye world\nhello again\n");
 
-    TestShell shell;
     shell(std::format("grep --color=never hello {}", file1.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
     CHECK(out.find("hello world") != std::string::npos);
     CHECK(out.find("hello again") != std::string::npos);
     CHECK(out.find("goodbye") == std::string::npos);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_file_no_match_exit_code")
 {
-    namespace fs = std::filesystem;
-    auto const testDir = fs::temp_directory_path() / "endo_grep_test_nomatch";
-    fs::remove_all(testDir);
-    fs::create_directories(testDir);
+    InMemoryShell shell;
+    auto const testDir = std::filesystem::path("/test/grep_nomatch");
+    shell.fs.addDirectory(testDir);
     auto const file1 = testDir / "test.txt";
-    {
-        std::ofstream ofs(file1);
-        ofs << "hello world\n";
-    }
+    shell.fs.addFile(file1, "hello world\n");
 
-    TestShell shell;
     shell(std::format("grep --color=never xyz {}", file1.string()));
     CHECK(shell.exitCode == 1);
-
-    fs::remove_all(testDir);
 }
 
 TEST_CASE("shell.builtin.grep_file_multiple_files")

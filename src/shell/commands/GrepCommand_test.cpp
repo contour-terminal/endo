@@ -3,12 +3,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <filesystem>
-#include <fstream>
 #include <vector>
 
 #include <platform/InterruptThrottle.hpp>
-#include <platform/NativeFileSystem.hpp>
 #include <platform/SignalHandler.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 
@@ -599,32 +596,16 @@ TEST_CASE("grep.search.context_overlap", "[grep]")
 
 TEST_CASE("grep.binary.text_file", "[grep]")
 {
-    namespace fs = std::filesystem;
-    auto const tmpDir = fs::temp_directory_path() / "endo_grep_test_binary";
-    fs::create_directories(tmpDir);
-    auto const textFile = tmpDir / "text.txt";
-    {
-        std::ofstream f(textFile);
-        f << "hello world\nthis is text\n";
-    }
-    CHECK_FALSE(isBinaryFile(endo::platform::NativeFileSystem::instance(), textFile));
-    fs::remove_all(tmpDir);
+    auto const fs =
+        endo::InMemoryFileSystem { { .path = "/test/text.txt", .content = "hello world\nthis is text\n" } };
+    CHECK_FALSE(isBinaryFile(fs, "/test/text.txt"));
 }
 
 TEST_CASE("grep.binary.null_bytes", "[grep]")
 {
-    namespace fs = std::filesystem;
-    auto const tmpDir = fs::temp_directory_path() / "endo_grep_test_binary";
-    fs::create_directories(tmpDir);
-    auto const binFile = tmpDir / "binary.bin";
-    {
-        std::ofstream f(binFile, std::ios::binary);
-        f << "hello";
-        f.put('\0');
-        f << "world";
-    }
-    CHECK(isBinaryFile(endo::platform::NativeFileSystem::instance(), binFile));
-    fs::remove_all(tmpDir);
+    auto const fs = endo::InMemoryFileSystem { { .path = "/test/binary.bin",
+                                                 .content = std::string("hello\0world", 11) } };
+    CHECK(isBinaryFile(fs, "/test/binary.bin"));
 }
 
 // ============================================================================
