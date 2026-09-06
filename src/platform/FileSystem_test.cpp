@@ -2,11 +2,17 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cerrno>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <system_error>
 #include <vector>
 
+#include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
+#include <testing/ScopedTempDir.hpp>
 
 using endo::platform::FileSystem;
 using endo::platform::testing::InMemoryFileSystem;
@@ -114,6 +120,40 @@ TEST_CASE("isExecutableFile rejects a regular file without an execute bit", "[Fi
     CHECK_FALSE(fs.isExecutableFile("/usr/bin/data"));
 }
 
+#if !defined(_WIN32)
+TEST_CASE("isExecutableFile agrees with the real filesystem on the execute bit", "[FileSystem]")
+{
+    // The tests above pin InMemoryFileSystem's behaviour, which on its own only proves the
+    // model is self-consistent. This one anchors it to the real thing: shell PATH resolution
+    // (CommandResolver) is tested entirely against the model, so if the two ever disagree
+    // about the execute bit, every one of those tests would agree with each other and be
+    // wrong together.
+    auto const& fs = endo::platform::NativeFileSystem::instance();
+
+    auto const path = fs.createTempFile("endo_execbit_test");
+    REQUIRE(path.has_value());
+
+    // A failing REQUIRE below throws out of the test case, so removal cannot be a trailing
+    // statement -- it would leave the file behind in the system temp directory.
+    struct Remover
+    {
+        FileSystem const& fs;
+        std::filesystem::path path;
+
+        ~Remover() { [[maybe_unused]] auto const removed = fs.remove(path); }
+    } const remover { .fs = fs, .path = *path };
+
+    REQUIRE(fs.setPermissions(*path, std::filesystem::perms::owner_read).has_value());
+    CHECK_FALSE(fs.isExecutableFile(*path));
+
+    REQUIRE(fs.setPermissions(*path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec)
+                .has_value());
+    CHECK(fs.isExecutableFile(*path));
+
+    // No removal here: that is the guard's job, exactly as its comment says.
+}
+#endif
+
 TEST_CASE("isExecutableFile rejects directories and missing paths", "[FileSystem]")
 {
     auto fs = InMemoryFileSystem {};
@@ -132,4 +172,80 @@ TEST_CASE("isExecutableFile follows the execute bit of a symlink entry", "[FileS
                 .has_value());
 
     CHECK(fs.isExecutableFile("/usr/bin/link"));
+}
+
+// ============================================================================
+// openRead error reporting
+// ============================================================================
+
+TEST_CASE("openRead names the reason it failed", "[FileSystem]")
+{
+    // Every backend distinguishes the same three cases, so a caller can report what the
+    // filesystem said instead of inferring it from a follow-up probe.
+    auto fs = InMemoryFileSystem {};
+    fs.addDirectory("/root/dir");
+    fs.addFile("/root/readable.txt", "content");
+    fs.addFile("/root/locked.txt", "secret");
+    fs.denyAccess("/root/locked.txt");
+
+    CHECK(fs.openRead("/root/readable.txt").has_value());
+
+    auto const missing = fs.openRead("/root/absent.txt");
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error() == "No such file or directory");
+
+    auto const directory = fs.openRead("/root/dir");
+    REQUIRE_FALSE(directory.has_value());
+    CHECK(directory.error() == "Is a directory");
+
+    auto const denied = fs.openRead("/root/locked.txt");
+    REQUIRE_FALSE(denied.has_value());
+    CHECK(denied.error() == "Permission denied");
+}
+
+TEST_CASE("openRead reports the operating system's own reason", "[FileSystem]")
+{
+    auto const& fs = endo::platform::NativeFileSystem::instance();
+    auto const dir = endo::testing::ScopedTempDir { "endo_openread" };
+
+    // A directory opens successfully on POSIX and fails only on the first read, so it has to
+    // be refused explicitly rather than surfacing as an empty file.
+    auto const directory = fs.openRead(dir.path());
+    REQUIRE_FALSE(directory.has_value());
+    CHECK(directory.error() == "Is a directory");
+
+    // errno's text, not a guess: distinct from the directory case above and from success.
+    auto const missing = fs.openRead(dir / "absent.txt");
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error() == std::error_code(ENOENT, std::generic_category()).message());
+}
+
+TEST_CASE("the in-memory model classifies a symlink by its target", "[FileSystem]")
+{
+    // std::filesystem follows symlinks for is_regular_file()/is_directory() and only reports
+    // the link itself through is_symlink(); the model has to agree or a consumer written
+    // against the real filesystem behaves differently under injection.
+    auto fs = InMemoryFileSystem {};
+    fs.addFile("/root/target.txt", "content");
+    fs.addDirectory("/root/dir");
+    fs.addSymlink("/root/to-file", "/root/target.txt");
+    fs.addSymlink("/root/to-dir", "/root/dir");
+    fs.addSymlink("/root/dangling", "/root/absent");
+
+    CHECK(fs.isRegularFile("/root/to-file"));
+    CHECK(fs.isDirectory("/root/to-dir"));
+    CHECK_FALSE(fs.isRegularFile("/root/dangling"));
+
+    // is_symlink() does not follow: the link is still a link.
+    CHECK(fs.isSymlink("/root/to-file"));
+    CHECK_FALSE(fs.isSymlink("/root/target.txt"));
+
+    auto const opened = fs.openRead("/root/to-file");
+    REQUIRE(opened.has_value());
+    CHECK(std::string(std::istreambuf_iterator<char>(**opened), {}) == "content");
+
+    // A cycle terminates rather than hanging.
+    fs.addSymlink("/root/loop-a", "/root/loop-b");
+    fs.addSymlink("/root/loop-b", "/root/loop-a");
+    CHECK_FALSE(fs.isRegularFile("/root/loop-a"));
 }

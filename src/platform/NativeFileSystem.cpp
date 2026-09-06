@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -133,29 +134,78 @@ std::expected<void, std::string> NativeFileSystem::appendFile(fs::path const& pa
     return {};
 }
 
-std::unique_ptr<std::istream> NativeFileSystem::openRead(fs::path const& path) const
+namespace
 {
-    auto stream = std::make_unique<std::ifstream>(path, std::ios::binary);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    /// @brief Explains a failed stream open in the operating system's own words.
+    ///
+    /// The stream classes report only *that* the open failed, so the reason comes from errno,
+    /// which the open() underlying every standard library this project targets sets. Callers
+    /// previously inferred the reason from a follow-up exists() probe, which both misreported
+    /// every cause other than the two it guessed between and raced with the open.
+    ///
+    /// @param errorNumber The value of errno immediately after the failed open.
+    /// @return The reason, or a generic message when errno says nothing useful.
+    [[nodiscard]] std::string describeOpenFailure(int errorNumber)
+    {
+        if (errorNumber == 0)
+            return "Cannot open file";
+        return std::error_code(errorNumber, std::generic_category()).message();
+    }
+
+    /// @brief Rejects a directory before it is opened as a file.
+    ///
+    /// Opening a directory succeeds on POSIX and fails only on the first read, which would
+    /// otherwise be indistinguishable from an empty file.
+    ///
+    /// @param path The path about to be opened.
+    /// @return The reason to refuse, or nullopt to proceed.
+    [[nodiscard]] std::optional<std::string> refuseDirectory(fs::path const& path)
+    {
+        std::error_code ec;
+        if (fs::is_directory(path, ec))
+            return "Is a directory";
+        return std::nullopt;
+    }
+
+    /// @brief Opens a stream, reporting why rather than merely that it failed.
+    ///
+    /// @tparam StreamT The concrete stream to construct.
+    /// @tparam BaseT   The interface type to hand back.
+    /// @param path The file to open.
+    /// @param mode The open mode.
+    /// @return The stream, or the reason it could not be opened.
+    template <typename StreamT, typename BaseT>
+    [[nodiscard]] std::expected<std::unique_ptr<BaseT>, std::string> openStream(fs::path const& path,
+                                                                                std::ios::openmode mode)
+    {
+        if (auto refusal = refuseDirectory(path))
+            return std::unexpected(std::move(*refusal));
+
+        errno = 0;
+        auto stream = std::make_unique<StreamT>(path, mode);
+        if (!*stream)
+            return std::unexpected(describeOpenFailure(errno));
+        return stream;
+    }
+} // namespace
+
+std::expected<std::unique_ptr<std::istream>, std::string> NativeFileSystem::openRead(
+    fs::path const& path) const
+{
+    return openStream<std::ifstream, std::istream>(path, std::ios::binary);
 }
 
-std::unique_ptr<std::ostream> NativeFileSystem::openWrite(fs::path const& path, bool append) const
+std::expected<std::unique_ptr<std::ostream>, std::string> NativeFileSystem::openWrite(fs::path const& path,
+                                                                                      bool append) const
 {
-    auto const mode = std::ios::binary | (append ? std::ios::app : std::ios::trunc);
-    auto stream = std::make_unique<std::ofstream>(path, mode);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    return openStream<std::ofstream, std::ostream>(
+        path, std::ios::binary | (append ? std::ios::app : std::ios::trunc));
 }
 
-std::unique_ptr<std::iostream> NativeFileSystem::openReadWrite(fs::path const& path) const
+std::expected<std::unique_ptr<std::iostream>, std::string> NativeFileSystem::openReadWrite(
+    fs::path const& path) const
 {
-    auto stream = std::make_unique<std::fstream>(path, std::ios::binary | std::ios::in | std::ios::out);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    return openStream<std::fstream, std::iostream>(path, std::ios::binary | std::ios::in | std::ios::out);
 }
 
 std::expected<void, std::string> NativeFileSystem::createDirectory(fs::path const& path) const
@@ -281,20 +331,43 @@ std::expected<void, std::string> NativeFileSystem::rename(fs::path const& from, 
         std::format("Cannot rename '{}' to '{}': {}", from.string(), to.string(), ec.message()));
 }
 
+namespace
+{
+    /// @brief Describes one directory entry without ever throwing.
+    ///
+    /// The throwing status accessors escape as filesystem_error whenever an entry cannot be
+    /// stat'ed -- EACCES on a readable-but-not-searchable directory, or a filesystem that
+    /// reports DT_UNKNOWN -- which would abort enumerating an otherwise perfectly readable
+    /// directory. An entry whose type cannot be determined is reported as neither.
+    ///
+    /// @param entry The entry to describe.
+    /// @param depth Walk-root-relative depth; 0 for a flat listing.
+    /// @return The described entry.
+    [[nodiscard]] FileSystem::DirectoryEntry describeEntry(fs::directory_entry const& entry, int depth = 0)
+    {
+        std::error_code ec;
+        return FileSystem::DirectoryEntry {
+            .path = entry.path(),
+            .isDirectory = entry.is_directory(ec),
+            .isRegularFile = entry.is_regular_file(ec),
+            .isSymlink = entry.is_symlink(ec),
+            .depth = depth,
+        };
+    }
+} // namespace
+
 std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSystem::listDirectory(
     fs::path const& path) const
 {
     std::error_code ec;
     auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry: fs::directory_iterator(path, ec))
-    {
-        entries.push_back(DirectoryEntry {
-            .path = entry.path(),
-            .isDirectory = entry.is_directory(),
-            .isRegularFile = entry.is_regular_file(),
-            .isSymlink = entry.is_symlink(),
-        });
-    }
+    auto it = fs::directory_iterator(path, ec);
+    auto const end = fs::directory_iterator {};
+    // Advanced through increment(ec) rather than a range-based for, whose operator++ throws:
+    // a mid-walk readdir failure would otherwise escape this std::expected-returning function
+    // as a filesystem_error.
+    for (; !ec && it != end; it.increment(ec))
+        entries.push_back(describeEntry(*it));
     if (ec)
         return std::unexpected(std::format("Cannot list directory '{}': {}", path.string(), ec.message()));
     return entries;
@@ -312,21 +385,12 @@ Generator<FileSystem::DirectoryEntry> NativeFileSystem::walkDirectoryRecursive(
     std::error_code ec;
     auto it = fs::recursive_directory_iterator(path, fs::directory_options::skip_permission_denied, ec);
     auto const end = fs::recursive_directory_iterator {};
-    // C-style loop is intentional here: a range-based for would use the throwing operator++,
-    // whereas we must thread an error_code through the non-throwing increment(ec) overload.
+    // Advanced through increment(ec) rather than a range-based for, whose operator++ throws:
+    // the error must be threaded out rather than escaping the coroutine.
     for (; !ec && it != end; it.increment(ec))
-    {
-        auto const& entry = *it;
-        co_yield DirectoryEntry {
-            .path = entry.path(),
-            .isDirectory = entry.is_directory(),
-            .isRegularFile = entry.is_regular_file(),
-            .isSymlink = entry.is_symlink(),
-            // recursive_directory_iterator::depth() is 0 for a direct child; +1 to match the
-            // walk-root-relative convention (direct child = depth 1) consumers expect.
-            .depth = it.depth() + 1,
-        };
-    }
+        // recursive_directory_iterator::depth() is 0 for a direct child; +1 to match the
+        // walk-root-relative convention (direct child = depth 1) consumers expect.
+        co_yield describeEntry(*it, it.depth() + 1);
     if (ec && outError != nullptr)
         *outError = ec;
 }

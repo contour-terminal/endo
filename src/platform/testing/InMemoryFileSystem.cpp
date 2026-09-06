@@ -3,6 +3,7 @@
 #include <format>
 #include <sstream>
 
+#include <platform/PathUtils.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
 
 namespace endo::platform::testing
@@ -140,9 +141,14 @@ InMemoryFileSystem::InMemoryFileSystem(std::initializer_list<FileEntry> entries)
 
 std::string InMemoryFileSystem::normalize(std::filesystem::path const& path) const
 {
-    auto result = path.is_relative() ? (_currentPath / path).lexically_normal().string()
-                                     : path.lexically_normal().string();
-    // Normalize to forward slashes for cross-platform consistency
+    // stripTrailingSeparator() normalizes, spells the result with forward slashes for
+    // cross-platform consistency, and drops the trailing separator lexically_normal()
+    // leaves behind for a final "." or ".." -- without which "/test/." would never match
+    // the "/test" held in the directory set.
+    auto result = platform::stripTrailingSeparator(path.is_relative() ? _currentPath / path : path);
+    // generic_string() only folds separators the host platform recognises, so a Windows-style
+    // fixture path keeps its backslashes on POSIX and would never match a key spelled with
+    // forward slashes. Fold them unconditionally: this filesystem is keyed by spelling.
     std::ranges::replace(result, '\\', '/');
     return result;
 }
@@ -159,6 +165,21 @@ void InMemoryFileSystem::ensureParentDirectories(std::filesystem::path const& pa
         _directories.insert(p.string());
 }
 
+std::string InMemoryFileSystem::resolveSymlinks(std::string key) const
+{
+    // Bounded so a cycle terminates; the real filesystem answers ELOOP, and every caller here
+    // treats "not a file and not a directory" the same way it would treat that.
+    constexpr auto MaxHops = 32;
+    for (auto hop = 0; hop < MaxHops; ++hop)
+    {
+        auto const it = _symlinks.find(key);
+        if (it == _symlinks.end())
+            return key;
+        key = normalize(it->second);
+    }
+    return key;
+}
+
 bool InMemoryFileSystem::exists(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
@@ -167,12 +188,12 @@ bool InMemoryFileSystem::exists(std::filesystem::path const& path) const
 
 bool InMemoryFileSystem::isDirectory(std::filesystem::path const& path) const
 {
-    return _directories.contains(normalize(path));
+    return _directories.contains(resolveSymlinks(normalize(path)));
 }
 
 bool InMemoryFileSystem::isRegularFile(std::filesystem::path const& path) const
 {
-    return _files.contains(normalize(path));
+    return _files.contains(resolveSymlinks(normalize(path)));
 }
 
 bool InMemoryFileSystem::isSymlink(std::filesystem::path const& path) const
@@ -237,34 +258,45 @@ std::expected<void, std::string> InMemoryFileSystem::appendFile(std::filesystem:
     return {};
 }
 
-std::unique_ptr<std::istream> InMemoryFileSystem::openRead(std::filesystem::path const& path) const
+std::optional<std::string> InMemoryFileSystem::refuseOpen(std::string const& key) const
 {
-    auto const key = normalize(path);
     if (_deniedPaths.contains(key))
-        return nullptr;
+        return "Permission denied";
+    if (_directories.contains(key))
+        return "Is a directory";
+    return std::nullopt;
+}
+
+std::expected<std::unique_ptr<std::istream>, std::string> InMemoryFileSystem::openRead(
+    std::filesystem::path const& path) const
+{
+    auto const key = resolveSymlinks(normalize(path));
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     auto const it = _files.find(key);
     if (it == _files.end())
-        return nullptr;
+        return std::unexpected("No such file or directory");
     return std::make_unique<MemoryIStream>(it->second);
 }
 
-std::unique_ptr<std::ostream> InMemoryFileSystem::openWrite(std::filesystem::path const& path,
-                                                            bool append) const
+std::expected<std::unique_ptr<std::ostream>, std::string> InMemoryFileSystem::openWrite(
+    std::filesystem::path const& path, bool append) const
 {
     auto const key = normalize(path);
-    if (_deniedPaths.contains(key))
-        return nullptr;
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
     return std::make_unique<MemoryOStream>(&_files[key], append);
 }
 
-std::unique_ptr<std::iostream> InMemoryFileSystem::openReadWrite(std::filesystem::path const& path) const
+std::expected<std::unique_ptr<std::iostream>, std::string> InMemoryFileSystem::openReadWrite(
+    std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
-    if (_deniedPaths.contains(key))
-        return nullptr;
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
@@ -608,8 +640,13 @@ std::expected<std::filesystem::path, std::string> InMemoryFileSystem::createTemp
 
 void InMemoryFileSystem::setCurrentPath(std::filesystem::path const& path)
 {
-    _currentPath = path;
-    _directories.insert(path.string());
+    // Normalized, like every other key: an unnormalized one (a trailing separator, or the
+    // backslashes operator/ inserts on Windows) would name a directory no lookup can ever
+    // find, since every query spells its key through normalize(). Normalizing first also
+    // resolves a relative path against the previous working directory, as chdir() does.
+    auto key = normalize(path);
+    _currentPath = std::filesystem::path(key);
+    _directories.insert(std::move(key));
 }
 
 void InMemoryFileSystem::addFile(std::filesystem::path const& path,

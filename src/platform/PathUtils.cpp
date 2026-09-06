@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <algorithm>
 #include <string>
 
 #include <platform/PathUtils.hpp>
@@ -15,19 +16,24 @@
 namespace endo::platform
 {
 
+std::string stripTrailingSeparator(std::filesystem::path const& path)
+{
+    auto text = path.lexically_normal().generic_string();
+    // Never strip into the root itself: "/" stays "/" and, on Windows, "C:/" stays "C:/"
+    // (reducing it to "C:" would name the drive's current directory, not its root).
+    auto const rootLength = std::max<std::size_t>(
+        std::filesystem::path(text).root_path().generic_string().size(), std::size_t { 1 });
+    while (text.size() > rootLength && text.back() == '/')
+        text.pop_back();
+    return text;
+}
+
 bool isCaseOnlyRename(std::filesystem::path const& from, std::filesystem::path const& to)
 {
     // Reduce both paths to their canonical lexical spelling and drop any trailing
     // separator so that `foo/` and `foo` are treated identically.
-    auto const stripTrailingSeparator = [](std::filesystem::path const& p) {
-        auto text = p.lexically_normal().generic_string();
-        while (text.size() > 1 && text.back() == '/')
-            text.pop_back();
-        return std::filesystem::path(text);
-    };
-
-    auto const source = stripTrailingSeparator(from);
-    auto const dest = stripTrailingSeparator(to);
+    auto const source = std::filesystem::path(stripTrailingSeparator(from));
+    auto const dest = std::filesystem::path(stripTrailingSeparator(to));
 
     auto const sourceName = source.filename().generic_string();
     auto const destName = dest.filename().generic_string();

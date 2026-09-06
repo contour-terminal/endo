@@ -15,9 +15,10 @@
 #include <thread>
 
 #include "PromptComponent.hpp"
+#include <platform/NativeFileSystem.hpp>
 #include <platform/PathUtils.hpp>
-#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
+#include <testing/ScopedTempDir.hpp>
 
 using namespace endo;
 
@@ -110,15 +111,17 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     // all candidates (e.g. "last" -> "lastrada-") without showing the popup; only the
     // next Tab opens the popup to disambiguate.
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_prompt_common_prefix";
-    fs::remove_all(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_prompt_common_prefix" };
+    auto const& base = baseGuard.path();
     fs::create_directories(base / "lastrada-tools");
     fs::create_directories(base / "lastrada-config");
 
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fileSystem;
+    // Real filesystem: these complete against directories created on disk above,
+    // and assert the on-disk capitalisation that only a real lookup can supply.
+    auto const& fileSystem = endo::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
     // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
@@ -140,8 +143,6 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     // Second Tab: the common prefix no longer extends the word, so show the popup.
     (void) comp.processInput(tabEvent());
     CHECK(comp.completionVisible());
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
@@ -150,14 +151,16 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
     // double quote so it stays a single argument. A directory candidate leaves the
     // quote open so completion can continue inside it.
     namespace fs = std::filesystem;
-    auto const base = fs::temp_directory_path() / "endo_prompt_quote_space";
-    fs::remove_all(base);
+    auto const baseGuard = endo::testing::ScopedTempDir { "endo_prompt_quote_space" };
+    auto const& base = baseGuard.path();
     fs::create_directories(base / "space dir");
 
     endo::InMemoryHistory history;
     endo::TestEnvironment env;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fileSystem;
+    // Real filesystem: these complete against directories created on disk above,
+    // and assert the on-disk capitalisation that only a real lookup can supply.
+    auto const& fileSystem = endo::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
     auto const typed = "cd " + endo::platform::normalizePath((base / "space").string());
@@ -169,8 +172,6 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
 
     (void) comp.processInput(tabEvent());
     CHECK(comp.text() == expected);
-
-    fs::remove_all(base);
 }
 
 TEST_CASE("PromptComponent.ctrl_d_after_timeout_shows_hint_again", "[prompt]")

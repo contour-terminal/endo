@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -19,7 +20,9 @@ class FileCompleter: public CompletionProvider
     /// @brief Constructs a file completer.
     /// @param env Environment abstraction used to resolve the user's home directory
     ///            for tilde (`~`) expansion.
-    explicit FileCompleter(EnvironmentProvider const& env);
+    /// @param fs  Filesystem to enumerate. Completion must offer what the shell will act
+    ///            on, so it reads the same filesystem the builtins do.
+    FileCompleter(EnvironmentProvider const& env, FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -28,6 +31,7 @@ class FileCompleter: public CompletionProvider
 
   private:
     EnvironmentProvider const& _env;
+    FileSystem const& _fs;
 
     /// @brief Expands tilde to home directory.
     [[nodiscard]] std::filesystem::path expandTilde(std::string_view path) const;
@@ -35,10 +39,10 @@ class FileCompleter: public CompletionProvider
     /// @brief Checks if a filename is hidden (starts with dot).
     [[nodiscard]] static bool isHidden(std::string_view name);
 
-    /// @brief Lists directory entries matching prefix.
-    [[nodiscard]] static std::vector<CompletionItem> listDirectory(std::filesystem::path const& dir,
-                                                                   std::string_view prefix,
-                                                                   std::string_view pathPrefix);
+    /// @brief Lists entries of @p dir (in @ref _fs) matching @p prefix.
+    [[nodiscard]] std::vector<CompletionItem> listDirectory(std::filesystem::path const& dir,
+                                                            std::string_view prefix,
+                                                            std::string_view pathPrefix) const;
 };
 
 } // namespace endo

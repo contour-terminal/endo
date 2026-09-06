@@ -24,8 +24,16 @@
             "condition": {
                 "type": "anyOf",
                 "conditions": [
-                    { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
-                    { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+                    {
+                        "type": "equals",
+                        "lhs": "${hostSystemName}",
+                        "rhs": "Linux"
+                    },
+                    {
+                        "type": "equals",
+                        "lhs": "${hostSystemName}",
+                        "rhs": "Darwin"
+                    }
                 ]
             }
         },
@@ -268,95 +276,79 @@
     ],
     "testPresets": [
         {
-            "name": "clang-debug",
-            "configurePreset": "clang-debug",
+            "name": "default-test",
+            "hidden": true,
             "output": {
                 "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 4
             }
+        },
+        {
+            "name": "clang-debug",
+            "configurePreset": "clang-debug",
+            "inherits": "default-test"
         },
         {
             "name": "clang-release",
             "configurePreset": "clang-release",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-release-native",
             "configurePreset": "clang-release-native",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-release-static",
             "configurePreset": "clang-release-static",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-coverage",
             "configurePreset": "clang-coverage",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-tsan",
             "configurePreset": "clang-tsan",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "gcc-debug",
             "configurePreset": "gcc-debug",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-pgo-instrument",
             "configurePreset": "clang-pgo-instrument",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clang-pgo-optimize",
             "configurePreset": "clang-pgo-optimize",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "cl-debug",
             "configurePreset": "cl-debug",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "cl-release",
             "configurePreset": "cl-release",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clangcl-debug",
             "configurePreset": "clangcl-debug",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         },
         {
             "name": "clangcl-release",
             "configurePreset": "clangcl-release",
-            "output": {
-                "outputOnFailure": true
-            }
+            "inherits": "default-test"
         }
     ],
     "packagePresets": [
@@ -384,7 +376,9 @@
             "name": "clang-deb",
             "configurePreset": "clang-deb",
             "displayName": "Debian Package (.deb + .ddeb)",
-            "generators": ["DEB"]
+            "generators": [
+                "DEB"
+            ]
         }
     ]
 }

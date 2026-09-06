@@ -270,6 +270,43 @@ std::pair<std::string, int> interruptibleReadAll(endo::NativeHandle fd)
     return { std::move(data), exitCode };
 }
 
+/// Reads all data from a stream interruptibly.
+///
+/// The descriptor-based overload polls because its source may be a pipe or a terminal that
+/// trickles data in. A stream from FileSystem::openRead() is a file, which is always ready,
+/// so a poll would be a no-op -- what carries over is the SIGINT check between chunks, which
+/// is what keeps `cat` of a very large file interruptible.
+///
+/// @param stream The stream to drain.
+/// @return {data, exitCode} where exitCode is 0 on EOF, 1 on I/O error, 130 on SIGINT.
+std::pair<std::string, int> interruptibleReadAll(std::istream& stream)
+{
+    using namespace endo::platform;
+
+    std::string data;
+    std::array<char, 4096> buffer {};
+
+    while (true)
+    {
+        SignalHandler::processSignalFd();
+        if (SignalHandler::hasPendingSigint())
+        {
+            SignalHandler::clearPendingSigint();
+            return { std::move(data), 130 };
+        }
+
+        stream.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        auto const bytesRead = stream.gcount();
+        if (bytesRead > 0)
+            data.append(buffer.data(), static_cast<size_t>(bytesRead));
+        if (stream.bad())
+            return { std::move(data), 1 };
+        if (bytesRead == 0 || stream.eof())
+            break;
+    }
+    return { std::move(data), 0 };
+}
+
 /// @brief A TerminalOutput that writes to a caller-supplied file descriptor.
 ///
 /// tui::TerminalOutput composes escape sequences into an internal buffer and, by
@@ -984,9 +1021,29 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                                    .language = tui::detectLanguageFromPath(file) };
             auto const renderMode = chooseCatRenderMode(renderContext);
 
+            // Resolved once, and every probe below asks about the same path: on Windows
+            // "/dev/null" resolves to "NUL", and querying the unresolved spelling would
+            // describe a path that was never opened.
+            auto const resolvedFile = platform::resolveDevicePath(file);
+
             if (renderMode == CatRenderMode::SixelImage)
             {
-                auto imageResult = tui::loadImage(file);
+                // Through the injected filesystem, like the text path below: loadImage()
+                // takes a path and would read the host's disk, so the bytes are fetched
+                // here and decoded from memory instead. openRead() rather than readFile()
+                // so the reason reads the same as it does for a text file.
+                auto const imageStream = _fs.openRead(resolvedFile);
+                if (!imageStream.has_value())
+                {
+                    error("cat: {}: {}", file, imageStream.error());
+                    success = false;
+                    continue;
+                }
+                auto imageBuffer = std::ostringstream {};
+                imageBuffer << (*imageStream)->rdbuf();
+                auto const imageBytes = std::move(imageBuffer).str();
+                auto imageResult = tui::loadImageFromMemory(std::span<std::uint8_t const> {
+                    reinterpret_cast<std::uint8_t const*>(imageBytes.data()), imageBytes.size() });
                 if (!imageResult.has_value())
                 {
                     error("cat: {}: {}", file, imageResult.error());
@@ -1065,16 +1122,65 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 continue;
             }
 
-            auto const result = _processManager.openFile(file, O_RDONLY);
-            if (!result.has_value())
+            // A directory has to be rejected before the open, not after: opening one
+            // succeeds on some platforms and then reads as nothing at all.
+            if (_fs.isDirectory(resolvedFile))
             {
-                error("cat: {}: {}", file, strerror(errno));
+                error("cat: {}: Is a directory", file);
                 success = false;
                 continue;
             }
-            auto const fd = result.value();
-            auto [content, exitCode] = interruptibleReadAll(fd);
-            _processManager.closeHandle(fd);
+
+            std::string content;
+            int exitCode = 0;
+
+            if (_fs.isRegularFile(resolvedFile))
+            {
+                // Read through the injected filesystem: cat consumes the bytes itself and
+                // hands no descriptor to a child, so a regular file needs no real fd. Such a
+                // file is always ready, so the stream loop's SIGINT check between chunks is
+                // enough to stay interruptible.
+                auto stream = _fs.openRead(resolvedFile);
+                if (!stream)
+                {
+                    error("cat: {}: {}", file, stream.error());
+                    success = false;
+                    continue;
+                }
+                std::tie(content, exitCode) = interruptibleReadAll(**stream);
+            }
+            // A path that resolveDevicePath() rewrote is a device by construction ("/dev/null"
+            // becomes "NUL" on Windows), which the filesystem abstraction does not model and
+            // cannot be asked about.
+            else if (resolvedFile != std::filesystem::path(file) || _fs.exists(resolvedFile))
+            {
+                // A FIFO, a character device or a process-substitution descriptor
+                // (`cat <(...)`) is not always ready, and SIGINT arrives over a signalfd
+                // rather than as EINTR -- so a blocking stream read would sit through Ctrl+C
+                // until the writer produced data. Those keep the polling descriptor path.
+                //
+                // Reached only for something the injected filesystem says is really there but
+                // is not a regular file. Falling through to here for a path it does not have
+                // would read the host's disk and defeat the injection entirely.
+                auto const result = _processManager.openFile(resolvedFile, O_RDONLY);
+                if (!result.has_value())
+                {
+                    // Unlike openRead(), this reports why.
+                    error("cat: {}: {}", file, toString(result.error()));
+                    success = false;
+                    continue;
+                }
+                auto const fd = result.value();
+                std::tie(content, exitCode) = interruptibleReadAll(fd);
+                _processManager.closeHandle(fd);
+            }
+            else
+            {
+                error("cat: {}: No such file or directory", file);
+                success = false;
+                continue;
+            }
+
             if (exitCode != 0)
                 return exitCode;
 
@@ -2553,10 +2659,10 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
 
             // Read file
             auto fileStream = _fs.openRead(filePath);
-            if (!fileStream || !fileStream->good())
+            if (!fileStream)
             {
                 if (!opts.suppressErrors)
-                    error("grep: {}: Permission denied", platform::normalizePath(filePath));
+                    error("grep: {}: {}", platform::normalizePath(filePath), fileStream.error());
                 hasError = true;
                 continue;
             }
@@ -2566,7 +2672,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             // buffer to avoid a per-line copy.
             std::vector<std::string> lines;
             std::string line;
-            while (std::getline(*fileStream, line))
+            while (std::getline(**fileStream, line))
             {
                 if (throttle.pending())
                     return 130;
@@ -4609,7 +4715,13 @@ namespace
         int exitCode = 0;
     };
 
-    ReadLinesResult readLinesFromInput(endo::NativeHandle stdinFd,
+    /// @brief Reads every line from stdin or from @p files.
+    ///
+    /// Takes the filesystem rather than opening an ifstream directly, so the six builtins
+    /// sharing this helper -- head, tail, wc, sort, uniq and cut -- read through the same
+    /// injected filesystem as the rest of the shell instead of going straight to disk.
+    ReadLinesResult readLinesFromInput(endo::platform::FileSystem const& fs,
+                                       endo::NativeHandle stdinFd,
                                        std::span<std::string const> files,
                                        auto const& errorFn)
     {
@@ -4661,14 +4773,14 @@ namespace
                 }
                 else
                 {
-                    std::ifstream ifs(platform::resolveDevicePath(file));
-                    if (!ifs)
+                    auto stream = fs.openRead(platform::resolveDevicePath(file));
+                    if (!stream)
                     {
-                        errorFn(std::format("{}: No such file or directory", file));
+                        errorFn(std::format("{}: {}", file, stream.error()));
                         result.hadError = true;
                         continue;
                     }
-                    readFromStream(ifs);
+                    readFromStream(**stream);
                 }
             }
         }
@@ -4727,7 +4839,7 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("head: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -4806,12 +4918,17 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     {
         // Follow mode: open file once, stream last N lines via bounded deque, then follow
         auto const& filePath = files.back();
-        std::ifstream ifs(platform::resolveDevicePath(filePath));
-        if (!ifs)
+        // Through the injected filesystem, like the non-follow path below: an injected
+        // filesystem hands back a snapshot rather than a growing file, so follow mode
+        // observes no further appends there -- but it reads the file the rest of the shell
+        // would read, instead of a same-named one on the host's disk.
+        auto const stream = _fs.openRead(platform::resolveDevicePath(filePath));
+        if (!stream)
         {
-            error("tail: cannot open '{}': No such file or directory", filePath);
+            error("tail: cannot open '{}': {}", filePath, stream.error());
             return 1;
         }
+        auto& ifs = **stream;
 
         // Read and output last N lines using a sliding window
         std::deque<std::string> lastLines;
@@ -4857,7 +4974,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         auto const errorFn = [this](std::string const& msg) {
             error("tail: {}", msg);
         };
-        auto const result = readLinesFromInput(stdinFd, files, errorFn);
+        auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
         if (result.exitCode != 0)
             return result.exitCode;
         auto const& lines = result.lines;
@@ -4905,7 +5022,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("tail: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5195,7 +5312,7 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const errorFn = [this](std::string const& msg) {
         error("wc: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5316,7 +5433,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("sort: {}", msg);
     };
-    auto result = readLinesFromInput(stdinFd, files, errorFn);
+    auto result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5431,7 +5548,7 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const errorFn = [this](std::string const& msg) {
         error("uniq: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)
@@ -5584,7 +5701,7 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
     auto const errorFn = [this](std::string const& msg) {
         error("cut: {}", msg);
     };
-    auto const result = readLinesFromInput(stdinFd, files, errorFn);
+    auto const result = readLinesFromInput(_fs, stdinFd, files, errorFn);
     if (result.exitCode != 0)
         return result.exitCode;
     if (result.hadError)

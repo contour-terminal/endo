@@ -55,10 +55,32 @@ class FileSystem
                                                                      std::string_view content) const = 0;
     [[nodiscard]] virtual std::expected<void, std::string> appendFile(std::filesystem::path const& path,
                                                                       std::string_view content) const = 0;
-    [[nodiscard]] virtual std::unique_ptr<std::istream> openRead(std::filesystem::path const& path) const = 0;
-    [[nodiscard]] virtual std::unique_ptr<std::ostream> openWrite(std::filesystem::path const& path,
-                                                                  bool append = false) const = 0;
-    [[nodiscard]] virtual std::unique_ptr<std::iostream> openReadWrite(
+    /// @brief Opens a file for reading.
+    ///
+    /// The error is the reason alone -- "No such file or directory", "Permission denied",
+    /// "Is a directory" -- so a caller prefixes it with its own command name and the path
+    /// rather than reformatting it. Without this a caller can only observe *that* the open
+    /// failed, and reporting an unreadable file as a missing one is a real diagnosis error.
+    ///
+    /// A directory is rejected here rather than left to the first read: opening one succeeds
+    /// on POSIX and would otherwise surface as an empty file.
+    ///
+    /// @param path The file to open.
+    /// @return The stream, or why it could not be opened.
+    [[nodiscard]] virtual std::expected<std::unique_ptr<std::istream>, std::string> openRead(
+        std::filesystem::path const& path) const = 0;
+
+    /// @brief Opens a file for writing, creating it if absent.
+    /// @param path The file to open.
+    /// @param append Append to the existing content rather than truncating it.
+    /// @return The stream, or why it could not be opened. See openRead() on the error's form.
+    [[nodiscard]] virtual std::expected<std::unique_ptr<std::ostream>, std::string> openWrite(
+        std::filesystem::path const& path, bool append = false) const = 0;
+
+    /// @brief Opens a file for reading and writing.
+    /// @param path The file to open.
+    /// @return The stream, or why it could not be opened. See openRead() on the error's form.
+    [[nodiscard]] virtual std::expected<std::unique_ptr<std::iostream>, std::string> openReadWrite(
         std::filesystem::path const& path) const = 0;
 
     // Directory ops
