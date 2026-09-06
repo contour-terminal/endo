@@ -147,10 +147,15 @@ using ErrorWriter = std::function<void(std::string_view)>;
 [[nodiscard]] std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts);
 
 /// Checks if a file appears to be binary by scanning for null bytes.
+///
+/// A file that cannot be opened is reported as *not* binary: unreadable is a different
+/// thing, and answering "binary" would make `-I` skip it without a word, where the caller's
+/// own open fails and explains why.
+///
 /// @param fs FileSystem abstraction used to open the file (so it works against
 ///           any injected backend, not just the real on-disk filesystem).
 /// @param path Path to the file to check.
-/// @return true if the file appears to be binary (or cannot be opened).
+/// @return true if the file appears to be binary; false if it does not, or cannot be opened.
 [[nodiscard]] bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path);
 
 /// Collects the list of files to search based on options.

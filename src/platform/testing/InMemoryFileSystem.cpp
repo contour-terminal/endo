@@ -165,6 +165,21 @@ void InMemoryFileSystem::ensureParentDirectories(std::filesystem::path const& pa
         _directories.insert(p.string());
 }
 
+std::string InMemoryFileSystem::resolveSymlinks(std::string key) const
+{
+    // Bounded so a cycle terminates; the real filesystem answers ELOOP, and every caller here
+    // treats "not a file and not a directory" the same way it would treat that.
+    constexpr auto MaxHops = 32;
+    for (auto hop = 0; hop < MaxHops; ++hop)
+    {
+        auto const it = _symlinks.find(key);
+        if (it == _symlinks.end())
+            return key;
+        key = normalize(it->second);
+    }
+    return key;
+}
+
 bool InMemoryFileSystem::exists(std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
@@ -173,12 +188,12 @@ bool InMemoryFileSystem::exists(std::filesystem::path const& path) const
 
 bool InMemoryFileSystem::isDirectory(std::filesystem::path const& path) const
 {
-    return _directories.contains(normalize(path));
+    return _directories.contains(resolveSymlinks(normalize(path)));
 }
 
 bool InMemoryFileSystem::isRegularFile(std::filesystem::path const& path) const
 {
-    return _files.contains(normalize(path));
+    return _files.contains(resolveSymlinks(normalize(path)));
 }
 
 bool InMemoryFileSystem::isSymlink(std::filesystem::path const& path) const
@@ -255,7 +270,7 @@ std::optional<std::string> InMemoryFileSystem::refuseOpen(std::string const& key
 std::expected<std::unique_ptr<std::istream>, std::string> InMemoryFileSystem::openRead(
     std::filesystem::path const& path) const
 {
-    auto const key = normalize(path);
+    auto const key = resolveSymlinks(normalize(path));
     if (auto refusal = refuseOpen(key))
         return std::unexpected(std::move(*refusal));
     auto const it = _files.find(key);
@@ -625,8 +640,13 @@ std::expected<std::filesystem::path, std::string> InMemoryFileSystem::createTemp
 
 void InMemoryFileSystem::setCurrentPath(std::filesystem::path const& path)
 {
-    _currentPath = path;
-    _directories.insert(path.string());
+    // Normalized, like every other key: an unnormalized one (a trailing separator, or the
+    // backslashes operator/ inserts on Windows) would name a directory no lookup can ever
+    // find, since every query spells its key through normalize(). Normalizing first also
+    // resolves a relative path against the previous working directory, as chdir() does.
+    auto key = normalize(path);
+    _currentPath = std::filesystem::path(key);
+    _directories.insert(std::move(key));
 }
 
 void InMemoryFileSystem::addFile(std::filesystem::path const& path,

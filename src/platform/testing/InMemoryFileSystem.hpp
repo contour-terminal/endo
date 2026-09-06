@@ -101,11 +101,6 @@ class InMemoryFileSystem final: public FileSystem
     [[nodiscard]] std::expected<std::filesystem::path, std::string> createTempFile(
         std::string_view prefix) const override;
 
-    /// @brief Refuses an open the model can answer without looking at content.
-    /// @param key A normalized path.
-    /// @return The reason to refuse, or nullopt to proceed.
-    [[nodiscard]] std::optional<std::string> refuseOpen(std::string const& key) const;
-
     // --- Test helpers ---
 
     /// Sets the current working directory for the virtual filesystem.
@@ -130,8 +125,25 @@ class InMemoryFileSystem final: public FileSystem
     void denyAccess(std::filesystem::path const& path);
 
   private:
+    /// @brief Follows a symlink chain to the key it ultimately names.
+    ///
+    /// std::filesystem's is_regular_file(), is_directory() and the stream opens all follow
+    /// symlinks; only is_symlink() and symlink_status() do not. This model has to agree, or a
+    /// shell reading through it would classify a symlink as neither file nor directory and
+    /// take a path meant for FIFOs and devices.
+    ///
+    /// @param key A normalized path.
+    /// @return The normalized key the chain ends at, or @p key when it is not a symlink. A
+    ///         cycle resolves to the last key reached rather than looping.
+    [[nodiscard]] std::string resolveSymlinks(std::string key) const;
+
     [[nodiscard]] std::string normalize(std::filesystem::path const& path) const;
     void ensureParentDirectories(std::filesystem::path const& path) const;
+
+    /// @brief Refuses an open the model can answer without looking at content.
+    /// @param key A normalized path.
+    /// @return The reason to refuse, or nullopt to proceed.
+    [[nodiscard]] std::optional<std::string> refuseOpen(std::string const& key) const;
 
     mutable std::map<std::string, std::string> _files;                  ///< path -> content
     mutable std::set<std::string> _directories;                         ///< known directories

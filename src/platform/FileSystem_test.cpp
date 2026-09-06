@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -149,7 +150,7 @@ TEST_CASE("isExecutableFile agrees with the real filesystem on the execute bit",
                 .has_value());
     CHECK(fs.isExecutableFile(*path));
 
-    CHECK(fs.remove(*path).has_value());
+    // No removal here: that is the guard's job, exactly as its comment says.
 }
 #endif
 
@@ -217,4 +218,34 @@ TEST_CASE("openRead reports the operating system's own reason", "[FileSystem]")
     auto const missing = fs.openRead(dir / "absent.txt");
     REQUIRE_FALSE(missing.has_value());
     CHECK(missing.error() == std::error_code(ENOENT, std::generic_category()).message());
+}
+
+TEST_CASE("the in-memory model classifies a symlink by its target", "[FileSystem]")
+{
+    // std::filesystem follows symlinks for is_regular_file()/is_directory() and only reports
+    // the link itself through is_symlink(); the model has to agree or a consumer written
+    // against the real filesystem behaves differently under injection.
+    auto fs = InMemoryFileSystem {};
+    fs.addFile("/root/target.txt", "content");
+    fs.addDirectory("/root/dir");
+    fs.addSymlink("/root/to-file", "/root/target.txt");
+    fs.addSymlink("/root/to-dir", "/root/dir");
+    fs.addSymlink("/root/dangling", "/root/absent");
+
+    CHECK(fs.isRegularFile("/root/to-file"));
+    CHECK(fs.isDirectory("/root/to-dir"));
+    CHECK_FALSE(fs.isRegularFile("/root/dangling"));
+
+    // is_symlink() does not follow: the link is still a link.
+    CHECK(fs.isSymlink("/root/to-file"));
+    CHECK_FALSE(fs.isSymlink("/root/target.txt"));
+
+    auto const opened = fs.openRead("/root/to-file");
+    REQUIRE(opened.has_value());
+    CHECK(std::string(std::istreambuf_iterator<char>(**opened), {}) == "content");
+
+    // A cycle terminates rather than hanging.
+    fs.addSymlink("/root/loop-a", "/root/loop-b");
+    fs.addSymlink("/root/loop-b", "/root/loop-a");
+    CHECK_FALSE(fs.isRegularFile("/root/loop-a"));
 }

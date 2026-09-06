@@ -1021,20 +1021,29 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                                    .language = tui::detectLanguageFromPath(file) };
             auto const renderMode = chooseCatRenderMode(renderContext);
 
+            // Resolved once, and every probe below asks about the same path: on Windows
+            // "/dev/null" resolves to "NUL", and querying the unresolved spelling would
+            // describe a path that was never opened.
+            auto const resolvedFile = platform::resolveDevicePath(file);
+
             if (renderMode == CatRenderMode::SixelImage)
             {
                 // Through the injected filesystem, like the text path below: loadImage()
                 // takes a path and would read the host's disk, so the bytes are fetched
-                // here and decoded from memory instead.
-                auto const imageBytes = _fs.readFile(file);
-                if (!imageBytes.has_value())
+                // here and decoded from memory instead. openRead() rather than readFile()
+                // so the reason reads the same as it does for a text file.
+                auto const imageStream = _fs.openRead(resolvedFile);
+                if (!imageStream.has_value())
                 {
-                    error("cat: {}: {}", file, imageBytes.error());
+                    error("cat: {}: {}", file, imageStream.error());
                     success = false;
                     continue;
                 }
+                auto imageBuffer = std::ostringstream {};
+                imageBuffer << (*imageStream)->rdbuf();
+                auto const imageBytes = std::move(imageBuffer).str();
                 auto imageResult = tui::loadImageFromMemory(std::span<std::uint8_t const> {
-                    reinterpret_cast<std::uint8_t const*>(imageBytes->data()), imageBytes->size() });
+                    reinterpret_cast<std::uint8_t const*>(imageBytes.data()), imageBytes.size() });
                 if (!imageResult.has_value())
                 {
                     error("cat: {}: {}", file, imageResult.error());
@@ -1112,11 +1121,6 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 writeOutput("\n");
                 continue;
             }
-
-            // Resolved once, and every probe below asks about the same path: on Windows
-            // "/dev/null" resolves to "NUL", and querying the unresolved spelling would
-            // describe a path that was never opened.
-            auto const resolvedFile = platform::resolveDevicePath(file);
 
             // A directory has to be rejected before the open, not after: opening one
             // succeeds on some platforms and then reads as nothing at all.

@@ -61,28 +61,41 @@ std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSyste
     return results;
 }
 
-/// @brief Spells a walked path relative to the base the walk started from.
-///
-/// walkDirectoryRecursive() yields whatever the filesystem considers the entry's path, and an
-/// injected filesystem resolves a relative base such as "." to an absolute one. Re-anchoring
-/// keeps `**` results in the same shape as `*` results regardless of the backend.
-///
-/// @param fileSystem The filesystem being walked; its working directory is the anchor.
-/// @param entryPath   The path as reported by the walk.
-/// @param basePath    The base the walk started from.
-/// @return The entry path relative to @p basePath when the base was ".", else normalized.
-std::string relativizeToBase(platform::FileSystem const& fileSystem,
-                             std::filesystem::path const& entryPath,
-                             std::string_view basePath)
+namespace
 {
-    if (basePath != ".")
-        return platform::normalizePath(entryPath);
+    /// @brief Spells a walked path relative to the base the walk started from.
+    ///
+    /// walkDirectoryRecursive() yields whatever the filesystem considers the entry's path, and
+    /// the two backends disagree about what that is for a base of ".": an injected filesystem
+    /// resolves it to its own working directory and reports absolute paths, while the real one
+    /// hands back "./sub/file". Re-anchoring the first and normalizing the second away leaves
+    /// both spelled the way expandGlobPattern() spells a match in ".", i.e. with no "./"
+    /// prefix, so `**` and `*` agree with each other and across backends.
+    ///
+    /// @param fileSystem The filesystem being walked; its working directory is the anchor.
+    /// @param entryPath   The path as reported by the walk.
+    /// @param basePath    The base the walk started from.
+    /// @return The entry path relative to @p basePath when the base was ".", else normalized.
+    [[nodiscard]] std::string relativizeToBase(platform::FileSystem const& fileSystem,
+                                               std::filesystem::path const& entryPath,
+                                               std::string_view basePath)
+    {
+        if (basePath != ".")
+            return platform::normalizePath(entryPath);
 
-    // The filesystem's working directory, never the process's: they are different views
-    // whenever the filesystem is injected, which is the whole reason this exists.
-    auto const relative = entryPath.lexically_relative(fileSystem.currentPath());
-    return platform::normalizePath(relative.empty() ? entryPath : relative);
-}
+        // The filesystem's working directory, never the process's: they are different views
+        // whenever the filesystem is injected, which is the whole reason this exists.
+        auto const relative = entryPath.lexically_relative(fileSystem.currentPath());
+        if (!relative.empty())
+            return platform::normalizePath(relative);
+
+        // lexically_relative() gives up whenever the entry is relative and the working
+        // directory absolute -- which is every entry the real filesystem yields for a walk
+        // rooted at ".". Those already are relative to the base; only the leading "." the
+        // iterator prepended has to go.
+        return platform::normalizePath(entryPath.lexically_normal());
+    }
+} // namespace
 
 std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem, std::string_view pattern)
 {

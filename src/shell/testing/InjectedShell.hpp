@@ -2,8 +2,10 @@
 #pragma once
 
 #include <shell/Shell.hpp>
+#include <shell/SixelCapability.hpp>
 #include <shell/TTY.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -45,10 +47,10 @@ inline void seedInjectedShell(endo::InMemoryFileSystem& fs, endo::TestEnvironmen
 /// child inherits descriptors, and there is no descriptor for an in-memory file. Those keep
 /// using a real filesystem.
 ///
-/// The in-memory model is also deliberately shallow in places: lastWriteTime() always
-/// reports "now", weaklyCanonical() never resolves symlinks, symlinks are metadata only,
-/// and permissions are not enforced beyond denyAccess(). A test whose assertion depends on
-/// any of those would pass vacuously here and belongs on a real filesystem.
+/// The in-memory model is also deliberately shallow in places: lastWriteTime() always reports
+/// "now", weaklyCanonical() never resolves symlinks (the type queries and the stream opens do
+/// follow them), and permissions are not enforced beyond denyAccess(). A test whose assertion
+/// depends on any of those would pass vacuously here and belongs on a real filesystem.
 struct InMemoryShell
 {
     endo::TestPTY pty;

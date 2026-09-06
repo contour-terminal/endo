@@ -5101,6 +5101,19 @@ TEST_CASE("shell.builtin.grep_reports_an_unreadable_file_with_or_without_binary_
     CHECK(shell("grep -I needle /test/locked.txt").output().find("Permission denied") != std::string::npos);
 }
 
+TEST_CASE("shell.builtin.cat_follows_a_symlink_inside_the_injected_filesystem")
+{
+    // A symlink must classify as whatever it points at, exactly as std::filesystem does.
+    // Reporting it as neither file nor directory would send cat down the descriptor path
+    // meant for FIFOs and devices -- and straight onto the host's disk.
+    InMemoryShell shell;
+    shell.fs.addFile("/test/target.txt", "through the link\n");
+    shell.fs.addSymlink("/test/link.txt", "/test/target.txt");
+
+    CHECK(shell("cat /test/link.txt").output().find("through the link") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
 TEST_CASE("shell.builtin.cat_never_falls_back_to_the_host_filesystem")
 {
     // A path absent from the injected filesystem must be reported as absent, never opened
