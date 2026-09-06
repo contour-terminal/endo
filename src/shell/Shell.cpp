@@ -629,17 +629,24 @@ void Shell::setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider
 }
 
 Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
+    Shell(tty,
+          env,
+          fs,
+#if defined(_WIN32)
+          WindowsProcessManager::instance()
+#else
+          PosixProcessManager::instance()
+#endif
+    )
+{
+}
+
+Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager& processManager):
     _fs { fs },
     _env { env },
     _tty { tty },
     _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
-    _processManager {
-#if defined(_WIN32)
-        WindowsProcessManager::instance()
-#else
-        PosixProcessManager::instance()
-#endif
-    }
+    _processManager { processManager }
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();

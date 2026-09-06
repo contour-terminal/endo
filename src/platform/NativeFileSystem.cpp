@@ -286,8 +286,14 @@ std::expected<std::vector<FileSystem::DirectoryEntry>, std::string> NativeFileSy
 {
     std::error_code ec;
     auto entries = std::vector<DirectoryEntry> {};
-    for (auto const& entry: fs::directory_iterator(path, ec))
+    auto it = fs::directory_iterator(path, ec);
+    auto const end = fs::directory_iterator {};
+    // C-style loop is intentional here, as in walkDirectoryRecursive(): a range-based for
+    // would advance through the throwing operator++, so a mid-walk readdir failure would
+    // escape this std::expected-returning function as a filesystem_error.
+    for (; !ec && it != end; it.increment(ec))
     {
+        auto const& entry = *it;
         // error_code overloads: the throwing ones escape as filesystem_error whenever an
         // entry cannot be stat'ed (EACCES on a readable-but-not-searchable directory, or a
         // filesystem that reports DT_UNKNOWN), which would abort listing an otherwise

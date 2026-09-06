@@ -270,6 +270,43 @@ std::pair<std::string, int> interruptibleReadAll(endo::NativeHandle fd)
     return { std::move(data), exitCode };
 }
 
+/// Reads all data from a stream interruptibly.
+///
+/// The descriptor-based overload polls because its source may be a pipe or a terminal that
+/// trickles data in. A stream from FileSystem::openRead() is a file, which is always ready,
+/// so a poll would be a no-op -- what carries over is the SIGINT check between chunks, which
+/// is what keeps `cat` of a very large file interruptible.
+///
+/// @param stream The stream to drain.
+/// @return {data, exitCode} where exitCode is 0 on EOF, 1 on I/O error, 130 on SIGINT.
+std::pair<std::string, int> interruptibleReadAll(std::istream& stream)
+{
+    using namespace endo::platform;
+
+    std::string data;
+    std::array<char, 4096> buffer {};
+
+    while (true)
+    {
+        SignalHandler::processSignalFd();
+        if (SignalHandler::hasPendingSigint())
+        {
+            SignalHandler::clearPendingSigint();
+            return { std::move(data), 130 };
+        }
+
+        stream.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        auto const bytesRead = stream.gcount();
+        if (bytesRead > 0)
+            data.append(buffer.data(), static_cast<size_t>(bytesRead));
+        if (stream.bad())
+            return { std::move(data), 1 };
+        if (bytesRead == 0 || stream.eof())
+            break;
+    }
+    return { std::move(data), 0 };
+}
+
 /// @brief A TerminalOutput that writes to a caller-supplied file descriptor.
 ///
 /// tui::TerminalOutput composes escape sequences into an internal buffer and, by
@@ -1065,16 +1102,65 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 continue;
             }
 
-            auto const result = _processManager.openFile(file, O_RDONLY);
-            if (!result.has_value())
+            // Resolved once, and every probe below asks about the same path: on Windows
+            // "/dev/null" resolves to "NUL", and querying the unresolved spelling would
+            // describe a path that was never opened.
+            auto const resolvedFile = platform::resolveDevicePath(file);
+
+            // A directory has to be rejected before the open, not after: opening one
+            // succeeds on some platforms and then reads as nothing at all.
+            if (_fs.isDirectory(resolvedFile))
             {
-                error("cat: {}: {}", file, strerror(errno));
+                error("cat: {}: Is a directory", file);
                 success = false;
                 continue;
             }
-            auto const fd = result.value();
-            auto [content, exitCode] = interruptibleReadAll(fd);
-            _processManager.closeHandle(fd);
+
+            // openRead() collapses every failure into a null or failed stream, so the reason
+            // is established separately -- otherwise an unreadable file gets reported as a
+            // missing one. FileSystem offers no error channel here.
+            auto const openFailure = [&] {
+                return _fs.exists(resolvedFile) ? "Permission denied" : "No such file or directory";
+            };
+
+            std::string content;
+            int exitCode = 0;
+
+            if (_fs.isRegularFile(resolvedFile))
+            {
+                // Read through the injected filesystem: cat consumes the bytes itself and
+                // hands no descriptor to a child, so a regular file needs no real fd. Such a
+                // file is always ready, so the stream loop's SIGINT check between chunks is
+                // enough to stay interruptible.
+                auto stream = _fs.openRead(resolvedFile);
+                if (!stream || !*stream)
+                {
+                    error("cat: {}: {}", file, openFailure());
+                    success = false;
+                    continue;
+                }
+                std::tie(content, exitCode) = interruptibleReadAll(*stream);
+            }
+            else
+            {
+                // A FIFO, a character device or a process-substitution descriptor
+                // (`cat <(...)`) is not always ready, and SIGINT arrives over a signalfd
+                // rather than as EINTR -- so a blocking stream read would sit through Ctrl+C
+                // until the writer produced data. Those keep the polling descriptor path.
+                // Nothing an injected filesystem models is one of them, so this branch is
+                // reached only against a real filesystem, or for a path that is simply absent.
+                auto const result = _processManager.openFile(resolvedFile, O_RDONLY);
+                if (!result.has_value())
+                {
+                    error("cat: {}: {}", file, openFailure());
+                    success = false;
+                    continue;
+                }
+                auto const fd = result.value();
+                std::tie(content, exitCode) = interruptibleReadAll(fd);
+                _processManager.closeHandle(fd);
+            }
+
             if (exitCode != 0)
                 return exitCode;
 

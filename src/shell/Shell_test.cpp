@@ -35,6 +35,7 @@ using crispy::escape;
 #include <platform/InstallPaths.hpp>
 #include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
+#include <platform/testing/MockProcessManager.hpp>
 #include <platform/testing/TestEnvironmentProvider.hpp>
 #include <testing/ScopedTempDir.hpp>
 #include <testing/ScopedWorkingDirectory.hpp>
@@ -74,6 +75,27 @@ struct TestShell
     }
 };
 
+/// @brief Seeds the "/test" convention every injected-filesystem fixture shares.
+///
+/// Kept in one place because a fixture that seeds it differently is not a variant, it is a
+/// bug: the shell resolves a relative path through the filesystem and the environment both,
+/// so the two views of the working directory have to agree.
+///
+/// @param fs    The injected filesystem to seed.
+/// @param env   The injected environment to keep in step with it.
+/// @param shell The shell owning them.
+void seedInjectedShell(endo::InMemoryFileSystem& fs, endo::TestEnvironment& env, endo::Shell& shell)
+{
+    fs.addDirectory("/test");
+    fs.setCurrentPath("/test");
+    env.set("HOME", "/test/home");
+    env.set("PWD", "/test");
+    shell.addModuleSearchPath("/test");
+    // Never probe the test PTY for Sixel support: the query would leak escape bytes into
+    // the captured output and stall on timeout.
+    shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
+}
+
 /// @brief A shell whose filesystem is private to the test case.
 ///
 /// Builtins reach the filesystem through Shell's injected FileSystem, so pointing that at
@@ -90,6 +112,7 @@ struct TestShell
 /// reports "now", weaklyCanonical() never resolves symlinks, symlinks are metadata only,
 /// and permissions are not enforced beyond denyAccess(). A test whose assertion depends on
 /// any of those would pass vacuously here and belongs on TestShell.
+
 struct InMemoryShell
 {
     endo::TestPTY pty;
@@ -101,19 +124,7 @@ struct InMemoryShell
 
     std::string output() const { return pty.output(); }
 
-    InMemoryShell()
-    {
-        fs.addDirectory("/test");
-        // Keep the filesystem's idea of the working directory in step with the
-        // environment's, so a relative path resolves the same way through both.
-        fs.setCurrentPath("/test");
-        env.set("HOME", "/test/home");
-        env.set("PWD", "/test");
-        shell.addModuleSearchPath("/test");
-        // Never probe the test PTY for Sixel support: the query would leak escape bytes
-        // into the captured output and stall on timeout.
-        shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
-    }
+    InMemoryShell() { seedInjectedShell(fs, env, shell); }
 
     InMemoryShell& operator()(std::string_view cmd)
     {
@@ -129,6 +140,33 @@ struct InMemoryShell
     [[nodiscard]] std::string content(std::filesystem::path const& path) const
     {
         return fs.readFile(path).value_or(std::string {});
+    }
+};
+
+/// A shell whose every OS collaborator is injected -- filesystem, environment and process
+/// manager. Spawning is recorded rather than performed, so a test can assert on what the
+/// shell would run without the program existing or a child being forked.
+struct MockedProcessShell
+{
+    endo::TestPTY pty;
+    endo::InMemoryFileSystem fs;
+    endo::TestEnvironment env { "/test" };
+    endo::platform::testing::MockProcessManager processManager;
+    int exitCode = -1;
+
+    endo::Shell shell { pty, env, fs, processManager };
+
+    [[nodiscard]] std::string output() const { return pty.output(); }
+
+    /// @return The configs the shell handed to the process manager, in spawn order.
+    [[nodiscard]] auto const& spawned() const noexcept { return processManager.spawnedConfigs(); }
+
+    MockedProcessShell() { seedInjectedShell(fs, env, shell); }
+
+    MockedProcessShell& operator()(std::string_view cmd)
+    {
+        exitCode = shell.execute(std::string(cmd));
+        return *this;
     }
 };
 
@@ -913,12 +951,10 @@ TEST_CASE("shell.builtin.cat_help_shows_image_options")
 
 TEST_CASE("shell.builtin.cat_raw_flag")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
-    auto const rawPpmPath = (tempDir / "raw.ppm").generic_string();
-    // Write a PPM image and cat it with --raw — should get raw bytes
-    TestShell shell;
-    // Create a minimal PPM file
-    shell(std::format(R"(echo -e 'P6\n1 1\n255\n' > {})", rawPpmPath));
+    // A minimal PPM: an image extension, so --raw is what keeps this out of the sixel path.
+    InMemoryShell shell;
+    auto const rawPpmPath = std::string { "/test/raw.ppm" };
+    shell.fs.addFile(rawPpmPath, "P6\n1 1\n255\n");
     auto output = shell(std::format("cat --raw {}", rawPpmPath)).output();
     CHECK(output.find("P6") != std::string::npos);
 }
@@ -926,28 +962,20 @@ TEST_CASE("shell.builtin.cat_raw_flag")
 #if !defined(_WIN32)
 TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
-    auto const binaryPath = (tempDir / "binary.dat").generic_string();
-    // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
-    {
-        std::ofstream f(binaryPath, std::ios::binary);
-        f << "hello" << '\0' << "world";
-    }
-    TestShell shell;
+    // Null bytes are seeded directly: the endo shell does not interpret \x00 in strings.
+    InMemoryShell shell;
+    auto const binaryPath = std::string { "/test/binary.dat" };
+    shell.fs.addFile(binaryPath, std::string("hello\0world", 11));
     shell(std::format("cat {}", binaryPath));
     CHECK(shell.exitCode == 1);
 }
 
 TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
-    auto const binaryRawPath = (tempDir / "binary.dat").generic_string();
-    // Create a file with null bytes directly (endo shell does not interpret \x00 in strings)
-    {
-        std::ofstream f(binaryRawPath, std::ios::binary);
-        f << "hello" << '\0' << "world";
-    }
-    TestShell shell;
+    // Null bytes are seeded directly: the endo shell does not interpret \x00 in strings.
+    InMemoryShell shell;
+    auto const binaryRawPath = std::string { "/test/binary.dat" };
+    shell.fs.addFile(binaryRawPath, std::string("hello\0world", 11));
     static_cast<void>(shell(std::format("cat --raw {}", binaryRawPath)).output());
     // With --raw, binary data should pass through (exit code 0)
     CHECK(shell.exitCode == 0);
@@ -4964,10 +4992,10 @@ constexpr auto MarkdownFixture = "# Title\n\nSee [Docs](https://endo-lang.org/).
 
 TEST_CASE("shell.builtin.cat_markdown_renders_on_tty")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "render.md", MarkdownFixture);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/render.md" };
+    shell.fs.addFile(path, std::string(MarkdownFixture));
 
-    TestShell shell;
     shell(std::format("cat {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -4988,10 +5016,10 @@ TEST_CASE("shell.builtin.cat_markdown_renders_on_tty")
 
 TEST_CASE("shell.builtin.cat_markdown_is_indented_by_default")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_default.md", "Hello\n"sv);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/indent_default.md" };
+    shell.fs.addFile(path, std::string("Hello\n"sv));
 
-    TestShell shell;
     shell(std::format("cat {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5003,10 +5031,10 @@ TEST_CASE("shell.builtin.cat_markdown_is_indented_by_default")
 
 TEST_CASE("shell.builtin.cat_markdown_indent_flag_overrides_the_default")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_flag.md", "Hello\n"sv);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/indent_flag.md" };
+    shell.fs.addFile(path, std::string("Hello\n"sv));
 
-    TestShell shell;
     shell(std::format("cat --indent 5 {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5018,10 +5046,10 @@ TEST_CASE("shell.builtin.cat_markdown_indent_flag_overrides_the_default")
 
 TEST_CASE("shell.builtin.cat_markdown_indent_zero_hugs_the_left_edge")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_zero.md", "Hello\n"sv);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/indent_zero.md" };
+    shell.fs.addFile(path, std::string("Hello\n"sv));
 
-    TestShell shell;
     shell(std::format("cat --indent=0 {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5034,10 +5062,10 @@ TEST_CASE("shell.builtin.cat_markdown_indent_zero_hugs_the_left_edge")
 
 TEST_CASE("shell.builtin.cat_indent_rejects_invalid_values")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_bad.md", "Hello\n"sv);
+    InMemoryShell bad;
+    auto const path = std::filesystem::path { "/test/indent_bad.md" };
+    bad.fs.addFile(path, std::string("Hello\n"sv));
 
-    TestShell bad;
     bad(std::format("cat --indent abc {}", path.string()));
     CHECK(bad.exitCode == 1);
 
@@ -5052,10 +5080,10 @@ TEST_CASE("shell.builtin.cat_indent_rejects_invalid_values")
 
 TEST_CASE("shell.builtin.cat_indent_does_not_affect_raw_output")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "indent_raw.md", "Hello\n"sv);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/indent_raw.md" };
+    shell.fs.addFile(path, std::string("Hello\n"sv));
 
-    TestShell shell;
     shell(std::format("cat --raw --indent 5 {}", path.string()));
 
     CHECK(shell.exitCode == 0);
@@ -5064,10 +5092,10 @@ TEST_CASE("shell.builtin.cat_indent_does_not_affect_raw_output")
 
 TEST_CASE("shell.builtin.cat_markdown_raw_flag_emits_source_bytes")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "raw.md", MarkdownFixture);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/raw.md" };
+    shell.fs.addFile(path, std::string(MarkdownFixture));
 
-    TestShell shell;
     shell(std::format("cat --raw {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5079,11 +5107,11 @@ TEST_CASE("shell.builtin.cat_markdown_raw_flag_emits_source_bytes")
 
 TEST_CASE("shell.builtin.cat_markdown_piped_is_not_rendered")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "piped.md", MarkdownFixture);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/piped.md" };
+    shell.fs.addFile(path, std::string(MarkdownFixture));
 
     // The first `cat` writes into a pipe, so its output handle is not a terminal.
-    TestShell shell;
     shell(std::format("cat {} | cat", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5094,11 +5122,11 @@ TEST_CASE("shell.builtin.cat_markdown_piped_is_not_rendered")
 
 TEST_CASE("shell.builtin.cat_markdown_number_flag_shows_source")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "numbered.md", MarkdownFixture);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/numbered.md" };
+    shell.fs.addFile(path, std::string(MarkdownFixture));
 
     // -n asks for a literal view of the source, so rendering is suppressed.
-    TestShell shell;
     shell(std::format("cat -n {}", path.string()));
     auto const output = std::string(shell.output());
 
@@ -5111,6 +5139,8 @@ TEST_CASE("shell.builtin.cat_markdown_number_flag_shows_source")
 TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
 {
     namespace fs = std::filesystem;
+    // Real filesystem: `>` opens its target as a descriptor, which an injected filesystem
+    // cannot supply -- see the redirect note on Shell::applyRedirects.
     auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
     auto const path = writeMarkdownFixture(markdownDir.path(), "redirect.md", MarkdownFixture);
     auto const target = path.parent_path() / "redirect.out";
@@ -5125,12 +5155,39 @@ TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
     CHECK(written == std::string(MarkdownFixture));
 }
 
+TEST_CASE("shell.builtin.cat_distinguishes_why_a_file_could_not_be_read")
+{
+    // openRead() reports every failure the same way, so cat has to tell these apart itself.
+    InMemoryShell shell;
+    shell.fs.addDirectory("/test/adir");
+    shell.fs.addFile("/test/locked.txt", "secret\n");
+    shell.fs.denyAccess("/test/locked.txt");
+
+    CHECK(shell("cat /test/missing.txt").output().find("No such file or directory") != std::string::npos);
+    CHECK(shell("cat /test/adir").output().find("Is a directory") != std::string::npos);
+    CHECK(shell("cat /test/locked.txt").output().find("Permission denied") != std::string::npos);
+}
+
+TEST_CASE("shell.spawn.external_commands_go_through_the_injected_process_manager")
+{
+    MockedProcessShell shell;
+    // An executable that exists only in the injected filesystem: nothing is forked, so the
+    // program never has to be real.
+    shell.fs.addExecutable("/test/tool");
+
+    shell("/test/tool --flag value");
+
+    REQUIRE(shell.spawned().size() == 1);
+    CHECK(shell.spawned()[0].program == "/test/tool");
+    CHECK(shell.spawned()[0].arguments == std::vector<std::string> { "--flag", "value" });
+}
+
 TEST_CASE("shell.builtin.cat_non_markdown_is_unaffected")
 {
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
-    auto const path = writeMarkdownFixture(markdownDir.path(), "plain.txt", "hello world\n"sv);
+    InMemoryShell shell;
+    auto const path = std::filesystem::path { "/test/plain.txt" };
+    shell.fs.addFile(path, std::string("hello world\n"sv));
 
-    TestShell shell;
     shell(std::format("cat {}", path.string()));
 
     CHECK(shell.exitCode == 0);

@@ -90,6 +90,15 @@ class Shell final: public SignalCallback
     Shell(TTY& tty, EnvironmentProvider& env);
     Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs);
 
+    /// @brief Constructs a shell over fully injected collaborators.
+    /// @param tty Terminal abstraction.
+    /// @param env Environment abstraction.
+    /// @param fs Filesystem the builtins read and write through.
+    /// @param processManager Spawns processes and opens the descriptors handed to them.
+    ///                       Anything a forked child must inherit goes through here, so a
+    ///                       mock only suits a shell that spawns nothing.
+    Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager& processManager);
+
     /// @brief Replaces the Sixel capability provider.
     ///
     /// Lets tests force Sixel on or off without a terminal probe.
