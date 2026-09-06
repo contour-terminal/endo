@@ -18,6 +18,8 @@
     #include <process.h>
 #else
 
+    #include <cstdlib> // mkdtemp
+
     #include <unistd.h>
 #endif
 

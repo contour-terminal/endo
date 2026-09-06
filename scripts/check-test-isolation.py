@@ -21,8 +21,10 @@ from pathlib import Path
 SEARCH_ROOTS = ["src/shell"]
 
 # temp_directory_path() joined with a literal, or a hardcoded /tmp path.
+TEMP_DIR_CALL = re.compile(r"temp_directory_path\s*\(\s*\)")
+
 PATTERNS = [
-    (re.compile(r"temp_directory_path\s*\(\s*\)"), "temp_directory_path()"),
+    (TEMP_DIR_CALL, "temp_directory_path()"),
     (re.compile(r"/tmp/"), "a hardcoded /tmp path"),
 ]
 
@@ -53,7 +55,12 @@ def main() -> int:
     for search_root in SEARCH_ROOTS:
         for path in sorted((root / search_root).rglob("*_test.cpp")):
             for number, line in enumerate(path.read_text().splitlines(), start=1):
-                if ALLOW.search(line):
+                # The allowance is matched against the whole line, so a broad alternative
+                # could otherwise exempt a genuine violation sharing that line.
+                # temp_directory_path() is always a real filesystem call and never a literal
+                # value, so nothing exempts it -- which is what keeps
+                # `dirs.push_back(fs::temp_directory_path() / "x")` caught.
+                if ALLOW.search(line) and not TEMP_DIR_CALL.search(line):
                     continue
                 for pattern, what in PATTERNS:
                     if pattern.search(line):

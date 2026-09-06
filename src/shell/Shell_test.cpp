@@ -25,6 +25,7 @@ using crispy::escape;
 #include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/TableFormatter.hpp>
+#include <shell/testing/InjectedShell.hpp>
 
 #include <endo-language/ide/CompletionContext.hpp>
 
@@ -42,6 +43,8 @@ using crispy::escape;
 
 namespace
 {
+using endo::testing::InMemoryShell;
+
 struct TestShell
 {
     endo::TestPTY pty;
@@ -75,74 +78,6 @@ struct TestShell
     }
 };
 
-/// @brief Seeds the "/test" convention every injected-filesystem fixture shares.
-///
-/// Kept in one place because a fixture that seeds it differently is not a variant, it is a
-/// bug: the shell resolves a relative path through the filesystem and the environment both,
-/// so the two views of the working directory have to agree.
-///
-/// @param fs    The injected filesystem to seed.
-/// @param env   The injected environment to keep in step with it.
-/// @param shell The shell owning them.
-void seedInjectedShell(endo::InMemoryFileSystem& fs, endo::TestEnvironment& env, endo::Shell& shell)
-{
-    fs.addDirectory("/test");
-    fs.setCurrentPath("/test");
-    env.set("HOME", "/test/home");
-    env.set("PWD", "/test");
-    shell.addModuleSearchPath("/test");
-    // Never probe the test PTY for Sixel support: the query would leak escape bytes into
-    // the captured output and stall on timeout.
-    shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
-}
-
-/// @brief A shell whose filesystem is private to the test case.
-///
-/// Builtins reach the filesystem through Shell's injected FileSystem, so pointing that at
-/// an in-memory implementation gives each test a private tree with nothing to clean up.
-/// This mirrors the wiring endo-test uses for `# mode: shell` tests
-/// (src/endo-test/TestExecutor.cpp).
-///
-/// Not usable by every test. A builtin whose output travels through a real file descriptor
-/// -- a redirection target, or anything inherited by a forked child -- cannot see this
-/// filesystem, because a child process cannot read an in-memory file through an fd. Those
-/// tests keep using TestShell and the real filesystem.
-///
-/// The in-memory model is also deliberately shallow in places: lastWriteTime() always
-/// reports "now", weaklyCanonical() never resolves symlinks, symlinks are metadata only,
-/// and permissions are not enforced beyond denyAccess(). A test whose assertion depends on
-/// any of those would pass vacuously here and belongs on TestShell.
-
-struct InMemoryShell
-{
-    endo::TestPTY pty;
-    endo::InMemoryFileSystem fs;
-    endo::TestEnvironment env { "/test" };
-    int exitCode = -1;
-
-    endo::Shell shell { pty, env, fs };
-
-    std::string output() const { return pty.output(); }
-
-    InMemoryShell() { seedInjectedShell(fs, env, shell); }
-
-    InMemoryShell& operator()(std::string_view cmd)
-    {
-        exitCode = shell.execute(std::string(cmd));
-        return *this;
-    }
-
-    /// @brief Returns a file's entire contents, or an empty string if it cannot be read.
-    ///
-    /// Whole contents rather than the first line: the fixtures these assertions replaced
-    /// used std::getline only because std::ifstream made that the easy call, so truncating
-    /// here would let a copy that dropped everything after the first newline pass.
-    [[nodiscard]] std::string content(std::filesystem::path const& path) const
-    {
-        return fs.readFile(path).value_or(std::string {});
-    }
-};
-
 /// A shell whose every OS collaborator is injected -- filesystem, environment and process
 /// manager. Spawning is recorded rather than performed, so a test can assert on what the
 /// shell would run without the program existing or a child being forked.
@@ -161,7 +96,7 @@ struct MockedProcessShell
     /// @return The configs the shell handed to the process manager, in spawn order.
     [[nodiscard]] auto const& spawned() const noexcept { return processManager.spawnedConfigs(); }
 
-    MockedProcessShell() { seedInjectedShell(fs, env, shell); }
+    MockedProcessShell() { endo::testing::seedInjectedShell(fs, env, shell); }
 
     MockedProcessShell& operator()(std::string_view cmd)
     {
@@ -5153,6 +5088,17 @@ TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
     auto stream = std::ifstream(target, std::ios::binary);
     auto const written = std::string(std::istreambuf_iterator<char>(stream), {});
     CHECK(written == std::string(MarkdownFixture));
+}
+
+TEST_CASE("shell.builtin.cat_never_falls_back_to_the_host_filesystem")
+{
+    // A path absent from the injected filesystem must be reported as absent, never opened
+    // on the host's disk -- which is what a descriptor fallback would silently do.
+    InMemoryShell shell;
+    auto const output = shell("cat /etc/hostname").output();
+
+    CHECK(shell.exitCode != 0);
+    CHECK(output.find("No such file or directory") != std::string::npos);
 }
 
 TEST_CASE("shell.builtin.cat_distinguishes_why_a_file_could_not_be_read")

@@ -1023,7 +1023,18 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 
             if (renderMode == CatRenderMode::SixelImage)
             {
-                auto imageResult = tui::loadImage(file);
+                // Through the injected filesystem, like the text path below: loadImage()
+                // takes a path and would read the host's disk, so the bytes are fetched
+                // here and decoded from memory instead.
+                auto const imageBytes = _fs.readFile(file);
+                if (!imageBytes.has_value())
+                {
+                    error("cat: {}: {}", file, imageBytes.error());
+                    success = false;
+                    continue;
+                }
+                auto imageResult = tui::loadImageFromMemory(std::span<std::uint8_t const> {
+                    reinterpret_cast<std::uint8_t const*>(imageBytes->data()), imageBytes->size() });
                 if (!imageResult.has_value())
                 {
                     error("cat: {}: {}", file, imageResult.error());
@@ -1141,24 +1152,36 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 }
                 std::tie(content, exitCode) = interruptibleReadAll(*stream);
             }
-            else
+            // A path that resolveDevicePath() rewrote is a device by construction ("/dev/null"
+            // becomes "NUL" on Windows), which the filesystem abstraction does not model and
+            // cannot be asked about.
+            else if (resolvedFile != std::filesystem::path(file) || _fs.exists(resolvedFile))
             {
                 // A FIFO, a character device or a process-substitution descriptor
                 // (`cat <(...)`) is not always ready, and SIGINT arrives over a signalfd
                 // rather than as EINTR -- so a blocking stream read would sit through Ctrl+C
                 // until the writer produced data. Those keep the polling descriptor path.
-                // Nothing an injected filesystem models is one of them, so this branch is
-                // reached only against a real filesystem, or for a path that is simply absent.
+                //
+                // Reached only for something the injected filesystem says is really there but
+                // is not a regular file. Falling through to here for a path it does not have
+                // would read the host's disk and defeat the injection entirely.
                 auto const result = _processManager.openFile(resolvedFile, O_RDONLY);
                 if (!result.has_value())
                 {
-                    error("cat: {}: {}", file, openFailure());
+                    // Unlike openRead(), this reports why.
+                    error("cat: {}: {}", file, toString(result.error()));
                     success = false;
                     continue;
                 }
                 auto const fd = result.value();
                 std::tie(content, exitCode) = interruptibleReadAll(fd);
                 _processManager.closeHandle(fd);
+            }
+            else
+            {
+                error("cat: {}: No such file or directory", file);
+                success = false;
+                continue;
             }
 
             if (exitCode != 0)
@@ -4756,7 +4779,13 @@ namespace
                     auto stream = fs.openRead(platform::resolveDevicePath(file));
                     if (!stream || !*stream)
                     {
-                        errorFn(std::format("{}: No such file or directory", file));
+                        // Same inference as cat: openRead() cannot say why it failed, and
+                        // reporting an unreadable file as a missing one is worse than
+                        // guessing between the two cases that actually occur.
+                        errorFn(
+                            std::format("{}: {}",
+                                        file,
+                                        fs.exists(file) ? "Permission denied" : "No such file or directory"));
                         result.hadError = true;
                         continue;
                     }
@@ -4898,12 +4927,19 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     {
         // Follow mode: open file once, stream last N lines via bounded deque, then follow
         auto const& filePath = files.back();
-        std::ifstream ifs(platform::resolveDevicePath(filePath));
-        if (!ifs)
+        // Through the injected filesystem, like the non-follow path below: an injected
+        // filesystem hands back a snapshot rather than a growing file, so follow mode
+        // observes no further appends there -- but it reads the file the rest of the shell
+        // would read, instead of a same-named one on the host's disk.
+        auto const stream = _fs.openRead(platform::resolveDevicePath(filePath));
+        if (!stream || !*stream)
         {
-            error("tail: cannot open '{}': No such file or directory", filePath);
+            error("tail: cannot open '{}': {}",
+                  filePath,
+                  _fs.exists(filePath) ? "Permission denied" : "No such file or directory");
             return 1;
         }
+        auto& ifs = *stream;
 
         // Read and output last N lines using a sliding window
         std::deque<std::string> lastLines;

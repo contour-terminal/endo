@@ -145,7 +145,12 @@ std::string InMemoryFileSystem::normalize(std::filesystem::path const& path) con
     // cross-platform consistency, and drops the trailing separator lexically_normal()
     // leaves behind for a final "." or ".." -- without which "/test/." would never match
     // the "/test" held in the directory set.
-    return platform::stripTrailingSeparator(path.is_relative() ? _currentPath / path : path);
+    auto result = platform::stripTrailingSeparator(path.is_relative() ? _currentPath / path : path);
+    // generic_string() only folds separators the host platform recognises, so a Windows-style
+    // fixture path keeps its backslashes on POSIX and would never match a key spelled with
+    // forward slashes. Fold them unconditionally: this filesystem is keyed by spelling.
+    std::ranges::replace(result, '\\', '/');
+    return result;
 }
 
 void InMemoryFileSystem::ensureParentDirectories(std::filesystem::path const& path) const

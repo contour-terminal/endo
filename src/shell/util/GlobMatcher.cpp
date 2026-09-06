@@ -61,6 +61,29 @@ std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSyste
     return results;
 }
 
+/// @brief Spells a walked path relative to the base the walk started from.
+///
+/// walkDirectoryRecursive() yields whatever the filesystem considers the entry's path, and an
+/// injected filesystem resolves a relative base such as "." to an absolute one. Re-anchoring
+/// keeps `**` results in the same shape as `*` results regardless of the backend.
+///
+/// @param fileSystem The filesystem being walked; its working directory is the anchor.
+/// @param entryPath   The path as reported by the walk.
+/// @param basePath    The base the walk started from.
+/// @return The entry path relative to @p basePath when the base was ".", else normalized.
+std::string relativizeToBase(platform::FileSystem const& fileSystem,
+                             std::filesystem::path const& entryPath,
+                             std::string_view basePath)
+{
+    if (basePath != ".")
+        return platform::normalizePath(entryPath);
+
+    // The filesystem's working directory, never the process's: they are different views
+    // whenever the filesystem is injected, which is the whole reason this exists.
+    auto const relative = entryPath.lexically_relative(fileSystem.currentPath());
+    return platform::normalizePath(relative.empty() ? entryPath : relative);
+}
+
 std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem, std::string_view pattern)
 {
     std::vector<std::string> results;
@@ -88,7 +111,11 @@ std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSys
         if (!entry.isRegularFile)
             continue;
 
-        std::string filePath = platform::normalizePath(entry.path);
+        // Spelled the way expandGlobPattern() spells its results: relative to the walk root
+        // when the pattern was relative. An injected filesystem resolves "." to an absolute
+        // path, so without this the same pattern yields absolute paths in a test and
+        // "./"-relative ones in the real shell.
+        std::string filePath = relativizeToBase(fileSystem, entry.path, basePath);
         std::string filename = entry.path.filename().string();
 
         if (!suffixPattern.empty())

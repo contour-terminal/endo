@@ -3,6 +3,7 @@
 #include <shell/DirectoryConfig.hpp>
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
+#include <shell/testing/InjectedShell.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -19,6 +20,7 @@ namespace fs = std::filesystem;
 
 namespace
 {
+using endo::testing::InMemoryShell;
 
 /// Silent diagnostic sink for tests — collects messages without printing.
 endo::DiagnosticSink silentDiag()
@@ -26,40 +28,6 @@ endo::DiagnosticSink silentDiag()
     return [](std::string const&) {
     };
 }
-
-struct InMemoryShell
-{
-    endo::TestPTY pty;
-    endo::InMemoryFileSystem fs;
-    endo::TestEnvironment env { "/test" };
-    int exitCode = -1;
-
-    endo::Shell shell { pty, env, fs };
-
-    std::string output() const { return pty.output(); }
-
-    InMemoryShell()
-    {
-        // $HOME decides where the trust store lives, so it must point into the injected
-        // filesystem rather than at the host's -- otherwise every test shares one real
-        // trusted-dirs.json. There is no reason to seed $PATH: nothing here spawns.
-        fs.addDirectory("/test");
-        // Keep the filesystem's working directory in step with the environment's, so a
-        // relative path resolves to the same place through both.
-        fs.setCurrentPath("/test");
-        env.set("HOME", "/test/home");
-        env.set("PWD", "/test");
-        // Never probe the test PTY for Sixel support: the query would leak escape bytes
-        // into the captured output and stall on timeout.
-        shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
-    }
-
-    InMemoryShell& operator()(std::string_view cmd)
-    {
-        exitCode = shell.execute(std::string(cmd));
-        return *this;
-    }
-};
 
 /// @brief Creates a directory under /test, optionally holding a .local-env.endo config.
 /// @param fileSystem Filesystem to create it in.
