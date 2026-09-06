@@ -455,10 +455,12 @@ bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& p
     // Open through the injected FileSystem so binary detection works against any
     // backend (e.g. InMemoryFileSystem in tests), consistent with collectFiles.
     auto stream = fs.openRead(path);
-    // Unreadable counts as binary, so the caller skips the file: classifying it means
-    // reading it, and that has already failed.
+    // Not binary -- unreadable, which is a different thing. Reporting it as binary makes
+    // the caller skip the file silently, so `grep -I pattern unreadable.txt` said nothing at
+    // all while the same command without -I reported the reason. Saying "not binary" lets
+    // the caller's own open fail and explain itself.
     if (!stream)
-        return true;
+        return false;
 
     auto& in = **stream;
     auto buffer = std::array<char, BinaryCheckSize> {};

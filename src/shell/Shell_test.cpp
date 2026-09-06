@@ -5090,6 +5090,17 @@ TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
     CHECK(written == std::string(MarkdownFixture));
 }
 
+TEST_CASE("shell.builtin.grep_reports_an_unreadable_file_with_or_without_binary_skipping")
+{
+    // -I asks to skip binary files, not to fall silent about unreadable ones.
+    InMemoryShell shell;
+    shell.fs.addFile("/test/locked.txt", "needle\n");
+    shell.fs.denyAccess("/test/locked.txt");
+
+    CHECK(shell("grep needle /test/locked.txt").output().find("Permission denied") != std::string::npos);
+    CHECK(shell("grep -I needle /test/locked.txt").output().find("Permission denied") != std::string::npos);
+}
+
 TEST_CASE("shell.builtin.cat_never_falls_back_to_the_host_filesystem")
 {
     // A path absent from the injected filesystem must be reported as absent, never opened

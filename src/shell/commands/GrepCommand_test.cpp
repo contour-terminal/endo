@@ -608,6 +608,17 @@ TEST_CASE("grep.binary.null_bytes", "[grep]")
     CHECK(isBinaryFile(fs, "/test/binary.bin"));
 }
 
+TEST_CASE("grep.binary.unreadable_is_not_binary", "[grep]")
+{
+    // An unreadable file must not be classified as binary: that would make -I skip it
+    // silently, where the caller's own open reports why.
+    auto fs = endo::InMemoryFileSystem {};
+    fs.addFile("/test/locked.txt", "hello world\n");
+    fs.denyAccess("/test/locked.txt");
+
+    CHECK_FALSE(isBinaryFile(fs, "/test/locked.txt"));
+}
+
 // ============================================================================
 // OSC 8 hyperlinks on filename prefixes
 // ============================================================================
