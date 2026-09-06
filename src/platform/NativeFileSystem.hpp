@@ -26,10 +26,11 @@ class NativeFileSystem final: public FileSystem
                                                              std::string_view content) const override;
     [[nodiscard]] std::expected<void, std::string> appendFile(std::filesystem::path const& path,
                                                               std::string_view content) const override;
-    [[nodiscard]] std::unique_ptr<std::istream> openRead(std::filesystem::path const& path) const override;
-    [[nodiscard]] std::unique_ptr<std::ostream> openWrite(std::filesystem::path const& path,
-                                                          bool append = false) const override;
-    [[nodiscard]] std::unique_ptr<std::iostream> openReadWrite(
+    [[nodiscard]] std::expected<std::unique_ptr<std::istream>, std::string> openRead(
+        std::filesystem::path const& path) const override;
+    [[nodiscard]] std::expected<std::unique_ptr<std::ostream>, std::string> openWrite(
+        std::filesystem::path const& path, bool append = false) const override;
+    [[nodiscard]] std::expected<std::unique_ptr<std::iostream>, std::string> openReadWrite(
         std::filesystem::path const& path) const override;
 
     [[nodiscard]] std::expected<void, std::string> createDirectory(

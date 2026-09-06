@@ -455,12 +455,15 @@ bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& p
     // Open through the injected FileSystem so binary detection works against any
     // backend (e.g. InMemoryFileSystem in tests), consistent with collectFiles.
     auto stream = fs.openRead(path);
-    if (!stream || !stream->good())
+    // Unreadable counts as binary, so the caller skips the file: classifying it means
+    // reading it, and that has already failed.
+    if (!stream)
         return true;
 
+    auto& in = **stream;
     auto buffer = std::array<char, BinaryCheckSize> {};
-    stream->read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    auto const bytesRead = static_cast<size_t>(stream->gcount());
+    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    auto const bytesRead = static_cast<size_t>(in.gcount());
 
     return std::any_of(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(bytesRead), [](char c) {
         return c == '\0';

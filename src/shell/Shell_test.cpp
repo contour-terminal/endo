@@ -5103,7 +5103,8 @@ TEST_CASE("shell.builtin.cat_never_falls_back_to_the_host_filesystem")
 
 TEST_CASE("shell.builtin.cat_distinguishes_why_a_file_could_not_be_read")
 {
-    // openRead() reports every failure the same way, so cat has to tell these apart itself.
+    // Each reason reaches the user as the filesystem stated it, rather than being inferred
+    // from a follow-up probe that can only guess between two of them.
     InMemoryShell shell;
     shell.fs.addDirectory("/test/adir");
     shell.fs.addFile("/test/locked.txt", "secret\n");

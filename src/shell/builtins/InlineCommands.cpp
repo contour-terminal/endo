@@ -1127,13 +1127,6 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 continue;
             }
 
-            // openRead() collapses every failure into a null or failed stream, so the reason
-            // is established separately -- otherwise an unreadable file gets reported as a
-            // missing one. FileSystem offers no error channel here.
-            auto const openFailure = [&] {
-                return _fs.exists(resolvedFile) ? "Permission denied" : "No such file or directory";
-            };
-
             std::string content;
             int exitCode = 0;
 
@@ -1144,13 +1137,13 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 // file is always ready, so the stream loop's SIGINT check between chunks is
                 // enough to stay interruptible.
                 auto stream = _fs.openRead(resolvedFile);
-                if (!stream || !*stream)
+                if (!stream)
                 {
-                    error("cat: {}: {}", file, openFailure());
+                    error("cat: {}: {}", file, stream.error());
                     success = false;
                     continue;
                 }
-                std::tie(content, exitCode) = interruptibleReadAll(*stream);
+                std::tie(content, exitCode) = interruptibleReadAll(**stream);
             }
             // A path that resolveDevicePath() rewrote is a device by construction ("/dev/null"
             // becomes "NUL" on Windows), which the filesystem abstraction does not model and
@@ -2662,10 +2655,10 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
 
             // Read file
             auto fileStream = _fs.openRead(filePath);
-            if (!fileStream || !fileStream->good())
+            if (!fileStream)
             {
                 if (!opts.suppressErrors)
-                    error("grep: {}: Permission denied", platform::normalizePath(filePath));
+                    error("grep: {}: {}", platform::normalizePath(filePath), fileStream.error());
                 hasError = true;
                 continue;
             }
@@ -2675,7 +2668,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             // buffer to avoid a per-line copy.
             std::vector<std::string> lines;
             std::string line;
-            while (std::getline(*fileStream, line))
+            while (std::getline(**fileStream, line))
             {
                 if (throttle.pending())
                     return 130;
@@ -4777,19 +4770,13 @@ namespace
                 else
                 {
                     auto stream = fs.openRead(platform::resolveDevicePath(file));
-                    if (!stream || !*stream)
+                    if (!stream)
                     {
-                        // Same inference as cat: openRead() cannot say why it failed, and
-                        // reporting an unreadable file as a missing one is worse than
-                        // guessing between the two cases that actually occur.
-                        errorFn(
-                            std::format("{}: {}",
-                                        file,
-                                        fs.exists(file) ? "Permission denied" : "No such file or directory"));
+                        errorFn(std::format("{}: {}", file, stream.error()));
                         result.hadError = true;
                         continue;
                     }
-                    readFromStream(*stream);
+                    readFromStream(**stream);
                 }
             }
         }
@@ -4932,14 +4919,12 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         // observes no further appends there -- but it reads the file the rest of the shell
         // would read, instead of a same-named one on the host's disk.
         auto const stream = _fs.openRead(platform::resolveDevicePath(filePath));
-        if (!stream || !*stream)
+        if (!stream)
         {
-            error("tail: cannot open '{}': {}",
-                  filePath,
-                  _fs.exists(filePath) ? "Permission denied" : "No such file or directory");
+            error("tail: cannot open '{}': {}", filePath, stream.error());
             return 1;
         }
-        auto& ifs = *stream;
+        auto& ifs = **stream;
 
         // Read and output last N lines using a sliding window
         std::deque<std::string> lastLines;

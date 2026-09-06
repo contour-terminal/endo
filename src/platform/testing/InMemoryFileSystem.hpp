@@ -3,6 +3,7 @@
 
 #include <initializer_list>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -59,10 +60,11 @@ class InMemoryFileSystem final: public FileSystem
                                                              std::string_view content) const override;
     [[nodiscard]] std::expected<void, std::string> appendFile(std::filesystem::path const& path,
                                                               std::string_view content) const override;
-    [[nodiscard]] std::unique_ptr<std::istream> openRead(std::filesystem::path const& path) const override;
-    [[nodiscard]] std::unique_ptr<std::ostream> openWrite(std::filesystem::path const& path,
-                                                          bool append = false) const override;
-    [[nodiscard]] std::unique_ptr<std::iostream> openReadWrite(
+    [[nodiscard]] std::expected<std::unique_ptr<std::istream>, std::string> openRead(
+        std::filesystem::path const& path) const override;
+    [[nodiscard]] std::expected<std::unique_ptr<std::ostream>, std::string> openWrite(
+        std::filesystem::path const& path, bool append = false) const override;
+    [[nodiscard]] std::expected<std::unique_ptr<std::iostream>, std::string> openReadWrite(
         std::filesystem::path const& path) const override;
 
     // Directory ops
@@ -98,6 +100,11 @@ class InMemoryFileSystem final: public FileSystem
     // Temp files
     [[nodiscard]] std::expected<std::filesystem::path, std::string> createTempFile(
         std::string_view prefix) const override;
+
+    /// @brief Refuses an open the model can answer without looking at content.
+    /// @param key A normalized path.
+    /// @return The reason to refuse, or nullopt to proceed.
+    [[nodiscard]] std::optional<std::string> refuseOpen(std::string const& key) const;
 
     // --- Test helpers ---
 

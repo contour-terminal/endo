@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -133,29 +134,78 @@ std::expected<void, std::string> NativeFileSystem::appendFile(fs::path const& pa
     return {};
 }
 
-std::unique_ptr<std::istream> NativeFileSystem::openRead(fs::path const& path) const
+namespace
 {
-    auto stream = std::make_unique<std::ifstream>(path, std::ios::binary);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    /// @brief Explains a failed stream open in the operating system's own words.
+    ///
+    /// The stream classes report only *that* the open failed, so the reason comes from errno,
+    /// which the open() underlying every standard library this project targets sets. Callers
+    /// previously inferred the reason from a follow-up exists() probe, which both misreported
+    /// every cause other than the two it guessed between and raced with the open.
+    ///
+    /// @param errorNumber The value of errno immediately after the failed open.
+    /// @return The reason, or a generic message when errno says nothing useful.
+    [[nodiscard]] std::string describeOpenFailure(int errorNumber)
+    {
+        if (errorNumber == 0)
+            return "Cannot open file";
+        return std::error_code(errorNumber, std::generic_category()).message();
+    }
+
+    /// @brief Rejects a directory before it is opened as a file.
+    ///
+    /// Opening a directory succeeds on POSIX and fails only on the first read, which would
+    /// otherwise be indistinguishable from an empty file.
+    ///
+    /// @param path The path about to be opened.
+    /// @return The reason to refuse, or nullopt to proceed.
+    [[nodiscard]] std::optional<std::string> refuseDirectory(fs::path const& path)
+    {
+        std::error_code ec;
+        if (fs::is_directory(path, ec))
+            return "Is a directory";
+        return std::nullopt;
+    }
+
+    /// @brief Opens a stream, reporting why rather than merely that it failed.
+    ///
+    /// @tparam StreamT The concrete stream to construct.
+    /// @tparam BaseT   The interface type to hand back.
+    /// @param path The file to open.
+    /// @param mode The open mode.
+    /// @return The stream, or the reason it could not be opened.
+    template <typename StreamT, typename BaseT>
+    [[nodiscard]] std::expected<std::unique_ptr<BaseT>, std::string> openStream(fs::path const& path,
+                                                                                std::ios::openmode mode)
+    {
+        if (auto refusal = refuseDirectory(path))
+            return std::unexpected(std::move(*refusal));
+
+        errno = 0;
+        auto stream = std::make_unique<StreamT>(path, mode);
+        if (!*stream)
+            return std::unexpected(describeOpenFailure(errno));
+        return stream;
+    }
+} // namespace
+
+std::expected<std::unique_ptr<std::istream>, std::string> NativeFileSystem::openRead(
+    fs::path const& path) const
+{
+    return openStream<std::ifstream, std::istream>(path, std::ios::binary);
 }
 
-std::unique_ptr<std::ostream> NativeFileSystem::openWrite(fs::path const& path, bool append) const
+std::expected<std::unique_ptr<std::ostream>, std::string> NativeFileSystem::openWrite(fs::path const& path,
+                                                                                      bool append) const
 {
-    auto const mode = std::ios::binary | (append ? std::ios::app : std::ios::trunc);
-    auto stream = std::make_unique<std::ofstream>(path, mode);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    return openStream<std::ofstream, std::ostream>(
+        path, std::ios::binary | (append ? std::ios::app : std::ios::trunc));
 }
 
-std::unique_ptr<std::iostream> NativeFileSystem::openReadWrite(fs::path const& path) const
+std::expected<std::unique_ptr<std::iostream>, std::string> NativeFileSystem::openReadWrite(
+    fs::path const& path) const
 {
-    auto stream = std::make_unique<std::fstream>(path, std::ios::binary | std::ios::in | std::ios::out);
-    if (!*stream)
-        return nullptr;
-    return stream;
+    return openStream<std::fstream, std::iostream>(path, std::ios::binary | std::ios::in | std::ios::out);
 }
 
 std::expected<void, std::string> NativeFileSystem::createDirectory(fs::path const& path) const

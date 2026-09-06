@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -10,6 +11,7 @@
 
 #include <platform/NativeFileSystem.hpp>
 #include <platform/testing/InMemoryFileSystem.hpp>
+#include <testing/ScopedTempDir.hpp>
 
 using endo::platform::FileSystem;
 using endo::platform::testing::InMemoryFileSystem;
@@ -169,4 +171,50 @@ TEST_CASE("isExecutableFile follows the execute bit of a symlink entry", "[FileS
                 .has_value());
 
     CHECK(fs.isExecutableFile("/usr/bin/link"));
+}
+
+// ============================================================================
+// openRead error reporting
+// ============================================================================
+
+TEST_CASE("openRead names the reason it failed", "[FileSystem]")
+{
+    // Every backend distinguishes the same three cases, so a caller can report what the
+    // filesystem said instead of inferring it from a follow-up probe.
+    auto fs = InMemoryFileSystem {};
+    fs.addDirectory("/root/dir");
+    fs.addFile("/root/readable.txt", "content");
+    fs.addFile("/root/locked.txt", "secret");
+    fs.denyAccess("/root/locked.txt");
+
+    CHECK(fs.openRead("/root/readable.txt").has_value());
+
+    auto const missing = fs.openRead("/root/absent.txt");
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error() == "No such file or directory");
+
+    auto const directory = fs.openRead("/root/dir");
+    REQUIRE_FALSE(directory.has_value());
+    CHECK(directory.error() == "Is a directory");
+
+    auto const denied = fs.openRead("/root/locked.txt");
+    REQUIRE_FALSE(denied.has_value());
+    CHECK(denied.error() == "Permission denied");
+}
+
+TEST_CASE("openRead reports the operating system's own reason", "[FileSystem]")
+{
+    auto const& fs = endo::platform::NativeFileSystem::instance();
+    auto const dir = endo::testing::ScopedTempDir { "endo_openread" };
+
+    // A directory opens successfully on POSIX and fails only on the first read, so it has to
+    // be refused explicitly rather than surfacing as an empty file.
+    auto const directory = fs.openRead(dir.path());
+    REQUIRE_FALSE(directory.has_value());
+    CHECK(directory.error() == "Is a directory");
+
+    // errno's text, not a guess: distinct from the directory case above and from success.
+    auto const missing = fs.openRead(dir / "absent.txt");
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error() == std::error_code(ENOENT, std::generic_category()).message());
 }

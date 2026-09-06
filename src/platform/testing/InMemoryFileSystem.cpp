@@ -243,34 +243,45 @@ std::expected<void, std::string> InMemoryFileSystem::appendFile(std::filesystem:
     return {};
 }
 
-std::unique_ptr<std::istream> InMemoryFileSystem::openRead(std::filesystem::path const& path) const
+std::optional<std::string> InMemoryFileSystem::refuseOpen(std::string const& key) const
+{
+    if (_deniedPaths.contains(key))
+        return "Permission denied";
+    if (_directories.contains(key))
+        return "Is a directory";
+    return std::nullopt;
+}
+
+std::expected<std::unique_ptr<std::istream>, std::string> InMemoryFileSystem::openRead(
+    std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
-    if (_deniedPaths.contains(key))
-        return nullptr;
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     auto const it = _files.find(key);
     if (it == _files.end())
-        return nullptr;
+        return std::unexpected("No such file or directory");
     return std::make_unique<MemoryIStream>(it->second);
 }
 
-std::unique_ptr<std::ostream> InMemoryFileSystem::openWrite(std::filesystem::path const& path,
-                                                            bool append) const
+std::expected<std::unique_ptr<std::ostream>, std::string> InMemoryFileSystem::openWrite(
+    std::filesystem::path const& path, bool append) const
 {
     auto const key = normalize(path);
-    if (_deniedPaths.contains(key))
-        return nullptr;
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
     return std::make_unique<MemoryOStream>(&_files[key], append);
 }
 
-std::unique_ptr<std::iostream> InMemoryFileSystem::openReadWrite(std::filesystem::path const& path) const
+std::expected<std::unique_ptr<std::iostream>, std::string> InMemoryFileSystem::openReadWrite(
+    std::filesystem::path const& path) const
 {
     auto const key = normalize(path);
-    if (_deniedPaths.contains(key))
-        return nullptr;
+    if (auto refusal = refuseOpen(key))
+        return std::unexpected(std::move(*refusal));
     ensureParentDirectories(path);
     if (!_files.contains(key))
         _files[key] = {};
