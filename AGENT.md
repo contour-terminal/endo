@@ -178,24 +178,39 @@ cmake --build --preset clang-release
 `USE_COMPILER_CACHE` (default ON, `cmake/CompileCache.cmake`) fronts the compiler with a caching
 launcher. It picks the first of these that is installed and usable:
 
-1. `fastcache-cc` — picked whenever a fastcached daemon actually answers. The address defaults to
-   fastcached's own port, `127.0.0.1:6674`, so an installed daemon needs no configuration;
-   `FASTCACHE_ADDR=host:port` in the environment points it at any other daemon, local or remote,
-   and takes effect on the next configure of an existing build tree too, rather than being frozen
-   at what the first one saw; `-DFASTCACHE_ADDR=host:port` overrides even that for the run it is
-   passed on, and an empty value opts out. Configure
+1. `fastcache-cc` — picked whenever a cache actually answers. The address defaults to fastcached's
+   own port, `127.0.0.1:6674`, so an installed daemon needs no configuration; that is also where a
+   `fastcache-compile-node`'s `--listen-node` sits, so a single-node cluster is picked up the same
+   way a stock `fastcached` is. `FASTCACHE_ADDR=host:port` in the environment points it at any
+   other daemon, local or remote, and takes effect on the next configure of an existing build tree
+   too, rather than being frozen at what the first one saw; `-DFASTCACHE_ADDR=host:port` overrides
+   even that for the run it is passed on, and an empty value opts out. Configure
    verifies the cache end to end by compiling one tiny file through the launcher — ~0.1 s when a
    daemon answers, capped at 10 s when none does — and falls through to the next launcher when
    nothing answers, naming the address it tried. `fastcache-cc` never fails a build, it just stops
    caching, so being told is the point. Its cache entries are portable across checkout paths, so
    CI and local builds share hits.
-2. `sccache`
+2. `sccache` — **never selected automatically**; it needs `-DALLOW_SCCACHE_FALLBACK=ON`. Silently
+   standing in for a `fastcache-cc` that could not reach its daemon is how a project stops noticing
+   that its own cache is unused. Opted into, it keeps this rank, ahead of `ccache`.
 3. `ccache`
 
 `-DUSE_COMPILER_CACHE=OFF` disables all of them. A launcher supplied externally
 (`-DCMAKE_CXX_COMPILER_LAUNCHER=...`, a preset, or a toolchain file) is always left untouched.
 Precompiled headers and C++20 module scanning are switched off whenever a launcher is active —
-neither survives a cache hit, and this project uses neither.
+neither survives a cache hit, and this project uses neither. While a launcher is active the module
+also adds `-fdebug-prefix-map` rules so a replayed object's debug info names no particular checkout.
+
+A daemon that answers but refuses the launcher's **wire version** is reported as a `CMake Warning`
+rather than a status line: that is the one rejection reason meaning a cache exists, is running, and
+is not being used. It is never fatal — a launcher out of step with its daemon is normal during a
+rollout, and this module may not fail a configure.
+
+`cmake/CompileCache.cmake` is a verbatim vendored copy of `cmake/portable/CompileCache.cmake` from
+[LASTRADA-Software/fastcached](https://github.com/LASTRADA-Software/fastcached). Fixes belong
+upstream; refresh it by copying the file over rather than editing it here. It carries options this
+project does not set — `FASTCACHE_AUTO_INSTALL` fetches the launcher when none is installed, and
+`FASTCACHE_AUTO_START` starts a daemon when none answers, both `OFF` by default.
 
 ---
 
