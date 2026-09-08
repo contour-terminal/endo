@@ -142,7 +142,7 @@ jobs:
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
         sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }}
         # The clang-debug preset enables clang-tidy, and cmake/ClangTidy.cmake looks for
-        # an unversioned binary, which apt.llvm.org does not provide.
+        # an unversioned binary, which apt.llvm.org does not install.
         sudo ln -sf /usr/bin/clang-tidy-${{ env.LLVM_VERSION }} /usr/local/bin/clang-tidy
 
     # OpenSSL backs the TLS transport in the vendored net library and curl backs the
@@ -168,8 +168,8 @@ jobs:
       run: python3 scripts/get_contour_dirs.py
 
     # clang-debug brings ASAN, UBSAN and clang-tidy, so the stub path is not merely
-    # compiled but exercised. ENDO_ENABLE_AGENT=OFF is the default; it is spelled out
-    # so the job's purpose survives a future change of that default.
+    # compiled but exercised and linted. ENDO_ENABLE_AGENT=OFF is the default; it is
+    # spelled out so the job's purpose survives a future change of that default.
     - name: Configure CMake
       run: >
         cmake --preset clang-debug
