@@ -93,7 +93,11 @@ if(WIN32)
 endif()
 
 
-option(ENDO_ENABLE_AGENT "Build with AI agent support (LLM providers, agent mode, MCP)" ON)
+# The AI agent features are experimental, so they are opt-in: a default configure
+# builds no LLM providers, no agent mode and no MCP client, and skips the llama.cpp
+# dependency entirely. Official packages are built with this switched ON.
+option(ENDO_ENABLE_AGENT
+       "Build with experimental AI agent support (LLM providers, agent mode, MCP) [default: OFF]" OFF)
 option(ENDO_ENABLE_WASM "Build the WebAssembly compilation backend (requires binaryen) [default: ON]" ON)
 
 if(NOT DEFINED ENDO_TRACE_VM)
@@ -247,6 +251,7 @@ message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
 message(STATUS "Testing             ${ENDO_TESTING}")
 message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
 message(STATUS "WASM backend        ${ENDO_HAS_WASM}")
+message(STATUS "Agent support       ${ENDO_ENABLE_AGENT}")
 message(STATUS "Built in crashdump  ${ENDO_BUILTIN_CRARHDUMP}")
 if(NOT EMSCRIPTEN)
     message(STATUS "Address Sanitizer   ${ENABLE_ASAN}")
