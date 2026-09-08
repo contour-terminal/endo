@@ -76,6 +76,7 @@ RUN printf '%s\n' "${ENDO_VERSION}" > version.txt \
 RUN cmake --preset clang-deb \
         -DCMAKE_C_COMPILER=clang-21 \
         -DCMAKE_CXX_COMPILER=clang++-21 \
+        -DENDO_ENABLE_AGENT=ON \
     && cmake --build --preset clang-deb \
     && cpack --preset clang-deb
 

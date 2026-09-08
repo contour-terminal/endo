@@ -50,12 +50,15 @@ jobs:
     - name: Setup clang-tidy problem matcher
       run: echo "::add-matcher::.github/clang-tidy-matcher.json"
 
+    # ENDO_ENABLE_AGENT is opt-in and off by default, but src/agent must stay in the
+    # compile database or a PR touching it would silently go untidied.
     - name: Configure CMake
       run: >
         cmake -B build
         -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
         -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
         -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -DENDO_ENABLE_AGENT=ON
         -GNinja
         -S ${{ github.workspace }}
 

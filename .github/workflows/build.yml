@@ -83,11 +83,11 @@ jobs:
 
     - name: Configure CMake (Linux)
       if: runner.os == 'Linux'
-      run: cmake --preset clang-release -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }} -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
+      run: cmake --preset clang-release -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }} -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }} -DENDO_ENABLE_AGENT=ON
 
     - name: Configure CMake (macOS)
       if: runner.os == 'macOS'
-      run: cmake --preset clang-release
+      run: cmake --preset clang-release -DENDO_ENABLE_AGENT=ON
 
     # ── Build & Test ──
 
@@ -120,6 +120,79 @@ jobs:
         name: endo-macos-arm64-dmg
         path: ${{ matrix.build_dir }}/endo-*.dmg
         retention-days: 30
+
+  # The AI agent features are opt-in (ENDO_ENABLE_AGENT, default OFF), so the build
+  # without them is the one most people get. Nothing else in CI compiles that
+  # configuration, and it is a genuinely different program: src/agent is dropped
+  # entirely and the shell registers no-op stubs for every agent_* property so that
+  # existing init.endo scripts keep loading. This job is what keeps that path honest.
+  linux-no-agent:
+    runs-on: ubuntu-latest
+    name: "Linux x86_64 (no AI features)"
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # full history + tags so the version is derived correctly
+
+    - name: Install clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh ${{ env.LLVM_VERSION }}
+        sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }}
+        # The clang-debug preset enables clang-tidy, and cmake/ClangTidy.cmake looks for
+        # an unversioned binary, which apt.llvm.org does not provide.
+        sudo ln -sf /usr/bin/clang-tidy-${{ env.LLVM_VERSION }} /usr/local/bin/clang-tidy
+
+    # OpenSSL backs the TLS transport in the vendored net library and curl backs the
+    # `fetch` builtin; neither is agent-only, so both are still needed here.
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-linux-no-agent
+        max-size: 256M
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: "Get vendored contour sources"
+      run: python3 scripts/get_contour_dirs.py
+
+    # clang-debug brings ASAN, UBSAN and clang-tidy, so the stub path is not merely
+    # compiled but exercised. ENDO_ENABLE_AGENT=OFF is the default; it is spelled out
+    # so the job's purpose survives a future change of that default.
+    - name: Configure CMake
+      run: >
+        cmake --preset clang-debug
+        -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
+        -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
+        -DENDO_ENABLE_AGENT=OFF
+
+    - name: Build
+      run: cmake --build --preset clang-debug
+
+    - name: Test
+      run: ctest --preset clang-debug
+      timeout-minutes: 30
+
+    # A build that silently re-enabled the agent would pass everything above, so
+    # assert the feature really is gone from the binary.
+    - name: Verify AI features are absent
+      run: |
+        set -e
+        endo=build/clang-debug/src/shell/endo
+        ! "$endo" agent status
+        "$endo" agent status 2>&1 | grep -q "not available in this build"
+        ! "$endo" --help | grep -q "AGENT COMMANDS"
 
   static-build:
     runs-on: ubuntu-latest
@@ -156,6 +229,7 @@ jobs:
         -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
         -DCMAKE_BUILD_TYPE=Release
         -DENABLE_STATIC_LINKING=ON
+        -DENDO_ENABLE_AGENT=ON
         -GNinja
         -S ${{ github.workspace }}
 
@@ -209,7 +283,7 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Configure CMake
-      run: cmake --preset clangcl-release
+      run: cmake --preset clangcl-release -DENDO_ENABLE_AGENT=ON
 
     - name: Build
       run: cmake --build build/clangcl-release --config Release
