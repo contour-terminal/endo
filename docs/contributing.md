@@ -34,6 +34,18 @@ cmake --build --preset clang-debug
 ctest --preset=clang-debug
 ```
 
+The AI agent features are opt-in and off by default. To work on them, use the
+`clang-debug-agent` preset, which is `clang-debug` plus `ENDO_ENABLE_AGENT=ON`:
+
+```bash
+cmake --preset clang-debug-agent
+cmake --build --preset clang-debug-agent
+ctest --preset=clang-debug-agent
+```
+
+Changes to the shell that touch agent code should be checked in both configurations -- CI
+builds the agent-less one on Linux, and the two register different builtins.
+
 For performance-sensitive changes, also verify with the release preset:
 
 ```bash

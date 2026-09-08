@@ -176,6 +176,10 @@ cmake --build --preset clang-release
 sudo cmake --install build/clang-release
 ```
 
+The experimental AI agent features are off by default in a source build; add
+`-DENDO_ENABLE_AGENT=ON` at configure time to include them. The packages below are built
+with them enabled.
+
 ### Debian / Ubuntu (`.deb`)
 
 Each [release](https://github.com/contour-terminal/endo/releases) ships a `.deb`

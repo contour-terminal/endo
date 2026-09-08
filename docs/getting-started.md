@@ -47,6 +47,21 @@ cmake --preset clang-debug
 cmake --build --preset clang-debug
 ```
 
+### Build Options
+
+The AI agent features -- LLM providers, agent mode and the MCP client -- are experimental
+and **off by default**. Enable them at configure time:
+
+```bash
+cmake --preset clang-release -DENDO_ENABLE_AGENT=ON
+cmake --build --preset clang-release
+```
+
+Building with them enabled also pulls in [llama.cpp](https://github.com/ggml-org/llama.cpp)
+for local inference, which noticeably lengthens the first build. The official packages
+(`.deb`, `.msi`, `.dmg` and the static Linux binary) are built with agent support enabled,
+so this only affects builds from source. See the [AI Agent](agent/index.md) documentation.
+
 ### Install (Optional)
 
 ```bash

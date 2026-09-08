@@ -4,6 +4,10 @@
 > The primary screen (inline rendering) is the main focus — no alt-screen context switch
 > for the core experience. Alt-screen is available on demand for sub-agents or full-screen views.
 
+> **Build status:** these features are experimental and opt-in. `ENDO_ENABLE_AGENT` defaults
+> to `OFF`; configure with `-DENDO_ENABLE_AGENT=ON` (or the `clang-debug-agent` preset) to
+> build them. Official release packages are built with them enabled.
+
 ---
 
 ## Design Principles
