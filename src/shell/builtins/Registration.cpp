@@ -13,6 +13,7 @@
 
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/builtins/PropertyDescriptors.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -1573,73 +1574,37 @@ void Shell::registerAgentConfigBuiltins()
         .onSet([this](CoreVM::Params& args) { agentConfig.local.chatTemplate = std::string(args.getString(1)); _agentProviderFactory.reset(); });
     // clang-format on
 }
-#else  // !ENDO_ENABLE_AGENT — register no-op stubs so init.endo scripts don't break
+#else  // !ENDO_ENABLE_AGENT
 void Shell::registerAgentConfigBuiltins()
 {
-    // clang-format off
-    auto noopSet = [](CoreVM::Params&) {};
-
-    auto registerStringProp = [&](char const* name) {
-        _runtime.registerProperty(name, CoreVM::LiteralType::String)
-            .onGet([](CoreVM::Params& args) { args.setResult(std::string {}); })
-            .onSet(noopSet);
-    };
-    auto registerNumberProp = [&](char const* name) {
-        _runtime.registerProperty(name, CoreVM::LiteralType::Number)
-            .onGet([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); })
-            .onSet(noopSet);
-    };
-    auto registerBoolProp = [&](char const* name) {
-        _runtime.registerProperty(name, CoreVM::LiteralType::Boolean)
-            .onGet([](CoreVM::Params& args) { args.setResult(false); })
-            .onSet(noopSet);
-    };
-    auto registerObjectProp = [&](char const* name) {
-        _runtime.registerProperty(name, CoreVM::LiteralType::Number)
-            .onGet([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); })
-            .onSet(noopSet);
-    };
-
-    for (auto const* name : {
-        "agent_provider", "agent_prompt_indicator",
-        "agent_claude_api_key", "agent_claude_api_key_env", "agent_claude_model",
-        "agent_claude_thinking_mode", "agent_claude_auth_type",
-        "agent_openai_api_key", "agent_openai_api_key_env", "agent_openai_model",
-        "agent_openai_base_url", "agent_openai_thinking_mode",
-        "agent_openai_compat_api_key", "agent_openai_compat_api_key_env",
-        "agent_openai_compat_model", "agent_openai_compat_base_url",
-        "agent_openai_compat_thinking_mode",
-        "agent_gemini_api_key", "agent_gemini_api_key_env", "agent_gemini_model",
-        "agent_gemini_thinking_mode",
-        "agent_permissions_policy",
-        "agent_web_search_engine", "agent_web_search_api_key", "agent_web_search_cx",
-        "agent_error_recovery_action", "agent_error_recovery_model",
-        "agent_local_model_path", "agent_local_model_dir", "agent_local_chat_template",
-        "agent_trace_default_path",
-    }) registerStringProp(name);
-
-    for (auto const* name : {
-        "agent_max_tool_result_size",
-        "agent_claude_max_tokens", "agent_openai_max_tokens",
-        "agent_openai_compat_max_tokens", "agent_gemini_max_tokens",
-        "agent_plan_mode_max_exploration_turns", "agent_explore_max_turns",
-        "agent_trace_max_files", "agent_web_search_max_results",
-        "agent_local_gpu_layers", "agent_local_context_size",
-        "agent_local_threads", "agent_local_batch_size",
-        "agent_local_temperature", "agent_local_max_tokens",
-    }) registerNumberProp(name);
-
-    for (auto const* name : {
-        "agent_log_tool_uses", "agent_claude_prompt_caching",
-        "agent_plan_mode_enabled", "agent_plan_mode_pause_between_steps",
-        "agent_auto_resume", "agent_session_replay",
-        "agent_trace_enabled", "agent_trace_terminal",
-        "agent_local_flash_attention",
-    }) registerBoolProp(name);
-
-    registerObjectProp("agent_trusted_tool");
-    registerObjectProp("agent_blocked_pattern");
-    // clang-format on
+    // Without agent support there is nothing to configure, but `init.endo` scripts and the
+    // documentation snippets still assign to these properties, and dropping the registrations
+    // would turn every such assignment into a compile error. Register a no-op stub for each
+    // one instead, driven by `agentPropertyDescriptors()` — the same table the LSP, hover and
+    // completion already read — so that name, type and getter/setter shape cannot drift from
+    // the agent-enabled build, and a newly declared property gets its stub for free.
+    for (auto const& descriptor: agentPropertyDescriptors())
+    {
+        auto& property = _runtime.registerProperty(std::string { descriptor.name }, descriptor.type);
+        switch (descriptor.type)
+        {
+            case CoreVM::LiteralType::String:
+                property.onGet([](CoreVM::Params& args) { args.setResult(std::string {}); });
+                break;
+            case CoreVM::LiteralType::Boolean:
+                property.onGet([](CoreVM::Params& args) { args.setResult(false); });
+                break;
+            // Number, and Object — whose agent-enabled getters return a cons-cell chain, of
+            // which the null chain is the empty list — are both a zero CoreNumber at the VM
+            // layer, which is exactly "nothing configured".
+            default:
+                property.onGet(
+                    [](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(0)); });
+                break;
+        }
+        if (!descriptor.readOnly)
+            property.onSet([](CoreVM::Params&) {});
+    }
 }
 #endif // ENDO_ENABLE_AGENT
 
