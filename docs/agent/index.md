@@ -5,6 +5,15 @@ description: Built-in AI agent — setup, providers, and quick start.
 
 # AI Agent Overview
 
+!!! warning "Experimental -- opt-in at build time"
+
+    The agent features are experimental and are **not compiled in by default**. The
+    official packages ship with them enabled, but a build from source needs
+    `-DENDO_ENABLE_AGENT=ON` at configure time (see
+    [Build Options](../getting-started.md#build-options)). Without it, `endo agent`
+    reports that agent features are unavailable, `#` does not enter agent mode, and the
+    `agent_*` configuration properties in `init.endo` are accepted but do nothing.
+
 Endo includes a built-in AI agent that can read and edit files, run commands, search your
 codebase, execute Endo scripts, and connect to external tool servers via
 [MCP](configuration.md#mcp-server-configuration).

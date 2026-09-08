@@ -153,9 +153,20 @@ APIs, not the other way around.
 
 ## Building
 
+The AI agent features (`src/agent/`, agent mode in the shell, MCP) are experimental and
+opt-in: `ENDO_ENABLE_AGENT` defaults to `OFF`. Use the `clang-debug-agent` preset (or pass
+`-DENDO_ENABLE_AGENT=ON`) when working on them. With the option off, `src/agent` is not
+built at all, `AgentModeSession.cpp` is dropped from `endo-shell`, the llama.cpp dependency
+is skipped, and `Shell::registerAgentConfigBuiltins()` registers no-op stubs driven by
+`agentPropertyDescriptors()` so `init.endo` scripts still load. CI covers both
+configurations; changes to shell builtins or `Shell.cpp` should be checked in both.
+
 ```bash
 # Configure (debug with ASAN, UBSAN, clang-tidy)
 cmake --preset clang-debug
+
+# Same, with the experimental AI agent features compiled in
+cmake --preset clang-debug-agent
 
 # Build
 cmake --build --preset clang-debug

@@ -71,6 +71,7 @@ jobs:
       - name: Configure
         run: >
           cmake --preset clang-release-static
+          -DENDO_ENABLE_AGENT=ON
           -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }}
           -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }}
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
@@ -150,7 +151,7 @@ jobs:
         run: python3 scripts/get_contour_dirs.py
 
       - name: Configure
-        run: cmake --preset clang-release
+        run: cmake --preset clang-release -DENDO_ENABLE_AGENT=ON
 
       - name: Build
         run: cmake --build --preset clang-release
@@ -201,7 +202,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
-        run: cmake --preset clangcl-release
+        run: cmake --preset clangcl-release -DENDO_ENABLE_AGENT=ON
 
       - name: Build
         run: cmake --build --preset clangcl-release

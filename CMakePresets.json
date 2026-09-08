@@ -51,6 +51,14 @@
             }
         },
         {
+            "name": "clang-debug-agent",
+            "inherits": "clang-debug",
+            "displayName": "Clang Debug (with AI agent)",
+            "cacheVariables": {
+                "ENDO_ENABLE_AGENT": "ON"
+            }
+        },
+        {
             "name": "clang-release",
             "inherits": "unix-base",
             "displayName": "Clang Release",
@@ -218,6 +226,10 @@
             "configurePreset": "clang-debug"
         },
         {
+            "name": "clang-debug-agent",
+            "configurePreset": "clang-debug-agent"
+        },
+        {
             "name": "clang-release",
             "configurePreset": "clang-release"
         },
@@ -288,6 +300,11 @@
         {
             "name": "clang-debug",
             "configurePreset": "clang-debug",
+            "inherits": "default-test"
+        },
+        {
+            "name": "clang-debug-agent",
+            "configurePreset": "clang-debug-agent",
             "inherits": "default-test"
         },
         {

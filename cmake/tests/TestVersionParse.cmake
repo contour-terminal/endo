@@ -7,6 +7,11 @@
 # Data-driven: each row is "<describe>|<expected-numeric>". The sentinel value
 # "FAIL" means parsing is expected to be rejected (out_ok == FALSE).
 
+# Required: a -P script starts with no policy baseline, and with CMP0007 unset the
+# list() commands drop empty elements. The empty-input row below splits to ";FAIL",
+# whose first element is empty, so list(GET _parts 1 ...) would read past the end.
+cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
+
 include("${CMAKE_CURRENT_LIST_DIR}/../VersionParse.cmake")
 
 set(_cases

@@ -9,10 +9,16 @@
 # It is therefore disabled tree-wide, matching contour (the upstream source of
 # src/coro and src/net). Endo cannot keep a directory-local .clang-tidy inside
 # those vendored directories, since they are overwritten on every fetch.
+# Note on -bugprone-chained-comparison below: Catch2 decomposes an assertion into
+# `Decomposer() <= lhs == rhs`, so every CHECK/REQUIRE holding a comparison reads to
+# that check as a chained comparison. It fires on essentially every assertion in every
+# *_test.cpp, is not something endo's own code can fix, and cannot be scoped to a
+# directory either, since the tests sit next to the sources they cover.
 Checks: >-
   -*,
   bugprone-*,
   -bugprone-branch-clone,
+  -bugprone-chained-comparison,
   -bugprone-command-processor,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape,
