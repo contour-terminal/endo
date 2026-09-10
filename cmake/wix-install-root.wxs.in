@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+
+  WIX source fragment: pins INSTALL_ROOT to THIS version's directory when an
+  upgrade is detected.
+
+  Without this, an MSI upgrade installs into the OLD version's directory and then
+  deletes everything it just wrote. CPack generates, into properties.wxi:
+
+      <Property Id="INSTALL_ROOT" Secure="yes">
+        <RegistrySearch Id="FindInstallLocation" Root="HKLM"
+            Key="Software\...\Uninstall\[WIX_UPGRADE_DETECTED]"
+            Name="InstallLocation" Type="raw"/>
+      </Property>
+
+  That search remembers where the previous version went, so a reinstall lands in
+  the directory the user originally chose. It is the right behaviour for a fixed
+  install directory and destructive for a per-version one: AppSearch assigns the
+  old path to the public property INSTALL_ROOT, a public property outranks the
+  Directory table's per-version default, so the new version's files are written
+  into the old version's directory — and MajorUpgrade (scheduled
+  afterInstallExecute) then removes the old product, deleting them. The result is
+  a registered product with no files and no PATH entry.
+
+  Conditioned on WIX_UPGRADE_DETECTED so it only fires when FindRelatedProducts
+  found an earlier product. A fresh install is untouched, and so is the install
+  directory a user picks in the WixUI_InstallDir dialog. In maintenance mode
+  FindRelatedProducts does not run, so a repair keeps its cached directory.
+
+  The one behaviour this gives up: a user who installed an earlier version to a
+  non-default location is moved back under Program Files by an upgrade. Today
+  that user ends up with nothing installed at all, so this is strictly better —
+  but it is the reason to prefer a stable INSTALL_ROOT if the install layout is
+  ever revisited.
+
+  Sequenced into both the UI and the execute sequence so a silent /qn install and
+  an interactive one behave identically.
+
+  Configured by CMake (configure_file, @ONLY) into the build tree: the value needs
+  both the product display name and the version, which are single-sourced in
+  cmake/ProjectMetadata.cmake and the version record. Compiled as an extra source
+  via CPACK_WIX_EXTRA_SOURCES and pulled in by the CustomActionRef in
+  cmake/wix-template.wxs.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Fragment>
+        <CustomAction Id="EndoOverrideInstallRoot"
+                      Property="INSTALL_ROOT"
+                      Value="[ProgramFiles64Folder]@ENDO_PRODUCT_DISPLAY_NAME@\@PROJECT_VERSION@"
+                      Execute="immediate"
+                      Return="check"/>
+
+        <InstallUISequence>
+            <Custom Action="EndoOverrideInstallRoot" After="AppSearch">WIX_UPGRADE_DETECTED</Custom>
+        </InstallUISequence>
+        <InstallExecuteSequence>
+            <Custom Action="EndoOverrideInstallRoot" After="AppSearch">WIX_UPGRADE_DETECTED</Custom>
+        </InstallExecuteSequence>
+    </Fragment>
+</Wix>

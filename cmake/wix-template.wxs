@@ -141,6 +141,11 @@
         <WixVariable Id="WixUIDialogBmp" Value="$(var.CPACK_WIX_UI_DIALOG)"/>
         <?endif?>
 
+        <!-- Pulls in cmake/wix-install-root.wxs.in's fragment, which pins
+             INSTALL_ROOT to this version's directory on an upgrade. A fragment
+             is only linked in if something references it. -->
+        <CustomActionRef Id="EndoOverrideInstallRoot"/>
+
         <FeatureRef Id="ProductFeature"/>
 
         <UIRef Id="$(var.CPACK_WIX_UI_REF)" />

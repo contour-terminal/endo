@@ -77,10 +77,19 @@ if(WIN32)
         TYPE SHA1 UPPER)
     configure_file("${CMAKE_SOURCE_DIR}/cmake/wix-env-path.wxs.in"
                    "${CMAKE_BINARY_DIR}/wix-env-path.wxs" @ONLY)
+
+    # Pin INSTALL_ROOT to this version's directory on an upgrade, cancelling the
+    # remembered-install-location search CPack generates into properties.wxi.
+    # Without it an upgrade writes the new version's files into the OLD version's
+    # directory and RemoveExistingProducts then deletes them. See the fragment.
+    configure_file("${CMAKE_SOURCE_DIR}/cmake/wix-install-root.wxs.in"
+                   "${CMAKE_BINARY_DIR}/wix-install-root.wxs" @ONLY)
+
     # wix-legacy-path-cleanup.wxs is static (frozen GUID, version-independent) and
     # is used verbatim — it must not go through configure_file.
     set(CPACK_WIX_EXTRA_SOURCES
         "${CMAKE_BINARY_DIR}/wix-env-path.wxs"
+        "${CMAKE_BINARY_DIR}/wix-install-root.wxs"
         "${CMAKE_SOURCE_DIR}/cmake/wix-legacy-path-cleanup.wxs")
     set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/wix-path-env.xml")
 
