@@ -3,11 +3,18 @@ cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(Version)
-GetVersionInformation(ENDO_VERSION ENDO_VERSION_STRING)
 
-project(endo VERSION "${ENDO_VERSION}" LANGUAGES CXX)
+# ENDO_VERSION is the record PREFIX, so the fields below are ENDO_VERSION_NUMERIC
+# (what project()/CPack/MSI use), ENDO_VERSION_QUAD (the four-field form the
+# binary's OS-level metadata reports) and ENDO_VERSION_HUMAN. See
+# ENDO_VERSION_RECORD_FIELDS in cmake/VersionParse.cmake, and docs/releases.md for
+# why the packaged and embedded versions differ.
+endo_get_version_information(ENDO_VERSION)
+
+project(endo VERSION "${ENDO_VERSION_NUMERIC}" LANGUAGES CXX)
 
 include(GNUInstallDirs)
+include(ProjectMetadata)
 
 
 # setting defaults
@@ -150,6 +157,15 @@ include(EndoThirdParties)
 include(PedanticCompiler)
 include(Sanitizers)
 include(ClangTidy)
+
+# OS-level version metadata for the shipped executable: one module per mechanism,
+# each exporting an enable_*(target) that is a no-op off its own platform, and
+# each doing its platform's one-time setup (enabling the RC language, probing the
+# linker) at include time. They are applied to endo-bin in
+# src/shell/CMakeLists.txt alongside enable_sanitizers()/enable_clang_tidy().
+include(WindowsVersionResource)
+include(MacOSInfoPlist)
+include(ElfPackageMetadata)
 
 if(NOT EMSCRIPTEN)
     check_static_system_requirements()

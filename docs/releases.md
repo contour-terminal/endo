@@ -122,3 +122,40 @@ welcome. See [Contributing](contributing.md) for details.
 Endo follows [Semantic Versioning](https://semver.org/). Until the 1.0 release, the API
 and language syntax may change between minor versions. After 1.0, backward compatibility
 will be maintained within major versions.
+
+### Version metadata in the binary
+
+`endo --version` prints the full descriptive version, for example
+`0.1.0-312-gfcf09f3e` — release tag `v0.1.0`, 312 commits past it, at commit
+`fcf09f3e`. The same information is embedded as OS-level metadata, so tools that
+never run the binary can read it too:
+
+| Platform | Mechanism | How to read it |
+|----------|-----------|----------------|
+| Windows | `VS_VERSION_INFO` resource | `(Get-Command endo.exe).Version` |
+| macOS | embedded `__TEXT,__info_plist` section | `otool -P $(which endo)` |
+| Linux | `.note.package` ELF note ([ELF package metadata](https://systemd.io/ELF_PACKAGE_METADATA/)) | `readelf -p .note.package $(which endo)` |
+
+The embedded numeric version has **four** fields —
+`MAJOR.MINOR.PATCH.COMMITS`, so `0.1.0.312` above. The first three are the
+release tag's own components; the fourth is the number of commits since that
+tag, and is `0` for a release build.
+
+This deliberately differs from the version the **packages** carry (`0.1.312` for
+the same build — the MSI `ProductVersion`, the `Program Files\Endo\<version>\`
+directory, the `.deb`/`.rpm` version). Windows Installer compares only three
+fields, so the packaged version has to fold the commit distance into the patch
+field to stay unique and increasing between releases. Binary metadata has a
+fourth field available and uses it, which keeps the release's real patch number
+visible. Releases built from a clean tag are unambiguous either way: `0.1.0`
+and `0.1.0.0`.
+
+Both are derived at **configure** time from `git describe`. Committing without
+re-running CMake leaves the previous commit count embedded until the next
+configure.
+
+The Linux note's `type` field defaults to `cmake`; a distribution build can set
+`-DENDO_PACKAGE_METADATA_TYPE=deb` (or `rpm`, …) to identify the packaging it
+belongs to. The note is only emitted when the linker supports
+`--package-metadata` (GNU ld 2.39+, LLVM lld 15+); configure says so when it
+does not.
