@@ -1392,6 +1392,8 @@ and — as the flagship language consumer — a builtin HTTP server.
 - [x] Set up Windows CI pipeline (`build.yml` has `windows-clangcl` job)
 - [x] Handle Windows-specific dependencies (`vcpkg.json` with 5 packages)
 - [x] Embed OS-level version metadata into the shipped binary (`MAJOR.MINOR.PATCH.COMMITS`): Win32 `VS_VERSION_INFO` resource, macOS `__TEXT,__info_plist` section, Linux `.note.package` ELF note — previously `endo.exe` reported `0.0.0.0` to every OS-level reader
+- [x] Maintain `C:\Program Files\Endo\latest` as a directory junction to the installed version, so a terminal profile has a path that survives upgrades (Windows Terminal does not resolve a bare `endo.exe` through `PATH`)
+- [x] Fix MSI upgrades installing into the previous version's directory: CPack's remembered-install-location search pinned `INSTALL_ROOT` to the old path, so `RemoveExistingProducts` deleted the files the upgrade had just written
 - [x] Fix CoreVM `jump_to` macro for switch-based VM dispatch loop (Windows/MSVC): `break` inside `do { ... } while(0)` wrapper exits the do-while instead of the switch, causing fall-through to the next case handler and VM stack corruption
 - [x] Fix `isInPath()` PATH separator for Windows: use `;` instead of `:`, probe `.exe`/`.cmd`/`.bat` extensions, skip POSIX `owner_exec` permission check
 

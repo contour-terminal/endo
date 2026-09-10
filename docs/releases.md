@@ -86,6 +86,23 @@ version, and the previous version's files are removed automatically (on the next
 it was still in use). See
 [Platform Differences](shell/platform-differences.md#windows) for setup details.
 
+#### Configuring a terminal to launch Endo
+
+The version-specific directory means an absolute path such as
+`C:\Program Files\Endo\1.2.3\bin\endo.exe` goes stale on the next upgrade. Use the
+`latest` link the installer maintains beside the version directories instead:
+
+```
+C:\Program Files\Endo\latest\bin\endo.exe
+```
+
+It is a directory junction, repointed at the version being installed on every install and
+removed on uninstall, so a terminal profile configured against it keeps working across
+upgrades. Windows Terminal needs this: it does not resolve a bare `endo.exe` through
+`PATH`. Anything that *does* resolve through `PATH` — a login shell, `cmd`, PowerShell —
+can simply use `endo`, since the installer puts the current version's `bin` first on the
+system `PATH`.
+
 If you are upgrading from a pre-`.msi` Endo that was installed with the old `.exe`
 (NSIS) installer, the `.msi` automatically removes that installer's leftover
 `C:\Program Files\Endo\bin` entry from `PATH`. Its files (directly under
