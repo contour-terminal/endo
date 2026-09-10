@@ -21,6 +21,12 @@
        silently deferred to the next reboot instead of prompting the user to
        close applications or forcing a restart.
 
+    3. A "latest" directory junction beside the versioned install directories,
+       repointed on every install. Per-version directories solve the locked-binary
+       upgrade, but they leave no fixed path to configure a terminal with, and
+       Windows Terminal does not resolve a bare "endo.exe" through PATH the way the
+       Env_PATH component allows. See the custom actions below.
+
   Keep this template in lockstep with the WiX toolset version used in CI (v3).
   If CI moves to WiX v4, re-base this on the v4 default template and migrate the
   env-path fragment (cmake/wix-env-path.wxs.in) to the v4 schema as well.
@@ -59,6 +65,66 @@
         <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable"/>
         <Property Id="REBOOT" Value="ReallySuppress"/>
 
+        <!-- "latest" junction: C:\Program Files\Endo\latest -> the version being
+             installed, giving terminals a path that survives upgrades.
+
+             A custom action because Windows Installer has no declarative way to
+             create a link, which costs us everything MSI would otherwise do for
+             free: the junction is not reference-counted, not repaired, and not
+             removed unless we remove it. Deferred + Impersonate="no" so it runs
+             in the elevated phase and may write under Program Files. Being a
+             type-34 (directory + ExeCommand) action, the command line is
+             formatted when the install script is written, so [INSTALL_ROOT] and
+             [INSTALL_PREFIX_1] resolve even though it executes deferred.
+
+             A junction rather than a symlink: /J never needs
+             SeCreateSymbolicLinkPrivilege, so a user can also recreate it by
+             hand without a Developer Mode or elevation caveat.
+
+             mklink refuses to overwrite, so the link is removed first. `rmdir`
+             without /s deletes the junction only and never recurses into the
+             directory it points at.
+
+             INSTALL_PREFIX_1 is CPack's directory ID for the parent of the
+             versioned install root — it exists because
+             CPACK_PACKAGE_INSTALL_DIRECTORY has two components ("Endo/<version>").
+             Collapsing that to one component would remove this ID. -->
+        <CustomAction Id="EndoCreateLatestLink"
+            Directory="INSTALL_PREFIX_1"
+            Execute="deferred"
+            Impersonate="no"
+            Return="ignore"
+            ExeCommand="&quot;[SystemFolder]cmd.exe&quot; /c rmdir &quot;[INSTALL_PREFIX_1]latest&quot; 2&gt;nul &amp; mklink /J &quot;[INSTALL_PREFIX_1]latest&quot; &quot;[INSTALL_ROOT]&quot;"/>
+
+        <CustomAction Id="EndoRemoveLatestLink"
+            Directory="INSTALL_PREFIX_1"
+            Execute="deferred"
+            Impersonate="no"
+            Return="ignore"
+            ExeCommand="&quot;[SystemFolder]cmd.exe&quot; /c rmdir &quot;[INSTALL_PREFIX_1]latest&quot;"/>
+
+        <!-- On rollback the link is removed rather than restored: the target it
+             pointed at before this install is not recorded anywhere, and no link
+             beats one dangling at a directory the rollback just deleted. -->
+        <CustomAction Id="EndoRollbackLatestLink"
+            Directory="INSTALL_PREFIX_1"
+            Execute="rollback"
+            Impersonate="no"
+            Return="ignore"
+            ExeCommand="&quot;[SystemFolder]cmd.exe&quot; /c rmdir &quot;[INSTALL_PREFIX_1]latest&quot;"/>
+
+        <InstallExecuteSequence>
+            <Custom Action="EndoRollbackLatestLink" After="InstallFiles">NOT REMOVE</Custom>
+            <Custom Action="EndoCreateLatestLink" After="EndoRollbackLatestLink">NOT REMOVE</Custom>
+            <!-- NOT UPGRADINGPRODUCTCODE is load-bearing. MajorUpgrade above is
+                 scheduled afterInstallExecute, so during an upgrade the OLD
+                 product is uninstalled after the new files (and the new junction)
+                 are already in place. Without this condition that uninstall would
+                 delete the junction the new install just created, and every
+                 upgrade would end with no "latest" at all. -->
+            <Custom Action="EndoRemoveLatestLink" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+        </InstallExecuteSequence>
+
         <WixVariable Id="WixUILicenseRtf" Value="$(var.CPACK_WIX_LICENSE_RTF)"/>
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALL_ROOT"/>
 
@@ -74,6 +140,11 @@
         <?ifdef CPACK_WIX_UI_DIALOG?>
         <WixVariable Id="WixUIDialogBmp" Value="$(var.CPACK_WIX_UI_DIALOG)"/>
         <?endif?>
+
+        <!-- Pulls in cmake/wix-install-root.wxs.in's fragment, which pins
+             INSTALL_ROOT to this version's directory on an upgrade. A fragment
+             is only linked in if something references it. -->
+        <CustomActionRef Id="EndoOverrideInstallRoot"/>
 
         <FeatureRef Id="ProductFeature"/>
 

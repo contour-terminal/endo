@@ -2,12 +2,11 @@
 # CPack packaging configuration for Endo Shell.
 
 # Common metadata
-set(CPACK_PACKAGE_NAME "endo")
-set(CPACK_PACKAGE_VENDOR "Endo Project")
-set(CPACK_PACKAGE_CONTACT "Christian Parpart <christian@parpart.family>")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-    "A modern, cross-platform shell where functional programming meets everyday productivity")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://endo-lang.org/")
+set(CPACK_PACKAGE_NAME "${ENDO_PRODUCT_NAME}")
+set(CPACK_PACKAGE_VENDOR "${ENDO_PRODUCT_VENDOR}")
+set(CPACK_PACKAGE_CONTACT "${ENDO_PRODUCT_CONTACT}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${ENDO_PRODUCT_DESCRIPTION}")
+set(CPACK_PACKAGE_HOMEPAGE_URL "${ENDO_PRODUCT_HOMEPAGE}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.txt")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 
@@ -36,7 +35,7 @@ if(WIN32)
     # the generated CPackConfig.cmake, and a literal backslash there would form an
     # invalid CMake string escape (e.g. "Endo\0.1.135" -> bad escape '\0'). The WIX
     # generator splits on '/' and still emits the nested "Endo\<version>\" tree.
-    set(CPACK_PACKAGE_INSTALL_DIRECTORY "Endo/${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "${ENDO_PRODUCT_DISPLAY_NAME}/${PROJECT_VERSION}")
 
     # WIX (.msi installer)
     # Stable GUID for MSI upgrade detection — must never change once published.
@@ -78,17 +77,26 @@ if(WIN32)
         TYPE SHA1 UPPER)
     configure_file("${CMAKE_SOURCE_DIR}/cmake/wix-env-path.wxs.in"
                    "${CMAKE_BINARY_DIR}/wix-env-path.wxs" @ONLY)
+
+    # Pin INSTALL_ROOT to this version's directory on an upgrade, cancelling the
+    # remembered-install-location search CPack generates into properties.wxi.
+    # Without it an upgrade writes the new version's files into the OLD version's
+    # directory and RemoveExistingProducts then deletes them. See the fragment.
+    configure_file("${CMAKE_SOURCE_DIR}/cmake/wix-install-root.wxs.in"
+                   "${CMAKE_BINARY_DIR}/wix-install-root.wxs" @ONLY)
+
     # wix-legacy-path-cleanup.wxs is static (frozen GUID, version-independent) and
     # is used verbatim — it must not go through configure_file.
     set(CPACK_WIX_EXTRA_SOURCES
         "${CMAKE_BINARY_DIR}/wix-env-path.wxs"
+        "${CMAKE_BINARY_DIR}/wix-install-root.wxs"
         "${CMAKE_SOURCE_DIR}/cmake/wix-legacy-path-cleanup.wxs")
     set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/wix-path-env.xml")
 
 elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
 
-    set(CPACK_DMG_VOLUME_NAME "Endo ${PROJECT_VERSION}")
+    set(CPACK_DMG_VOLUME_NAME "${ENDO_PRODUCT_DISPLAY_NAME} ${PROJECT_VERSION}")
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_GENERATOR "DEB;RPM")
@@ -98,7 +106,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_DEBIAN_PACKAGE_SECTION "shells")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://endo-lang.org/")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${ENDO_PRODUCT_HOMEPAGE}")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # Emit a separate debug-symbols package (endo-dbgsym_<ver>_<arch>.ddeb) and ship
@@ -108,9 +116,9 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_DEBIAN_DEBUGINFO_PACKAGE ON)
 
     # RPM
-    set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
+    set(CPACK_RPM_PACKAGE_LICENSE "${ENDO_PRODUCT_LICENSE_SPDX}")
     set(CPACK_RPM_PACKAGE_GROUP "System Environment/Shells")
-    set(CPACK_RPM_PACKAGE_URL "https://endo-lang.org/")
+    set(CPACK_RPM_PACKAGE_URL "${ENDO_PRODUCT_HOMEPAGE}")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 

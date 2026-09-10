@@ -3,9 +3,9 @@
 # It depends on the endo language library for parsing and IR generation.
 
 # Generate the build-derived version header (build/src/shell/EndoVersion.hpp),
-# includable as <shell/EndoVersion.hpp>. ENDO_VERSION_STRING / ENDO_VERSION are
-# set at top scope by GetVersionInformation() and are visible here via the
-# add_subdirectory() scope. (Re-runs at configure time, not on every commit.)
+# includable as <shell/EndoVersion.hpp>. The ENDO_VERSION_* record it substitutes
+# is published at top scope by endo_get_version_information() and is visible here
+# via the add_subdirectory() scope. (Re-runs at configure time, not per commit.)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/EndoVersion.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/EndoVersion.hpp @ONLY)
 
@@ -291,10 +291,7 @@ endif()
 add_executable(endo-bin
     main.cpp
 )
-if(MSVC)
-    target_sources(endo-bin PRIVATE endo.manifest)
-endif()
-set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
+set_target_properties(endo-bin PROPERTIES OUTPUT_NAME ${ENDO_PRODUCT_NAME})
 target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp endo-dap)
 enable_static_linking(endo-bin)
 
@@ -417,6 +414,37 @@ if(ENDO_TESTING AND UNIX AND NOT EMSCRIPTEN)
     )
     set_tests_properties(installed-binary PROPERTIES TIMEOUT 120)
 endif()
+
+# Reads the OS-level version metadata back out of the binary the linker just
+# produced. The build-tree binary is the right subject here (unlike
+# installed-binary, which exists to exercise INSTALL_RPATH): every one of the
+# three mechanisms is applied at link time, so if it is not in the build-tree
+# binary it is nowhere. Skips itself where the platform has no probe or the
+# probe tool is missing -- see cmake/tests/TestBinaryVersionMetadata.cmake.
+if(ENDO_TESTING AND NOT EMSCRIPTEN)
+    add_test(
+        NAME binary-version-metadata
+        COMMAND ${CMAKE_COMMAND}
+            -DBINARY=$<TARGET_FILE:endo-bin>
+            -DTARGET_SYSTEM=${CMAKE_SYSTEM_NAME}
+            -DEXPECT_FILE_VERSION=${ENDO_VERSION_QUAD}
+            -DEXPECT_HUMAN_VERSION=${ENDO_VERSION_HUMAN}
+            -DHAVE_VERSION_RESOURCE=$<BOOL:${ENDO_HAS_VERSION_RESOURCE}>
+            -DHAVE_PACKAGE_METADATA=$<BOOL:${ENDO_HAS_ELF_PACKAGE_METADATA}>
+            -P ${CMAKE_SOURCE_DIR}/cmake/tests/TestBinaryVersionMetadata.cmake
+    )
+    set_tests_properties(binary-version-metadata PROPERTIES
+        SKIP_RETURN_CODE 77
+        TIMEOUT 60)
+endif()
+
+# OS-level version metadata, so the shipped executable reports its version to the
+# OS and not just to `endo --version`. Each of these is a no-op off its platform.
+# The Windows one also configures and attaches endo.manifest, which carries a
+# version too.
+enable_windows_version_resource(endo-bin)
+enable_macos_info_plist(endo-bin)
+enable_elf_package_metadata(endo-bin)
 
 # Enable sanitizers and clang-tidy for all targets
 enable_sanitizers(endo-shell)

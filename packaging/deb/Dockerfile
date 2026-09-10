@@ -77,6 +77,7 @@ RUN cmake --preset clang-deb \
         -DCMAKE_C_COMPILER=clang-21 \
         -DCMAKE_CXX_COMPILER=clang++-21 \
         -DENDO_ENABLE_AGENT=ON \
+        -DENDO_PACKAGE_METADATA_TYPE=deb \
     && cmake --build --preset clang-deb \
     && cpack --preset clang-deb
 

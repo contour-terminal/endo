@@ -28,7 +28,11 @@ function(enable_sanitizers target)
     endif()
 
     if(SANITIZER_FLAGS)
-        target_compile_options(${target} PRIVATE ${SANITIZER_FLAGS})
+        # Scoped to CXX: target_compile_options applies to EVERY language of the
+        # target, and endo-bin carries an RC source on Windows. clang-cl matches
+        # the Clang guard above, so an unscoped -fsanitize=address would reach
+        # rc.exe, which treats an unknown switch as a fatal RC1106.
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${SANITIZER_FLAGS}>)
         target_link_options(${target} PRIVATE ${SANITIZER_FLAGS})
     endif()
 endfunction()

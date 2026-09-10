@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  SPDX-License-Identifier: Apache-2.0
+
+  Embedded into endo's __TEXT,__info_plist section by enable_macos_info_plist()
+  (cmake/MacOSInfoPlist.cmake). endo is a CLI tool and not an .app bundle, so
+  there is no Contents/Info.plist to put this in -- the section IS the
+  Info.plist, and `otool -P endo` prints it.
+
+  Every value is XML character data: keep the strings free of & and < or they
+  have to be escaped here. ENDO_PRODUCT_CONTACT is deliberately absent for
+  exactly that reason (it contains <>).
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>@ENDO_PRODUCT_BUNDLE_ID@</string>
+    <key>CFBundleName</key>
+    <string>@ENDO_PRODUCT_DISPLAY_NAME@</string>
+    <key>CFBundleExecutable</key>
+    <string>@ENDO_PRODUCT_NAME@</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <!-- The clean tag triple, which is what a release is called. -->
+    <key>CFBundleShortVersionString</key>
+    <string>@ENDO_VERSION_MAJOR@.@ENDO_VERSION_MINOR@.@ENDO_VERSION_PATCH@</string>
+    <!--
+      The build, identical to the Windows FileVersion. Apple documents
+      CFBundleVersion as up to three period-separated integers; that limit is
+      enforced by App Store submission validation, not by the loader or plutil,
+      and endo is a Homebrew/DMG CLI tool that never goes through review. The
+      four-field form buys exact symmetry with Windows at no cost here.
+    -->
+    <key>CFBundleVersion</key>
+    <string>@ENDO_VERSION_QUAD@</string>
+    <key>CFBundleGetInfoString</key>
+    <string>@ENDO_VERSION_HUMAN@</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>@ENDO_PRODUCT_COPYRIGHT@</string>
+</dict>
+</plist>

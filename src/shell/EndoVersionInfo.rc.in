@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// Win32 VERSIONINFO resource for endo.exe -- what makes
+// `(Get-Command endo.exe).Version` report something other than 0.0.0.0.
+//
+// Configured at CONFIGURE time by enable_windows_version_resource()
+// (cmake/WindowsVersionResource.cmake) from the version record
+// (cmake/Version.cmake) and cmake/ProjectMetadata.cmake. Nothing here is
+// spelled a second time.
+//
+// FILEVERSION is <tag major>.<tag minor>.<tag patch>.<commits since tag>, which
+// is NOT the three-field ENDO_VERSION that CPack and the MSI use: MSI
+// ProductVersion has only three fields, so it folds the commit distance into the
+// patch. See docs/releases.md.
+//
+// It deliberately carries NO `1 24 "endo.manifest"` entry: CMake feeds
+// endo.manifest to the MSVC linker via /MANIFESTINPUT and the linker embeds it
+// as RT_MANIFEST id 1 itself; a second one from here would collide.
+//
+// Self-contained -- no `#include <winver.h>` -- so rc.exe, llvm-rc and windres
+// all accept it without depending on the resource compiler's preprocessor
+// finding the Windows SDK include directory.
+//
+// ASCII only: rc.exe reads a BOM-less file as ANSI, so a non-ASCII vendor or
+// copyright string would need /c65001 added to CMAKE_RC_FLAGS. Keep the strings
+// ASCII and the question does not arise.
+
+#define VS_VERSION_INFO      1
+#define VS_FFI_FILEFLAGSMASK 0x0000003FL
+#define VOS_NT_WINDOWS32     0x00040004L
+#define VFT_APP              0x00000001L
+#define VFT2_UNKNOWN         0x00000000L
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    @ENDO_RC_VERSION_FIELDS@
+ PRODUCTVERSION @ENDO_RC_VERSION_FIELDS@
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef ENDO_RC_DEBUG_BUILD
+ FILEFLAGS @ENDO_RC_FILEFLAGS_DEBUG@
+#else
+ FILEFLAGS @ENDO_RC_FILEFLAGS@
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 0409 = U.S. English, 04B0 = 1200 = Unicode. Must agree with the
+        // Translation value below or the shell reads no strings at all.
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "@ENDO_PRODUCT_VENDOR@"
+            VALUE "FileDescription",  "@ENDO_PRODUCT_DESCRIPTION@"
+            VALUE "FileVersion",      "@ENDO_VERSION_QUAD@"
+            VALUE "InternalName",     "@ENDO_PRODUCT_NAME@"
+            VALUE "LegalCopyright",   "@ENDO_PRODUCT_COPYRIGHT@"
+            VALUE "OriginalFilename", "@ENDO_PRODUCT_NAME@.exe"
+            VALUE "ProductName",      "@ENDO_PRODUCT_DISPLAY_NAME@"
+            // The human describe string, deliberately: the numeric FileVersion
+            // above already carries the machine-comparable form.
+            VALUE "ProductVersion",   "@ENDO_VERSION_HUMAN@"
+            VALUE "Comments",         "@ENDO_PRODUCT_HOMEPAGE@"
+@ENDO_RC_PRIVATE_BUILD_VALUE@
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

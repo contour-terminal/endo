@@ -7,17 +7,21 @@ function(enable_coverage target)
         return()
     endif()
 
+    # Compile options are scoped to CXX: target_compile_options applies to EVERY
+    # language of the target, and endo-bin compiles an RC source on Windows,
+    # where an unknown switch is a fatal RC1106. Link options have no such
+    # per-language split and need no scoping.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${target} PRIVATE
-            -fprofile-instr-generate
-            -fcoverage-mapping
+            $<$<COMPILE_LANGUAGE:CXX>:-fprofile-instr-generate;-fcoverage-mapping>
         )
         target_link_options(${target} PRIVATE
             -fprofile-instr-generate
             -fcoverage-mapping
         )
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(${target} PRIVATE --coverage -fprofile-arcs -ftest-coverage)
+        target_compile_options(${target} PRIVATE
+            $<$<COMPILE_LANGUAGE:CXX>:--coverage;-fprofile-arcs;-ftest-coverage>)
         target_link_options(${target} PRIVATE --coverage)
     endif()
 endfunction()

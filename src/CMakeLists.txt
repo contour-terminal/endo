@@ -47,6 +47,33 @@ if(_need_fetch)
     endif()
 endif()
 
+# contour::tracy — an adaptation to the vendored sources, not a feature of endo.
+#
+# crispy and vtparser link contour::tracy unconditionally: their call sites use
+# Tracy's macros whether or not profiling is compiled in, which is what lets
+# contour keep the instrumentation out of the #ifdef business. Contour defines
+# the target in its own cmake/Tracy.cmake, which endo does not vendor, so without
+# a definition here the generate step fails with "Target ... links to
+# contour::tracy but the target was not found".
+#
+# Endo compiles no Tracy instrumentation, so this is contour's own DISABLED
+# shape of the target: an INTERFACE library contributing nothing but the no-op
+# header shim that ships inside the vendored crispy checkout. SYSTEM so the stub
+# can never contribute a warning to a -Werror build, and BUILD_INTERFACE because
+# nothing installs it. If endo ever wants real profiling, that is a new option
+# here rather than an edit under src/crispy.
+set(_contour_tracy_stub "${CMAKE_CURRENT_SOURCE_DIR}/crispy/tracy-stub")
+if(NOT IS_DIRECTORY "${_contour_tracy_stub}")
+    message(FATAL_ERROR
+        "Vendored crispy has no tracy-stub directory (${_contour_tracy_stub}). "
+        "Upstream contour moved the no-op Tracy shim; adapt this target to its new "
+        "location rather than editing src/crispy.")
+endif()
+add_library(contour_tracy INTERFACE)
+add_library(contour::tracy ALIAS contour_tracy)
+target_include_directories(contour_tracy SYSTEM INTERFACE
+    $<BUILD_INTERFACE:${_contour_tracy_stub}>)
+
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
 set_target_properties(crispy-core PROPERTIES SYSTEM TRUE)
