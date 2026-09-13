@@ -158,25 +158,6 @@ auto Terminal::isSuspended() const noexcept -> bool
     return _input.isSuspended();
 }
 
-auto Terminal::queryDecMode(int mode) -> DecModeStatus
-{
-    if (!canQuery())
-        return DecModeStatus::NotAsked;
-
-    // Send DECRQM: CSI ? mode $ p
-    // Response: CSI ? mode ; status $ y (DecModeReport)
-    _output->requestDecMode(mode);
-    _output->flush();
-
-    auto const reply = awaitReport([mode](InputEvent const& event) {
-        auto const* report = std::get_if<DecModeReport>(&event);
-        return report != nullptr && report->mode == mode;
-    });
-    if (!reply)
-        return DecModeStatus::NoReply;
-    return decModeStatusFromReply(std::get<DecModeReport>(*reply).status);
-}
-
 auto Terminal::hudSupported() const noexcept -> bool
 {
     return _hudSupported;

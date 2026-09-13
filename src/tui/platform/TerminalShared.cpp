@@ -146,6 +146,29 @@ auto Terminal::queryCellSize() -> std::expected<std::pair<int, int>, QueryUnansw
     return std::pair { report.width, report.height };
 }
 
+auto Terminal::queryDecMode(int mode) -> DecModeStatus
+{
+    if (!canQuery())
+        return DecModeStatus::NotAsked;
+
+    // Send DECRQM: CSI ? mode $ p
+    // Response: CSI ? mode ; status $ y (DecModeReport)
+    //
+    // Shared by both platform arms. On Windows the console reads with ENABLE_VIRTUAL_TERMINAL_INPUT,
+    // so the reply arrives in the input stream exactly as on POSIX and the same loop reads it. A
+    // console that does not answer DECRQM is NoReply at the deadline -- one bounded wait, never a hang.
+    _output->requestDecMode(mode);
+    _output->flush();
+
+    auto const reply = awaitReport([mode](InputEvent const& event) {
+        auto const* report = std::get_if<DecModeReport>(&event);
+        return report != nullptr && report->mode == mode;
+    });
+    if (!reply)
+        return DecModeStatus::NoReply;
+    return decModeStatusFromReply(std::get<DecModeReport>(*reply).status);
+}
+
 auto Terminal::queryDeviceAttributes() -> std::expected<DeviceAttributesReport, QueryUnanswered>
 {
     if (!canQuery())

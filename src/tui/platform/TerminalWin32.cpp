@@ -167,13 +167,6 @@ auto Terminal::hudSupported() const noexcept -> bool
     return _hudSupported;
 }
 
-auto Terminal::queryDecMode(int /*mode*/) -> DecModeStatus
-{
-    // Not yet implemented on Windows. Said as such rather than as a terminal that declined, so a
-    // caller does not read every mode as unsupported by the terminal.
-    return DecModeStatus::NotImplemented;
-}
-
 } // namespace tui
 
 #endif // _WIN32

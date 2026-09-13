@@ -32,14 +32,12 @@ enum class ColorScheme : std::uint8_t
 
 /// @brief A terminal's answer to a DECRQM query for one DEC private mode, or why there is none.
 ///
-/// Three of these are not answers, and they are different facts: a query nobody sent, a
-/// platform that cannot send one, and a terminal that stayed silent. A caller turning a feature
-/// off because the terminal declined and one turning it off because nobody asked are making
-/// different decisions, so they must not share a value.
+/// Two of these are not answers, and they are different facts: a query nobody sent, and a terminal
+/// that stayed silent. A caller turning a feature off because the terminal declined and one turning
+/// it off because nobody asked are making different decisions, so they must not share a value.
 enum class DecModeStatus : std::uint8_t
 {
     NotAsked,         ///< No query was sent: this terminal has no input to read a reply from (mock output).
-    NotImplemented,   ///< This platform's Terminal cannot send the query at all.
     NoReply,          ///< The query was sent and nothing answered before the timeout.
     NotRecognized,    ///< Answered, status 0: the terminal does not know the mode.
     Set,              ///< Answered, status 1.
@@ -192,7 +190,7 @@ class Terminal
     /// Input read while waiting that is not the reply is handed back to @c TerminalInput, so it is
     /// delivered to the application rather than lost.
     /// @param mode The DEC private mode number to query.
-    /// @return The terminal's answer, or which of not asked, not implemented and no reply applies.
+    /// @return The terminal's answer, or which of not asked and no reply applies.
     [[nodiscard]] auto queryDecMode(int mode) -> DecModeStatus;
 
     /// @brief Returns the cached cell pixel width (0 if unknown).

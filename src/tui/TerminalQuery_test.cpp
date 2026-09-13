@@ -280,22 +280,6 @@ TEST_CASE("A terminal that never answers DA1 reports NoReply at the deadline ins
     CHECK(codepoints(input.handedBack()) == std::vector<char32_t> { U'k' });
 }
 
-#if defined(_WIN32)
-
-TEST_CASE("On Windows a DEC mode query reports NotImplemented, never a terminal that declined",
-          "[TerminalQuery]")
-{
-    auto clock = ManualClock {};
-    auto input = ScriptedQueryInput { clock };
-    auto terminal = Terminal { std::make_unique<MockTerminalOutput>(), input, clock };
-    input.pushRead({ DecModeReport { .mode = 2035, .status = 1 } });
-
-    CHECK(terminal.queryDecMode(2035) == DecModeStatus::NotImplemented);
-    CHECK(input.timeouts().empty());
-}
-
-#else
-
 TEST_CASE("A DEC mode query that was never sent is told apart from one the terminal declined",
           "[TerminalQuery]")
 {
@@ -342,8 +326,6 @@ TEST_CASE("A DEC mode report for another mode is not the reply", "[TerminalQuery
     // The stale report is a protocol report and is consumed; the key is input and is handed back.
     CHECK(codepoints(input.handedBack()) == std::vector<char32_t> { U'k' });
 }
-
-#endif
 
 TEST_CASE("Events handed back to TerminalInput are the next poll's, in arrival order", "[TerminalQuery]")
 {

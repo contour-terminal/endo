@@ -233,7 +233,14 @@ void TerminalInput::enableRawMode()
     // Enable VT input processing, disable line input, echo, and processed input.
     // With ENABLE_VIRTUAL_TERMINAL_INPUT, the console sends CSI escape sequences
     // for special keys, matching the behavior of Linux terminals.
-    DWORD const inputMode = ENABLE_VIRTUAL_TERMINAL_INPUT;
+    //
+    // ENABLE_WINDOW_INPUT is the documented condition for the console to put WINDOW_BUFFER_SIZE_EVENT
+    // records in the input buffer, and those records are the only resize path this arm has: nothing on
+    // Windows signals _resizeEvent, which is the POSIX arm's SIGWINCH. It is asked for so a host that
+    // follows the documentation reports a size change too. It is NOT what makes resizing work on the
+    // hosts measured: on Windows 11 (26200), conhost and Windows Terminal both delivered a window
+    // resize to this arm with the flag cleared, in VT input mode.
+    DWORD const inputMode = ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT;
     SetConsoleMode(_hStdin, inputMode);
 
     // Enable VT output processing and disable automatic newline translation
