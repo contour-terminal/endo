@@ -256,7 +256,33 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+# No executable ctest starts may stop at a Windows dialog: every executable target gets the startup
+# suppression and every test the environment that switches it on in a product binary. Deferred, so the
+# walk sees every target and test the tree declares below. See cmake/WindowsDialogs.cmake.
+include(WindowsDialogs)
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL endo_install_windows_dialog_suppression)
+
 add_subdirectory(src)
+
+# The proof that the suppression reaches an executable whose main() never asks for it: a canary that
+# asserts, aborts, passes an invalid parameter and faults must EXIT each time, and a product-linked copy
+# must keep its dialogs unless the test environment names the variable.
+if(ENDO_TESTING AND WIN32)
+    add_executable(endo-windows-dialog-canary src/testing/WindowsDialogCanary.cpp)
+    add_executable(endo-windows-dialog-product-canary src/testing/WindowsDialogCanary.cpp)
+    list(APPEND EndoWindowsDialogProductExecutables
+        "endo-windows-dialog-product-canary|stands in for a product in windows-dialog-canary, which watches that variant both ways")
+    add_test(NAME windows-dialog-canary
+             COMMAND ${CMAKE_COMMAND}
+                 -DCANARY=$<TARGET_FILE:endo-windows-dialog-canary>
+                 -DPRODUCT_CANARY=$<TARGET_FILE:endo-windows-dialog-product-canary>
+                 "-DCTEST=${CMAKE_CTEST_COMMAND}"
+                 "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                 -P "${CMAKE_SOURCE_DIR}/cmake/tests/TestWindowsDialogCanary.cmake")
+    set_tests_properties(windows-dialog-canary PROPERTIES
+        TIMEOUT 180
+        FAIL_REGULAR_EXPRESSION "CMake Error")
+endif()
 EndoThirdPartiesSummary2()
 message(STATUS "==============================================================================")
 message(STATUS "          build flags")

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <shell/util/GlobMatcher.hpp>
+#include <testing/SuppressWindowsDialogs.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -183,6 +184,11 @@ struct CliOptions
 
 int main(int argc, char* argv[])
 {
+    // First, as every test main() here does. cmake/WindowsDialogs.cmake also installs this before main()
+    // in every executable, so omitting it is no longer a hang -- but this main() omitting it is how a
+    // .endo test's CRT assert once held a ctest run for 58 minutes.
+    testing::suppressWindowsDialogs();
+
     auto opts = parseArgs(argc, argv);
     if (!opts.has_value())
         return (argc > 1 && (std::string_view(argv[1]) == "-h" || std::string_view(argv[1]) == "--help")) ? 0
