@@ -7,6 +7,7 @@
 #include <ranges>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -106,13 +107,21 @@ namespace
             auto& bucket = buckets[largestIdx];
             auto const channel = widestChannel(bucket);
 
-            // Sort by the widest channel
-            std::ranges::sort(bucket.pixels, [channel](auto const& a, auto const& b) {
+            // Sort by the widest channel, then by the other two: a total order on the whole pixel.
+            //
+            // Sorting on the widest channel alone left pixels equal in it and different in the others
+            // in whatever order the unstable sort produced, and the median split below then put
+            // different pixels in each half. So one image quantized to a different palette depending
+            // on the order its pixels arrived in, and encoded to different bytes on libstdc++, libc++
+            // and MSVC's library. Pixels equal in all three channels are interchangeable, so no further
+            // tiebreak can change what lands in either half -- and a stable sort would not do instead,
+            // because it keeps the arrival order this is removing.
+            std::ranges::sort(bucket.pixels, {}, [channel](RgbPixel const& p) {
                 switch (channel)
                 {
-                    case 0: return a.r < b.r;
-                    case 1: return a.g < b.g;
-                    default: return a.b < b.b;
+                    case 0: return std::tuple { p.r, p.g, p.b };
+                    case 1: return std::tuple { p.g, p.r, p.b };
+                    default: return std::tuple { p.b, p.r, p.g };
                 }
             });
 

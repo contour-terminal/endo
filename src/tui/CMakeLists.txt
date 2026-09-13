@@ -114,6 +114,7 @@ if(ENDO_TESTING)
         VtParser_test.cpp
         ImageLoader_test.cpp
         SemanticBlockClient_test.cpp
+        Sixel_test.cpp
         runtime/TuiRuntime_test.cpp
         runtime/Modal_test.cpp
     )
