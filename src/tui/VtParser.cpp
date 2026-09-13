@@ -1050,6 +1050,13 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         return;
     }
 
+    // Primary Device Attributes (DA1) response: CSI ? p1 ; p2 ; ... c
+    if (finalByte == 'c' && _paramBuf.starts_with("?"))
+    {
+        events.emplace_back(DeviceAttributesReport { .attributes = parseCsiParams(_paramBuf.substr(1)) });
+        return;
+    }
+
     // Standard CSI sequences (cursor keys, function keys, etc.)
     // Skip sequences with private markers (>, ?, but not <)
     if (!_paramBuf.empty() && (_paramBuf[0] == '>' || _paramBuf[0] == '?'))

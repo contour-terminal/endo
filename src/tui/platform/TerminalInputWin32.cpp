@@ -71,6 +71,11 @@ void TerminalInput::shutdown()
 
 auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
 {
+    // Events a terminal query read ahead of its reply were read before anything still waiting
+    // on the handle, so they are delivered first, and without waiting.
+    if (auto pending = takePending(); !pending.empty())
+        return pending;
+
     auto const timeout = (timeoutMs < 0) ? INFINITE : static_cast<DWORD>(timeoutMs);
 
     // Wait on both stdin and the resize event

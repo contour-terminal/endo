@@ -4,10 +4,12 @@
 #include <tui/KeyCode.hpp>
 #include <tui/Modifier.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 namespace tui
 {
@@ -109,6 +111,22 @@ struct DecModeReport
     int status; ///< Mode status (0=unknown, 1=set, 2=reset, 3=perm set, 4=perm reset).
 };
 
+/// @brief Primary Device Attributes (DA1) response: CSI ? p1 ; p2 ; ... c.
+///
+/// The terminal's feature list, one number per attribute. Attribute 4 advertises Sixel graphics.
+struct DeviceAttributesReport
+{
+    std::vector<int> attributes; ///< The reported attributes, in the order the terminal sent them.
+};
+
+/// @brief Tells whether a DA1 response advertises Sixel graphics (attribute 4).
+/// @param report The decoded DA1 response.
+/// @return True when attribute 4 is present.
+[[nodiscard]] inline auto advertisesSixel(DeviceAttributesReport const& report) noexcept -> bool
+{
+    return std::ranges::find(report.attributes, 4) != report.attributes.end();
+}
+
 /// @brief Discriminated union of all possible terminal input events.
 using InputEvent = std::variant<KeyEvent,
                                 MouseEvent,
@@ -119,13 +137,14 @@ using InputEvent = std::variant<KeyEvent,
                                 CellSizeReport,
                                 FocusEvent,
                                 DcsResponse,
-                                DecModeReport>;
+                                DecModeReport,
+                                DeviceAttributesReport>;
 
 /// @brief Tells whether @p event is an internal protocol-response report rather
 /// than an application input event.
 ///
 /// Protocol reports are terminal responses to queries / mode changes
-/// (color-scheme, cursor-position, cell-size, DEC-mode, focus, DCS). They are
+/// (color-scheme, cursor-position, cell-size, DEC-mode, device-attributes, focus, DCS). They are
 /// consumed internally and never surfaced to application code. This is the
 /// single source of truth for that classification, shared by
 /// @c Terminal::consumeProtocolReports (which also dispatches the color-scheme
@@ -140,7 +159,8 @@ using InputEvent = std::variant<KeyEvent,
             using T = std::decay_t<decltype(concrete)>;
             return std::is_same_v<T, ColorSchemeReport> || std::is_same_v<T, CellSizeReport>
                    || std::is_same_v<T, CursorPositionReport> || std::is_same_v<T, DecModeReport>
-                   || std::is_same_v<T, FocusEvent> || std::is_same_v<T, DcsResponse>;
+                   || std::is_same_v<T, FocusEvent> || std::is_same_v<T, DcsResponse>
+                   || std::is_same_v<T, DeviceAttributesReport>;
         },
         event);
 }

@@ -670,8 +670,9 @@ void Screen::flushInline()
                 out.restoreCursor(); // DECRC: anchor to exact saved position
 
                 // Query cursor position after DECRC to know where content starts.
-                auto const [cursorRow1Based, cursorCol1Based] = _terminal.queryCursorPosition();
-                auto const startRow = (cursorRow1Based > 0) ? (cursorRow1Based - 1) : (_terminal.rows() - 1);
+                auto const cursor = _terminal.queryCursorPosition();
+                auto const startRow =
+                    (cursor && cursor->first > 0) ? (cursor->first - 1) : (_terminal.rows() - 1);
 
                 if (reservedRoom >= contentHeight)
                 {
@@ -697,8 +698,9 @@ void Screen::flushInline()
             {
                 // Very first render (no previous Screen) — reserve room with LFs.
                 // Query actual cursor position to compute _inlineContentStartRow accurately.
-                auto const [cursorRow1Based, cursorCol1Based] = _terminal.queryCursorPosition();
-                auto const startRow = (cursorRow1Based > 0) ? (cursorRow1Based - 1) : (_terminal.rows() - 1);
+                auto const cursor = _terminal.queryCursorPosition();
+                auto const startRow =
+                    (cursor && cursor->first > 0) ? (cursor->first - 1) : (_terminal.rows() - 1);
 
                 // Emit contentHeight-1 newlines (enough to ensure room without overshooting).
                 auto const newLines = std::max(0, contentHeight - 1);

@@ -105,6 +105,7 @@ if(ENDO_TESTING)
         MarkdownImage_test.cpp
         MarkdownHtml_test.cpp
         TerminalProtocols_test.cpp
+        TerminalQuery_test.cpp
         QuestionComponent_test.cpp
         StyledText_test.cpp
         TreeTableView_test.cpp

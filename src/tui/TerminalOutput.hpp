@@ -183,6 +183,11 @@ class TerminalOutput
     /// @param mode The DEC private mode number to query.
     virtual void requestDecMode(int mode);
 
+    /// @brief Sends a Primary Device Attributes query (DA1): CSI c.
+    ///
+    /// The terminal responds with CSI ? p1 ; p2 ; ... c (DeviceAttributesReport).
+    virtual void requestDeviceAttributes();
+
     /// @brief Clears the entire current line.
     virtual void clearLine();
 

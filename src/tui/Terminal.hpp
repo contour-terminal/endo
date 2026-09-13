@@ -7,9 +7,17 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <cstdint>
+#include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <utility>
 #include <vector>
+
+namespace endo::platform
+{
+class IClock;
+} // namespace endo::platform
 
 namespace tui
 {
@@ -20,6 +28,76 @@ enum class ColorScheme : std::uint8_t
     Unknown, ///< Color scheme not yet detected.
     Dark,    ///< Dark background.
     Light,   ///< Light background.
+};
+
+/// @brief A terminal's answer to a DECRQM query for one DEC private mode, or why there is none.
+///
+/// Three of these are not answers, and they are different facts: a query nobody sent, a
+/// platform that cannot send one, and a terminal that stayed silent. A caller turning a feature
+/// off because the terminal declined and one turning it off because nobody asked are making
+/// different decisions, so they must not share a value.
+enum class DecModeStatus : std::uint8_t
+{
+    NotAsked,         ///< No query was sent: this terminal has no input to read a reply from (mock output).
+    NotImplemented,   ///< This platform's Terminal cannot send the query at all.
+    NoReply,          ///< The query was sent and nothing answered before the timeout.
+    NotRecognized,    ///< Answered, status 0: the terminal does not know the mode.
+    Set,              ///< Answered, status 1.
+    Reset,            ///< Answered, status 2.
+    PermanentlySet,   ///< Answered, status 3.
+    PermanentlyReset, ///< Answered, status 4.
+};
+
+/// @brief Maps a DECRPM status value to the answer it carries.
+/// @param status The status field of a @c DecModeReport.
+/// @return The answer; a value outside 0..4 is not a status the terminal protocol defines, and
+///         reads as @c NotRecognized.
+[[nodiscard]] constexpr auto decModeStatusFromReply(int status) noexcept -> DecModeStatus
+{
+    switch (status)
+    {
+        case 1: return DecModeStatus::Set;
+        case 2: return DecModeStatus::Reset;
+        case 3: return DecModeStatus::PermanentlySet;
+        case 4: return DecModeStatus::PermanentlyReset;
+        default: return DecModeStatus::NotRecognized;
+    }
+}
+
+/// @brief Why a terminal query has no answer.
+///
+/// Returned in place of a value that used to stand in for "nothing" -- `(0, 0)` for a cursor
+/// position, which is not even a legal one. A query nobody sent and a terminal that stayed silent
+/// are different facts, and a caller deciding what to do next needs to know which it has.
+enum class QueryUnanswered : std::uint8_t
+{
+    NotAsked, ///< No query was sent: this terminal has no input to read a reply from (mock output).
+    NoReply,  ///< The query was sent and nothing answered before the timeout.
+};
+
+/// @brief The input a terminal query reads its reply through.
+///
+/// @c Terminal's own @c TerminalInput is the production implementation. Tests script one, so a
+/// query can be driven to its reply, or to its timeout under a @c ManualClock, with no terminal
+/// attached and no real time elapsing.
+class TerminalQueryInput
+{
+  public:
+    TerminalQueryInput() = default;
+    virtual ~TerminalQueryInput() = default;
+    TerminalQueryInput(TerminalQueryInput const&) = delete;
+    auto operator=(TerminalQueryInput const&) -> TerminalQueryInput& = delete;
+    TerminalQueryInput(TerminalQueryInput&&) = delete;
+    auto operator=(TerminalQueryInput&&) -> TerminalQueryInput& = delete;
+
+    /// @brief Waits for input.
+    /// @param timeoutMs The longest to wait, in milliseconds.
+    /// @return Decoded events; empty when nothing arrived.
+    [[nodiscard]] virtual auto poll(int timeoutMs) -> std::vector<InputEvent> = 0;
+
+    /// @brief Hands back events a query read that were not its reply.
+    /// @param events Events in arrival order.
+    virtual void unread(std::vector<InputEvent> events) = 0;
 };
 
 /// @brief Top-level terminal coordinator that owns both input and output subsystems.
@@ -35,6 +113,15 @@ class Terminal
     /// @brief Constructs a Terminal with a custom TerminalOutput (for dependency injection in tests).
     /// @param output The output implementation to use (ownership transferred).
     explicit Terminal(std::unique_ptr<TerminalOutput> output);
+
+    /// @brief Constructs a Terminal whose queries read replies through @p queryInput and time out
+    /// by @p clock, whatever @p output is -- so a test can drive a query with a mock output.
+    /// @param output The output implementation to use (ownership transferred).
+    /// @param queryInput The input queries read from (not owned; must outlive this Terminal).
+    /// @param clock The clock query timeouts are measured on (not owned; must outlive this Terminal).
+    Terminal(std::unique_ptr<TerminalOutput> output,
+             TerminalQueryInput& queryInput,
+             endo::platform::IClock& clock);
 
     ~Terminal();
 
@@ -83,12 +170,30 @@ class Terminal
     [[nodiscard]] auto isSuspended() const noexcept -> bool;
 
     /// @brief Queries the current cursor position from the terminal.
-    /// @return Pair of (row, column), both 1-based, or (0, 0) on failure.
-    [[nodiscard]] auto queryCursorPosition() -> std::pair<int, int>;
+    ///
+    /// On a mock output with no query input, the mock's own cursor is the answer.
+    /// @return Pair of (row, column), both 1-based, or why there is none.
+    [[nodiscard]] auto queryCursorPosition() -> std::expected<std::pair<int, int>, QueryUnanswered>;
 
     /// @brief Queries the cell size in pixels from the terminal via CSI 16 t.
-    /// @return Pair of (width, height) in pixels, or (0, 0) on failure/timeout.
-    [[nodiscard]] auto queryCellSize() -> std::pair<int, int>;
+    /// @return Pair of (width, height) in pixels, or why there is none.
+    [[nodiscard]] auto queryCellSize() -> std::expected<std::pair<int, int>, QueryUnanswered>;
+
+    /// @brief Queries the terminal's Primary Device Attributes (DA1) and waits for the reply.
+    ///
+    /// The reply lists the terminal's features; @c advertisesSixel reads attribute 4 from it. A
+    /// terminal that never answers reports @c NoReply at the query timeout rather than hanging,
+    /// and input read while waiting is handed back as with every other query.
+    /// @return The reply, or why there is none.
+    [[nodiscard]] auto queryDeviceAttributes() -> std::expected<DeviceAttributesReport, QueryUnanswered>;
+
+    /// @brief Queries a DEC private mode via DECRQM and waits for the reply.
+    ///
+    /// Input read while waiting that is not the reply is handed back to @c TerminalInput, so it is
+    /// delivered to the application rather than lost.
+    /// @param mode The DEC private mode number to query.
+    /// @return The terminal's answer, or which of not asked, not implemented and no reply applies.
+    [[nodiscard]] auto queryDecMode(int mode) -> DecModeStatus;
 
     /// @brief Returns the cached cell pixel width (0 if unknown).
     [[nodiscard]] auto cellPixelWidth() const noexcept -> int;
@@ -151,6 +256,8 @@ class Terminal
   private:
     TerminalInput _input;
     std::unique_ptr<TerminalOutput> _output;
+    endo::platform::IClock& _clock;            ///< The clock query timeouts are measured on.
+    TerminalQueryInput* _queryInput = nullptr; ///< Where queries read replies, or nullptr for _input.
     bool _initialized = false;
     bool _mockMode = false; ///< True when using a mock output (skip input/signal init).
     ColorScheme _colorScheme = ColorScheme::Unknown;
@@ -161,10 +268,21 @@ class Terminal
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
     int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).
 
-    /// @brief Queries a DEC private mode via DECRQM and waits for the response.
-    /// @param mode The DEC private mode number to query.
-    /// @return True if the mode is recognized (status 1 or 2), false otherwise.
-    [[nodiscard]] auto queryDecMode(int mode) -> bool;
+    /// @brief Whether a query can read a reply: an injected query input, or a real (non-mock) terminal.
+    [[nodiscard]] auto canQuery() const noexcept -> bool;
+
+    /// @brief Waits for the first event @p isReply accepts, until the query timeout on the injected clock.
+    ///
+    /// On every exit path, answered or timed out, the other events read meanwhile are passed through
+    /// @c consumeProtocolReports (so a color-scheme or focus report is dispatched, as poll() does)
+    /// and what remains is handed back to the input, so no application input is lost to a probe.
+    /// @param isReply Accepts the reply this query is waiting for.
+    /// @return The reply, or std::nullopt when none arrived in time.
+    [[nodiscard]] auto awaitReport(std::function<bool(InputEvent const&)> const& isReply)
+        -> std::optional<InputEvent>;
+
+    /// @brief Asks for the color scheme and waits for it, unless it is already known.
+    void awaitColorScheme();
 };
 
 } // namespace tui

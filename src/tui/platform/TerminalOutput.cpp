@@ -312,6 +312,11 @@ void TerminalOutput::requestDecMode(int mode)
     _buffer += std::format("\033[?{}$p", mode);
 }
 
+void TerminalOutput::requestDeviceAttributes()
+{
+    _buffer += protocols::QueryPrimaryDeviceAttributes;
+}
+
 void TerminalOutput::clearLine()
 {
     _buffer += "\033[2K";

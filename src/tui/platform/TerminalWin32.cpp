@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/MockTerminalOutput.hpp>
 #include <tui/Terminal.hpp>
 
 #if defined(_WIN32)
 
-    #include <chrono>
     #include <tuple>
 
     #include <windows.h>
@@ -18,15 +16,6 @@ namespace
     // Only one Terminal instance should be active at a time.
     TerminalInput* gActiveInput = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
-
-Terminal::Terminal(): _output(std::make_unique<TerminalOutput>())
-{
-}
-
-Terminal::Terminal(std::unique_ptr<TerminalOutput> output):
-    _output(std::move(output)), _mockMode(dynamic_cast<MockTerminalOutput*>(_output.get()) != nullptr)
-{
-}
 
 Terminal::~Terminal()
 {
@@ -57,40 +46,17 @@ auto Terminal::initialize() -> VoidResult
     // via WINDOW_BUFFER_SIZE_EVENT in TerminalInput::poll() directly.
     gActiveInput = &_input;
 
-    // Query cell pixel dimensions (best-effort, non-fatal)
-    auto const [cellWidth, cellHeight] = queryCellSize();
-    _cellPixelWidth = cellWidth;
-    _cellPixelHeight = cellHeight;
+    // Query cell pixel dimensions (best-effort, non-fatal; unanswered leaves them 0, "unknown")
+    if (auto const cellSize = queryCellSize())
+    {
+        _cellPixelWidth = cellSize->first;
+        _cellPixelHeight = cellSize->second;
+    }
 
     // Wait for color scheme response so the first prompt renders with correct colors.
     // The original query from enableProtocols() may have been consumed by the raw
     // XTVERSION read in detectCapabilities(), so re-send it here.
-    if (_colorScheme == ColorScheme::Unknown)
-    {
-        _output->writeRaw("\033[?996n"); // CSI ? 996 n — query color scheme
-        _output->flush();
-        auto constexpr TotalTimeout = std::chrono::milliseconds(100);
-        auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
-        while (_colorScheme == ColorScheme::Unknown)
-        {
-            auto const now = std::chrono::steady_clock::now();
-            if (now >= deadline)
-                break;
-            auto const remaining =
-                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-            auto events = _input.poll(static_cast<int>(remaining));
-            if (events.empty())
-                break; // Real timeout — terminal doesn't support color scheme queries
-            for (auto const& event: events)
-            {
-                if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
-                {
-                    auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
-                    handleColorSchemeReport(scheme);
-                }
-            }
-        }
-    }
+    awaitColorScheme();
 
     _initialized = true;
     return {};
@@ -156,88 +122,6 @@ auto Terminal::isSuspended() const noexcept -> bool
     return _input.isSuspended();
 }
 
-auto Terminal::queryCursorPosition() -> std::pair<int, int>
-{
-    if (_mockMode)
-    {
-        if (auto* mock = dynamic_cast<MockTerminalOutput*>(_output.get()))
-            return { mock->cursorRow() + 1, mock->cursorCol() + 1 }; // Convert 0-based to 1-based
-        return { 0, 0 };
-    }
-
-    _output->requestCursorPosition();
-    _output->flush();
-
-    auto constexpr TotalTimeout = std::chrono::milliseconds(100);
-    auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
-
-    while (true)
-    {
-        auto const now = std::chrono::steady_clock::now();
-        if (now >= deadline)
-            break;
-
-        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-        auto events = _input.poll(static_cast<int>(remaining));
-
-        if (events.empty())
-            break;
-
-        for (auto const& event: events)
-        {
-            if (auto const* cpr = std::get_if<CursorPositionReport>(&event))
-                return { cpr->row, cpr->column };
-
-            if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
-            {
-                auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
-                handleColorSchemeReport(scheme);
-            }
-        }
-    }
-
-    return { 0, 0 };
-}
-
-auto Terminal::queryCellSize() -> std::pair<int, int>
-{
-    if (_mockMode)
-        return { 0, 0 };
-
-    _output->requestCellSize();
-    _output->flush();
-
-    auto constexpr TotalTimeout = std::chrono::milliseconds(100);
-    auto const deadline = std::chrono::steady_clock::now() + TotalTimeout;
-
-    while (true)
-    {
-        auto const now = std::chrono::steady_clock::now();
-        if (now >= deadline)
-            break;
-
-        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
-        auto events = _input.poll(static_cast<int>(remaining));
-
-        if (events.empty())
-            break;
-
-        for (auto const& event: events)
-        {
-            if (auto const* csr = std::get_if<CellSizeReport>(&event))
-                return { csr->width, csr->height };
-
-            if (auto const* cs = std::get_if<ColorSchemeReport>(&event))
-            {
-                auto const scheme = (cs->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
-                handleColorSchemeReport(scheme);
-            }
-        }
-    }
-
-    return { 0, 0 };
-}
-
 auto Terminal::cellPixelWidth() const noexcept -> int
 {
     return _cellPixelWidth;
@@ -283,10 +167,11 @@ auto Terminal::hudSupported() const noexcept -> bool
     return _hudSupported;
 }
 
-auto Terminal::queryDecMode(int /*mode*/) -> bool
+auto Terminal::queryDecMode(int /*mode*/) -> DecModeStatus
 {
-    // Not yet implemented on Windows
-    return false;
+    // Not yet implemented on Windows. Said as such rather than as a terminal that declined, so a
+    // caller does not read every mode as unsupported by the terminal.
+    return DecModeStatus::NotImplemented;
 }
 
 } // namespace tui

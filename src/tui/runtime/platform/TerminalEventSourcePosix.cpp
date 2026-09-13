@@ -15,7 +15,7 @@
 namespace tui::runtime
 {
 
-WaitOutcome TerminalEventSource::wait(int timeoutMs)
+WaitOutcome TerminalEventSource::waitForReadiness(int timeoutMs)
 {
     auto& input = _terminal.input();
 

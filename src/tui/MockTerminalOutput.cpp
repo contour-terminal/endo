@@ -131,6 +131,11 @@ void MockTerminalOutput::requestDecMode(int /*mode*/)
     // No-op — mock does not respond to terminal queries.
 }
 
+void MockTerminalOutput::requestDeviceAttributes()
+{
+    // No-op — mock does not respond to terminal queries.
+}
+
 void MockTerminalOutput::clearLine()
 {
     // No-op on mock canvas — just semantic tracking.

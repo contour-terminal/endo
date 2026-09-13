@@ -5,8 +5,10 @@
 #include <tui/InputEvent.hpp>
 #include <tui/VtParser.hpp>
 
+#include <iterator>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <platform/Types.hpp>
@@ -53,6 +55,23 @@ class TerminalInput
     /// @param timeoutMs -1 = block indefinitely, 0 = non-blocking, >0 = timeout in milliseconds.
     /// @return Vector of parsed events (empty on timeout or no data).
     [[nodiscard]] auto poll(int timeoutMs = -1) -> std::vector<InputEvent>;
+
+    /// @brief Hands events back, to be delivered before any input not yet read.
+    ///
+    /// A terminal query reads input while it waits for its reply, and whatever it read that was
+    /// not the reply comes back here. So a key typed while a probe was in flight still reaches the
+    /// application: @c poll() and the runtime's @c TerminalEventSource deliver pending events first,
+    /// without waiting.
+    /// @param events Events in arrival order, appended after any already pending.
+    void unread(std::vector<InputEvent> events)
+    {
+        _pending.insert(
+            _pending.end(), std::make_move_iterator(events.begin()), std::make_move_iterator(events.end()));
+    }
+
+    /// @brief Removes and returns every event handed back by @c unread(), in arrival order.
+    /// @return The pending events; empty when there are none.
+    [[nodiscard]] auto takePending() -> std::vector<InputEvent> { return std::exchange(_pending, {}); }
 
     /// @brief Injects a synthetic resize event.
     ///
@@ -143,6 +162,7 @@ class TerminalInput
 #endif
 
     endo::platform::Wakeup* _wakeup = nullptr; ///< Optional cross-thread wakeup handle.
+    std::vector<InputEvent> _pending;          ///< Events handed back by unread(), delivered first.
 
     void enableRawMode();
     void disableRawMode();

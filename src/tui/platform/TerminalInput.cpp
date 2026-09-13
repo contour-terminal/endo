@@ -62,6 +62,11 @@ void TerminalInput::shutdown()
 
 auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
 {
+    // Events a terminal query read ahead of its reply were read before anything still waiting
+    // on the handle, so they are delivered first, and without waiting.
+    if (auto pending = takePending(); !pending.empty())
+        return pending;
+
     auto fds = std::array<struct pollfd, 3> {};
     fds[0] = { .fd = _fd, .events = POLLIN, .revents = 0 };
     fds[1] = { .fd = _resizePipe[0], .events = POLLIN, .revents = 0 };

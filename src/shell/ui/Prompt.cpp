@@ -424,8 +424,8 @@ void Prompt::resume()
         // Check if the command left the cursor at a non-column-1 position,
         // indicating output that didn't end with a newline. Show a dim indicator
         // (like fish shell) and move to a fresh line.
-        if (auto const [row, col] = _terminal.queryCursorPosition(); col > 1)
-            emitPartialLineIndicator(standardOutput(), col);
+        if (auto const cursor = _terminal.queryCursorPosition(); cursor && cursor->second > 1)
+            emitPartialLineIndicator(standardOutput(), cursor->second);
 
         if (_screen)
         {

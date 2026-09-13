@@ -10,6 +10,7 @@
 #include <tui/runtime/EventSource.hpp>
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include <platform/SignalHandler.hpp>
@@ -46,7 +47,17 @@ class TerminalEventSource: public EventSource
     {
     }
 
-    [[nodiscard]] WaitOutcome wait(int timeoutMs) override;
+    /// Delivers events a terminal query handed back (@c TerminalInput::unread) without waiting,
+    /// since they were read before anything still on the input handle; otherwise waits for a
+    /// source to become ready.
+    /// @param timeoutMs -1 = block, 0 = non-blocking, >0 = timeout in ms.
+    /// @return The outcome of this wait.
+    [[nodiscard]] WaitOutcome wait(int timeoutMs) override
+    {
+        if (auto pending = _terminal.input().takePending(); !pending.empty())
+            return finalize(WaitOutcome { .events = std::move(pending) });
+        return waitForReadiness(timeoutMs);
+    }
 
     [[nodiscard]] FdToken attach(endo::platform::NativeHandle fd, FdInterest interest) override
     {
@@ -56,6 +67,11 @@ class TerminalEventSource: public EventSource
     void detach(FdToken token) override { _registry.detach(token); }
 
   private:
+    /// The platform wait: blocks until a source is ready or @p timeoutMs elapses.
+    /// @param timeoutMs -1 = block, 0 = non-blocking, >0 = timeout in ms.
+    /// @return The outcome of this wait.
+    [[nodiscard]] WaitOutcome waitForReadiness(int timeoutMs);
+
     /// Consumes protocol-response events (via @c Terminal::consumeProtocolReports
     /// so the policy lives in one place) and folds a pending SIGINT into the
     /// outcome, clearing the flag so the runtime observes each interrupt once. A
