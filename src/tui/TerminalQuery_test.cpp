@@ -240,6 +240,30 @@ TEST_CASE("A DA1 reply decodes to the attributes the terminal listed, as a proto
     CHECK(tui::isProtocolReport(events.front()));
 }
 
+TEST_CASE("A cell size reply as the terminal writes it, height first, answers the query width first",
+          "[TerminalQuery]")
+{
+    // The reply to CSI 16 t is CSI 6 ; height ; width t, and the query answers (width, height). A swap
+    // on either side passes every case that scripts an already-decoded report, and sizes each image
+    // with its sides exchanged, so this one starts from the bytes.
+    auto parser = tui::VtParser {};
+    auto events = parser.feed("\033[6;20;10t");
+    REQUIRE(events.size() == 1);
+    CHECK(tui::isProtocolReport(events.front()));
+
+    auto clock = ManualClock {};
+    auto input = ScriptedQueryInput { clock };
+    auto terminal = Terminal { std::make_unique<MockTerminalOutput>(), input, clock };
+    input.pushRead(std::move(events));
+
+    auto const size = terminal.queryCellSize();
+
+    REQUIRE(size.has_value());
+    CHECK(size->first == 10);
+    CHECK(size->second == 20);
+    CHECK(input.timeouts().size() == 1);
+}
+
 TEST_CASE("A DA1 query reports whether the terminal advertises Sixel, and hands back input read meanwhile",
           "[TerminalQuery]")
 {
