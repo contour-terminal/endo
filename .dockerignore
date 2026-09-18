@@ -9,3 +9,7 @@ dist/
 editors/vscode/node_modules/
 **/*.o
 **/*.obj
+# Windows- and macOS-only packaging files; the Linux package never reads them.
+packaging/icons/*.ico
+packaging/icons/*.icns
+packaging/windows/

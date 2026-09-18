@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Endo</title>
+  <defs>
+    <filter id="p0" filterUnits="userSpaceOnUse" x="-40" y="-40" width="592" height="592" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009" numOctaves="2" seed="11" result="slow"/>
+      <feDisplacementMap in="SourceGraphic" in2="slow" scale="7" xChannelSelector="R" yChannelSelector="G" result="drift"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="16" result="fine"/>
+      <feDisplacementMap in="drift" in2="fine" scale="3" xChannelSelector="G" yChannelSelector="R" result="rough"/>
+      <feGaussianBlur in="rough" stdDeviation="2.2"/>
+    </filter>
+    <filter id="p1" filterUnits="userSpaceOnUse" x="-40" y="-40" width="592" height="592" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009" numOctaves="2" seed="23" result="slow"/>
+      <feDisplacementMap in="SourceGraphic" in2="slow" scale="9" xChannelSelector="R" yChannelSelector="G" result="drift"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="28" result="fine"/>
+      <feDisplacementMap in="drift" in2="fine" scale="3" xChannelSelector="G" yChannelSelector="R" result="rough"/>
+      <feGaussianBlur in="rough" stdDeviation="1.6"/>
+    </filter>
+    <filter id="p2" filterUnits="userSpaceOnUse" x="-40" y="-40" width="592" height="592" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009" numOctaves="2" seed="37" result="slow"/>
+      <feDisplacementMap in="SourceGraphic" in2="slow" scale="11" xChannelSelector="R" yChannelSelector="G" result="drift"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="42" result="fine"/>
+      <feDisplacementMap in="drift" in2="fine" scale="3" xChannelSelector="G" yChannelSelector="R" result="rough"/>
+      <feGaussianBlur in="rough" stdDeviation="1.4"/>
+    </filter>
+    <filter id="p3" filterUnits="userSpaceOnUse" x="-40" y="-40" width="592" height="592" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009" numOctaves="2" seed="51" result="slow"/>
+      <feDisplacementMap in="SourceGraphic" in2="slow" scale="12" xChannelSelector="R" yChannelSelector="G" result="drift"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="56" result="fine"/>
+      <feDisplacementMap in="drift" in2="fine" scale="3" xChannelSelector="G" yChannelSelector="R" result="rough"/>
+      <feGaussianBlur in="rough" stdDeviation="1.2"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="#000000"/>
+  <g filter="url(#p0)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 14 25.1 L 495 22" stroke="#f2d81c" stroke-width="11" stroke-opacity="1" pathLength="100" stroke-dasharray="97 200" stroke-dashoffset="-0.8"/>
+    <path d="M 489 12 L 490 494" stroke="#f2d81c" stroke-width="11" stroke-opacity="1" pathLength="100" stroke-dasharray="95.4 200" stroke-dashoffset="-2"/>
+    <path d="M 500 488 L 16 490" stroke="#f2d81c" stroke-width="11" stroke-opacity="1" pathLength="100" stroke-dasharray="98 200" stroke-dashoffset="-1.1"/>
+    <path d="M 22 500 L 24 19" stroke="#f2d81c" stroke-width="11" stroke-opacity="1" pathLength="100" stroke-dasharray="98.3 200" stroke-dashoffset="-0.2"/>
+    <path d="M 104 104 L 110.6 102 L 116.8 100.6 L 122.6 99.7 L 128.1 99.3 L 133.3 99.4 L 138.2 100 L 142.7 101 L 147 102.5 L 151 104.4 L 154.7 106.7 L 158.2 109.4 L 161.4 112.4 L 164.4 115.8 L 167.1 119.6 L 169.7 123.6 L 172 128 L 318 414" stroke="#4a6cff" stroke-width="36.8" stroke-opacity="1" pathLength="100" stroke-dasharray="96.7 200" stroke-dashoffset="-1.9"/>
+    <path d="M 240 262 L 118 414" stroke="#4a6cff" stroke-width="36.8" stroke-opacity="1" pathLength="100" stroke-dasharray="98.1 200" stroke-dashoffset="-1.6"/>
+    <path d="M 360 414 L 444 411" stroke="#b000e0" stroke-width="33.1" stroke-opacity="1" pathLength="100" stroke-dasharray="95.7 200" stroke-dashoffset="-2.6"/>
+  </g>
+  <g filter="url(#p1)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 481.1 12 L 482.1 494" stroke="#e0806c" stroke-width="5" stroke-opacity="0.9" pathLength="100" stroke-dasharray="75.4 200" stroke-dashoffset="-2.3"/>
+    <path d="M 500 480 L 16 482.1" stroke="#e0806c" stroke-width="5" stroke-opacity="0.9" pathLength="100" stroke-dasharray="85.6 200" stroke-dashoffset="-13"/>
+    <path d="M 29.9 500 L 31.9 19" stroke="#e0806c" stroke-width="5" stroke-opacity="0.9" pathLength="100" stroke-dasharray="61.1 200" stroke-dashoffset="-34.5"/>
+    <path d="M 105.9 110.2 L 112.2 108.3 L 118 106.9 L 123.3 106.1 L 128.3 105.8 L 132.9 105.9 L 137.1 106.4 L 141 107.2 L 144.6 108.5 L 147.9 110.1 L 151 112 L 154 114.3 L 156.7 116.9 L 159.3 119.9 L 161.8 123.2 L 164.1 126.9 L 166.3 131 L 312.3 416.9" stroke="#4a6cff" stroke-width="11.1" stroke-opacity="0.9" pathLength="100" stroke-dasharray="89.6 200" stroke-dashoffset="-4.9"/>
+    <path d="M 107.3 115 L 113.5 113.1 L 118.9 111.9 L 123.9 111.1 L 128.4 110.8 L 132.5 110.9 L 136.2 111.3 L 139.6 112.1 L 142.6 113.1 L 145.5 114.5 L 148.1 116.1 L 150.7 118.1 L 153.1 120.4 L 155.4 123 L 157.6 126.1 L 159.7 129.4 L 161.8 133.3 L 307.8 419.2" stroke="#4a6cff" stroke-width="7.9" stroke-opacity="0.9" pathLength="100" stroke-dasharray="95.5 200" stroke-dashoffset="-2.8"/>
+    <path d="M 108.7 119.8 L 114.8 118 L 119.9 116.8 L 124.4 116.1 L 128.5 115.8 L 132.2 115.9 L 135.4 116.2 L 138.2 116.9 L 140.8 117.8 L 143.1 118.9 L 145.3 120.2 L 147.4 121.9 L 149.5 123.8 L 151.5 126.2 L 153.5 128.9 L 155.4 131.9 L 157.4 135.6 L 303.3 421.5" stroke="#4a6cff" stroke-width="5.6" stroke-opacity="0.9" pathLength="100" stroke-dasharray="95.4 200" stroke-dashoffset="-2.8"/>
+    <path d="M 252.6 272.1 L 130.6 424.1" stroke="#4a6cff" stroke-width="5.9" stroke-opacity="0.9" pathLength="100" stroke-dasharray="97.7 200" stroke-dashoffset="-0.1"/>
+    <path d="M 230.3 254.2 L 108.3 406.2" stroke="#4a6cff" stroke-width="7" stroke-opacity="0.9" pathLength="100" stroke-dasharray="93.8 200" stroke-dashoffset="-3.1"/>
+    <path d="M 226.7 251.3 L 104.7 403.3" stroke="#4a6cff" stroke-width="6" stroke-opacity="0.9" pathLength="100" stroke-dasharray="96.4 200" stroke-dashoffset="-0.7"/>
+    <path d="M 359.4 398.3 L 443.4 395.3" stroke="#b000e0" stroke-width="9.9" stroke-opacity="0.9" pathLength="100" stroke-dasharray="97.9 200" stroke-dashoffset="-1.1"/>
+    <path d="M 360.4 425.5 L 444.4 422.5" stroke="#b000e0" stroke-width="7.5" stroke-opacity="0.9" pathLength="100" stroke-dasharray="89.9 200" stroke-dashoffset="-4.1"/>
+    <path d="M 360.5 428.9 L 444.5 425.9" stroke="#b000e0" stroke-width="9" stroke-opacity="0.9" pathLength="100" stroke-dasharray="95.7 200" stroke-dashoffset="-3.4"/>
+  </g>
+  <g filter="url(#p2)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 99.1 87.8 L 106.2 85.7 L 113.6 84 L 120.7 82.9 L 127.7 82.4 L 134.5 82.5 L 141 83.3 L 147.4 84.7 L 153.4 86.8 L 159.1 89.5 L 164.4 92.8 L 169.2 96.5 L 173.6 100.7 L 177.6 105.2 L 181.1 110.1 L 184.3 115.1 L 187 120.1 L 333.1 406.3" stroke="#2a9cf0" stroke-width="10.4" stroke-opacity="0.9" pathLength="100" stroke-dasharray="63.2 200" stroke-dashoffset="-21.1"/>
+    <path d="M 104.7 106.3 L 111.2 104.3 L 117.2 102.9 L 122.9 102.1 L 128.2 101.7 L 133.1 101.8 L 137.8 102.3 L 142.1 103.3 L 146.1 104.7 L 149.8 106.5 L 153.3 108.7 L 156.6 111.2 L 159.7 114.1 L 162.5 117.3 L 165.1 120.9 L 167.6 124.8 L 169.9 129.1 L 315.9 415.1" stroke="#2a9cf0" stroke-width="10.8" stroke-opacity="0.9" pathLength="100" stroke-dasharray="75.6 200" stroke-dashoffset="-14.3"/>
+    <path d="M 249.1 269.3 L 127.1 421.3" stroke="#2a9cf0" stroke-width="6.8" stroke-opacity="0.7" pathLength="100" stroke-dasharray="80.8 200" stroke-dashoffset="-5.8"/>
+    <path d="M 245.1 266.1 L 123.1 418.1" stroke="#2a9cf0" stroke-width="9.1" stroke-opacity="0.6" pathLength="100" stroke-dasharray="84.2 200" stroke-dashoffset="-0.2"/>
+    <path d="M 234.1 257.3 L 112.1 409.3" stroke="#2a9cf0" stroke-width="11" stroke-opacity="0.9" pathLength="100" stroke-dasharray="80.5 200" stroke-dashoffset="-1.4"/>
+    <path d="M 359.6 402.2 L 443.6 399.2" stroke="#e0609a" stroke-width="7" stroke-opacity="0.8" pathLength="100" stroke-dasharray="81.5 200" stroke-dashoffset="-17.5"/>
+    <path d="M 360.3 421.4 L 444.3 418.4" stroke="#e0609a" stroke-width="7.8" stroke-opacity="1" pathLength="100" stroke-dasharray="68.4 200" stroke-dashoffset="-18.8"/>
+  </g>
+  <g filter="url(#p3)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 14 25.4 L 495 22.3" stroke="#fbe84a" stroke-width="3.9" stroke-opacity="0.8" pathLength="100" stroke-dasharray="84.1 200" stroke-dashoffset="-10.8"/>
+    <path d="M 490 12 L 491 494" stroke="#fbe84a" stroke-width="3.9" stroke-opacity="0.8" pathLength="100" stroke-dasharray="71.5 200" stroke-dashoffset="-7.8"/>
+    <path d="M 500 489.3 L 16 491.4" stroke="#fbe84a" stroke-width="3.9" stroke-opacity="0.8" pathLength="100" stroke-dasharray="61.7 200" stroke-dashoffset="-21.8"/>
+    <path d="M 21.7 500 L 23.8 19" stroke="#fbe84a" stroke-width="3.9" stroke-opacity="0.8" pathLength="100" stroke-dasharray="85.1 200" stroke-dashoffset="-0.8"/>
+    <path d="M 100.8 93.2 L 107.7 91.1 L 114.6 89.5 L 121.4 88.5 L 127.8 88 L 134.1 88.1 L 140.1 88.9 L 145.8 90.2 L 151.3 92 L 156.4 94.5 L 161.2 97.4 L 165.5 100.8 L 169.5 104.6 L 173.2 108.8 L 176.4 113.2 L 179.4 118 L 182 122.8 L 328.1 408.9" stroke="#12e6cc" stroke-width="8.5" stroke-opacity="0.9" pathLength="100" stroke-dasharray="91.2 200" stroke-dashoffset="-4.9"/>
+    <path d="M 101.9 96.9 L 108.7 94.8 L 115.4 93.3 L 121.8 92.3 L 127.9 91.8 L 133.8 92 L 139.4 92.6 L 144.8 93.8 L 149.8 95.6 L 154.6 97.8 L 159 100.6 L 163 103.7 L 166.8 107.3 L 170.2 111.2 L 173.3 115.4 L 176.1 119.9 L 178.6 124.5 L 324.6 410.6" stroke="#12e6cc" stroke-width="9.5" stroke-opacity="0.7" pathLength="100" stroke-dasharray="60.7 200" stroke-dashoffset="-16.8"/>
+    <path d="M 103.3 101.6 L 109.9 99.6 L 116.3 98.1 L 122.3 97.2 L 128.1 96.8 L 133.5 96.9 L 138.6 97.5 L 143.4 98.6 L 148 100.2 L 152.2 102.2 L 156.1 104.6 L 159.8 107.5 L 163.2 110.7 L 166.3 114.3 L 169.2 118.2 L 171.8 122.4 L 174.2 126.8 L 320.2 412.9" stroke="#12e6cc" stroke-width="7.8" stroke-opacity="0.7" pathLength="100" stroke-dasharray="68.6 200" stroke-dashoffset="-4.7"/>
+    <path d="M 242.1 263.7 L 120.1 415.7" stroke="#12e6cc" stroke-width="5.9" stroke-opacity="0.9" pathLength="100" stroke-dasharray="58.7 200" stroke-dashoffset="-17.1"/>
+    <path d="M 237.7 260.1 L 115.7 412.1" stroke="#12e6cc" stroke-width="6.4" stroke-opacity="0.7" pathLength="100" stroke-dasharray="74.8 200" stroke-dashoffset="-17.8"/>
+    <path d="M 359.8 408.2 L 443.8 405.2" stroke="#f7e02a" stroke-width="9.2" stroke-opacity="0.9" pathLength="100" stroke-dasharray="90.3 200" stroke-dashoffset="-1.7"/>
+    <path d="M 359.9 410.9 L 443.9 407.9" stroke="#f7e02a" stroke-width="5.3" stroke-opacity="0.7" pathLength="100" stroke-dasharray="54.8 200" stroke-dashoffset="-27.3"/>
+    <path d="M 360.1 416.6 L 444.1 413.6" stroke="#f7e02a" stroke-width="8.7" stroke-opacity="0.7" pathLength="100" stroke-dasharray="92.7 200" stroke-dashoffset="-3.3"/>
+  </g>
+</svg>
