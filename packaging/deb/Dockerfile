@@ -94,6 +94,12 @@ FROM ubuntu:${UBUNTU_VERSION} AS tester
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Only here to validate the desktop entry below. Its own layer, ahead of the
+# COPY, so it stays cached while the packages change on every build.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends desktop-file-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # Both packages are installed so CI proves they are installable, not merely built.
 # apt resolves the .deb's declared dependencies; the -dbgsym .ddeb is installed
 # afterwards because it depends on the exact endo version installed by the .deb.
@@ -109,6 +115,9 @@ RUN set -eux; \
     test "$(endo -c 'println "hello"')" = "hello"; \
     test -d /usr/share/endo; \
     test -d /usr/lib/debug; \
+    desktop-file-validate /usr/share/applications/endo.desktop; \
+    test -f /usr/share/icons/hicolor/scalable/apps/endo.svg; \
+    test -f /usr/share/icons/hicolor/256x256/apps/endo.png; \
     dpkg -s endo; \
     dpkg -s endo-dbgsym
 

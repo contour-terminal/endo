@@ -167,6 +167,11 @@ include(WindowsVersionResource)
 include(MacOSInfoPlist)
 include(ElfPackageMetadata)
 
+# Desktop integration on freedesktop platforms (icon theme, desktop entry), in the
+# same shape: enable_freedesktop_integration(target), applied to endo-bin in
+# src/shell/CMakeLists.txt.
+include(FreedesktopIntegration)
+
 if(NOT EMSCRIPTEN)
     check_static_system_requirements()
 endif()

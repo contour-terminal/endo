@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Freedesktop desktop entry, configured from cmake/ProjectMetadata.cmake and
+# installed to share/applications by enable_freedesktop_integration()
+# (cmake/FreedesktopIntegration.cmake). endo is a shell, so the entry runs it in
+# the user's terminal emulator (Terminal=true).
+[Desktop Entry]
+Type=Application
+Name=@ENDO_PRODUCT_DISPLAY_NAME@
+GenericName=Shell
+Comment=@ENDO_PRODUCT_DESCRIPTION@
+Exec=@ENDO_PRODUCT_NAME@
+Icon=@ENDO_PRODUCT_NAME@
+Terminal=true
+Categories=System;ConsoleOnly;
+Keywords=shell;terminal;command line;functional;fsharp;

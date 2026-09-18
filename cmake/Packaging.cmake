@@ -153,6 +153,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 
+    # Directories the desktop integration installs into that the system owns
+    # (cmake/FreedesktopIntegration.cmake), under CPack RPM's default /usr prefix.
+    list(TRANSFORM ENDO_FREEDESKTOP_SYSTEM_DIRS PREPEND "/usr/"
+         OUTPUT_VARIABLE CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION)
+
 else()
     set(CPACK_GENERATOR "TGZ")
 endif()

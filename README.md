@@ -191,6 +191,9 @@ sudo apt install ./endo_<version>_amd64.deb
 sudo apt install ./endo-dbgsym_<version>_amd64.ddeb
 ```
 
+The package also installs a desktop entry and the Endo icon, so Endo shows up in your
+application menu and opens in your terminal emulator.
+
 To build the package yourself (requires Docker):
 
 ```bash

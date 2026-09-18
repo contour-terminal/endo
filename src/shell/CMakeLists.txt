@@ -401,6 +401,9 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/stdlib/
         DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/stdlib)
 
+# The icon theme and a desktop entry on freedesktop platforms; a no-op elsewhere.
+enable_freedesktop_integration(endo-bin)
+
 # Guards the RPATH above: the build-tree binary resolves its libraries even when
 # the installed one cannot, so only an installed binary can prove the install is
 # usable. Unix-only, where RPATH is the mechanism being tested.
