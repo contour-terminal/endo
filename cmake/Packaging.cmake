@@ -93,10 +93,41 @@ if(WIN32)
         "${CMAKE_SOURCE_DIR}/cmake/wix-legacy-path-cleanup.wxs")
     set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/wix-path-env.xml")
 
+    # Branding: the Add/Remove Programs icon, the banner atop every inner dialog,
+    # and the image behind Welcome and Finish. cmake/wix-template.wxs wires all
+    # three. The two bitmaps are composed from the icon theme at build time
+    # rather than committed: WixUI takes uncompressed BMP, and they are derived
+    # from the logo. Their layout lives in the script. Without a PowerShell to
+    # run it the MSI keeps WixUI's stock bitmaps.
+    set(CPACK_WIX_PRODUCT_ICON "${ENDO_PRODUCT_ICON_ICO}")
+    find_program(ENDO_POWERSHELL NAMES pwsh powershell)
+    if(ENDO_POWERSHELL)
+        set(_compose "${CMAKE_SOURCE_DIR}/packaging/windows/compose-installer-bitmaps.ps1")
+        set(_bitmaps "${CMAKE_BINARY_DIR}/installer-bitmaps")
+        set(CPACK_WIX_UI_BANNER "${_bitmaps}/installer-banner.bmp")
+        set(CPACK_WIX_UI_DIALOG "${_bitmaps}/installer-dialog.bmp")
+        file(GLOB _icon_pngs "${ENDO_PRODUCT_ICON_THEME_DIR}/*/apps/*.png")
+        add_custom_command(
+            OUTPUT "${CPACK_WIX_UI_BANNER}" "${CPACK_WIX_UI_DIALOG}"
+            COMMAND "${ENDO_POWERSHELL}" -NoProfile -NonInteractive -ExecutionPolicy Bypass
+                    -File "${_compose}" -IconTheme "${ENDO_PRODUCT_ICON_THEME_DIR}" -OutputDirectory "${_bitmaps}"
+            DEPENDS "${_compose}" ${_icon_pngs}
+            COMMENT "Composing the WiX installer bitmaps"
+            VERBATIM)
+        add_custom_target(installer-bitmaps ALL DEPENDS "${CPACK_WIX_UI_BANNER}" "${CPACK_WIX_UI_DIALOG}")
+    else()
+        message(STATUS "Endo: no PowerShell found; the MSI keeps WixUI's stock bitmaps.")
+    endif()
+
 elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
 
     set(CPACK_DMG_VOLUME_NAME "${ENDO_PRODUCT_DISPLAY_NAME} ${PROJECT_VERSION}")
+
+    # The DMG's volume icon: DragNDrop copies it to .VolumeIcon.icns and flags
+    # the volume with SetFile. A bare CLI executable has no icon slot on macOS
+    # (only .app bundles do), so the volume is where the logo shows.
+    set(CPACK_PACKAGE_ICON "${ENDO_PRODUCT_ICON_ICNS}")
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_GENERATOR "DEB;RPM")

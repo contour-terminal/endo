@@ -5,6 +5,10 @@
 #
 # Both carry a version, so both live here: leaving the manifest behind was how
 # its assemblyIdentity froze at 0.1.0.0 while the rest of the build moved on.
+#
+# The application icon rides in the same resource script: it is one more line
+# of the executable's identity, and a second .rc would be a second resource
+# compilation for that one line.
 
 # The resource compiler. It sits at module scope rather than inside the function
 # because enable_language() is rejected inside a function(), and out of the
@@ -29,11 +33,11 @@ else()
     set(ENDO_HAS_VERSION_RESOURCE OFF)
 endif()
 
-## @brief Embeds Windows version metadata into @p target.
+## @brief Embeds Windows version metadata, and the application icon, into @p target.
 ##
 ## Without it a Windows executable has no version metadata at all and every
 ## reader -- Explorer, `Get-Command`, a crash reporter -- reports the synthesised
-## 0.0.0.0.
+## 0.0.0.0. It also has no icon, and Explorer shows the generic one.
 ##
 ## Templates (EndoVersionInfo.rc.in, endo.manifest.in) are read from @p target's
 ## own source directory, so this works from anywhere. A no-op off Windows, so
@@ -80,6 +84,10 @@ function(enable_windows_version_resource target)
     set(_rc "${CMAKE_CURRENT_BINARY_DIR}/EndoVersionInfo.rc")
     configure_file("${_source_dir}/EndoVersionInfo.rc.in" "${_rc}" @ONLY)
     target_sources(${target} PRIVATE "${_rc}")
+
+    # The resource compiler's dependency scan follows #include, not ICON, so a
+    # re-rendered icon would otherwise not rebuild the resource.
+    set_source_files_properties("${_rc}" PROPERTIES OBJECT_DEPENDS "${ENDO_PRODUCT_ICON_ICO}")
 
     # Scoped to RC: an unscoped definition would also land on every C++
     # translation unit, and the Debug bit is the one flag a multi-config
