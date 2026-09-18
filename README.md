@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/images/endo-icon.svg">
+  <img src="docs/assets/images/endo-icon-light.svg" alt="Endo logo" width="160">
+</picture>
+
 # Endo
 
 **A cross-platform shell with F#-inspired functional programming.**
