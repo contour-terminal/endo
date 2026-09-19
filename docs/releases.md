@@ -71,6 +71,10 @@ sudo cmake --install build/clang-release
 See the [Getting Started](getting-started.md) guide for detailed prerequisites and build
 instructions.
 
+On Linux, installing (from source or from the `.deb`/`.rpm`) also adds a desktop entry and
+the Endo icon to the freedesktop icon theme, so Endo shows up in application menus and
+launchers and opens in your terminal emulator.
+
 ### Windows Installer (.msi)
 
 Windows releases ship as an `.msi` installer. It installs Endo into a version-specific

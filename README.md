@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/images/endo-icon.svg">
+  <img src="docs/assets/images/endo-icon-light.svg" alt="Endo logo" width="160">
+</picture>
+
 # Endo
 
 **A cross-platform shell with F#-inspired functional programming.**
@@ -190,6 +195,9 @@ sudo apt install ./endo_<version>_amd64.deb
 # optional, for debugging / crash reports:
 sudo apt install ./endo-dbgsym_<version>_amd64.ddeb
 ```
+
+The package also installs a desktop entry and the Endo icon, so Endo shows up in your
+application menu and opens in your terminal emulator.
 
 To build the package yourself (requires Docker):
 

@@ -5,6 +5,9 @@ description: A cross-platform shell with F#-inspired functional programming.
 
 <div class="hero" markdown>
 
+![Endo logo](assets/images/endo-icon-light.svg#only-light){ .hero-logo }
+![Endo logo](assets/images/endo-icon.svg#only-dark){ .hero-logo }
+
 # **Endo**
 
 A cross-platform shell with F#-inspired functional programming.

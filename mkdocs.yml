@@ -6,6 +6,9 @@ repo_name: contour-terminal/endo
 
 theme:
   name: material
+  # The flat logo variant: the header shows it at 24px, where the painted one blurs.
+  logo: assets/images/endo-icon-small.svg
+  favicon: assets/images/favicon.png
   palette:
     - scheme: slate
       primary: deep purple

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Win32 VERSIONINFO resource for endo.exe -- what makes
-// `(Get-Command endo.exe).Version` report something other than 0.0.0.0.
+// Win32 resources for endo.exe: the VERSIONINFO resource -- what makes
+// `(Get-Command endo.exe).Version` report something other than 0.0.0.0 -- and
+// the application icon.
 //
 // Configured at CONFIGURE time by enable_windows_version_resource()
 // (cmake/WindowsVersionResource.cmake) from the version record
@@ -24,6 +25,11 @@
 // ASCII only: rc.exe reads a BOM-less file as ANSI, so a non-ASCII vendor or
 // copyright string would need /c65001 added to CMAKE_RC_FLAGS. Keep the strings
 // ASCII and the question does not arise.
+
+// The icon Explorer, the taskbar and Start show for endo.exe: they take the
+// first icon group in the image, and this is the only one. The path is absolute
+// and spelled with forward slashes, which rc.exe and llvm-rc both accept.
+1 ICON "@ENDO_PRODUCT_ICON_ICO@"
 
 #define VS_VERSION_INFO      1
 #define VS_FFI_FILEFLAGSMASK 0x0000003FL

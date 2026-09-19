@@ -34,3 +34,10 @@ set(ENDO_PRODUCT_COPYRIGHT "Copyright (C) 2022-2026 Christian Parpart")
 # so nothing enforces this -- it is what `otool -P` prints and what any future
 # codesigning would read.
 set(ENDO_PRODUCT_BUNDLE_ID "org.endo-lang.endo")
+
+# The logo, in the formats its consumers take; which consumer takes which is in
+# packaging/icons/README.md.
+set(ENDO_PRODUCT_ICON_SVG "${CMAKE_SOURCE_DIR}/docs/assets/images/endo-icon.svg")
+set(ENDO_PRODUCT_ICON_ICO "${CMAKE_SOURCE_DIR}/packaging/icons/endo.ico")
+set(ENDO_PRODUCT_ICON_ICNS "${CMAKE_SOURCE_DIR}/packaging/icons/endo.icns")
+set(ENDO_PRODUCT_ICON_THEME_DIR "${CMAKE_SOURCE_DIR}/packaging/icons/hicolor")
