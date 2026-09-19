@@ -34,10 +34,13 @@
 
 # Executables a user runs, as "<target>|<why it is a product>". Read by the function below when it
 # runs, deferred -- so a row a configuration adds only where its target exists (the product canary, on
-# Windows with testing on) is appended where that target is declared.
-set(EndoWindowsDialogProductExecutables
-    "endo-bin|the shell users run, which must keep its assert dialog and crash reporting when started by hand"
-)
+# Windows with testing on) is appended where that target is declared. The shell's row carries the
+# condition src/CMakeLists.txt adds the shell under: a WebAssembly build declares no endo-bin.
+set(EndoWindowsDialogProductExecutables "")
+if(NOT EMSCRIPTEN)
+    list(APPEND EndoWindowsDialogProductExecutables
+        "endo-bin|the shell users run, which must keep its assert dialog and crash reporting when started by hand")
+endif()
 
 ## @brief Every directory at and below @p dir, into @p out.
 function(endo_windows_dialogs_directories dir out)
