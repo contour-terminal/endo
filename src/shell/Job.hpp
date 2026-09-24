@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/Types.hpp>
+
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "Error.hpp"
-#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -23,10 +24,10 @@ enum class JobState // NOLINT(performance-enum-size)
 /// Represents a background job in the shell
 struct Job
 {
-    int id = 0;                        ///< Job number (1-based, displayed as [N])
-    ProcessId pgid = InvalidProcessId; ///< Process group ID for the job
-    std::vector<ProcessId> pids;       ///< All PIDs in this job (for pipelines)
-    std::string command;               ///< Original command string
+    int id = 0; ///< Job number (1-based, displayed as [N])
+    core::platform::ProcessId pgid = core::platform::InvalidProcessId; ///< Process group ID for the job
+    std::vector<core::platform::ProcessId> pids; ///< All PIDs in this job (for pipelines)
+    std::string command;                         ///< Original command string
     JobState state = JobState::Running;
     int exitCode = 0;      ///< Exit code (valid when state is Done)
     int signal = 0;        ///< Signal number (valid when terminated/stopped)
@@ -43,7 +44,9 @@ class JobTable
     /// @param pids All process IDs in the job
     /// @param command The command string
     /// @return The assigned job ID
-    [[nodiscard]] int addJob(ProcessId pgid, std::vector<ProcessId> pids, std::string command);
+    [[nodiscard]] int addJob(core::platform::ProcessId pgid,
+                             std::vector<core::platform::ProcessId> pids,
+                             std::string command);
 
     /// Gets a job by its job ID.
     ///
@@ -58,13 +61,13 @@ class JobTable
     ///
     /// @param pgid Process group ID
     /// @return Pointer to the job, or nullptr if not found
-    [[nodiscard]] Job* getJobByPgid(ProcessId pgid);
+    [[nodiscard]] Job* getJobByPgid(core::platform::ProcessId pgid);
 
     /// Gets a job containing a specific PID.
     ///
     /// @param pid Process ID to search for
     /// @return Pointer to the job, or nullptr if not found
-    [[nodiscard]] Job* getJobByPid(ProcessId pid);
+    [[nodiscard]] Job* getJobByPid(core::platform::ProcessId pid);
 
     /// Gets the current job (most recently backgrounded or stopped).
     [[nodiscard]] Job* getCurrentJob();
@@ -76,7 +79,7 @@ class JobTable
     ///
     /// @param pid Process ID that changed state
     /// @param result The wait result
-    void updateJobState(ProcessId pid, WaitResult const& result);
+    void updateJobState(core::platform::ProcessId pid, WaitResult const& result);
 
     /// Removes completed jobs that have been notified.
     void cleanupCompletedJobs();

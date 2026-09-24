@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TerminalInput.hpp"
 
-#include <tui/QuestionComponent.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Terminal.hpp>
-#include <tui/runtime/Modal.hpp>
-#include <tui/runtime/TerminalEventSource.hpp>
-#include <tui/runtime/TuiRuntime.hpp>
+#include <core/net/EventLoop.hpp>
+#include <core/net/IoBackend.hpp>
+#include <core/tui/QuestionComponent.hpp>
+#include <core/tui/Screen.hpp>
+#include <core/tui/Terminal.hpp>
+#include <core/tui/runtime/Modal.hpp>
+#include <core/tui/runtime/TerminalInputSource.hpp>
+#include <core/tui/runtime/TuiRuntime.hpp>
 
 #include <cstdlib>
 #include <print>
@@ -24,36 +26,41 @@ namespace
     /// Terminal, Screen, and TuiRuntime and drives the question with `runModal`.
     /// @param config The question configuration.
     /// @return The result of the question interaction.
-    auto runQuestion(tui::QuestionConfig config) -> tui::QuestionResult
+    auto runQuestion(core::tui::QuestionConfig config) -> core::tui::QuestionResult
     {
-        auto terminal = tui::Terminal {};
+        auto terminal = core::tui::Terminal {};
         if (auto result = terminal.initialize(); !result)
         {
             std::println(stderr, "Terminal initialization failed: {}", result.error());
             return {};
         }
 
-        auto screen = tui::Screen(terminal, { .viewport = tui::Viewport::Inline });
+        auto screen = core::tui::Screen(terminal, { .viewport = core::tui::Viewport::Inline });
 
-        auto question = tui::QuestionComponent(std::move(config));
+        auto question = core::tui::QuestionComponent(std::move(config));
 
         auto const prefSize = question.preferredSize();
         auto const width = terminal.columns();
         auto const height = prefSize.height;
-        auto const area = tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
+        auto const area = core::tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
 
         question.setArea(area);
         screen.root().addChild(question, { .area = area });
         screen.setFocus(&question);
 
-        auto source = tui::runtime::TerminalEventSource(terminal);
-        auto runtime = tui::runtime::TuiRuntime(source);
-        auto const result = runtime.blockOn(tui::runtime::runModal(&runtime, &question, &screen));
+        // The runtime and its loop watch the terminal's handles, so both are gone before the
+        // terminal shuts down and closes them.
+        auto const result = [&] {
+            auto const backend = core::net::makeDefaultBackend();
+            auto loop = core::net::EventLoop { *backend };
+            auto runtime = core::tui::runtime::TuiRuntime(loop, terminal);
+            return runtime.blockOn(core::tui::runtime::runModal(&runtime, &question, &screen));
+        }();
 
         screen.clearAndRelease();
         terminal.shutdown();
 
-        return result.value_or(tui::QuestionResult {});
+        return result.value_or(core::tui::QuestionResult {});
     }
 } // namespace
 
@@ -65,7 +72,7 @@ auto askSingleSelect(std::string_view question, std::span<std::string_view const
     for (auto const& opt: options)
         optionStrings.emplace_back(opt);
 
-    auto result = runQuestion(tui::QuestionConfig {
+    auto result = runQuestion(core::tui::QuestionConfig {
         .questionText = std::string(question),
         .options = std::move(optionStrings),
         .multiSelect = false,
@@ -80,7 +87,7 @@ auto askSingleSelect(std::string_view question, std::span<std::string_view const
 
 auto askFreeText(std::string_view question, bool masked) -> std::optional<std::string>
 {
-    auto result = runQuestion(tui::QuestionConfig {
+    auto result = runQuestion(core::tui::QuestionConfig {
         .questionText = std::string(question),
         .options = {},
         .multiSelect = false,

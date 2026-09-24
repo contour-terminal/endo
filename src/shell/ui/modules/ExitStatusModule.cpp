@@ -2,7 +2,7 @@
 #include "ExitStatusModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <string>
 
@@ -16,7 +16,7 @@ bool ExitStatusModule::shouldShow(PromptContext const& ctx) const
 
 PromptSegments ExitStatusModule::evaluate(PromptContext const& ctx) const
 {
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->exitCode.solid();
     else if (ctx.theme)

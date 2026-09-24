@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -6,7 +8,6 @@
 
 #include "PersistentHistory.hpp"
 #include "RequiredPaths.hpp"
-#include <platform/testing/InMemoryFileSystem.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -21,7 +22,7 @@ namespace
 /// nothing to clean up.
 struct HistoryFixture
 {
-    endo::InMemoryFileSystem fs;
+    core::platform::testing::InMemoryFileSystem fs;
     std::filesystem::path dir { "/test/history" };
     endo::PersistentHistory history { fs };
 
@@ -543,7 +544,7 @@ TEST_CASE("PersistentHistory.required_paths_filtered_when_missing", "[history][r
                 endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/notes/plan.md" } });
     history.add("ls", endo::HistoryAddContext { .cwd = "~", .requiredPaths = {} });
 
-    auto fs = endo::platform::testing::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     // Note: ~/notes/plan.md is NOT added — the file no longer exists.
 
     auto options = endo::FuzzySearchOptions {
@@ -566,7 +567,7 @@ TEST_CASE("PersistentHistory.required_paths_kept_when_file_exists", "[history][r
     history.add("cat ~/notes/plan.md",
                 endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/notes/plan.md" } });
 
-    auto fs = endo::platform::testing::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     fs.addFile("/home/u/notes/plan.md", "contents");
 
     auto options = endo::FuzzySearchOptions {
@@ -588,7 +589,7 @@ TEST_CASE("PersistentHistory.required_paths_validation_disabled", "[history][req
     history.add("cat ~/missing.txt",
                 endo::HistoryAddContext { .cwd = "~", .requiredPaths = { "~/missing.txt" } });
 
-    auto fs = endo::platform::testing::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
 
     auto options = endo::FuzzySearchOptions {
         .currentCwd = "/home/u",

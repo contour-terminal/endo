@@ -71,10 +71,10 @@ WindowsTestPTY::~WindowsTestPTY()
     _closed = true;
 
     // Close write end of output pipe to signal EOF to capture thread
-    if (_writeOutputHandle != InvalidHandle)
+    if (_writeOutputHandle != core::platform::InvalidHandle)
     {
         CloseHandle(_writeOutputHandle);
-        _writeOutputHandle = InvalidHandle;
+        _writeOutputHandle = core::platform::InvalidHandle;
     }
 
     // Wait for capture thread to finish
@@ -82,20 +82,20 @@ WindowsTestPTY::~WindowsTestPTY()
         _captureThread.join();
 
     // Close remaining handles
-    if (_readInputHandle != InvalidHandle)
+    if (_readInputHandle != core::platform::InvalidHandle)
         CloseHandle(_readInputHandle);
-    if (_writeInputHandle != InvalidHandle)
+    if (_writeInputHandle != core::platform::InvalidHandle)
         CloseHandle(_writeInputHandle);
-    if (_readOutputHandle != InvalidHandle)
+    if (_readOutputHandle != core::platform::InvalidHandle)
         CloseHandle(_readOutputHandle);
 }
 
-NativeHandle WindowsTestPTY::inputFd() const noexcept
+core::platform::NativeHandle WindowsTestPTY::inputFd() const noexcept
 {
     return _readInputHandle;
 }
 
-NativeHandle WindowsTestPTY::outputFd() const noexcept
+core::platform::NativeHandle WindowsTestPTY::outputFd() const noexcept
 {
     return _writeOutputHandle;
 }

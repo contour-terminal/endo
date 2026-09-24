@@ -10,7 +10,7 @@
 
 #include <endo-language/ide/CompletionContext.hpp>
 
-#include <tui/completer/CompletionItem.hpp>
+#include <core/tui/completer/CompletionItem.hpp>
 
 #include <algorithm>
 #include <string>
@@ -61,7 +61,8 @@ namespace endo::test
 }
 
 /// @brief Tests whether @p items contains a completion with exactly @p text.
-[[nodiscard]] inline bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string_view text)
+[[nodiscard]] inline bool hasCompletion(std::vector<core::tui::completer::CompletionItem> const& items,
+                                        std::string_view text)
 {
     return std::ranges::any_of(items, [&](auto const& item) { return item.text == text; });
 }

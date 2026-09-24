@@ -30,7 +30,7 @@ endo::CompletionContext makeContext(std::string fullInput,
 }
 
 /// @brief Helper to check if a specific text is in the completions.
-bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string_view text)
+bool hasCompletion(std::vector<core::tui::completer::CompletionItem> const& items, std::string_view text)
 {
     return std::ranges::any_of(items, [text](auto const& item) { return item.text == text; });
 }

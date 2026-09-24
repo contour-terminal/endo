@@ -6,8 +6,8 @@ namespace endo
 {
 
 HistoryCompleter::HistoryCompleter(History const& history,
-                                   EnvironmentProvider const& env,
-                                   FileSystem const& fs):
+                                   core::platform::EnvironmentProvider const& env,
+                                   core::platform::FileSystem const& fs):
     _history(history), _env(env), _fs(fs)
 {
 }

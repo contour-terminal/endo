@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FileTypeStyle.hpp"
 
-#include <tui/SgrBuilder.hpp>
+#include <core/tui/SgrBuilder.hpp>
 
 #include <algorithm>
 #include <array>
 #include <string>
 #include <string_view>
 
-using tui::RgbColor;
-using tui::Style;
+using core::tui::RgbColor;
+using core::tui::Style;
 
 namespace endo
 {
@@ -295,9 +295,9 @@ FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode
     return decoration;
 }
 
-std::string sgrSequence(tui::Style const& style)
+std::string sgrSequence(core::tui::Style const& style)
 {
-    return tui::buildSgrSequence(style);
+    return core::tui::buildSgrSequence(style);
 }
 
 std::string colorizePermissions(std::string_view perms)

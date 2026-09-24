@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GlobMatcher.hpp"
 
+#include <core/platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <ranges>
 #include <string>
 
-#include <platform/PathUtils.hpp>
-
 namespace endo
 {
 
-std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSystem, std::string_view pattern)
+std::vector<std::string> expandGlobPattern(core::platform::FileSystem const& fileSystem,
+                                           std::string_view pattern)
 {
     namespace fs = std::filesystem;
     std::vector<std::string> results;
@@ -47,12 +48,12 @@ std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSyste
     for (auto const& entry: *listing)
     {
         std::string filename = entry.path.filename().string();
-        if (globMatchFilename(filename, filePattern))
+        if (core::platform::globMatchFilename(filename, filePattern))
         {
             if (dirPath == ".")
                 results.push_back(filename);
             else
-                results.push_back(platform::normalizePath(entry.path));
+                results.push_back(core::platform::normalizePath(entry.path));
         }
     }
 
@@ -76,28 +77,29 @@ namespace
     /// @param entryPath   The path as reported by the walk.
     /// @param basePath    The base the walk started from.
     /// @return The entry path relative to @p basePath when the base was ".", else normalized.
-    [[nodiscard]] std::string relativizeToBase(platform::FileSystem const& fileSystem,
+    [[nodiscard]] std::string relativizeToBase(core::platform::FileSystem const& fileSystem,
                                                std::filesystem::path const& entryPath,
                                                std::string_view basePath)
     {
         if (basePath != ".")
-            return platform::normalizePath(entryPath);
+            return core::platform::normalizePath(entryPath);
 
         // The filesystem's working directory, never the process's: they are different views
         // whenever the filesystem is injected, which is the whole reason this exists.
         auto const relative = entryPath.lexically_relative(fileSystem.currentPath());
         if (!relative.empty())
-            return platform::normalizePath(relative);
+            return core::platform::normalizePath(relative);
 
         // lexically_relative() gives up whenever the entry is relative and the working
         // directory absolute -- which is every entry the real filesystem yields for a walk
         // rooted at ".". Those already are relative to the base; only the leading "." the
         // iterator prepended has to go.
-        return platform::normalizePath(entryPath.lexically_normal());
+        return core::platform::normalizePath(entryPath.lexically_normal());
     }
 } // namespace
 
-std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem, std::string_view pattern)
+std::vector<std::string> expandRecursiveGlob(core::platform::FileSystem const& fileSystem,
+                                             std::string_view pattern)
 {
     std::vector<std::string> results;
     std::string patternStr(pattern);
@@ -133,7 +135,7 @@ std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSys
 
         if (!suffixPattern.empty())
         {
-            if (globMatchFilename(filename, suffixPattern))
+            if (core::platform::globMatchFilename(filename, suffixPattern))
                 results.push_back(filePath);
         }
         else

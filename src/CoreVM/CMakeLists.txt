@@ -59,7 +59,7 @@ target_include_directories(CoreVM PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
+target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL core::base core::log)
 
 if(WIN32)
     target_link_libraries(CoreVM PUBLIC ws2_32)
@@ -94,7 +94,7 @@ if(ENDO_TESTING)
         vm/GarbageCollector_test.cpp
         vm/Runner_test.cpp
     )
-    target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
+    target_link_libraries(test-corevm CoreVM core::base core::log core::cli core::testing Catch2::Catch2)
     if(ENDO_HAS_WASM)
         target_sources(test-corevm PRIVATE wasm/WasmCodeGenerator_test.cpp)
         target_link_libraries(test-corevm CoreVM-wasm Binaryen::Binaryen)

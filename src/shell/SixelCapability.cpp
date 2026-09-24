@@ -2,7 +2,7 @@
 #include <shell/SixelCapability.hpp>
 #include <shell/TTY.hpp>
 
-#include <tui/TerminalProtocols.hpp>
+#include <core/tui/TerminalProtocols.hpp>
 
 #include <chrono>
 #include <string>
@@ -43,7 +43,7 @@ namespace
     /// @return The raw response, possibly empty on timeout.
     auto queryDeviceAttributes(TTY& tty) -> std::string
     {
-        tty.writeToStdout(tui::protocols::QueryPrimaryDeviceAttributes);
+        tty.writeToStdout(core::tui::protocols::QueryPrimaryDeviceAttributes);
 
         auto response = std::string {};
         auto timeout = FirstByteTimeout;
@@ -79,7 +79,7 @@ bool TerminalSixelCapability::supportsSixel()
     }
 
     auto const guard = RawModeGuard(_tty);
-    _cached = tui::protocols::parseSixelFromDeviceAttributes(queryDeviceAttributes(_tty));
+    _cached = core::tui::protocols::parseSixelFromDeviceAttributes(queryDeviceAttributes(_tty));
     return *_cached;
 }
 

@@ -2,7 +2,7 @@
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/types/Type.hpp>
 
-#include <crispy/Assert.hpp>
+#include <core/Assert.hpp>
 
 #include <format>
 #include <ranges>

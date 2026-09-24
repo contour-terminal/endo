@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/Buffer.hpp>
-#include <tui/Canvas.hpp>
-#include <tui/Theme.hpp>
+#include <core/tui/Buffer.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -125,28 +125,31 @@ TEST_CASE("ToolStatusComponent.error_tool_result", "[agent][ui]")
 TEST_CASE("ToolStatusComponent.render_does_not_crash", "[agent][ui]")
 {
     auto comp = ToolStatusComponent {};
-    auto const theme = tui::darkTheme();
+    auto const theme = core::tui::darkTheme();
 
     // Render empty
     {
-        auto buffer = tui::Buffer(1, 80);
-        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
+        auto buffer = core::tui::Buffer(1, 80);
+        auto canvas =
+            core::tui::Canvas(buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
         comp.render(canvas); // Should not crash
     }
 
     // Render with active entry
     comp.toolStarted(makeToolCall("shell_execute", { { "command", "cmake --build" } }));
     {
-        auto buffer = tui::Buffer(1, 80);
-        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
+        auto buffer = core::tui::Buffer(1, 80);
+        auto canvas =
+            core::tui::Canvas(buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
         comp.render(canvas); // Should not crash
     }
 
     // Render with completed entry
     comp.toolCompleted(makeToolResult("shell_execute", "Build complete", false, 3200ms));
     {
-        auto buffer = tui::Buffer(1, 80);
-        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
+        auto buffer = core::tui::Buffer(1, 80);
+        auto canvas =
+            core::tui::Canvas(buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 1 }, theme);
         comp.render(canvas); // Should not crash
     }
 
@@ -154,8 +157,9 @@ TEST_CASE("ToolStatusComponent.render_does_not_crash", "[agent][ui]")
     comp.toolStarted(makeToolCall("read_file", { { "path", "/no" } }));
     comp.toolCompleted(makeToolResult("read_file", "Not found", true, 100ms));
     {
-        auto buffer = tui::Buffer(2, 80);
-        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 2 }, theme);
+        auto buffer = core::tui::Buffer(2, 80);
+        auto canvas =
+            core::tui::Canvas(buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 2 }, theme);
         comp.render(canvas); // Should not crash
     }
 }

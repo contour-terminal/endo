@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/FileSystem.hpp>
+
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -10,7 +12,6 @@
 #include <string>
 #include <vector>
 
-#include <platform/FileSystem.hpp>
 #include <platform/InterruptThrottle.hpp>
 
 namespace endo::grep
@@ -40,7 +41,7 @@ struct GrepRenderOptions
 {
     bool useColor = false;      ///< Emit SGR color sequences.
     bool useHyperlinks = false; ///< Wrap filenames in OSC 8 hyperlinks (terminal only).
-    std::string uriHost;        ///< Authority for `file://` URIs, normally platform::hostName().
+    std::string uriHost;        ///< Authority for `file://` URIs, normally core::platform::hostName().
     std::string baseDirectory;  ///< Absolute directory that relative filenames resolve against.
 };
 
@@ -156,7 +157,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
 ///           any injected backend, not just the real on-disk filesystem).
 /// @param path Path to the file to check.
 /// @return true if the file appears to be binary; false if it does not, or cannot be opened.
-[[nodiscard]] bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path);
+[[nodiscard]] bool isBinaryFile(core::platform::FileSystem const& fs, std::filesystem::path const& path);
 
 /// Collects the list of files to search based on options.
 ///
@@ -175,7 +176,7 @@ using ErrorWriter = std::function<void(std::string_view)>;
 ///                 null (the default) the walk runs to completion without polling for Ctrl+C.
 /// @return Vector of file paths to search (possibly partial if interrupted).
 [[nodiscard]] std::vector<std::filesystem::path> collectFiles(
-    platform::FileSystem const& fs,
+    core::platform::FileSystem const& fs,
     GrepOptions const& opts,
     ErrorWriter const& errWriter,
     bool& hasError,

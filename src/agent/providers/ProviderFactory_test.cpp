@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <http/HttpClient.hpp>
 
+#include <core/testing/EnvHelper.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdlib>
 
 #include <agent/AgentConfig.hpp>
 #include <agent/providers/ProviderFactory.hpp>
-#include <testing/EnvHelper.hpp>
 
 using namespace endo::agent;
-using endo::testing::setTestEnv;
-using endo::testing::unsetTestEnv;
+using core::testing::setTestEnv;
+using core::testing::unsetTestEnv;
 
 // =============================================================================
 // ProviderFactory tests

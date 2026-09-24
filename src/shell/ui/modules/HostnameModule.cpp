@@ -2,7 +2,7 @@
 #include "HostnameModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 namespace endo
 {
@@ -16,7 +16,7 @@ PromptSegments HostnameModule::evaluate(PromptContext const& ctx) const
 {
     /// @brief Builds a bold style carrying @p picker's foreground color.
     auto const styled = [&ctx](auto picker) {
-        auto style = tui::Style {};
+        auto style = core::tui::Style {};
         if (ctx.resolvedColors)
             style.fg = picker(*ctx.resolvedColors).solid();
         else if (ctx.theme)

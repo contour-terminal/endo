@@ -158,6 +158,14 @@ include(PedanticCompiler)
 include(Sanitizers)
 include(ClangTidy)
 
+# core-cpp instruments none of its targets as a subproject: a parent that sanitizes its own code
+# and not core-cpp's would mix instrumented and uninstrumented code, which is what makes TSan
+# report races that are not there. So endo applies its own sanitizers to every core-cpp target.
+get_property(_endo_core_cpp_targets GLOBAL PROPERTY CORE_CPP_TARGETS)
+foreach(_endo_core_cpp_target IN LISTS _endo_core_cpp_targets)
+    enable_sanitizers(${_endo_core_cpp_target})
+endforeach()
+
 # OS-level version metadata for the shipped executable: one module per mechanism,
 # each exporting an enable_*(target) that is a no-op off its own platform, and
 # each doing its platform's one-time setup (enabling the RC language, probing the
@@ -201,63 +209,11 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-D_GLIBCXX_ASSERTIONS)
 endif()
 
-# crispy, vtparser, coro and net are vendored from contour — pass through the
-# testing flag their CMakeLists gate their unit tests on.
-# (ENDO_TESTING is defined earlier, before include(EndoThirdParties).)
-set(CONTOUR_TESTING ${ENDO_TESTING})
-
 option(ENDO_BUILTIN_CRARHDUMP "Enable built-in crashdump reporter, say NO to use system wide crashdump collection like coredumpctl [default: ON]" ON)
 
-# Apply Emscripten compatibility patches to vendored sources.
-# crispy is fetched from contour into src/crispy and is overwritten on every
-# fetch, so the patch is reapplied here at configure time rather than committed.
-#
-# emscripten's clang rejects an out-of-line definition whose written return type
-# differs from the declaration's, even when the two name the same type; upstream
-# writes `BufferObjectPtr<T> BufferObject<T>::create(...)` against a declaration
-# that returns the injected-class-name form. Rewriting the definition to a
-# trailing return type sidesteps the comparison.
-#
-# The patterns below track upstream's names, so they go stale whenever contour
-# renames. That is why a miss is a hard error rather than a status message: the
-# previous version of this block silently matched nothing after the snake_case ->
-# CamelCase rename and reported success, and the no-op only surfaced as a
-# confusing compile error in the WASM CI job.
-if(EMSCRIPTEN)
-    set(_BUFOBJ_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.hpp")
-    if(NOT EXISTS "${_BUFOBJ_PATH}")
-        message(FATAL_ERROR
-            "Emscripten patch target ${_BUFOBJ_PATH} is missing. crispy was probably "
-            "renamed upstream; update this patch in CMakeLists.txt.")
-    endif()
-
-    set(_BUFOBJ_FROM "BufferObjectPtr<T> BufferObject<T>::create(size_t capacity, BufferObjectRelease<T> release)")
-    set(_BUFOBJ_TO   "auto BufferObject<T>::create(size_t capacity, BufferObjectRelease<T> release) -> BufferObjectPtr<T>")
-
-    file(REAL_PATH "${_BUFOBJ_PATH}" _BUFOBJ_H)
-    file(READ "${_BUFOBJ_H}" _BUFOBJ_CONTENT)
-    string(FIND "${_BUFOBJ_CONTENT}" "${_BUFOBJ_TO}" _BUFOBJ_DONE)
-    string(FIND "${_BUFOBJ_CONTENT}" "${_BUFOBJ_FROM}" _BUFOBJ_TODO)
-    if(NOT _BUFOBJ_DONE EQUAL -1)
-        message(STATUS "Emscripten patch for BufferObject.hpp already applied")
-    elseif(NOT _BUFOBJ_TODO EQUAL -1)
-        string(REPLACE "${_BUFOBJ_FROM}" "${_BUFOBJ_TO}" _BUFOBJ_CONTENT "${_BUFOBJ_CONTENT}")
-        file(WRITE "${_BUFOBJ_H}" "${_BUFOBJ_CONTENT}")
-        message(STATUS "Applied Emscripten patch to BufferObject.hpp (trailing return type)")
-    else()
-        message(FATAL_ERROR
-            "Emscripten patch for BufferObject.hpp matched nothing. Upstream changed "
-            "BufferObject<T>::create's signature; update _BUFOBJ_FROM/_BUFOBJ_TO in "
-            "CMakeLists.txt to match src/crispy/BufferObject.hpp.")
-    endif()
-endif()
-
-# The vendored crispy and net link Threads::Threads from their own CMakeLists, but
-# neither calls find_package(Threads) -- upstream contour does it once at its top level.
 # find_package imported targets are scoped to the directory that created them and its
-# subdirectories, so the calls further down in src/platform and src/shell come both too
-# late and in the wrong scope for crispy and net. Do it here, above add_subdirectory(src),
-# where every subdirectory can see the target.
+# subdirectories, so Threads is found here, above add_subdirectory(src), where every
+# subdirectory can see the target.
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 

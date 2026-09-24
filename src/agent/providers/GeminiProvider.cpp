@@ -3,7 +3,7 @@
 
 #include <http/HttpClient.hpp>
 
-#include <crispy/Base64.hpp>
+#include <core/Base64.hpp>
 
 #include <format>
 #include <ranges>
@@ -189,7 +189,7 @@ auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
             }
             else if (auto const* image = std::get_if<ImageBlock>(&block))
             {
-                auto const encoded = crispy::base64::encode(image->data.begin(), image->data.end());
+                auto const encoded = core::base64::encode(image->data.begin(), image->data.end());
                 parts.push_back(nlohmann::json {
                     { "inlineData", { { "mimeType", image->mediaType }, { "data", encoded } } } });
             }
@@ -323,8 +323,8 @@ auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCa
                     auto imageBlock = ImageBlock {};
                     imageBlock.mediaType = inlineData.value("mimeType", "image/png");
                     auto const& b64Data = inlineData["data"].get<std::string>();
-                    imageBlock.data.resize(crispy::base64::decodeLength(b64Data));
-                    imageBlock.data.resize(crispy::base64::decode(b64Data, imageBlock.data.data()));
+                    imageBlock.data.resize(core::base64::decodeLength(b64Data));
+                    imageBlock.data.resize(core::base64::decode(b64Data, imageBlock.data.data()));
                     result.content.emplace_back(std::move(imageBlock));
                 }
             }

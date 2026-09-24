@@ -32,7 +32,8 @@ namespace
     }
 } // namespace
 
-void OutputDefinitionRegistry::loadFromDirectory(std::filesystem::path const& dir, FileSystem const& fs)
+void OutputDefinitionRegistry::loadFromDirectory(std::filesystem::path const& dir,
+                                                 core::platform::FileSystem const& fs)
 {
     if (!fs.exists(dir) || !fs.isDirectory(dir))
         return;
@@ -48,7 +49,8 @@ void OutputDefinitionRegistry::loadFromDirectory(std::filesystem::path const& di
     }
 }
 
-bool OutputDefinitionRegistry::loadFromFile(std::filesystem::path const& path, FileSystem const& fs)
+bool OutputDefinitionRegistry::loadFromFile(std::filesystem::path const& path,
+                                            core::platform::FileSystem const& fs)
 {
     try
     {

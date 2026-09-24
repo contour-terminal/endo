@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestEnvironmentProvider.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -10,8 +13,6 @@
 #include "CompletionTestSupport.hpp"
 #include "PathCommandIndex.hpp"
 #include "PathCommandQueryProvider.hpp"
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
 {
@@ -51,9 +52,9 @@ std::string pathList(std::initializer_list<std::string_view> dirs)
 /// /usr/bin holds git, git-lfs and a non-executable README; /usr/local/bin shadows git
 /// (so $PATH precedence can be observed) and adds gio. The two home directories exercise
 /// component-aware `~` collapsing.
-endo::InMemoryFileSystem makePathFilesystem()
+core::platform::testing::InMemoryFileSystem makePathFilesystem()
 {
-    return endo::InMemoryFileSystem {
+    return core::platform::testing::InMemoryFileSystem {
         { .path = "/usr/bin", .isDirectory = true },
         { .path = exe("/usr/bin/git"), .isExecutable = true },
         { .path = exe("/usr/bin/git-lfs"), .isExecutable = true },
@@ -74,8 +75,8 @@ endo::InMemoryFileSystem makePathFilesystem()
 /// without repeating the ordering constraint in every test.
 struct PathFixture
 {
-    endo::InMemoryFileSystem fs = makePathFilesystem();
-    endo::TestEnvironment env;
+    core::platform::testing::InMemoryFileSystem fs = makePathFilesystem();
+    core::platform::testing::TestEnvironmentProvider env;
     endo::PathCommandIndex index { env, fs };
 
     /// @param dirs $PATH entries; the index reads them lazily, on the first entries() call.

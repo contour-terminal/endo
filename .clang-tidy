@@ -6,9 +6,7 @@
 # final_suspend makes the compiler-generated `promise.hook()` call trip
 # readability-static-accessed-through-instance -- so the stateless ones cannot be
 # turned into static members, and the check false-positives on every one of them.
-# It is therefore disabled tree-wide, matching contour (the upstream source of
-# src/coro and src/net). Endo cannot keep a directory-local .clang-tidy inside
-# those vendored directories, since they are overwritten on every fetch.
+# It is therefore disabled tree-wide, matching contour and core-cpp.
 # Note on -bugprone-chained-comparison below: Catch2 decomposes an assertion into
 # `Decomposer() <= lhs == rhs`, so every CHECK/REQUIRE holding a comparison reads to
 # that check as a chained comparison. It fires on essentially every assertion in every
@@ -85,9 +83,9 @@ Checks: >-
 WarningsAsErrors: >-
   *
 UseColor: true
-# crispy, vtparser, coro and net are vendored from contour (see scripts/contour-pin.json)
-# and are not endo's to lint; they are excluded here.
-HeaderFilterRegex: 'src/(CoreVM|agent|dap|editor-protocol|endo-language|endo-test|http|lsp|platform|shell|testing|tui)/[^.]'
+# endo's own directories. core-cpp's headers are not endo's to lint, and they are
+# outside src/ anyway.
+HeaderFilterRegex: 'src/(CoreVM|agent|dap|editor-protocol|endo-language|endo-test|http|lsp|platform|shell|testing)/[^.]'
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength
@@ -129,10 +127,9 @@ CheckOptions:
   # rather than inferred. StaticConstant is deliberately left unpinned: it covers
   # function-local statics (`static auto const table = ...`), which are camelBack
   # throughout this codebase, and is not where a `k` prefix would appear anyway.
-  # Note that these rules are only advisory in practice today:
-  # src/ reaches every TU via -isystem (the vendored crispy/vtparser/coro/net targets
-  # are marked SYSTEM TRUE and their include root is src/ itself), so clang-tidy
-  # reports nothing for declarations in first-party headers.
+  # These rules apply to first-party headers as well: src/ is an ordinary include
+  # directory, no longer the -isystem one the vendored crispy target made it, so a
+  # header matching HeaderFilterRegex is checked like the source that includes it.
   - key:             readability-identifier-naming.EnumCase
     value:           CamelCase
   - key:             readability-identifier-naming.EnumConstantCase

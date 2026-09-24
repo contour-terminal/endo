@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/testing/EnvHelper.hpp>
+#include <core/testing/ScopedTempDir.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
 #include <fstream>
 #include <string>
-
-#include <testing/EnvHelper.hpp>
-#include <testing/ScopedTempDir.hpp>
 
 #if !defined(_WIN32)
 
@@ -25,7 +25,7 @@
 TEST_CASE("CrashHandler.creates_crash_log_on_sigsegv", "[crash]")
 {
     // Use a temp directory as HOME so we don't pollute the real one.
-    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-test" };
+    auto const tmpDirGuard = core::testing::ScopedTempDir { "endo-crash-test" };
     auto const& tmpDir = tmpDirGuard.path();
 
     auto const pid = fork();
@@ -80,13 +80,13 @@ TEST_CASE("CrashHandler.creates_crash_log_on_sigsegv", "[crash]")
 
 TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
 {
-    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-dir-test" };
+    auto const tmpDirGuard = core::testing::ScopedTempDir { "endo-crash-dir-test" };
     auto const& tmpDir = tmpDirGuard.path();
 
     // Set HOME and initialize — should create the directory tree. Scoped, because $HOME is
     // process-global and other fixtures read it while constructing a shell.
     {
-        auto const scopedHome = endo::testing::ScopedEnv { "HOME", tmpDir.string() };
+        auto const scopedHome = core::testing::ScopedEnv { "HOME", tmpDir.string() };
         endo::CrashHandler::initialize("0.1.0-test");
     }
 
@@ -173,7 +173,7 @@ static auto buildEnvironmentBlock(std::filesystem::path const& localAppData) -> 
 
 TEST_CASE("CrashHandler.creates_crash_log_on_access_violation", "[crash]")
 {
-    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-test" };
+    auto const tmpDirGuard = core::testing::ScopedTempDir { "endo-crash-test" };
     auto const& tmpDir = tmpDirGuard.path();
 
     // Build command line: run the hidden crash-child helper test.
@@ -241,7 +241,7 @@ TEST_CASE("CrashHandler.creates_crash_log_on_access_violation", "[crash]")
 
 TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
 {
-    auto const tmpDirGuard = endo::testing::ScopedTempDir { "endo-crash-dir-test" };
+    auto const tmpDirGuard = core::testing::ScopedTempDir { "endo-crash-dir-test" };
     auto const& tmpDir = tmpDirGuard.path();
 
     // Override %LOCALAPPDATA% and initialize — should create the directory tree. Scoped,
@@ -249,7 +249,7 @@ TEST_CASE("CrashHandler.creates_crash_directory", "[crash]")
     // whenever the variable had been unset, and leaked the override entirely when an
     // assertion threw first.
     {
-        auto const scopedLocalAppData = endo::testing::ScopedEnv { "LOCALAPPDATA", tmpDir.string() };
+        auto const scopedLocalAppData = core::testing::ScopedEnv { "LOCALAPPDATA", tmpDir.string() };
         endo::CrashHandler::initialize("0.1.0-test");
     }
 

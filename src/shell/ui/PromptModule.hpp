@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -9,10 +9,10 @@
 #include <string_view>
 #include <vector>
 
-namespace tui
+namespace core::tui
 {
 struct Theme;
-} // namespace tui
+} // namespace core::tui
 
 namespace endo
 {
@@ -56,8 +56,8 @@ constexpr bool operator!=(ModuleSensitivity a, ModuleSensitivity b) noexcept
 /// @brief A single styled text segment within a prompt.
 struct PromptSegment
 {
-    std::string text; ///< The text content.
-    tui::Style style; ///< The style to render this segment with.
+    std::string text;       ///< The text content.
+    core::tui::Style style; ///< The style to render this segment with.
 
     /// Absolute URI making this segment clickable, or empty for none. Adjacent segments sharing
     /// a URI are rendered as one OSC 8 link, so a module may split its text freely (the path
@@ -80,7 +80,7 @@ struct PromptContext
     std::string hostname;                         ///< Hostname of the machine.
     std::string username;                         ///< Current user's login name.
     bool hyperlinks = true;                       ///< Emit OSC 8 hyperlinks for module segments.
-    tui::Theme const* theme = nullptr;            ///< Current TUI theme.
+    core::tui::Theme const* theme = nullptr;      ///< Current TUI theme.
     ResolvedPromptColors const* resolvedColors =
         nullptr; ///< Resolved prompt colors (overrides merged with theme).
     FSharpPersistentState const* fsharpState = nullptr;   ///< F# persistent state (functions, bindings).

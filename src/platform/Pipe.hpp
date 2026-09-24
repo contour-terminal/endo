@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/PlatformError.hpp>
+#include <core/platform/Types.hpp>
+
 #include <expected>
 #include <memory>
-
-#include <platform/PlatformError.hpp>
-#include <platform/Types.hpp>
 
 namespace endo::platform
 {
@@ -27,18 +27,18 @@ class Pipe
     Pipe& operator=(Pipe&&) = default;
 
     /// Returns the native handle for the read end of the pipe.
-    [[nodiscard]] virtual NativeHandle reader() const noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle reader() const noexcept = 0;
 
     /// Returns the native handle for the write end of the pipe.
-    [[nodiscard]] virtual NativeHandle writer() const noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle writer() const noexcept = 0;
 
     /// Releases ownership of the read handle and returns it.
     /// After calling this method, the read handle will not be closed by the pipe.
-    [[nodiscard]] virtual NativeHandle releaseReader() noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle releaseReader() noexcept = 0;
 
     /// Releases ownership of the write handle and returns it.
     /// After calling this method, the write handle will not be closed by the pipe.
-    [[nodiscard]] virtual NativeHandle releaseWriter() noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle releaseWriter() noexcept = 0;
 
     /// Closes the read end of the pipe.
     virtual void closeReader() noexcept = 0;
@@ -54,7 +54,8 @@ class Pipe
 ///
 /// @param flags Platform-specific flags for pipe creation (e.g., O_CLOEXEC on POSIX)
 /// @return A unique pointer to the created pipe on success, or an error
-[[nodiscard]] std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags = 0);
+[[nodiscard]] std::expected<std::unique_ptr<Pipe>, core::platform::PlatformError> createPipe(
+    unsigned flags = 0);
 
 } // namespace endo::platform
 

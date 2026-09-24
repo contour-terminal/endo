@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/StringUtils.hpp>
+
 #include <chrono>
 #include <format>
 #include <span>
@@ -11,7 +13,6 @@
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tracing/AgentTracer.hpp>
 #include <agent/tracing/TraceEvent.hpp>
-#include <platform/StringUtils.hpp>
 
 namespace endo::agent
 {
@@ -60,7 +61,7 @@ auto AgentSession::processMessage(std::string_view userMessage,
     -> std::expected<std::string, AgentError>
 {
     auto trimmedMessage = std::string(userMessage);
-    endo::platform::trimInPlace(trimmedMessage);
+    core::platform::trimInPlace(trimmedMessage);
     if (trimmedMessage.empty())
         return std::unexpected(AgentError {
             .code = AgentErrorCode::ProviderError,
@@ -305,7 +306,7 @@ auto AgentSession::processMessageForPlan(
     submitPlanTool->clearParsedPlan();
 
     auto trimmedPlanMessage = std::string(userMessage);
-    endo::platform::trimInPlace(trimmedPlanMessage);
+    core::platform::trimInPlace(trimmedPlanMessage);
     if (trimmedPlanMessage.empty())
         return std::unexpected(AgentError {
             .code = AgentErrorCode::ProviderError,

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/testing/EnvHelper.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdlib>
@@ -8,7 +10,6 @@
 #include <sstream>
 
 #include <agent/tools/SaveMemoryTool.hpp>
-#include <testing/EnvHelper.hpp>
 
 using namespace endo::agent;
 
@@ -25,10 +26,10 @@ class TempHome
         _previousHome = saveEnv("HOME");
         _previousXdg = saveEnv("XDG_CONFIG_HOME");
         _previousAppdata = saveEnv("APPDATA");
-        endo::testing::setTestEnv("HOME", _path.string().c_str());
+        core::testing::setTestEnv("HOME", _path.string().c_str());
         // Clear XDG_CONFIG_HOME and APPDATA so that configHome() falls through to HOME/.config.
-        endo::testing::unsetTestEnv("XDG_CONFIG_HOME");
-        endo::testing::unsetTestEnv("APPDATA");
+        core::testing::unsetTestEnv("XDG_CONFIG_HOME");
+        core::testing::unsetTestEnv("APPDATA");
     }
 
     ~TempHome()
@@ -66,9 +67,9 @@ class TempHome
     static void restoreEnv(char const* name, std::optional<std::string> const& prev)
     {
         if (prev.has_value())
-            endo::testing::setTestEnv(name, prev->c_str());
+            core::testing::setTestEnv(name, prev->c_str());
         else
-            endo::testing::unsetTestEnv(name);
+            core::testing::unsetTestEnv(name);
     }
 
     std::filesystem::path _path;

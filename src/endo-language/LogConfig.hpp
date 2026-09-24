@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <crispy/LogStore.hpp>
+#include <core/log/LogStore.hpp>
 
 #include <string>
 #include <string_view>
@@ -89,8 +89,8 @@ class Config
 [[nodiscard]] inline auto categoryState(std::string_view name, bool defaultEnabled = false) noexcept
 {
     if (Config::instance().shouldEnable(name))
-        return logstore::Category::State::Enabled;
-    return defaultEnabled ? logstore::Category::State::Enabled : logstore::Category::State::Disabled;
+        return core::log::Category::State::Enabled;
+    return defaultEnabled ? core::log::Category::State::Enabled : core::log::Category::State::Disabled;
 }
 
 } // namespace endo::log

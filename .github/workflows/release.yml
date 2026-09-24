@@ -52,9 +52,7 @@ jobs:
         run: wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- ${{ env.LLVM_VERSION }}
 
       - name: Install system dependencies
-        # libssl-dev backs the TLS transport in the vendored net library; it also
-        # ships libssl.a, which a fully-static link needs.
-        run: sudo apt-get install -y ninja-build libc6-dev libssl-dev
+        run: sudo apt-get install -y ninja-build libc6-dev
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -64,9 +62,6 @@ jobs:
 
       - name: Install CMake
         uses: ssrobins/install-cmake@v1
-
-      - name: "Fetch vendored contour sources"
-        run: python3 scripts/get_contour_dirs.py
 
       - name: Configure
         run: >
@@ -133,10 +128,8 @@ jobs:
 
       - name: Install Homebrew dependencies
         run: |
-          brew install llvm ninja openssl@3
+          brew install llvm ninja
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
-          # macOS ships no usable OpenSSL headers, so point find_package at Homebrew's.
-          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -146,9 +139,6 @@ jobs:
 
       - name: Install CMake
         uses: ssrobins/install-cmake@v1
-
-      - name: "Fetch vendored contour sources"
-        run: python3 scripts/get_contour_dirs.py
 
       - name: Configure
         run: cmake --preset clang-release -DENDO_ENABLE_AGENT=ON
@@ -189,9 +179,6 @@ jobs:
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
-
-      - name: "Fetch vendored contour sources"
-        run: python scripts/get_contour_dirs.py
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11

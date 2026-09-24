@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PersistentHistory.hpp"
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <yaml-cpp/yaml.h>
 
@@ -42,7 +42,7 @@ namespace
 
 } // namespace
 
-PersistentHistory::PersistentHistory(FileSystem const& fs, size_t maxSize):
+PersistentHistory::PersistentHistory(core::platform::FileSystem const& fs, size_t maxSize):
     _fs(fs), _filePath(defaultHistoryPath()), _maxSize(maxSize)
 {
     _richEntries.reserve(std::min(maxSize, size_t { 256 }));
@@ -294,7 +294,7 @@ std::vector<std::string_view> PersistentHistory::search(std::string_view prefix,
     // Search from newest to oldest (reverse order)
     for (auto it = _richEntries.rbegin(); it != _richEntries.rend() && results.size() < maxResults; ++it)
     {
-        if (tui::SmartCaseMatch::matchesPrefix(it->command, prefix))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(it->command, prefix))
         {
             // Entries are unique in _richEntries, no dedup needed
             results.emplace_back(it->command);
@@ -310,7 +310,7 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
     auto results = std::vector<FuzzySearchResult> {};
     results.reserve(std::min(maxResults * 2, _richEntries.size()));
 
-    auto fuzzyConfig = tui::FuzzyConfig {};
+    auto fuzzyConfig = core::tui::completer::FuzzyConfig {};
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
     // CWD ranking bonuses — exact must outrank maxRecencyBonus so same-CWD entries
@@ -340,14 +340,14 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
     for (auto it = _richEntries.rbegin(); it != _richEntries.rend(); ++it, ++position)
     {
         // Check prefix match first
-        auto const isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(it->command, prefix);
-        auto fuzzyResult = tui::FuzzyMatchResult {};
+        auto const isPrefixMatch = core::tui::completer::SmartCaseMatch::matchesPrefix(it->command, prefix);
+        auto fuzzyResult = core::tui::completer::FuzzyMatchResult {};
         auto isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(it->command, prefix);
-            auto const textLen = tui::FuzzyMatch::countGraphemes(it->command);
+            fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(it->command, prefix);
+            auto const textLen = core::tui::completer::FuzzyMatch::countGraphemes(it->command);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -386,12 +386,13 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(
 
         if (isPrefixMatch)
         {
-            score = tui::SmartCaseMatch::adjustScore(100, it->command, prefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(100, it->command, prefix);
             score += fuzzyConfig.prefixMatchBonus + recencyBonus + frequencyBonus + cwdBonus;
         }
         else
         {
-            score = tui::FuzzyMatch::calculateScore(50, it->command, prefix, fuzzyResult, fuzzyConfig);
+            score = core::tui::completer::FuzzyMatch::calculateScore(
+                50, it->command, prefix, fuzzyResult, fuzzyConfig);
             score += recencyBonus + frequencyBonus + cwdBonus;
             matchPositions = std::move(fuzzyResult.positions);
         }

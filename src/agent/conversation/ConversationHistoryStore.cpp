@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <crispy/Base64.hpp>
+#include <core/Base64.hpp>
 
 #include <array>
 #include <fstream>
@@ -96,8 +96,8 @@ namespace
                 else if constexpr (std::is_same_v<T, ImageBlock>)
                 {
                     auto const encoded =
-                        crispy::base64::encode(reinterpret_cast<char const*>(b.data.data()),
-                                               reinterpret_cast<char const*>(b.data.data() + b.data.size()));
+                        core::base64::encode(reinterpret_cast<char const*>(b.data.data()),
+                                             reinterpret_cast<char const*>(b.data.data() + b.data.size()));
                     return nlohmann::json { { "type", "image" },
                                             { "media_type", b.mediaType },
                                             { "data", encoded } };
@@ -134,7 +134,7 @@ namespace
         if (type == "image")
         {
             auto const encoded = j.at("data").get<std::string>();
-            auto decoded = crispy::base64::decode(encoded);
+            auto decoded = core::base64::decode(encoded);
             auto bytes = std::vector<uint8_t>(decoded.begin(), decoded.end());
             return ImageBlock {
                 .data = std::move(bytes),

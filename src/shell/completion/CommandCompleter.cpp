@@ -13,7 +13,7 @@ namespace endo
 {
 
 CommandCompleter::CommandCompleter(PathCommandIndex const& pathCommands,
-                                   EnvironmentProvider const& env,
+                                   core::platform::EnvironmentProvider const& env,
                                    History const& history):
     _pathCommands(pathCommands), _env(env), _history(history)
 {

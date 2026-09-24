@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <cstdint>
 #include <string>
@@ -13,8 +13,8 @@ namespace endo
 /// Describes the visual decoration for a file entry in table output.
 struct FileDecoration
 {
-    std::string_view icon; ///< Nerd Font glyph (UTF-8 encoded, single character).
-    tui::Style style;      ///< SGR style for the name cell (foreground color, bold, dim, etc.).
+    std::string_view icon;  ///< Nerd Font glyph (UTF-8 encoded, single character).
+    core::tui::Style style; ///< SGR style for the name cell (foreground color, bold, dim, etc.).
 };
 
 /// Returns the visual decoration (icon and color) for a file based on its properties.
@@ -48,6 +48,6 @@ struct FileDecoration
 ///
 /// @param style The terminal style to encode.
 /// @return SGR escape sequence string (e.g., "\033[1;38;2;92;122;255m").
-[[nodiscard]] std::string sgrSequence(tui::Style const& style);
+[[nodiscard]] std::string sgrSequence(core::tui::Style const& style);
 
 } // namespace endo

@@ -7,7 +7,7 @@
 namespace endo::agent
 {
 
-AgentWorker::AgentWorker(AgentSession& session, platform::MessageQueue<FromAgentMessage>& outbound):
+AgentWorker::AgentWorker(AgentSession& session, core::platform::MessageQueue<FromAgentMessage>& outbound):
     _session(session), _outbound(outbound)
 {
     // Wire tool status callback to push ToolStatusMessage to outbound queue.

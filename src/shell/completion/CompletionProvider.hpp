@@ -3,7 +3,7 @@
 
 #include <endo-language/ide/CompletionContext.hpp>
 
-#include <tui/completer/CompletionItem.hpp>
+#include <core/tui/completer/CompletionItem.hpp>
 
 #include <string>
 #include <vector>
@@ -11,8 +11,8 @@
 namespace endo
 {
 
-// Use tui::CompletionItem for completion items
-using tui::CompletionItem;
+// Use core::tui::completer::CompletionItem for completion items
+using core::tui::completer::CompletionItem;
 
 /// @brief Abstract base for completion providers.
 ///

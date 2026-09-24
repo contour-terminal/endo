@@ -18,10 +18,13 @@ class MockProcessManager final: public ProcessManager
 {
   public:
     /// Callback type for custom spawn behavior.
-    using SpawnHandler = std::function<std::expected<ProcessId, PlatformError>(SpawnConfig const&)>;
+    using SpawnHandler =
+        std::function<std::expected<core::platform::ProcessId, core::platform::PlatformError>(
+            SpawnConfig const&)>;
 
     /// Callback type for custom wait behavior.
-    using WaitHandler = std::function<std::expected<WaitResult, PlatformError>(ProcessId, WaitFlags)>;
+    using WaitHandler = std::function<std::expected<WaitResult, core::platform::PlatformError>(
+        core::platform::ProcessId, WaitFlags)>;
 
     /// Sets a custom spawn handler.
     void onSpawn(SpawnHandler handler) { _spawnHandler = std::move(handler); }
@@ -33,12 +36,13 @@ class MockProcessManager final: public ProcessManager
     [[nodiscard]] std::vector<SpawnConfig> const& spawnedConfigs() const noexcept { return _spawnedConfigs; }
 
     /// Returns the list of signals sent (pid, signal pairs).
-    [[nodiscard]] std::vector<std::pair<ProcessId, int>> const& sentSignals() const noexcept
+    [[nodiscard]] std::vector<std::pair<core::platform::ProcessId, int>> const& sentSignals() const noexcept
     {
         return _sentSignals;
     }
 
-    [[nodiscard]] std::expected<ProcessId, PlatformError> spawn(SpawnConfig const& config) override
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> spawn(
+        SpawnConfig const& config) override
     {
         _spawnedConfigs.push_back(config);
         if (_spawnHandler)
@@ -46,61 +50,65 @@ class MockProcessManager final: public ProcessManager
         return _nextPid++;
     }
 
-    [[nodiscard]] std::expected<WaitResult, PlatformError> wait(ProcessId pid, WaitFlags flags = {}) override
+    [[nodiscard]] std::expected<WaitResult, core::platform::PlatformError> wait(core::platform::ProcessId pid,
+                                                                                WaitFlags flags = {}) override
     {
         if (_waitHandler)
             return _waitHandler(pid, flags);
         return WaitResult { .exitCode = 0 };
     }
 
-    [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> waitPgid(
-        ProcessId /*pgid*/, WaitFlags /*flags*/) override
+    [[nodiscard]] std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>,
+                                core::platform::PlatformError>
+    waitPgid(core::platform::ProcessId /*pgid*/, WaitFlags /*flags*/) override
     {
         return std::nullopt;
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> sendSignal(ProcessId pid, int signal) override
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> sendSignal(core::platform::ProcessId pid,
+                                                                                int signal) override
     {
         _sentSignals.emplace_back(pid, signal);
         return {};
     }
 
-    [[nodiscard]] std::expected<ProcessId, PlatformError> getForegroundPgrp(NativeHandle /*fd*/) override
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> getForegroundPgrp(
+        core::platform::NativeHandle /*fd*/) override
     {
-        return static_cast<ProcessId>(1);
+        return static_cast<core::platform::ProcessId>(1);
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> setForegroundPgrp(NativeHandle /*fd*/,
-                                                                       ProcessId /*pgid*/) override
-    {
-        return {};
-    }
-
-    [[nodiscard]] std::expected<NativeHandle, PlatformError> openFile(std::filesystem::path const& /*path*/,
-                                                                      int /*flags*/,
-                                                                      int /*mode*/) override
-    {
-        return std::unexpected(PlatformError::NotImplemented);
-    }
-
-    [[nodiscard]] std::expected<ProcessId, PlatformError> createSession() override
-    {
-        return static_cast<ProcessId>(1);
-    }
-
-    [[nodiscard]] std::expected<void, PlatformError> setProcessGroup(ProcessId /*pid*/,
-                                                                     ProcessId /*pgid*/) override
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setForegroundPgrp(
+        core::platform::NativeHandle /*fd*/, core::platform::ProcessId /*pgid*/) override
     {
         return {};
     }
 
-    [[nodiscard]] std::expected<void, PlatformError> duplicateFd(NativeHandle /*src*/,
-                                                                 NativeHandle /*dst*/) override
+    [[nodiscard]] std::expected<core::platform::NativeHandle, core::platform::PlatformError> openFile(
+        std::filesystem::path const& /*path*/, int /*flags*/, int /*mode*/) override
+    {
+        return std::unexpected(core::platform::PlatformError::NotImplemented);
+    }
+
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> createSession()
+        override
+    {
+        return static_cast<core::platform::ProcessId>(1);
+    }
+
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setProcessGroup(
+        core::platform::ProcessId /*pid*/, core::platform::ProcessId /*pgid*/) override
     {
         return {};
     }
 
-    void closeHandle(NativeHandle /*handle*/) noexcept override {}
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> duplicateFd(
+        core::platform::NativeHandle /*src*/, core::platform::NativeHandle /*dst*/) override
+    {
+        return {};
+    }
+
+    void closeHandle(core::platform::NativeHandle /*handle*/) noexcept override {}
 
     void closeExtraHandles() noexcept override {}
 
@@ -108,8 +116,8 @@ class MockProcessManager final: public ProcessManager
     SpawnHandler _spawnHandler;
     WaitHandler _waitHandler;
     std::vector<SpawnConfig> _spawnedConfigs;
-    std::vector<std::pair<ProcessId, int>> _sentSignals;
-    ProcessId _nextPid = 1000;
+    std::vector<std::pair<core::platform::ProcessId, int>> _sentSignals;
+    core::platform::ProcessId _nextPid = 1000;
 };
 
 } // namespace endo::platform::testing

@@ -11,7 +11,7 @@
 namespace endo
 {
 
-BindCommand::BindCommand(tui::KeyBindings const& bindings): _bindings(bindings)
+BindCommand::BindCommand(core::tui::KeyBindings const& bindings): _bindings(bindings)
 {
 }
 
@@ -31,7 +31,7 @@ CoreVM::TypedObject* BindCommand::execute(CoreVM::Runner& runner) const
     {
         auto writer = builtins::RecordWriter { &runner, CoreVM::BuiltinTypeId::KeyBindingInfo };
         auto* record =
-            writer.set("key", chord.toString()).set("action", tui::editActionToString(action)).record();
+            writer.set("key", chord.toString()).set("action", core::tui::editActionToString(action)).record();
 
         list = runner.makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
     }

@@ -114,7 +114,7 @@ add_library(endo STATIC
     ScopedLogger.hpp
 )
 
-target_link_libraries(endo PUBLIC CoreVM crispy::core nlohmann_json::nlohmann_json unicode::unicode)
+target_link_libraries(endo PUBLIC CoreVM core::base core::log core::cli core::platform nlohmann_json::nlohmann_json unicode::unicode)
 target_include_directories(endo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Tracing support
@@ -156,7 +156,7 @@ if(ENDO_TESTING)
 
         format/SourceFormatter_test.cpp
     )
-    target_link_libraries(test-endo-language endo endo-platform Catch2::Catch2)
+    target_link_libraries(test-endo-language endo endo-platform core::testing Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
         ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"

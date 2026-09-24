@@ -23,17 +23,16 @@
     #include <agent/providers/ProviderFactory.hpp>
     #include <agent/tools/WebSearchTool.hpp>
 #endif
+#include <core/platform/FileInfoProvider.hpp>
+#include <core/platform/Types.hpp>
+
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if defined(_WIN32)
-    #include <platform/windows/WindowsFileInfoProvider.hpp>
     #include <platform/windows/WindowsProcessProvider.hpp>
 #elif defined(__APPLE__)
     #include <platform/darwin/DarwinProcessProvider.hpp>
-    #include <platform/linux/LinuxFileInfoProvider.hpp>
 #else
-    #include <platform/linux/LinuxFileInfoProvider.hpp>
     #include <platform/linux/LinuxProcessProvider.hpp>
 #endif
 
@@ -582,12 +581,8 @@ void Shell::registerStructuredBuiltins()
         .returnType(CoreVM::LiteralType::Number)
         .bind([this](CoreVM::Params& args) {
             auto const path = args.getString(1);
-#if defined(_WIN32)
-            WindowsFileInfoProvider provider;
-#else
-            LinuxFileInfoProvider provider;
-#endif
-            LsCommand cmd(provider, std::string(path));
+            auto const provider = core::platform::nativeFileInfoProvider();
+            LsCommand cmd(*provider, std::string(path));
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });
@@ -698,7 +693,7 @@ void Shell::registerStructuredBuiltins()
                     config.arguments = { "sh", "-c", cmd };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = standardError();
+                    config.stderrFd = core::platform::standardError();
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -708,7 +703,7 @@ void Shell::registerStructuredBuiltins()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+                        auto const n = core::platform::platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));
@@ -821,7 +816,7 @@ void Shell::registerStructuredBuiltins()
                     config.arguments = { "sh", "-c", std::string(sourceCmd) };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = standardError();
+                    config.stderrFd = core::platform::standardError();
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -829,7 +824,7 @@ void Shell::registerStructuredBuiltins()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+                        auto const n = core::platform::platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));
@@ -875,7 +870,7 @@ void Shell::registerStructuredBuiltins()
                     config.arguments = { "sh", "-c", std::string(sourceCmd) };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = standardError();
+                    config.stderrFd = core::platform::standardError();
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -883,7 +878,7 @@ void Shell::registerStructuredBuiltins()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+                        auto const n = core::platform::platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));

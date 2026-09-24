@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/StringUtils.hpp>
+
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include <platform/FileSystem.hpp>
-#include <platform/StringUtils.hpp>
-
 namespace endo
 {
 
-using platform::trimInPlace;
+using core::platform::trimInPlace;
 
 /// @brief Context supplied by callers when appending to history.
 ///
@@ -37,7 +37,7 @@ struct FuzzySearchOptions
     std::string home;                  ///< $HOME; used to canonicalize CWD and expand stored paths.
     bool validateRequiredPaths = true; ///< Drop entries whose referenced paths no longer exist
                                        ///< (only applies when @c fs is non-null).
-    FileSystem const* fs = nullptr;    ///< Non-null enables required-paths existence checks.
+    core::platform::FileSystem const* fs = nullptr; ///< Non-null enables required-paths existence checks.
 };
 
 /// @brief Abstract history interface for completion and recall.

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/GenericSyntaxHighlighter.hpp>
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <cstdint>
 #include <span>
@@ -58,7 +58,7 @@ inline constexpr int LargeEditThreshold = 50;
 /// @param filePath The file path (displayed in the diff header).
 /// @param diffLines The diff lines to render.
 /// @param truncated If true, appends a truncation notice.
-void renderDiff(tui::TerminalOutput& output,
+void renderDiff(core::tui::TerminalOutput& output,
                 std::string_view filePath,
                 std::span<DiffLine const> diffLines,
                 bool truncated = false);
@@ -75,10 +75,13 @@ void renderDiff(tui::TerminalOutput& output,
 /// @param diffLines The diff lines to render.
 /// @param language The language for syntax highlighting.
 /// @param truncated If true, appends a truncation notice.
-void renderDiff(tui::TerminalOutput& output,
+/// @param highlighters The registry that issued @p language, when it is not a built-in one, or
+///        nullptr for the built-in languages alone. Non-owning.
+void renderDiff(core::tui::TerminalOutput& output,
                 std::string_view filePath,
                 std::span<DiffLine const> diffLines,
-                tui::LanguageId language,
-                bool truncated = false);
+                core::tui::LanguageId language,
+                bool truncated = false,
+                core::tui::SyntaxHighlighterRegistry const* highlighters = nullptr);
 
 } // namespace endo::agent

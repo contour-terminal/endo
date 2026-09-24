@@ -2,7 +2,7 @@
 #include <shell/commands/FindExpression.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
-#include <platform/PathUtils.hpp>
+#include <core/platform/PathUtils.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -404,13 +404,13 @@ namespace
 bool NameExpr::evaluate(FindEntry const& entry) const
 {
     if (caseInsensitive)
-        return globMatchFilename(toLower(entry.filename), toLower(pattern));
-    return globMatchFilename(entry.filename, pattern);
+        return core::platform::globMatchFilename(toLower(entry.filename), toLower(pattern));
+    return core::platform::globMatchFilename(entry.filename, pattern);
 }
 
 bool PathExpr::evaluate(FindEntry const& entry) const
 {
-    auto const pathStr = platform::normalizePath(entry.path);
+    auto const pathStr = core::platform::normalizePath(entry.path);
     if (caseInsensitive)
         return globMatch(toLower(pathStr), toLower(pattern));
     return globMatch(pathStr, pattern);

@@ -3,7 +3,7 @@
 
 #include <shell/ui/PromptModule.hpp>
 
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <span>
 #include <string_view>
@@ -20,7 +20,9 @@ namespace endo
 /// @param end The ending RGB color.
 /// @param text The text to apply the gradient to.
 /// @return A vector of PromptSegments, one per grapheme cluster.
-[[nodiscard]] PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text);
+[[nodiscard]] PromptSegments gradient(core::tui::RgbColor start,
+                                      core::tui::RgbColor end,
+                                      std::string_view text);
 
 /// @brief Produces gradient-colored prompt segments for the given text using N color stops.
 ///
@@ -30,7 +32,7 @@ namespace endo
 /// @param stops The color stops, evenly spaced along the text.
 /// @param text The text to apply the gradient to.
 /// @return A vector of PromptSegments, one per grapheme cluster.
-[[nodiscard]] PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view text);
+[[nodiscard]] PromptSegments gradient(std::span<core::tui::RgbColor const> stops, std::string_view text);
 
 /// @brief Interpolates across evenly-spaced color stops at parameter t in [0, 1].
 ///
@@ -41,6 +43,7 @@ namespace endo
 /// @param stops The color stops, evenly spaced.
 /// @param t Interpolation parameter in [0, 1].
 /// @return The interpolated color.
-[[nodiscard]] tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) noexcept;
+[[nodiscard]] core::tui::RgbColor multiStopGradient(std::span<core::tui::RgbColor const> stops,
+                                                    float t) noexcept;
 
 } // namespace endo

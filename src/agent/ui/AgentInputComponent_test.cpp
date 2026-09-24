@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/completer/CompletionItem.hpp>
-#include <tui/completer/CompletionProvider.hpp>
+#include <core/tui/completer/CompletionItem.hpp>
+#include <core/tui/completer/CompletionProvider.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -19,46 +19,48 @@ namespace
 {
 
 /// @brief Creates a printable character key event.
-tui::InputEvent charEvent(char ch)
+core::tui::InputEvent charEvent(char ch)
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>(ch),
-                           .modifiers = tui::Modifier::None,
-                           .codepoint = static_cast<char32_t>(ch) };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>(ch),
+                                 .modifiers = core::tui::Modifier::None,
+                                 .codepoint = static_cast<char32_t>(ch) };
 }
 
 /// @brief Creates a Backspace key event.
-tui::InputEvent backspaceEvent()
+core::tui::InputEvent backspaceEvent()
 {
-    return tui::KeyEvent { .key = tui::KeyCode::Backspace, .modifiers = tui::Modifier::None };
+    return core::tui::KeyEvent { .key = core::tui::KeyCode::Backspace,
+                                 .modifiers = core::tui::Modifier::None };
 }
 
 /// @brief Creates a Tab key event.
-tui::InputEvent tabEvent()
+core::tui::InputEvent tabEvent()
 {
-    return tui::KeyEvent { .key = tui::KeyCode::Tab, .modifiers = tui::Modifier::None };
+    return core::tui::KeyEvent { .key = core::tui::KeyCode::Tab, .modifiers = core::tui::Modifier::None };
 }
 
 /// @brief Creates a Ctrl+W key event (word-backward delete).
-tui::InputEvent ctrlW()
+core::tui::InputEvent ctrlW()
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('w'),
-                           .modifiers = tui::Modifier::Ctrl,
-                           .codepoint = 'w' };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>('w'),
+                                 .modifiers = core::tui::Modifier::Ctrl,
+                                 .codepoint = 'w' };
 }
 
 /// @brief Prefix-completion provider: completes any prefix of @p word to @p word.
 ///
 /// Mirrors a real prefix completer just enough to drive the ghost-text lifecycle through the
 /// production completion path (Completer::suggest), without a test-only injection seam.
-class PrefixProvider: public tui::CompletionProvider
+class PrefixProvider: public core::tui::completer::CompletionProvider
 {
   public:
     explicit PrefixProvider(std::string word): _word(std::move(word)) {}
 
-    std::vector<tui::CompletionItem> complete(std::string_view input, size_t /*cursor*/) override
+    std::vector<core::tui::completer::CompletionItem> complete(std::string_view input,
+                                                               size_t /*cursor*/) override
     {
         if (!input.empty() && _word.starts_with(input) && input.size() < _word.size())
-            return { tui::CompletionItem { .text = _word } };
+            return { core::tui::completer::CompletionItem { .text = _word } };
         return {};
     }
 
@@ -104,7 +106,8 @@ TEST_CASE("AgentInputComponent.tab_without_ghost_falls_through_to_completion", "
         (void) comp.processInput(charEvent(ch));
     std::this_thread::sleep_for(110ms);
     comp.flushDeferredUpdates();
-    (void) comp.processInput(tui::InputEvent { tui::KeyEvent { .key = tui::KeyCode::End } });
+    (void) comp.processInput(
+        core::tui::InputEvent { core::tui::KeyEvent { .key = core::tui::KeyCode::End } });
     REQUIRE(comp.inputField().text() == "cmake --build");
 
     // Word-delete the last word: the consumed-prefix seed restores "build" as ghost synchronously
@@ -134,8 +137,10 @@ TEST_CASE("AgentInputComponent.ctrl_e_accepts_ghost_text", "[agent][ghost]")
     comp.flushDeferredUpdates();
     REQUIRE(comp.inputField().ghostText() == " --build");
 
-    auto const ctrlE = tui::InputEvent { tui::KeyEvent {
-        .key = static_cast<tui::KeyCode>('e'), .modifiers = tui::Modifier::Ctrl, .codepoint = 'e' } };
+    auto const ctrlE =
+        core::tui::InputEvent { core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>('e'),
+                                                      .modifiers = core::tui::Modifier::Ctrl,
+                                                      .codepoint = 'e' } };
     (void) comp.processInput(ctrlE);
     CHECK(comp.inputField().text() == "cmake --build");
     CHECK(comp.inputField().ghostText().empty());
@@ -180,7 +185,7 @@ TEST_CASE("AgentInputComponent.history_recall_then_backspace_does_not_resurrect_
     REQUIRE(comp.inputField().text() == "cmake --build install");
 
     // Recall the history entry via Up arrow.
-    (void) comp.processInput(tui::InputEvent { tui::KeyEvent { .key = tui::KeyCode::Up } });
+    (void) comp.processInput(core::tui::InputEvent { core::tui::KeyEvent { .key = core::tui::KeyCode::Up } });
     REQUIRE(comp.inputField().text() == "ls -la");
     REQUIRE(comp.inputField().ghostText().empty());
 

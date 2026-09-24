@@ -6,14 +6,14 @@
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestEnvironmentProvider.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <memory>
-
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 #if defined(ENDO_HAS_WASM) && !defined(_WIN32)
     #include <endo-language/CompileToWasm.hpp>
@@ -758,7 +758,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
 
         case TestMode::Shell: {
             // Create in-memory filesystem and populate with auxiliary files
-            InMemoryFileSystem fs;
+            core::platform::testing::InMemoryFileSystem fs;
             fs.addDirectory("/test");
             fs.setCurrentPath("/test");
 
@@ -777,7 +777,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
             // Create test shell with isolated environment
             TestPTY pty;
             auto const initialCwd = testFile.mockCwd.value_or("/test");
-            TestEnvironment env(initialCwd);
+            core::platform::testing::TestEnvironmentProvider env(initialCwd);
 
             // Seed essential variables from real environment
             if (auto const* path = std::getenv("PATH"))

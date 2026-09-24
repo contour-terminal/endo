@@ -2,7 +2,9 @@
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
-#include <tui/TerminalProtocols.hpp>
+#include <core/platform/FileUri.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/tui/TerminalProtocols.hpp>
 
 #include <algorithm>
 #include <array>
@@ -14,9 +16,6 @@
 #include <ranges>
 #include <regex>
 #include <utility>
-
-#include <platform/FileUri.hpp>
-#include <platform/PathUtils.hpp>
 
 namespace endo::grep
 {
@@ -91,15 +90,17 @@ namespace
         // Check include patterns (if any specified, file must match at least one)
         if (!opts.includeGlobs.empty())
         {
-            auto const matches = std::ranges::any_of(
-                opts.includeGlobs, [&](auto const& glob) { return globMatchFilename(filename, glob); });
+            auto const matches = std::ranges::any_of(opts.includeGlobs, [&](auto const& glob) {
+                return core::platform::globMatchFilename(filename, glob);
+            });
             if (!matches)
                 return false;
         }
 
         // Check exclude patterns
-        if (std::ranges::any_of(opts.excludeGlobs,
-                                [&](auto const& glob) { return globMatchFilename(filename, glob); }))
+        if (std::ranges::any_of(opts.excludeGlobs, [&](auto const& glob) {
+                return core::platform::globMatchFilename(filename, glob);
+            }))
             return false;
 
         return true;
@@ -109,8 +110,9 @@ namespace
     bool isExcludedDir(std::filesystem::path const& dirPath, GrepOptions const& opts)
     {
         auto const dirname = dirPath.filename().string();
-        return std::ranges::any_of(opts.excludeDirs,
-                                   [&](auto const& pattern) { return globMatchFilename(dirname, pattern); });
+        return std::ranges::any_of(opts.excludeDirs, [&](auto const& pattern) {
+            return core::platform::globMatchFilename(dirname, pattern);
+        });
     }
 
 } // namespace
@@ -450,7 +452,7 @@ std::expected<std::regex, std::string> buildRegex(GrepOptions const& opts)
     }
 }
 
-bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& path)
+bool isBinaryFile(core::platform::FileSystem const& fs, std::filesystem::path const& path)
 {
     // Open through the injected FileSystem so binary detection works against any
     // backend (e.g. InMemoryFileSystem in tests), consistent with collectFiles.
@@ -472,7 +474,7 @@ bool isBinaryFile(platform::FileSystem const& fs, std::filesystem::path const& p
     });
 }
 
-std::vector<std::filesystem::path> collectFiles(platform::FileSystem const& fs,
+std::vector<std::filesystem::path> collectFiles(core::platform::FileSystem const& fs,
                                                 GrepOptions const& opts,
                                                 ErrorWriter const& errWriter,
                                                 bool& hasError,
@@ -568,11 +570,11 @@ FilenamePrefix::FilenamePrefix(std::string_view filename, GrepRenderOptions cons
     // Resolve the path and build the URI up to (but not including) the fragment, once. Only the
     // `#line` suffix varies per output line, so per-line work reduces to appending digits.
     auto const uri =
-        platform::fileUri(platform::absolutePath(filename, render.baseDirectory), render.uriHost);
+        core::platform::fileUri(core::platform::absolutePath(filename, render.baseDirectory), render.uriHost);
     if (uri.empty())
         return;
 
-    _linkOpenPrefix = std::string { tui::protocols::HyperlinkOpenPrefix };
+    _linkOpenPrefix = std::string { core::tui::protocols::HyperlinkOpenPrefix };
     _linkOpenPrefix += uri;
 }
 
@@ -587,7 +589,7 @@ void FilenamePrefix::appendTo(std::string& out, int lineNumber) const
             out += '#';
             out += std::to_string(lineNumber);
         }
-        out += tui::protocols::StringTerminator;
+        out += core::tui::protocols::StringTerminator;
     }
     if (_useColor)
         out += ColorFilename;
@@ -595,7 +597,7 @@ void FilenamePrefix::appendTo(std::string& out, int lineNumber) const
     if (_useColor)
         out += ColorReset;
     if (linked)
-        out += tui::protocols::HyperlinkClose;
+        out += core::tui::protocols::HyperlinkClose;
 }
 
 std::string FilenamePrefix::render() const

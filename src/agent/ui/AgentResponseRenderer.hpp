@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/Spinner.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/Spinner.hpp>
 
 #include <cstddef>
 #include <functional>
 #include <string_view>
 
-namespace tui
+namespace core::tui
 {
 class TerminalOutput;
 }
@@ -36,7 +36,11 @@ class AgentResponseRenderer
   public:
     /// @brief Constructs a renderer targeting the given terminal output.
     /// @param output The terminal output to write to.
-    explicit AgentResponseRenderer(tui::TerminalOutput& output);
+    /// @param highlighters The languages a fenced code block may be tagged with beyond the
+    ///        built-in ones, or nullptr for the built-in ones alone. Non-owning: it must outlive
+    ///        this renderer.
+    explicit AgentResponseRenderer(core::tui::TerminalOutput& output,
+                                   core::tui::SyntaxHighlighterRegistry const* highlighters = nullptr);
 
     /// @brief Begins the response, showing a thinking spinner.
     void begin();
@@ -80,9 +84,9 @@ class AgentResponseRenderer
     void renderPlanProgress(Plan const& plan, size_t currentStep);
 
   private:
-    tui::TerminalOutput& _output;
-    tui::MarkdownRenderer _markdownRenderer;
-    tui::Spinner _spinner;
+    core::tui::TerminalOutput& _output;
+    core::tui::MarkdownRenderer _markdownRenderer;
+    core::tui::Spinner _spinner;
     bool _thinking = false;
     bool _firstToken = true;
     int _lineCount = 1;         ///< Number of output lines (starts at 1 for spinner/first line).

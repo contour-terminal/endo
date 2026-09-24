@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/UserPaths.hpp>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -7,7 +9,6 @@
 
 #include <agent/tracing/AgentTracer.hpp>
 #include <nlohmann/json.hpp>
-#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -213,7 +214,7 @@ auto resolveTraceLogDirectory() -> std::filesystem::path
     }
 
     // Fallback: global state directory.
-    if (auto const home = platform::homeDirectory())
+    if (auto const home = core::platform::homeDirectory())
         return *home / ".local" / "state" / "endo" / "trace-logs";
 
 #if defined(_WIN32)

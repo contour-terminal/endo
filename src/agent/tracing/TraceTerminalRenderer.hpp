@@ -6,7 +6,7 @@
 
 #include <agent/tracing/TraceEvent.hpp>
 
-namespace tui
+namespace core::tui
 {
 class TerminalOutput;
 }
@@ -14,10 +14,10 @@ class TerminalOutput;
 namespace endo::agent
 {
 
-/// @brief Renders a trace event to a tui::TerminalOutput (interactive mode).
+/// @brief Renders a trace event to a core::tui::TerminalOutput (interactive mode).
 /// @param out The terminal output to write to.
 /// @param event The trace event to render.
-void renderTraceEvent(tui::TerminalOutput& out, TraceEvent const& event);
+void renderTraceEvent(core::tui::TerminalOutput& out, TraceEvent const& event);
 
 /// @brief Renders a trace event to stderr using raw ANSI sequences (headless mode).
 /// @param event The trace event to render.

@@ -7,9 +7,13 @@
 
 #include <http/HttpClient.hpp>
 
-#include <tui/SemanticBlockClient.hpp>
-
 #include <CoreVM/CoreVM.hpp>
+
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/Wakeup.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/SemanticBlockClient.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -22,10 +26,6 @@
 #include <span>
 #include <string>
 #include <vector>
-
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
-#include <platform/Wakeup.hpp>
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     #include <agent/AgentConfig.hpp>
@@ -56,9 +56,10 @@ struct AgentRunOptions;
     #include <agent/mcp/ServerManager.hpp>
     #include <agent/tools/WebSearchTool.hpp>
 #endif
+#include <core/platform/SignalHandler.hpp>
+
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
-#include <platform/SignalHandler.hpp>
 
 namespace endo
 {
@@ -77,7 +78,7 @@ struct ReadOptions
     std::vector<std::string> variableNames;           ///< VAR1 VAR2 ...
 };
 
-class Shell final: public SignalCallback
+class Shell final: public core::platform::SignalCallback
 {
     // The agent-mode loop is factored into AgentModeSession, which borrows this
     // shell's agent collaborators (the _agent* members and project-context cache).
@@ -87,8 +88,8 @@ class Shell final: public SignalCallback
     Shell();
     ~Shell() override;
 
-    Shell(TTY& tty, EnvironmentProvider& env);
-    Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs);
+    Shell(TTY& tty, core::platform::EnvironmentProvider& env);
+    Shell(TTY& tty, core::platform::EnvironmentProvider& env, core::platform::FileSystem& fs);
 
     /// @brief Constructs a shell over fully injected collaborators.
     /// @param tty Terminal abstraction.
@@ -97,7 +98,10 @@ class Shell final: public SignalCallback
     /// @param processManager Spawns processes and opens the descriptors handed to them.
     ///                       Anything a forked child must inherit goes through here, so a
     ///                       mock only suits a shell that spawns nothing.
-    Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager& processManager);
+    Shell(TTY& tty,
+          core::platform::EnvironmentProvider& env,
+          core::platform::FileSystem& fs,
+          ProcessManager& processManager);
 
     /// @brief Replaces the Sixel capability provider.
     ///
@@ -105,12 +109,18 @@ class Shell final: public SignalCallback
     /// @param provider The replacement provider; must not be null.
     void setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider);
 
-    [[nodiscard]] EnvironmentProvider& environment() noexcept;
-    [[nodiscard]] EnvironmentProvider const& environment() const noexcept;
+    [[nodiscard]] core::platform::EnvironmentProvider& environment() noexcept;
+    [[nodiscard]] core::platform::EnvironmentProvider const& environment() const noexcept;
 
-    [[nodiscard]] FileSystem& fs() noexcept { return _fs; }
+    /// @brief The languages this shell highlights: core::tui's built-in ones and endo's own.
+    [[nodiscard]] core::tui::SyntaxHighlighterRegistry const& syntaxHighlighters() const noexcept
+    {
+        return _highlighters;
+    }
 
-    [[nodiscard]] FileSystem const& fs() const noexcept { return _fs; }
+    [[nodiscard]] core::platform::FileSystem& fs() noexcept { return _fs; }
+
+    [[nodiscard]] core::platform::FileSystem const& fs() const noexcept { return _fs; }
 
     /// @brief The VM runtime holding this shell's registered builtins and properties.
     ///
@@ -234,7 +244,7 @@ class Shell final: public SignalCallback
     JobTable jobTable; ///< Table of background jobs
 
   private:
-    FileSystem& _fs; ///< Filesystem interface (declared before history for init order)
+    core::platform::FileSystem& _fs; ///< Filesystem interface (declared before history for init order)
 
   public:
     PersistentHistory history { _fs };    ///< Command history for completion (persisted to disk)
@@ -300,103 +310,131 @@ class Shell final: public SignalCallback
   private:
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args,
+                                        core::platform::NativeHandle outputFd);
     /// Executes the cat builtin, writing to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineCat(CoreVM::CoreStringArray const& args,
-                                       NativeHandle outputFd,
-                                       NativeHandle stdinFd);
+                                       core::platform::NativeHandle outputFd,
+                                       core::platform::NativeHandle stdinFd);
     /// Executes the sleep builtin, writing help to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineSleep(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the rm builtin, writing verbose output to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineRm(CoreVM::CoreStringArray const& args,
+                                      core::platform::NativeHandle outputFd);
     /// Executes the mkdir builtin, writing verbose output to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineMkdir(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the cp builtin, writing verbose output to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineCp(CoreVM::CoreStringArray const& args,
+                                      core::platform::NativeHandle outputFd);
     /// Executes the mv builtin, writing verbose output to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineMv(CoreVM::CoreStringArray const& args,
+                                      core::platform::NativeHandle outputFd);
     /// Executes the find builtin, writing matching paths to outputFd. Returns exit code.
-    [[nodiscard]] int executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineFind(CoreVM::CoreStringArray const& args,
+                                        core::platform::NativeHandle outputFd);
     /// Executes the grep builtin, writing matching lines to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineGrep(CoreVM::CoreStringArray const& args,
-                                        NativeHandle outputFd,
-                                        NativeHandle stdinFd);
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the timeout builtin, running a command with a time limit. Returns exit code.
-    [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineTimeout(CoreVM::CoreStringArray const& args,
+                                           core::platform::NativeHandle outputFd);
     /// Executes the kill builtin, sending signals to processes or jobs. Returns exit code.
-    [[nodiscard]] int executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineKill(CoreVM::CoreStringArray const& args,
+                                        core::platform::NativeHandle outputFd);
     /// Executes the pkill builtin, sending signals to processes matched by name or command line. Returns exit
     /// code.
-    [[nodiscard]] int executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlinePkill(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the pgrep builtin, printing PIDs of processes matched by name or command line. Returns exit
     /// code.
-    [[nodiscard]] int executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlinePgrep(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the pidof builtin, printing PIDs of processes matching program names. Returns exit code.
-    [[nodiscard]] int executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlinePidof(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the whoami builtin. Returns exit code.
-    [[nodiscard]] int executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineWhoami(CoreVM::CoreStringArray const& args,
+                                          core::platform::NativeHandle outputFd);
     /// Executes the hostname builtin. Returns exit code.
-    [[nodiscard]] int executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineHostname(CoreVM::CoreStringArray const& args,
+                                            core::platform::NativeHandle outputFd);
     /// Executes the date builtin. Returns exit code.
-    [[nodiscard]] int executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineDate(CoreVM::CoreStringArray const& args,
+                                        core::platform::NativeHandle outputFd);
     /// Executes the cal builtin (calendar view with optional color). Returns exit code.
-    [[nodiscard]] int executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineCal(CoreVM::CoreStringArray const& args,
+                                       core::platform::NativeHandle outputFd);
     /// Executes the uname builtin. Returns exit code.
-    [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineUname(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the nproc builtin. Returns exit code.
-    [[nodiscard]] int executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineNproc(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the pwd builtin, printing the current working directory. Returns exit code.
-    [[nodiscard]] int executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlinePwd(CoreVM::CoreStringArray const& args,
+                                       core::platform::NativeHandle outputFd);
     /// Executes the basename builtin. Returns exit code.
-    [[nodiscard]] int executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineBasename(CoreVM::CoreStringArray const& args,
+                                            core::platform::NativeHandle outputFd);
     /// Executes the dirname builtin. Returns exit code.
-    [[nodiscard]] int executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineDirname(CoreVM::CoreStringArray const& args,
+                                           core::platform::NativeHandle outputFd);
     /// Executes the realpath builtin. Returns exit code.
-    [[nodiscard]] int executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineRealpath(CoreVM::CoreStringArray const& args,
+                                            core::platform::NativeHandle outputFd);
     /// Executes the touch builtin. Returns exit code.
-    [[nodiscard]] int executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineTouch(CoreVM::CoreStringArray const& args,
+                                         core::platform::NativeHandle outputFd);
     /// Executes the ln builtin. Returns exit code.
-    [[nodiscard]] int executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineLn(CoreVM::CoreStringArray const& args,
+                                      core::platform::NativeHandle outputFd);
     /// Executes the mktemp builtin. Returns exit code.
-    [[nodiscard]] int executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineMktemp(CoreVM::CoreStringArray const& args,
+                                          core::platform::NativeHandle outputFd);
     /// Executes the head builtin. Returns exit code.
     [[nodiscard]] int executeInlineHead(CoreVM::CoreStringArray const& args,
-                                        NativeHandle outputFd,
-                                        NativeHandle stdinFd);
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the tail builtin. Returns exit code.
     [[nodiscard]] int executeInlineTail(CoreVM::CoreStringArray const& args,
-                                        NativeHandle outputFd,
-                                        NativeHandle stdinFd);
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the wc builtin. Returns exit code.
     [[nodiscard]] int executeInlineWc(CoreVM::CoreStringArray const& args,
-                                      NativeHandle outputFd,
-                                      NativeHandle stdinFd);
+                                      core::platform::NativeHandle outputFd,
+                                      core::platform::NativeHandle stdinFd);
     /// Executes the sort builtin. Returns exit code.
     [[nodiscard]] int executeInlineSort(CoreVM::CoreStringArray const& args,
-                                        NativeHandle outputFd,
-                                        NativeHandle stdinFd);
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the uniq builtin. Returns exit code.
     [[nodiscard]] int executeInlineUniq(CoreVM::CoreStringArray const& args,
-                                        NativeHandle outputFd,
-                                        NativeHandle stdinFd);
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the cut builtin. Returns exit code.
     [[nodiscard]] int executeInlineCut(CoreVM::CoreStringArray const& args,
-                                       NativeHandle outputFd,
-                                       NativeHandle stdinFd);
+                                       core::platform::NativeHandle outputFd,
+                                       core::platform::NativeHandle stdinFd);
     /// Executes the tr builtin. Returns exit code.
     [[nodiscard]] int executeInlineTr(CoreVM::CoreStringArray const& args,
-                                      NativeHandle outputFd,
-                                      NativeHandle stdinFd);
+                                      core::platform::NativeHandle outputFd,
+                                      core::platform::NativeHandle stdinFd);
     /// Executes the tee builtin. Returns exit code.
     [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
-                                       NativeHandle outputFd,
-                                       NativeHandle stdinFd);
+                                       core::platform::NativeHandle outputFd,
+                                       core::platform::NativeHandle stdinFd);
     /// Executes the history builtin. Returns exit code.
-    [[nodiscard]] int executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineHistory(CoreVM::CoreStringArray const& args,
+                                           core::platform::NativeHandle outputFd);
     /// Executes the source builtin, running a script in the current shell context. Returns exit code.
-    [[nodiscard]] int executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineSource(CoreVM::CoreStringArray const& args,
+                                          core::platform::NativeHandle outputFd);
     /// Executes the source-env builtin, sourcing a script and importing its environment. Returns exit code.
-    [[nodiscard]] int executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineSourceEnv(CoreVM::CoreStringArray const& args,
+                                             core::platform::NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
     void finalizePipelineBuiltin(bool lastInChain,
                                  CoreVM::CoreStringArray const& args,
@@ -413,8 +451,8 @@ class Shell final: public SignalCallback
     /// @return Exit code if the command was an inline builtin, std::nullopt otherwise.
     [[nodiscard]] std::optional<int> tryExecuteInlineBuiltin(std::string_view program,
                                                              CoreVM::CoreStringArray const& args,
-                                                             NativeHandle outputFd,
-                                                             NativeHandle inputFd);
+                                                             core::platform::NativeHandle outputFd,
+                                                             core::platform::NativeHandle inputFd);
 
     /// Executes an .endo script file in the current shell context (like source).
     /// @return Exit code of the script.
@@ -466,10 +504,10 @@ class Shell final: public SignalCallback
     /// Result of running a command in the foreground with job control.
     struct ForegroundResult
     {
-        int exitCode = 0;     ///< Exit code if process terminated
-        bool stopped = false; ///< True if process was stopped (Ctrl+Z)
-        ProcessId pid = 0;    ///< Process ID of the child
-        ProcessId pgid = 0;   ///< Process group ID
+        int exitCode = 0;                   ///< Exit code if process terminated
+        bool stopped = false;               ///< True if process was stopped (Ctrl+Z)
+        core::platform::ProcessId pid = 0;  ///< Process ID of the child
+        core::platform::ProcessId pgid = 0; ///< Process group ID
     };
 
     [[nodiscard]] std::expected<ForegroundResult, ShellError> runForeground(SpawnConfig& config,
@@ -530,7 +568,8 @@ class Shell final: public SignalCallback
     // --- Read command builtins (builtins/ReadCommand.cpp) ---
     void builtinReadDefault(CoreVM::Params& context);
     void builtinRead(CoreVM::Params& context);
-    [[nodiscard]] static std::string readInputLine(NativeHandle inputFd, ReadOptions const& options);
+    [[nodiscard]] static std::string readInputLine(core::platform::NativeHandle inputFd,
+                                                   ReadOptions const& options);
     [[nodiscard]] std::vector<std::string> splitByIFS(std::string_view input) const;
 
     // --- User commands (builtins/UserCommands.cpp) ---
@@ -538,18 +577,20 @@ class Shell final: public SignalCallback
     void builtinWhich(CoreVM::Params& context);
 
     // --- Directory config builtins (builtins/DirectoryConfigBuiltins.cpp) ---
-    [[nodiscard]] int executeInlineDirConfig(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    [[nodiscard]] int executeInlineDirConfig(CoreVM::CoreStringArray const& args,
+                                             core::platform::NativeHandle outputFd);
 
     // --- Shared helpers ---
 
     /// @brief Renders markdown help text to a file descriptor.
     ///
-    /// When outputFd is a TTY, uses tui::MarkdownRenderer for styled output;
+    /// When outputFd is a TTY, uses core::tui::MarkdownRenderer for styled output;
     /// otherwise falls back to raw text.
     /// @param outputFd File descriptor to write to.
     /// @param markdownContent The markdown text to render.
     /// @return Always 0.
-    [[nodiscard]] static int renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent);
+    [[nodiscard]] int renderMarkdownHelp(core::platform::NativeHandle outputFd,
+                                         std::string_view markdownContent);
 
     /// @brief Renders a markdown document to a terminal file descriptor.
     ///
@@ -562,7 +603,7 @@ class Shell final: public SignalCallback
     /// @param baseDir Directory the document lives in; relative image paths resolve here.
     /// @param indent Left margin in columns applied to every rendered line.
     /// @return Always 0.
-    [[nodiscard]] int renderMarkdownDocument(NativeHandle outputFd,
+    [[nodiscard]] int renderMarkdownDocument(core::platform::NativeHandle outputFd,
                                              std::string_view markdownContent,
                                              std::filesystem::path const& baseDir,
                                              int indent);
@@ -612,7 +653,7 @@ class Shell final: public SignalCallback
         _tty.writeToStderr(text);
     }
 
-    std::unique_ptr<tui::SemanticBlockClient> _semanticBlockClient;
+    std::unique_ptr<core::tui::SemanticBlockClient> _semanticBlockClient;
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     // --- Agent mode ---
@@ -627,8 +668,8 @@ class Shell final: public SignalCallback
     /// @param runtime The runtime driving the flow (must outlive the call).
     /// @param initialMessage An optional first user message to send to the agent.
     /// @return A task that completes when the user leaves agent mode.
-    [[nodiscard]] coro::Task<void> runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
-                                                    std::optional<std::string> initialMessage);
+    [[nodiscard]] core::async::Task<void> runAgentModeFlow(core::tui::runtime::TuiRuntime* runtime,
+                                                           std::optional<std::string> initialMessage);
 
     /// @brief Offers error recovery after a failed command.
     /// @param exitCode The exit code of the failed command.
@@ -642,7 +683,7 @@ class Shell final: public SignalCallback
     std::unique_ptr<http::HttpClient> _agentHttpClient;
     std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
     std::unique_ptr<agent::AgentSession> _agentSession;
-    platform::Wakeup _agentWakeup; ///< Wakeup primitive for agent event loop integration.
+    core::platform::Wakeup _agentWakeup; ///< Wakeup primitive for agent event loop integration.
     std::optional<agent::ProjectContext>
         _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
     std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.
@@ -653,8 +694,12 @@ class Shell final: public SignalCallback
 
     CoreVM::Runtime _runtime;
     CoreVM::diagnostics::BufferedReport _moduleReport; ///< Diagnostics report for module loading
-    EnvironmentProvider& _env;
+    core::platform::EnvironmentProvider& _env;
     TTY& _tty;
+    /// core::tui's languages plus endo's own, which selects .endo files and ```endo fences.
+    core::tui::SyntaxHighlighterRegistry _highlighters;
+    core::tui::LanguageId _endoLanguage =
+        core::tui::LanguageId::None;                           ///< What _highlighters issued for endo.
     std::unique_ptr<SixelCapabilityProvider> _sixelCapability; ///< Terminal Sixel support (lazy, cached).
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
@@ -675,14 +720,14 @@ class Shell final: public SignalCallback
     {
         struct IODescriptors
         {
-            NativeHandle reader;
-            NativeHandle writer;
+            core::platform::NativeHandle reader;
+            core::platform::NativeHandle writer;
         };
 
-        NativeHandle defaultStdinFd = InvalidHandle;
-        NativeHandle defaultStdoutFd = InvalidHandle;
+        core::platform::NativeHandle defaultStdinFd = core::platform::InvalidHandle;
+        core::platform::NativeHandle defaultStdoutFd = core::platform::InvalidHandle;
         std::unique_ptr<Pipe> currentPipe = nullptr;
-        NativeHandle lastReleasedReaderFd = InvalidHandle;
+        core::platform::NativeHandle lastReleasedReaderFd = core::platform::InvalidHandle;
 
         auto requestShellPipe(bool lastInChain) -> IODescriptors;
 
@@ -695,10 +740,10 @@ class Shell final: public SignalCallback
 
     PipelineBuilder _currentPipelineBuilder;
 
-    std::vector<ProcessId> _currentProcessGroupPids;
+    std::vector<core::platform::ProcessId> _currentProcessGroupPids;
     std::vector<std::string> _pipelineCommands; ///< Commands in current pipeline for job table display
-    std::optional<ProcessId> _leftPid;
-    std::optional<ProcessId> _rightPid;
+    std::optional<core::platform::ProcessId> _leftPid;
+    std::optional<core::platform::ProcessId> _rightPid;
 
     int _exitCode = -1;
     /// Scratch buffer populated by the `__prompt_capture_string` builtin when
@@ -712,12 +757,12 @@ class Shell final: public SignalCallback
     bool _lsIcons = true;               ///< Show Nerd Font icons in ls output
     bool _lsDirectorySlash = true;      ///< Append trailing '/' to directory names
     bool _hyperlinks = true;            ///< Emit OSC 8 hyperlinks in shell-generated output
-    ProcessId _shellPid = 0;
-    ProcessId _shellPgid = 0;          ///< Shell's process group ID
-    int _signalFd = -1;                ///< signalfd for Linux, -1 otherwise
-    platform::Wakeup _interruptWakeup; ///< Signalled by SignalHandler on Ctrl+C to wake a blocked wait.
-    int _shellLevel = 0;               ///< Shell nesting depth (0 = outermost)
-    std::optional<ProcessId> _lastBackgroundPid;
+    core::platform::ProcessId _shellPid = 0;
+    core::platform::ProcessId _shellPgid = 0; ///< Shell's process group ID
+    int _signalFd = -1;                       ///< signalfd for Linux, -1 otherwise
+    core::platform::Wakeup _interruptWakeup; ///< Signalled by SignalHandler on Ctrl+C to wake a blocked wait.
+    int _shellLevel = 0;                     ///< Shell nesting depth (0 = outermost)
+    std::optional<core::platform::ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
     bool _interactiveReady =
         false; ///< Whether interactive subsystems (history, completer, dirconfig) are initialized
@@ -742,7 +787,7 @@ class Shell final: public SignalCallback
             std::string path;
             std::string content;
             bool append = false;
-            NativeHandle openedFd = InvalidHandle;
+            core::platform::NativeHandle openedFd = core::platform::InvalidHandle;
         };
 
         std::vector<Entry> entries;
@@ -751,11 +796,13 @@ class Shell final: public SignalCallback
 
         /// Get the effective stdout fd considering output redirects.
         /// Opens the redirect file if needed.
-        [[nodiscard]] NativeHandle getEffectiveStdoutFd(NativeHandle defaultFd, ProcessManager& pm);
+        [[nodiscard]] core::platform::NativeHandle getEffectiveStdoutFd(
+            core::platform::NativeHandle defaultFd, ProcessManager& pm);
 
         /// Get the effective stdin fd considering input redirects.
         /// Opens the redirect file if needed.
-        [[nodiscard]] NativeHandle getEffectiveStdinFd(NativeHandle defaultFd, ProcessManager& pm);
+        [[nodiscard]] core::platform::NativeHandle getEffectiveStdinFd(core::platform::NativeHandle defaultFd,
+                                                                       ProcessManager& pm);
 
         void addInputFile(int targetFd, std::string path);
         void addOutputFile(int sourceFd, std::string path, bool append);
@@ -769,7 +816,7 @@ class Shell final: public SignalCallback
     struct SubstitutionCapture
     {
         std::unique_ptr<Pipe> pipe;
-        NativeHandle savedStdout = InvalidHandle;
+        core::platform::NativeHandle savedStdout = core::platform::InvalidHandle;
         std::string output;
 
         void clear();
@@ -779,8 +826,8 @@ class Shell final: public SignalCallback
 
     std::vector<std::unique_ptr<Pipe>> _processSubstitutionPipes;
     std::string _procSubstFdPath;
-    std::vector<ProcessId> _procSubstChildPids;
-    std::vector<NativeHandle> _procSubstExposedFds;
+    std::vector<core::platform::ProcessId> _procSubstChildPids;
+    std::vector<core::platform::NativeHandle> _procSubstExposedFds;
 
     struct ForLoopState
     {

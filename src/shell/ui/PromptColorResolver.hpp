@@ -3,7 +3,7 @@
 
 #include <shell/ui/PromptConfig.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <optional>
 #include <string>
@@ -15,24 +15,24 @@ namespace endo
 /// @brief Resolved prompt colors — merges color overrides with theme defaults.
 ///
 /// Each field is a fully resolved ColorSpec (solid or gradient). The background
-/// field uses tui::Color which may be std::monostate for transparent backgrounds.
+/// field uses core::tui::Color which may be std::monostate for transparent backgrounds.
 struct ResolvedPromptColors
 {
-    ColorSpec path;           ///< Path module text color.
-    ColorSpec gitClean;       ///< Git branch name when clean.
-    ColorSpec gitDirty;       ///< Git branch name when dirty.
-    ColorSpec gitStaged;      ///< Git indicator when staged.
-    ColorSpec indicator;      ///< Input line indicator.
-    ColorSpec indicatorError; ///< Indicator color when last command failed.
-    ColorSpec exitCode;       ///< Exit code badge color.
-    ColorSpec duration;       ///< Duration badge color.
-    ColorSpec hostname;       ///< Hostname text color.
-    ColorSpec username;       ///< Username text color.
-    tui::Color background;    ///< Prompt background (may be monostate for transparent).
-    ColorSpec separator;      ///< Separator/bar color.
-    ColorSpec badge;          ///< Badge background color.
-    ColorSpec badgeText;      ///< Badge text color.
-    ColorSpec clock;          ///< Clock text color.
+    ColorSpec path;              ///< Path module text color.
+    ColorSpec gitClean;          ///< Git branch name when clean.
+    ColorSpec gitDirty;          ///< Git branch name when dirty.
+    ColorSpec gitStaged;         ///< Git indicator when staged.
+    ColorSpec indicator;         ///< Input line indicator.
+    ColorSpec indicatorError;    ///< Indicator color when last command failed.
+    ColorSpec exitCode;          ///< Exit code badge color.
+    ColorSpec duration;          ///< Duration badge color.
+    ColorSpec hostname;          ///< Hostname text color.
+    ColorSpec username;          ///< Username text color.
+    core::tui::Color background; ///< Prompt background (may be monostate for transparent).
+    ColorSpec separator;         ///< Separator/bar color.
+    ColorSpec badge;             ///< Badge background color.
+    ColorSpec badgeText;         ///< Badge text color.
+    ColorSpec clock;             ///< Clock text color.
 };
 
 /// @brief Resolves effective prompt colors by merging config overrides with theme defaults.
@@ -45,8 +45,8 @@ struct ResolvedPromptColors
 /// @param overrides The per-color overrides from PromptConfig.
 /// @param themeColors The theme's prompt color palette.
 /// @return Fully resolved colors ready for rendering.
-[[nodiscard]] ResolvedPromptColors resolvePromptColors(PromptColorOverrides const& overrides,
-                                                       tui::Theme::PromptColorPalette const& themeColors);
+[[nodiscard]] ResolvedPromptColors resolvePromptColors(
+    PromptColorOverrides const& overrides, core::tui::Theme::PromptColorPalette const& themeColors);
 
 /// @brief Parses a color spec string into a ColorSpec.
 ///

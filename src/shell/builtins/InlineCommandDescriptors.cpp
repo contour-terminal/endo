@@ -364,8 +364,8 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
 
 int InlineCommandDescriptor::execute(Shell& shell,
                                      CoreVM::CoreStringArray const& args,
-                                     NativeHandle outputFd,
-                                     NativeHandle stdinFd) const
+                                     core::platform::NativeHandle outputFd,
+                                     core::platform::NativeHandle stdinFd) const
 {
     if (withStdinFn)
         return (shell.*withStdinFn)(args, outputFd, stdinFd);

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/CommandPalettePopup.hpp>
-#include <tui/CommandRegistry.hpp>
-#include <tui/CompletionPopup.hpp>
-#include <tui/Component.hpp>
-#include <tui/InputField.hpp>
-#include <tui/Spinner.hpp>
-#include <tui/completer/Completer.hpp>
+#include <core/tui/CommandPalettePopup.hpp>
+#include <core/tui/CommandRegistry.hpp>
+#include <core/tui/CompletionPopup.hpp>
+#include <core/tui/Component.hpp>
+#include <core/tui/InputField.hpp>
+#include <core/tui/Spinner.hpp>
+#include <core/tui/completer/Completer.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -19,10 +19,10 @@
 
 #include <agent/Types.hpp>
 
-namespace tui
+namespace core::tui::completer
 {
 class CompletionProvider;
-} // namespace tui
+} // namespace core::tui::completer
 
 namespace endo::agent
 {
@@ -35,7 +35,7 @@ namespace endo::agent
 ///
 /// Supports slash command completion via a CompletionPopup and Completer, reusing the
 /// same TUI completion infrastructure as the shell prompt.
-class AgentInputComponent: public tui::Component
+class AgentInputComponent: public core::tui::Component
 {
   public:
     /// @brief Result of processing input.
@@ -58,21 +58,24 @@ class AgentInputComponent: public tui::Component
 
     // --- Component Interface ---
 
-    void render(tui::Canvas& canvas) override;
-    [[nodiscard]] tui::EventResult onEvent(tui::InputEvent const& event) override;
+    void render(core::tui::Canvas& canvas) override;
+    [[nodiscard]] core::tui::EventResult onEvent(core::tui::InputEvent const& event) override;
 
     [[nodiscard]] bool focusable() const override { return true; }
 
-    [[nodiscard]] tui::CursorShape cursorShape() const override { return tui::CursorShape::SteadyBar; }
+    [[nodiscard]] core::tui::CursorShape cursorShape() const override
+    {
+        return core::tui::CursorShape::SteadyBar;
+    }
 
-    [[nodiscard]] tui::Size preferredSize() const override;
+    [[nodiscard]] core::tui::Size preferredSize() const override;
 
     // --- Agent Input API ---
 
     /// @brief Processes an input event and returns the action.
     /// @param event The input event to process.
     /// @return The resulting action.
-    [[nodiscard]] Action processInput(tui::InputEvent const& event);
+    [[nodiscard]] Action processInput(core::tui::InputEvent const& event);
 
     /// @brief Sets the prompt indicator displayed before user input.
     /// @param indicator The indicator string (e.g., "❯").
@@ -127,28 +130,28 @@ class AgentInputComponent: public tui::Component
     [[nodiscard]] int topPadding() const noexcept { return _topPadding; }
 
     /// @brief Returns the InputField for direct access.
-    [[nodiscard]] auto inputField() noexcept -> tui::InputField& { return _inputField; }
+    [[nodiscard]] auto inputField() noexcept -> core::tui::InputField& { return _inputField; }
 
-    [[nodiscard]] auto inputField() const noexcept -> tui::InputField const& { return _inputField; }
+    [[nodiscard]] auto inputField() const noexcept -> core::tui::InputField const& { return _inputField; }
 
     // --- Completion API ---
 
     /// @brief Adds a completion provider to the completer.
     /// @param provider The provider to add (ownership transferred).
-    void addCompletionProvider(std::unique_ptr<tui::CompletionProvider> provider);
+    void addCompletionProvider(std::unique_ptr<core::tui::completer::CompletionProvider> provider);
 
     /// @brief Returns whether the completion popup is currently visible.
     [[nodiscard]] bool completionVisible() const noexcept { return _completionPopup.visible(); }
 
     /// @brief Returns the CompletionPopup for direct access.
-    [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
+    [[nodiscard]] core::tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
     /// @brief Returns the CommandPalettePopup for direct access.
-    [[nodiscard]] tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
+    [[nodiscard]] core::tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
 
     /// @brief Sets the command registry used by the command palette.
     /// @param registry Pointer to the registry (caller owns, must outlive this component).
-    void setCommandRegistry(tui::CommandRegistry* registry) { _commandRegistry = registry; }
+    void setCommandRegistry(core::tui::CommandRegistry* registry) { _commandRegistry = registry; }
 
     /// @brief Flushes deferred completion popup and ghost text updates.
     /// Call once per event batch, before drawing.
@@ -219,12 +222,12 @@ class AgentInputComponent: public tui::Component
     [[nodiscard]] int spinnerTimeoutMs() const;
 
   private:
-    tui::InputField _inputField;
-    tui::CompletionPopup _completionPopup;            ///< Popup widget for slash command completion.
-    tui::CommandPalettePopup _commandPalette;         ///< Command palette popup.
-    tui::CommandRegistry* _commandRegistry = nullptr; ///< External command registry.
-    tui::Completer _completer;                        ///< Orchestrates completion providers.
-    bool _completionPopupDirty = false;               ///< Completion popup needs re-filtering.
+    core::tui::InputField _inputField;
+    core::tui::CompletionPopup _completionPopup;            ///< Popup widget for slash command completion.
+    core::tui::CommandPalettePopup _commandPalette;         ///< Command palette popup.
+    core::tui::CommandRegistry* _commandRegistry = nullptr; ///< External command registry.
+    core::tui::completer::Completer _completer;             ///< Orchestrates completion providers.
+    bool _completionPopupDirty = false;                     ///< Completion popup needs re-filtering.
 
     std::string _providerName;                      ///< Active provider name for header display.
     std::string _modelName;                         ///< Active model name for header display.
@@ -262,12 +265,12 @@ class AgentInputComponent: public tui::Component
     std::optional<std::string> _suggestCacheResult; ///< Cached suggest result.
 
     // Info line rendering
-    void renderInfoLine(tui::Canvas& canvas, int row);
+    void renderInfoLine(core::tui::Canvas& canvas, int row);
 
     // Thinking/activity state
-    tui::Spinner _spinner { tui::SpinnerType::Dots }; ///< Spinner for thinking animation.
-    bool _thinkingActive = false;                     ///< Whether agent is thinking/processing.
-    std::string _activityLabel;                       ///< Label shown next to spinner.
+    core::tui::Spinner _spinner { core::tui::SpinnerType::Dots }; ///< Spinner for thinking animation.
+    bool _thinkingActive = false;                                 ///< Whether agent is thinking/processing.
+    std::string _activityLabel;                                   ///< Label shown next to spinner.
 
     // Escape double-press confirmation state
     void restoreFromEscapeHint();

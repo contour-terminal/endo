@@ -2,7 +2,7 @@
 #include "GitModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <array>
 #include <cstdio>
@@ -176,7 +176,7 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
     auto segments = PromptSegments {};
 
     // Branch icon
-    auto branchStyle = tui::Style {};
+    auto branchStyle = core::tui::Style {};
     if (ctx.resolvedColors)
     {
         if (_cache.dirty > 0)
@@ -208,7 +208,7 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
         if (_cache.staged > 0)
             indicatorText += " +" + std::to_string(_cache.staged);
 
-        auto indicatorStyle = tui::Style {};
+        auto indicatorStyle = core::tui::Style {};
         if (ctx.resolvedColors)
             indicatorStyle.fg = (_cache.dirty > 0) ? ctx.resolvedColors->gitDirty.solid()
                                                    : ctx.resolvedColors->gitStaged.solid();

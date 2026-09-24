@@ -2,14 +2,13 @@
 #include "PathModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/platform/FileUri.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <string_view>
-
-#include <platform/FileUri.hpp>
-#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -51,7 +50,7 @@ PromptSegments PathModule::evaluate(PromptContext const& ctx) const
             path = ctx.cwd; // Restore if not a clean prefix match
     }
 
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->path.solid();
     else if (ctx.theme)
@@ -60,7 +59,7 @@ PromptSegments PathModule::evaluate(PromptContext const& ctx) const
 
     // Link the real cwd, not the tilde-contracted text the user sees. Built unconditionally —
     // whether links are emitted is the renderer's call, so there is exactly one gate.
-    auto hyperlink = platform::fileUri(platform::normalizePath(ctx.cwd), ctx.hostname);
+    auto hyperlink = core::platform::fileUri(core::platform::normalizePath(ctx.cwd), ctx.hostname);
 
     return { PromptSegment { .text = std::move(path), .style = style, .hyperlink = std::move(hyperlink) } };
 }

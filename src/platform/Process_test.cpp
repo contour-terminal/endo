@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/testing/MockFileInfoProvider.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <csignal>
 
-#include <platform/testing/MockFileInfoProvider.hpp>
 #include <platform/testing/MockProcessManager.hpp>
 #include <platform/testing/MockProcessProvider.hpp>
 
@@ -27,16 +28,17 @@ TEST_CASE("MockProcessManager.spawn_default", "[platform][mock]")
 TEST_CASE("MockProcessManager.spawn_custom_handler", "[platform][mock]")
 {
     testing::MockProcessManager pm;
-    pm.onSpawn([](SpawnConfig const&) -> std::expected<ProcessId, PlatformError> {
-        return std::unexpected(PlatformError::ProgramNotFound);
-    });
+    pm.onSpawn(
+        [](SpawnConfig const&) -> std::expected<core::platform::ProcessId, core::platform::PlatformError> {
+            return std::unexpected(core::platform::PlatformError::ProgramNotFound);
+        });
 
     SpawnConfig config;
     config.program = "/nonexistent";
 
     auto result = pm.spawn(config);
     CHECK(!result.has_value());
-    CHECK(result.error() == PlatformError::ProgramNotFound);
+    CHECK(result.error() == core::platform::PlatformError::ProgramNotFound);
 }
 
 TEST_CASE("MockProcessManager.wait_default", "[platform][mock]")
@@ -71,7 +73,7 @@ TEST_CASE("MockProcessProvider.basic", "[platform][mock]")
 
 TEST_CASE("MockFileInfoProvider.basic", "[platform][mock]")
 {
-    testing::MockFileInfoProvider fip;
+    core::platform::testing::MockFileInfoProvider fip;
     fip.setEntries("/tmp", { { .name = "foo.txt", .size = 42, .mode = 0644, .mtime = 0, .isDir = false } });
 
     auto const entries = fip.listDirectory("/tmp");

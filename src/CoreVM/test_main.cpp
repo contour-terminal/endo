@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <catch2/catch_session.hpp>
+#include <core/testing/SuppressWindowsDialogs.hpp>
 
-#include <testing/SuppressWindowsDialogs.hpp>
+#include <catch2/catch_session.hpp>
 
 int main(int argc, char* argv[])
 {
-    testing::suppressWindowsDialogs();
+    core::testing::suppressWindowsDialogs();
     return Catch::Session().run(argc, argv);
 }

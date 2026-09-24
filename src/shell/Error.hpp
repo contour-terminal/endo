@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/PlatformError.hpp>
+
 #include <string_view>
 
-#include <platform/PlatformError.hpp>
 #include <platform/WaitResult.hpp>
 
 namespace endo
@@ -11,7 +12,7 @@ namespace endo
 
 /// Shell error codes for operations that can fail.
 ///
-/// Platform-level errors (fork, pipe, file I/O) are in endo::platform::PlatformError.
+/// Platform-level errors (fork, pipe, file I/O) are in core::platform::PlatformError.
 /// This enum retains shell-specific errors and platform-error aliases for backward compatibility.
 enum class ShellError // NOLINT(performance-enum-size)
 {
@@ -68,24 +69,25 @@ enum class ShellError // NOLINT(performance-enum-size)
 ///
 /// @param error The platform error to convert
 /// @return The corresponding ShellError
-[[nodiscard]] constexpr ShellError toShellError(platform::PlatformError error) noexcept
+[[nodiscard]] constexpr ShellError toShellError(core::platform::PlatformError error) noexcept
 {
     switch (error)
     {
-        case platform::PlatformError::ForkFailed: return ShellError::ForkFailed;
-        case platform::PlatformError::ExecFailed: return ShellError::ExecFailed;
-        case platform::PlatformError::WaitFailed: return ShellError::WaitFailed;
-        case platform::PlatformError::ProgramNotFound: return ShellError::ProgramNotFound;
-        case platform::PlatformError::PipeCreationFailed: return ShellError::PipeCreationFailed;
-        case platform::PlatformError::HandleDuplicationFailed: return ShellError::HandleDuplicationFailed;
-        case platform::PlatformError::FileNotFound: return ShellError::FileNotFound;
-        case platform::PlatformError::PermissionDenied: return ShellError::PermissionDenied;
-        case platform::PlatformError::IoError: return ShellError::IoError;
-        case platform::PlatformError::SignalFailed: return ShellError::ExecutionFailed;
-        case platform::PlatformError::SessionCreationFailed: return ShellError::ForkFailed;
-        case platform::PlatformError::ProcessGroupFailed: return ShellError::ExecutionFailed;
-        case platform::PlatformError::TerminalControlFailed: return ShellError::ExecutionFailed;
-        case platform::PlatformError::NotImplemented: return ShellError::NotImplemented;
+        case core::platform::PlatformError::ForkFailed: return ShellError::ForkFailed;
+        case core::platform::PlatformError::ExecFailed: return ShellError::ExecFailed;
+        case core::platform::PlatformError::WaitFailed: return ShellError::WaitFailed;
+        case core::platform::PlatformError::ProgramNotFound: return ShellError::ProgramNotFound;
+        case core::platform::PlatformError::PipeCreationFailed: return ShellError::PipeCreationFailed;
+        case core::platform::PlatformError::HandleDuplicationFailed:
+            return ShellError::HandleDuplicationFailed;
+        case core::platform::PlatformError::FileNotFound: return ShellError::FileNotFound;
+        case core::platform::PlatformError::PermissionDenied: return ShellError::PermissionDenied;
+        case core::platform::PlatformError::IoError: return ShellError::IoError;
+        case core::platform::PlatformError::SignalFailed: return ShellError::ExecutionFailed;
+        case core::platform::PlatformError::SessionCreationFailed: return ShellError::ForkFailed;
+        case core::platform::PlatformError::ProcessGroupFailed: return ShellError::ExecutionFailed;
+        case core::platform::PlatformError::TerminalControlFailed: return ShellError::ExecutionFailed;
+        case core::platform::PlatformError::NotImplemented: return ShellError::NotImplemented;
     }
     return ShellError::ExecutionFailed;
 }

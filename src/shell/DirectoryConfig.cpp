@@ -12,8 +12,8 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -31,8 +31,8 @@ DiagnosticSink stderrDiagnosticSink(TTY const& tty)
 // DirectoryConfigTrustStore
 // ============================================================================
 
-DirectoryConfigTrustStore::DirectoryConfigTrustStore(FileSystem const& fs,
-                                                     EnvironmentProvider& env,
+DirectoryConfigTrustStore::DirectoryConfigTrustStore(core::platform::FileSystem const& fs,
+                                                     core::platform::EnvironmentProvider& env,
                                                      DiagnosticSink diag):
     _fs(fs), _env(env), _diag(std::move(diag))
 {
@@ -142,8 +142,8 @@ void DirectoryConfigTrustStore::revokeTrust(fs::path const& configPath)
 // ============================================================================
 
 DirectoryConfigManager::DirectoryConfigManager(Shell& shell,
-                                               FileSystem const& fs,
-                                               EnvironmentProvider& env,
+                                               core::platform::FileSystem const& fs,
+                                               core::platform::EnvironmentProvider& env,
                                                DiagnosticSink diag):
     _shell(shell), _fs(fs), _env(env), _trustStore(fs, env, diag), _diag(std::move(diag))
 {

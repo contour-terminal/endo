@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <cstddef>
+#include <core/platform/SignalHandler.hpp>
 
-#include <platform/SignalHandler.hpp>
+#include <cstddef>
 
 namespace endo::platform
 {
@@ -58,7 +58,7 @@ class InterruptThrottle
     {
         if (!polledAndPending())
             return false;
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         return true;
     }
 
@@ -81,8 +81,8 @@ class InterruptThrottle
     {
         if (_counter++ % _interval != 0)
             return false;
-        SignalHandler::processSignalFd();
-        return SignalHandler::hasPendingSigint();
+        core::platform::SignalHandler::processSignalFd();
+        return core::platform::SignalHandler::hasPendingSigint();
     }
 
     std::size_t _interval;

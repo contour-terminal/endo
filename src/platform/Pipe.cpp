@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Pipe.hpp"
 
-#include <crispy/LogStore.hpp>
+#include <core/log/LogStore.hpp>
 
 #include <cstring>
 #include <stdexcept>
@@ -22,12 +22,12 @@ namespace
     /// Lazily-initialized log category for platform pipe operations.
     ///
     /// A function-local static (initialized on first use) is used instead of a
-    /// namespace-scope static so the potentially-throwing @c logstore::Category
+    /// namespace-scope static so the potentially-throwing @c core::log::Category
     /// construction does not run during static initialization
     /// (bugprone-throwing-static-initialization).
     auto& pipeLog()
     {
-        static auto pipeTag = logstore::Category("platform.pipe", "Platform pipe operations");
+        static auto pipeTag = core::log::Category("platform.pipe", "Platform pipe operations");
         return pipeTag;
     }
 } // namespace
@@ -37,13 +37,13 @@ using namespace std::string_literals;
 /// Safely closes a file descriptor and sets it to InvalidHandle.
 ///
 /// @param fd Pointer to the file descriptor to close
-void safeClosePipe(NativeHandle* fd) noexcept
+void safeClosePipe(core::platform::NativeHandle* fd) noexcept
 {
-    if (fd && *fd != InvalidHandle)
+    if (fd && *fd != core::platform::InvalidHandle)
     {
         pipeLog()()("Closing fd {}\n", *fd);
         ::close(*fd); // NOLINT(clang-analyzer-unix.StdCLibraryFunctions)
-        *fd = InvalidHandle;
+        *fd = core::platform::InvalidHandle;
     }
 }
 
@@ -55,7 +55,8 @@ class PosixPipe final: public Pipe
     ///
     /// @param flags Pipe creation flags (e.g., O_CLOEXEC, O_NONBLOCK)
     /// @throws std::runtime_error if pipe creation fails
-    explicit PosixPipe(unsigned flags = 0): _pfd { InvalidHandle, InvalidHandle }
+    explicit PosixPipe(unsigned flags = 0):
+        _pfd { core::platform::InvalidHandle, core::platform::InvalidHandle }
     {
     #if defined(__linux__)
         if (pipe2(_pfd, static_cast<int>(flags)) < 0)
@@ -81,8 +82,8 @@ class PosixPipe final: public Pipe
 
     PosixPipe(PosixPipe&& other) noexcept: _pfd { other._pfd[0], other._pfd[1] }
     {
-        other._pfd[0] = InvalidHandle;
-        other._pfd[1] = InvalidHandle;
+        other._pfd[0] = core::platform::InvalidHandle;
+        other._pfd[1] = core::platform::InvalidHandle;
     }
 
     PosixPipe& operator=(PosixPipe&& other) noexcept
@@ -92,27 +93,27 @@ class PosixPipe final: public Pipe
             close();
             _pfd[0] = other._pfd[0];
             _pfd[1] = other._pfd[1];
-            other._pfd[0] = InvalidHandle;
-            other._pfd[1] = InvalidHandle;
+            other._pfd[0] = core::platform::InvalidHandle;
+            other._pfd[1] = core::platform::InvalidHandle;
         }
         return *this;
     }
 
-    [[nodiscard]] NativeHandle reader() const noexcept override { return _pfd[0]; }
+    [[nodiscard]] core::platform::NativeHandle reader() const noexcept override { return _pfd[0]; }
 
-    [[nodiscard]] NativeHandle writer() const noexcept override { return _pfd[1]; }
+    [[nodiscard]] core::platform::NativeHandle writer() const noexcept override { return _pfd[1]; }
 
-    [[nodiscard]] NativeHandle releaseReader() noexcept override
+    [[nodiscard]] core::platform::NativeHandle releaseReader() noexcept override
     {
         auto const fd = _pfd[0];
-        _pfd[0] = InvalidHandle;
+        _pfd[0] = core::platform::InvalidHandle;
         return fd;
     }
 
-    [[nodiscard]] NativeHandle releaseWriter() noexcept override
+    [[nodiscard]] core::platform::NativeHandle releaseWriter() noexcept override
     {
         auto const fd = _pfd[1];
-        _pfd[1] = InvalidHandle;
+        _pfd[1] = core::platform::InvalidHandle;
         return fd;
     }
 
@@ -122,7 +123,7 @@ class PosixPipe final: public Pipe
 
     [[nodiscard]] bool good() const noexcept override
     {
-        return _pfd[0] != InvalidHandle && _pfd[1] != InvalidHandle;
+        return _pfd[0] != core::platform::InvalidHandle && _pfd[1] != core::platform::InvalidHandle;
     }
 
   private:
@@ -132,10 +133,10 @@ class PosixPipe final: public Pipe
         closeWriter();
     }
 
-    NativeHandle _pfd[2] { InvalidHandle, InvalidHandle };
+    core::platform::NativeHandle _pfd[2] { core::platform::InvalidHandle, core::platform::InvalidHandle };
 };
 
-std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags)
+std::expected<std::unique_ptr<Pipe>, core::platform::PlatformError> createPipe(unsigned flags)
 {
     try
     {
@@ -143,7 +144,7 @@ std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags)
     }
     catch (std::runtime_error const&)
     {
-        return std::unexpected(PlatformError::PipeCreationFailed);
+        return std::unexpected(core::platform::PlatformError::PipeCreationFailed);
     }
 }
 

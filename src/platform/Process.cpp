@@ -27,7 +27,8 @@ PosixProcessManager& PosixProcessManager::instance()
     return pm;
 }
 
-std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig const& config)
+std::expected<core::platform::ProcessId, core::platform::PlatformError> PosixProcessManager::spawn(
+    SpawnConfig const& config)
 {
     std::vector<char const*> argv;
     argv.reserve(config.arguments.size() + 2);
@@ -36,9 +37,9 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
         argv.push_back(arg.c_str());
     argv.push_back(nullptr);
 
-    ProcessId const pid = fork();
+    core::platform::ProcessId const pid = fork();
     if (pid == -1)
-        return std::unexpected(PlatformError::ForkFailed);
+        return std::unexpected(core::platform::PlatformError::ForkFailed);
 
     if (pid == 0)
     {
@@ -68,11 +69,11 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
         if (config.processGroup.has_value())
             setpgid(0, config.processGroup.value());
 
-        if (config.stdinFd != InvalidHandle && config.stdinFd != STDIN_FILENO)
+        if (config.stdinFd != core::platform::InvalidHandle && config.stdinFd != STDIN_FILENO)
             dup2(config.stdinFd, STDIN_FILENO);
-        if (config.stdoutFd != InvalidHandle && config.stdoutFd != STDOUT_FILENO)
+        if (config.stdoutFd != core::platform::InvalidHandle && config.stdoutFd != STDOUT_FILENO)
             dup2(config.stdoutFd, STDOUT_FILENO);
-        if (config.stderrFd != InvalidHandle && config.stderrFd != STDERR_FILENO)
+        if (config.stderrFd != core::platform::InvalidHandle && config.stderrFd != STDERR_FILENO)
             dup2(config.stderrFd, STDERR_FILENO);
 
         if (config.closeExtraFds)
@@ -99,7 +100,8 @@ std::expected<ProcessId, PlatformError> PosixProcessManager::spawn(SpawnConfig c
     return pid;
 }
 
-std::expected<WaitResult, PlatformError> PosixProcessManager::wait(ProcessId pid, WaitFlags flags)
+std::expected<WaitResult, core::platform::PlatformError> PosixProcessManager::wait(
+    core::platform::ProcessId pid, WaitFlags flags)
 {
     int waitFlags = 0;
     if (flags.test(WaitFlag::NoHang))
@@ -111,7 +113,7 @@ std::expected<WaitResult, PlatformError> PosixProcessManager::wait(ProcessId pid
     pid_t const waitResult = waitpid(pid, &wstatus, waitFlags);
 
     if (waitResult == -1)
-        return std::unexpected(PlatformError::WaitFailed);
+        return std::unexpected(core::platform::PlatformError::WaitFailed);
 
     if (waitResult == 0 && flags.test(WaitFlag::NoHang))
     {
@@ -140,8 +142,8 @@ std::expected<WaitResult, PlatformError> PosixProcessManager::wait(ProcessId pid
     return result;
 }
 
-std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> PosixProcessManager::waitPgid(
-    ProcessId pgid, WaitFlags flags)
+std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>, core::platform::PlatformError>
+PosixProcessManager::waitPgid(core::platform::ProcessId pgid, WaitFlags flags)
 {
     int waitFlags = 0;
     if (flags.test(WaitFlag::NoHang))
@@ -156,7 +158,7 @@ std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> Po
     {
         if (errno == ECHILD)
             return std::nullopt; // No children in this process group
-        return std::unexpected(PlatformError::WaitFailed);
+        return std::unexpected(core::platform::PlatformError::WaitFailed);
     }
 
     if (result == 0)
@@ -179,66 +181,70 @@ std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> Po
         waitResult.signal = WSTOPSIG(wstatus);
     }
 
-    return std::make_pair(static_cast<ProcessId>(result), waitResult);
+    return std::make_pair(static_cast<core::platform::ProcessId>(result), waitResult);
 }
 
-std::expected<void, PlatformError> PosixProcessManager::sendSignal(ProcessId pid, int signal)
+std::expected<void, core::platform::PlatformError> PosixProcessManager::sendSignal(
+    core::platform::ProcessId pid, int signal)
 {
     if (kill(pid, signal) == -1)
-        return std::unexpected(PlatformError::SignalFailed);
+        return std::unexpected(core::platform::PlatformError::SignalFailed);
     return {};
 }
 
-std::expected<ProcessId, PlatformError> PosixProcessManager::getForegroundPgrp(NativeHandle fd)
+std::expected<core::platform::ProcessId, core::platform::PlatformError> PosixProcessManager::
+    getForegroundPgrp(core::platform::NativeHandle fd)
 {
     pid_t const pgid = tcgetpgrp(fd);
     if (pgid == -1)
-        return std::unexpected(PlatformError::TerminalControlFailed);
-    return static_cast<ProcessId>(pgid);
+        return std::unexpected(core::platform::PlatformError::TerminalControlFailed);
+    return static_cast<core::platform::ProcessId>(pgid);
 }
 
-std::expected<void, PlatformError> PosixProcessManager::setForegroundPgrp(NativeHandle fd, ProcessId pgid)
+std::expected<void, core::platform::PlatformError> PosixProcessManager::setForegroundPgrp(
+    core::platform::NativeHandle fd, core::platform::ProcessId pgid)
 {
     if (tcsetpgrp(fd, pgid) == -1)
-        return std::unexpected(PlatformError::TerminalControlFailed);
+        return std::unexpected(core::platform::PlatformError::TerminalControlFailed);
     return {};
 }
 
-std::expected<NativeHandle, PlatformError> PosixProcessManager::openFile(std::filesystem::path const& path,
-                                                                         int flags,
-                                                                         int mode)
+std::expected<core::platform::NativeHandle, core::platform::PlatformError> PosixProcessManager::openFile(
+    std::filesystem::path const& path, int flags, int mode)
 {
-    NativeHandle const fd = open(path.c_str(), flags, mode);
-    if (fd == InvalidHandle)
-        return std::unexpected(PlatformError::IoError);
+    core::platform::NativeHandle const fd = open(path.c_str(), flags, mode);
+    if (fd == core::platform::InvalidHandle)
+        return std::unexpected(core::platform::PlatformError::IoError);
     return fd;
 }
 
-std::expected<ProcessId, PlatformError> PosixProcessManager::createSession()
+std::expected<core::platform::ProcessId, core::platform::PlatformError> PosixProcessManager::createSession()
 {
-    ProcessId const sid = setsid();
-    if (sid == InvalidProcessId)
-        return std::unexpected(PlatformError::SessionCreationFailed);
+    core::platform::ProcessId const sid = setsid();
+    if (sid == core::platform::InvalidProcessId)
+        return std::unexpected(core::platform::PlatformError::SessionCreationFailed);
     return sid;
 }
 
-std::expected<void, PlatformError> PosixProcessManager::setProcessGroup(ProcessId pid, ProcessId pgid)
+std::expected<void, core::platform::PlatformError> PosixProcessManager::setProcessGroup(
+    core::platform::ProcessId pid, core::platform::ProcessId pgid)
 {
     if (setpgid(pid, pgid) == -1)
-        return std::unexpected(PlatformError::ProcessGroupFailed);
+        return std::unexpected(core::platform::PlatformError::ProcessGroupFailed);
     return {};
 }
 
-std::expected<void, PlatformError> PosixProcessManager::duplicateFd(NativeHandle src, NativeHandle dst)
+std::expected<void, core::platform::PlatformError> PosixProcessManager::duplicateFd(
+    core::platform::NativeHandle src, core::platform::NativeHandle dst)
 {
     if (dup2(src, dst) == -1)
-        return std::unexpected(PlatformError::HandleDuplicationFailed);
+        return std::unexpected(core::platform::PlatformError::HandleDuplicationFailed);
     return {};
 }
 
-void PosixProcessManager::closeHandle(NativeHandle handle) noexcept
+void PosixProcessManager::closeHandle(core::platform::NativeHandle handle) noexcept
 {
-    if (handle != InvalidHandle)
+    if (handle != core::platform::InvalidHandle)
         ::close(handle);
 }
 
@@ -254,7 +260,8 @@ void PosixProcessManager::closeExtraHandles() noexcept
     #endif
 }
 
-void PosixProcessManager::closeExtraHandlesExcept(std::vector<NativeHandle> const& keepOpen) noexcept
+void PosixProcessManager::closeExtraHandlesExcept(
+    std::vector<core::platform::NativeHandle> const& keepOpen) noexcept
 {
     int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
     for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)

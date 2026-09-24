@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ToolStatusComponent.hpp"
 
-#include <tui/Canvas.hpp>
-#include <tui/Theme.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <algorithm>
 #include <format>
@@ -149,7 +149,7 @@ auto ToolStatusComponent::formatArgsSummary(std::string const& name, nlohmann::j
     return truncated.dump(-1);
 }
 
-tui::Size ToolStatusComponent::preferredSize() const
+core::tui::Size ToolStatusComponent::preferredSize() const
 {
     if (_entries.empty())
         return { .width = 0, .height = 0 };
@@ -170,19 +170,19 @@ tui::Size ToolStatusComponent::preferredSize() const
     return { .width = 0, .height = visibleEntries };
 }
 
-void ToolStatusComponent::render(tui::Canvas& canvas)
+void ToolStatusComponent::render(core::tui::Canvas& canvas)
 {
     if (_entries.empty())
         return;
 
     auto const& theme = canvas.theme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const toolNameStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
-    auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
-    auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-    auto const successStyle = tui::Style { .fg = theme.colors.success };
-    auto const errorStyle = tui::Style { .fg = theme.colors.error };
-    auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const toolNameStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+    auto const argsStyle = core::tui::Style { .fg = theme.agentColors.statusText };
+    auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+    auto const successStyle = core::tui::Style { .fg = theme.colors.success };
+    auto const errorStyle = core::tui::Style { .fg = theme.colors.error };
+    auto const spinnerStyle = core::tui::Style { .fg = theme.agentColors.spinnerColor };
 
     // Collect visible entries: skip oldest completed entries beyond MaxVisibleCompleted.
     auto visibleEntries = std::vector<ToolEntry const*> {};

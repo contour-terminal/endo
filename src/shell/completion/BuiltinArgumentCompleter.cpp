@@ -4,7 +4,7 @@
 
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <tui/KeyBindings.hpp>
+#include <core/tui/KeyBindings.hpp>
 
 #include <array>
 #include <string_view>
@@ -73,7 +73,7 @@ namespace
     std::vector<CompletionCandidate> bindKeyCandidates(std::string_view prefix)
     {
         std::vector<CompletionCandidate> results;
-        for (auto const name: tui::allKeyNames())
+        for (auto const name: core::tui::allKeyNames())
         {
             if (name.starts_with(prefix))
                 results.push_back(CompletionCandidate {
@@ -101,7 +101,7 @@ namespace
     std::vector<CompletionCandidate> bindActionCandidates(std::string_view prefix)
     {
         std::vector<CompletionCandidate> results;
-        for (auto const& info: tui::allEditActionNames())
+        for (auto const& info: core::tui::allEditActionNames())
         {
             if (info.name.starts_with(prefix))
                 results.push_back(CompletionCandidate {

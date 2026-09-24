@@ -13,7 +13,7 @@ namespace
 auto& diagnosticsLog()
 {
     static auto instance =
-        logstore::Category("vm.diag", "VM diagnostics log", endo::log::categoryState("vm.diag"));
+        core::log::Category("vm.diag", "VM diagnostics log", endo::log::categoryState("vm.diag"));
     return instance;
 }
 } // namespace

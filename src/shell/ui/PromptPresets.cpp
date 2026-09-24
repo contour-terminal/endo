@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PromptPresets.hpp"
 
-using tui::operator""_rgb;
+using core::tui::operator""_rgb;
 
 using namespace std::string_view_literals;
 
@@ -129,13 +129,13 @@ static void applyLightOverrides(PromptConfig& config)
     }
 }
 
-PromptConfig promptPreset(std::string_view name, tui::ColorScheme scheme)
+PromptConfig promptPreset(std::string_view name, core::tui::ColorScheme scheme)
 {
     for (const auto& preset: presets())
         if (preset.name == name)
         {
             auto config = preset;
-            if (scheme == tui::ColorScheme::Light)
+            if (scheme == core::tui::ColorScheme::Light)
                 applyLightOverrides(config);
             return config;
         }

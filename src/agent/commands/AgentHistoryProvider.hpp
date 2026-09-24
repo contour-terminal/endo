@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/completer/CompletionProvider.hpp>
+#include <core/tui/completer/CompletionProvider.hpp>
 
 #include <string>
 #include <vector>
@@ -14,7 +14,7 @@ namespace endo::agent
 /// Provides both prefix and fuzzy matching against stored user queries,
 /// scored by recency (most recent = highest score). Used for ghost text
 /// suggestions and completion popup in agent mode.
-class AgentHistoryProvider final: public tui::CompletionProvider
+class AgentHistoryProvider final: public core::tui::completer::CompletionProvider
 {
   public:
     AgentHistoryProvider() = default;
@@ -32,7 +32,7 @@ class AgentHistoryProvider final: public tui::CompletionProvider
 
     /// @brief Generates completions from history for the given input.
     [[nodiscard]] auto complete(std::string_view input, size_t cursorPosition)
-        -> std::vector<tui::CompletionItem> override;
+        -> std::vector<core::tui::completer::CompletionItem> override;
 
     /// @brief Returns priority below slash commands (100) but above default (0).
     [[nodiscard]] int priority() const override { return 50; }

@@ -12,8 +12,8 @@ TEST_CASE("Pipe.createPipe", "[platform]")
     REQUIRE(result.has_value());
     auto& pipe = *result;
     CHECK(pipe->good());
-    CHECK(pipe->reader() != InvalidHandle);
-    CHECK(pipe->writer() != InvalidHandle);
+    CHECK(pipe->reader() != core::platform::InvalidHandle);
+    CHECK(pipe->writer() != core::platform::InvalidHandle);
 }
 
 TEST_CASE("Pipe.releaseHandles", "[platform]")
@@ -23,12 +23,12 @@ TEST_CASE("Pipe.releaseHandles", "[platform]")
     auto& pipe = *result;
 
     auto const reader = pipe->releaseReader();
-    CHECK(reader != InvalidHandle);
-    CHECK(pipe->reader() == InvalidHandle);
+    CHECK(reader != core::platform::InvalidHandle);
+    CHECK(pipe->reader() == core::platform::InvalidHandle);
 
     auto const writer = pipe->releaseWriter();
-    CHECK(writer != InvalidHandle);
-    CHECK(pipe->writer() == InvalidHandle);
+    CHECK(writer != core::platform::InvalidHandle);
+    CHECK(pipe->writer() == core::platform::InvalidHandle);
 
     CHECK(!pipe->good());
 
@@ -50,6 +50,6 @@ TEST_CASE("MockPipe.basic", "[platform][mock]")
     CHECK(!pipe.good());
 
     pipe.closeWriter();
-    CHECK(pipe.reader() == InvalidHandle);
-    CHECK(pipe.writer() == InvalidHandle);
+    CHECK(pipe.reader() == core::platform::InvalidHandle);
+    CHECK(pipe.writer() == core::platform::InvalidHandle);
 }

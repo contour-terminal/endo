@@ -14,8 +14,8 @@ using namespace endo::test;
 // port, emit a function reference for the handler, call the httpServe(IH)I native callback).
 // These tests pin that codegen down: a well-formed call must generate IR, and each misuse must
 // produce a clear diagnostic instead of the historical "Undefined function: httpServe".
-// The actual serving/wire behaviour is covered by the net-layer round-trip test in
-// src/net/HttpServer_test.cpp.
+// The actual serving/wire behaviour is covered by core-cpp's round-trip test,
+// src/core/net/HttpServer_test.cpp.
 // =================================================================================================
 
 TEST_CASE("httpServe.named_handler_generates_ir", "[fsharp][builtin][net][http]")

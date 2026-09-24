@@ -2,14 +2,14 @@
 #include "IndicatorModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 namespace endo
 {
 
 PromptSegments IndicatorModule::evaluate(PromptContext const& ctx) const
 {
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
     {
         style.fg = (ctx.lastExitCode != 0) ? ctx.resolvedColors->indicatorError.solid()

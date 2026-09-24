@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/Types.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -14,10 +17,8 @@
 #include <utility>
 #include <vector>
 
-#include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -78,7 +79,7 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
     if (!result.has_value())
     {
         error("Failed to change directory to '{}': {}",
-              platform::normalizePath(path),
+              core::platform::normalizePath(path),
               toString(result.error()));
         _exitCode = 1;
     }
@@ -281,7 +282,7 @@ namespace
 
 } // anonymous namespace
 
-int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Usage: source-env <script-path> [extra-args...]
     if (args.size() < 2)
@@ -304,7 +305,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     // 1. Validate script exists
     if (!std::filesystem::exists(scriptPath))
     {
-        error("source-env: script not found: {}", platform::normalizePath(scriptPath));
+        error("source-env: script not found: {}", core::platform::normalizePath(scriptPath));
         return EXIT_FAILURE;
     }
 
@@ -396,7 +397,8 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         auto ofs = std::ofstream(wrapperPath, std::ios::binary);
         if (!ofs)
         {
-            error("source-env: failed to create temp wrapper: {}", platform::normalizePath(wrapperPath));
+            error("source-env: failed to create temp wrapper: {}",
+                  core::platform::normalizePath(wrapperPath));
             return EXIT_FAILURE;
         }
         ofs << wrapperContent;
@@ -429,7 +431,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     config.arguments.push_back(wrapperPath.string());
     config.stdinFd = _tty.inputFd();
     config.stdoutFd = pipe->writer();
-    config.stderrFd = standardError();
+    config.stderrFd = core::platform::standardError();
 
     auto pidResult = _processManager.spawn(config);
     pipe->closeWriter();
@@ -439,7 +441,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     char buf[4096];
     while (true)
     {
-        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+        auto const n = core::platform::platformRead(pipe->reader(), buf, sizeof(buf));
         if (n <= 0)
             break;
         output.append(buf, static_cast<size_t>(n));
@@ -454,7 +456,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     }
     else
     {
-        error("source-env: failed to spawn interpreter: {}", platform::normalizePath(interpreter));
+        error("source-env: failed to spawn interpreter: {}", core::platform::normalizePath(interpreter));
         return EXIT_FAILURE;
     }
 

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <fcntl.h>
 
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -15,7 +16,8 @@ void Shell::builtinOpenRead(CoreVM::Params& context)
     auto const result = _processManager.openFile(path, O_RDONLY);
     if (result.has_value())
     {
-        context.setResult(static_cast<CoreVM::CoreNumber>(platform::nativeHandleToNumber(result.value())));
+        context.setResult(
+            static_cast<CoreVM::CoreNumber>(core::platform::nativeHandleToNumber(result.value())));
     }
     else
     {
@@ -31,7 +33,8 @@ void Shell::builtinOpenWrite(CoreVM::Params& context)
     auto const result = _processManager.openFile(path, oflags);
     if (result.has_value())
     {
-        context.setResult(static_cast<CoreVM::CoreNumber>(platform::nativeHandleToNumber(result.value())));
+        context.setResult(
+            static_cast<CoreVM::CoreNumber>(core::platform::nativeHandleToNumber(result.value())));
     }
     else
     {
@@ -85,11 +88,13 @@ void Shell::builtinRedirectEnd(CoreVM::Params&)
 {
     for (auto& entry: _redirectState.entries)
     {
-        if (entry.openedFd != InvalidHandle && entry.openedFd != standardInput()
-            && entry.openedFd != standardOutput() && entry.openedFd != standardError())
+        if (entry.openedFd != core::platform::InvalidHandle
+            && entry.openedFd != core::platform::standardInput()
+            && entry.openedFd != core::platform::standardOutput()
+            && entry.openedFd != core::platform::standardError())
         {
             _processManager.closeHandle(entry.openedFd);
-            entry.openedFd = InvalidHandle;
+            entry.openedFd = core::platform::InvalidHandle;
         }
     }
     _redirectState.clear();

@@ -6,10 +6,10 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
+#include <core/platform/PathUtils.hpp>
+
 #include <filesystem>
 #include <ranges>
-
-#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -63,7 +63,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
                 {
                     auto const fileStatus = fs::status(canonicalSearch, ec);
                     matches.push_back({
-                        .path = platform::normalizePath(canonicalSearch),
+                        .path = core::platform::normalizePath(canonicalSearch),
                         .size = entry.size,
                         .mode = static_cast<uint64_t>(fileStatus.permissions()),
                         .mtime = static_cast<int64_t>(
@@ -118,7 +118,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
             {
                 auto const fileStatus = dirEntry.status(ec);
                 matches.push_back({
-                    .path = platform::normalizePath(dirEntry.path()),
+                    .path = core::platform::normalizePath(dirEntry.path()),
                     .size = entry.size,
                     .mode = static_cast<uint64_t>(ec ? fs::perms::none : fileStatus.permissions()),
                     .mtime = static_cast<int64_t>(
@@ -135,7 +135,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
 
     // Hoisted out of the loop: resolving the working directory is a syscall, and `find` can match
     // many thousands of entries.
-    auto const workingDirectory = platform::absoluteDirectory({});
+    auto const workingDirectory = core::platform::absoluteDirectory({});
 
     for (auto& match: std::ranges::reverse_view(matches))
     {
@@ -143,7 +143,7 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
         // record additionally carries the absolute form. It reports no symlink information, and
         // the builder writes valid values into those slots regardless, so f.isSymlink / f.target
         // never read back as a null string.
-        auto const resolved = platform::absolutePath(match.path, workingDirectory);
+        auto const resolved = core::platform::absolutePath(match.path, workingDirectory);
         auto* record = endo::builtins::makeFileInfoRecord(&runner,
                                                           { .name = match.path,
                                                             .path = resolved,

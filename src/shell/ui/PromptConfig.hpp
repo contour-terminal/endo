@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <cstdint>
 #include <optional>
@@ -46,15 +46,15 @@ enum class TransientMode : std::uint8_t
 /// interpolated across the color stops.
 struct ColorSpec
 {
-    std::vector<tui::RgbColor> colors; ///< 1 color = solid, 2+ = gradient stops.
+    std::vector<core::tui::RgbColor> colors; ///< 1 color = solid, 2+ = gradient stops.
 
     /// @brief Returns whether this color spec represents a gradient.
     [[nodiscard]] bool isGradient() const noexcept { return colors.size() > 1; }
 
     /// @brief Returns the solid color (first stop), or black if empty.
-    [[nodiscard]] tui::RgbColor solid() const noexcept
+    [[nodiscard]] core::tui::RgbColor solid() const noexcept
     {
-        return colors.empty() ? tui::RgbColor {} : colors.front();
+        return colors.empty() ? core::tui::RgbColor {} : colors.front();
     }
 };
 
@@ -112,8 +112,8 @@ struct PromptConfig
     std::vector<std::string> rightPromptModules;                  ///< Modules for the right-aligned section.
     int promptSpacing = 1;              ///< Number of blank lines above and below the prompt (0 or 1).
     int64_t durationThresholdMs = 2000; ///< Min duration (ms) to show duration module.
-    std::vector<tui::RgbColor> auroraBackground; ///< Multi-stop background gradient (empty = flat bg).
-    bool enableSixelFade = false;                ///< Enable sixel aurora fade above prompt.
+    std::vector<core::tui::RgbColor> auroraBackground; ///< Multi-stop background gradient (empty = flat bg).
+    bool enableSixelFade = false;                      ///< Enable sixel aurora fade above prompt.
     int64_t exitConfirmTimeoutMs =
         1000; ///< Timeout (ms) for double Ctrl+D exit confirmation (0 = immediate exit).
     PromptColorOverrides colorOverrides; ///< Per-color overrides (empty = use theme defaults).

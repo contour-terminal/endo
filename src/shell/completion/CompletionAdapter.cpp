@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CompletionAdapter.hpp"
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
 {
 
-std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandidate> const& candidates,
-                                                   std::string_view prefix,
-                                                   int baseScore)
+std::vector<core::tui::completer::CompletionItem> applyFuzzyScoring(
+    std::vector<CompletionCandidate> const& candidates, std::string_view prefix, int baseScore)
 {
-    std::vector<tui::CompletionItem> results;
+    std::vector<core::tui::completer::CompletionItem> results;
 
-    tui::FuzzyConfig fuzzyConfig;
+    core::tui::completer::FuzzyConfig fuzzyConfig;
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
     for (auto const& candidate: candidates)
@@ -21,14 +20,14 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
         auto const& name = candidate.text;
 
         // Check both prefix and fuzzy matches
-        auto const isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
+        auto const isPrefixMatch = core::tui::completer::SmartCaseMatch::matchesPrefix(name, prefix);
+        core::tui::completer::FuzzyMatchResult fuzzyResult;
         auto isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
-            auto const textLen = tui::FuzzyMatch::countGraphemes(name);
+            fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(name, prefix);
+            auto const textLen = core::tui::completer::FuzzyMatch::countGraphemes(name);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -43,13 +42,14 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
 
         if (isPrefixMatch || prefix.empty())
         {
-            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(baseScore, name, prefix);
             if (isPrefixMatch)
                 score += fuzzyConfig.prefixMatchBonus;
         }
         else
         {
-            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
+            score = core::tui::completer::FuzzyMatch::calculateScore(
+                baseScore, name, prefix, fuzzyResult, fuzzyConfig);
             matchPositions = std::move(fuzzyResult.positions);
         }
 
@@ -66,7 +66,7 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
         if (isDuplicate)
             continue;
 
-        results.push_back(tui::CompletionItem {
+        results.push_back(core::tui::completer::CompletionItem {
             .text = name,
             .displayText = candidate.displayText.empty() ? name : candidate.displayText,
             .description = candidate.description,

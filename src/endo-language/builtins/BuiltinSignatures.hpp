@@ -72,7 +72,6 @@ struct BuiltinInfo
 ///
 /// Called once at shell startup so that completions, diagnostics, and LSP hover
 /// automatically include every inline builtin without maintaining a separate list.
-/// Follows the same pattern as registerEndoHighlighter().
 void registerInlineBuiltins(std::vector<BuiltinInfo> builtins);
 
 } // namespace endo

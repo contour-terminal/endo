@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/TerminalOutput.hpp>
-#include <tui/Theme.hpp>
+#include <core/tui/TerminalOutput.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <format>
 
@@ -10,8 +10,11 @@
 namespace endo::agent
 {
 
-AgentResponseRenderer::AgentResponseRenderer(tui::TerminalOutput& output):
-    _output(output), _markdownRenderer(output), _spinner(tui::SpinnerType::Dots)
+AgentResponseRenderer::AgentResponseRenderer(core::tui::TerminalOutput& output,
+                                             core::tui::SyntaxHighlighterRegistry const* highlighters):
+    _output(output),
+    _markdownRenderer(output, core::tui::MarkdownRenderer::defaultTheme(), highlighters),
+    _spinner(core::tui::SpinnerType::Dots)
 {
     _markdownRenderer.setFullWidthMode(true);
 }
@@ -85,10 +88,10 @@ auto AgentResponseRenderer::tickSpinner() -> bool
 
 void AgentResponseRenderer::renderSpinner()
 {
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
-    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const spinnerStyle = core::tui::Style { .fg = theme.agentColors.spinnerColor };
+    auto const labelStyle = core::tui::Style { .fg = theme.agentColors.statusText };
 
     _output.carriageReturn();
     _output.clearToEndOfLine();
@@ -99,10 +102,10 @@ void AgentResponseRenderer::renderSpinner()
 
 void AgentResponseRenderer::renderPlan(Plan const& plan)
 {
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-    auto const defaultStyle = tui::Style {};
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const labelStyle = core::tui::Style { .fg = theme.agentColors.statusText };
+    auto const defaultStyle = core::tui::Style {};
 
     // Count unique files across all steps
     auto fileCount = size_t { 0 };
@@ -179,10 +182,10 @@ void AgentResponseRenderer::renderPlan(Plan const& plan)
 
 void AgentResponseRenderer::renderPlanProgress(Plan const& plan, size_t currentStep)
 {
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const defaultStyle = tui::Style {};
-    auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const defaultStyle = core::tui::Style {};
+    auto const spinnerStyle = core::tui::Style { .fg = theme.agentColors.spinnerColor };
 
     _output.writeText(
         std::format("\u256D\u2500 progress \u2502 step {}/{}\n", currentStep + 1, plan.steps.size()),

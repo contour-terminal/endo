@@ -4,10 +4,10 @@
 #include <shell/completion/CompletionProvider.hpp>
 #include <shell/history/History.hpp>
 
-#include <vector>
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/FileSystem.hpp>
 
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
+#include <vector>
 
 namespace endo
 {
@@ -25,7 +25,9 @@ class HistoryCompleter: public CompletionProvider
     /// @param history The history to search.
     /// @param env     Environment provider (for current CWD and $HOME).
     /// @param fs      Filesystem used for required-paths validation.
-    HistoryCompleter(History const& history, EnvironmentProvider const& env, FileSystem const& fs);
+    HistoryCompleter(History const& history,
+                     core::platform::EnvironmentProvider const& env,
+                     core::platform::FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -34,8 +36,8 @@ class HistoryCompleter: public CompletionProvider
 
   private:
     History const& _history;
-    EnvironmentProvider const& _env;
-    FileSystem const& _fs;
+    core::platform::EnvironmentProvider const& _env;
+    core::platform::FileSystem const& _fs;
 };
 
 } // namespace endo

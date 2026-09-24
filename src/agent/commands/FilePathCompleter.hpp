@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/completer/CompletionProvider.hpp>
+#include <core/tui/completer/CompletionProvider.hpp>
 
 #include <cstddef>
 #include <mutex>
@@ -21,7 +21,7 @@ namespace endo::agent
 ///
 /// File paths are populated asynchronously after project context loading completes.
 /// Thread-safe: `setFilePaths()` may be called from a background thread.
-class FilePathCompleter final: public tui::CompletionProvider
+class FilePathCompleter final: public core::tui::completer::CompletionProvider
 {
   public:
     /// @brief Updates the set of project file paths available for completion.
@@ -32,8 +32,8 @@ class FilePathCompleter final: public tui::CompletionProvider
     /// @param input The full input text.
     /// @param cursorPosition The cursor byte offset in the input.
     /// @return Completion items for matching file paths, or empty if not in @-context.
-    [[nodiscard]] std::vector<tui::CompletionItem> complete(std::string_view input,
-                                                            size_t cursorPosition) override;
+    [[nodiscard]] std::vector<core::tui::completer::CompletionItem> complete(std::string_view input,
+                                                                             size_t cursorPosition) override;
 
     /// @brief Returns priority between slash commands (100) and history (50).
     [[nodiscard]] int priority() const override { return 75; }

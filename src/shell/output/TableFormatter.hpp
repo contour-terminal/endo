@@ -35,7 +35,7 @@ struct TableConfig
     /// output reaches a terminal opt in.
     bool useHyperlinks = false;
 
-    /// Authority for the `file://` URIs, normally platform::hostName(). Passed in rather than
+    /// Authority for the `file://` URIs, normally core::platform::hostName(). Passed in rather than
     /// queried so this formatter performs no OS access of its own.
     std::string uriHost;
 };

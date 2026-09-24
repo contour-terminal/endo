@@ -3,12 +3,11 @@
 
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
-
-#include <platform/PathUtils.hpp>
 
 #if !defined(_WIN32)
     #include <pwd.h>
@@ -17,7 +16,9 @@
 namespace endo
 {
 
-FileCompleter::FileCompleter(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
+FileCompleter::FileCompleter(core::platform::EnvironmentProvider const& env,
+                             core::platform::FileSystem const& fs):
+    _env(env), _fs(fs)
 {
 }
 
@@ -29,7 +30,7 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
 
     // Normalize backslashes to forward slashes on Windows so that user-typed
     // backslash paths are handled correctly in all slash-related logic below.
-    auto const normalizedPrefix = platform::normalizePath(std::string(context.prefix));
+    auto const normalizedPrefix = core::platform::normalizePath(std::string(context.prefix));
     std::string_view const prefix = normalizedPrefix;
 
     if (prefix.empty())
@@ -69,7 +70,8 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
     // path or expand "~/foo" into the literal home directory.
     auto const caseCorrect = [](std::filesystem::path const& path, std::string_view typed) -> std::string {
         bool const isTilde = !typed.empty() && typed.front() == '~';
-        return (path.is_absolute() && !isTilde) ? platform::canonicalCasePath(path) : std::string(typed);
+        return (path.is_absolute() && !isTilde) ? core::platform::canonicalCasePath(path)
+                                                : std::string(typed);
     };
 
     // Appends a trailing '/' to a non-empty directory prefix so listed children are
@@ -140,8 +142,8 @@ std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& con
                 // Only canonicalize absolute paths: canonicalCasePath() resolves to an
                 // absolute path, which would otherwise rewrite a relative prefix the user
                 // typed (e.g. "foo/") into an absolute one.
-                pathPrefix =
-                    dir.is_absolute() ? platform::canonicalCasePath(dir) : platform::normalizePath(dir);
+                pathPrefix = dir.is_absolute() ? core::platform::canonicalCasePath(dir)
+                                               : core::platform::normalizePath(dir);
                 ensureTrailingSlash(pathPrefix);
             }
         }
@@ -176,7 +178,7 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
         if (!home.has_value())
             return std::filesystem::path(path); // No home set: leave the path unchanged.
 
-        result = platform::normalizePath(*home); // Forward slashes, matching the rest.
+        result = core::platform::normalizePath(*home); // Forward slashes, matching the rest.
         if (path.size() > 1)
             result += std::string(path.substr(1));
     }
@@ -220,7 +222,7 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     bool showHidden = !prefix.empty() && prefix[0] == '.';
 
     // Configuration for fuzzy matching
-    tui::FuzzyConfig fuzzyConfig;
+    core::tui::completer::FuzzyConfig fuzzyConfig;
     double const minThreshold = fuzzyConfig.minMatchThreshold;
 
     // On case-insensitive filesystems (Windows, default macOS) path matching must ignore
@@ -228,7 +230,7 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     // "Lastrada-to" -> "lastrada-tools/"). The candidate text is built from the on-disk
     // filename below, so casing is corrected automatically. POSIX is case-sensitive, so
     // smart-case matching is kept there.
-    bool const caseInsensitive = platform::FilesystemCaseInsensitive;
+    bool const caseInsensitive = core::platform::FilesystemCaseInsensitive;
 
     auto const listing = _fs.listDirectory(dir);
     if (!listing)
@@ -243,18 +245,21 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
             continue;
 
         // Option C: Check both prefix and fuzzy matches
-        bool isPrefixMatch = caseInsensitive
-                                 ? tui::SmartCaseMatch::matchesPrefixCaseInsensitive(filename, prefix)
-                                 : tui::SmartCaseMatch::matchesPrefix(filename, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
+        bool isPrefixMatch =
+            caseInsensitive
+                ? core::tui::completer::SmartCaseMatch::matchesPrefixCaseInsensitive(filename, prefix)
+                : core::tui::completer::SmartCaseMatch::matchesPrefix(filename, prefix);
+        core::tui::completer::FuzzyMatchResult fuzzyResult;
         bool isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
             // Try fuzzy matching only if not a prefix match
-            fuzzyResult = caseInsensitive ? tui::FuzzyMatch::match(filename, prefix, /*caseSensitive=*/false)
-                                          : tui::FuzzyMatch::matchSmartCase(filename, prefix);
-            size_t textLen = tui::FuzzyMatch::countGraphemes(filename);
+            fuzzyResult =
+                caseInsensitive
+                    ? core::tui::completer::FuzzyMatch::match(filename, prefix, /*caseSensitive=*/false)
+                    : core::tui::completer::FuzzyMatch::matchSmartCase(filename, prefix);
+            size_t textLen = core::tui::completer::FuzzyMatch::countGraphemes(filename);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -281,14 +286,15 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         if (isPrefixMatch)
         {
             // Prefix matches use SmartCaseMatch scoring with bonus
-            score = tui::SmartCaseMatch::adjustScore(baseScore, filename, prefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(baseScore, filename, prefix);
             score += fuzzyConfig.prefixMatchBonus; // Prefix gets priority over fuzzy
             // No matchPositions for prefix matches (no special highlighting needed)
         }
         else
         {
             // Fuzzy matches use FuzzyMatch scoring
-            score = tui::FuzzyMatch::calculateScore(baseScore, filename, prefix, fuzzyResult, fuzzyConfig);
+            score = core::tui::completer::FuzzyMatch::calculateScore(
+                baseScore, filename, prefix, fuzzyResult, fuzzyConfig);
             matchPositions = std::move(fuzzyResult.positions);
         }
 

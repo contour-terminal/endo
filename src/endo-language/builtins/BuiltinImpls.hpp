@@ -183,7 +183,7 @@ CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode);
 
 /// @brief The values one FileInfo record is built from.
 ///
-/// Deliberately not platform::FileEntry: this library does not depend on endo-platform, and the
+/// Deliberately not core::platform::FileEntry: this library does not depend on endo-platform, and the
 /// producers do not all start from a directory listing (`find` walks paths, the test mock reads a
 /// fixture table). Views, so filling this copies nothing.
 ///

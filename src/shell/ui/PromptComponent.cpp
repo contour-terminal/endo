@@ -11,14 +11,14 @@
 
 #include <endo-language/ide/HoverProvider.hpp>
 
-#include <tui/Canvas.hpp>
-#include <tui/GhostTextHelper.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Sixel.hpp>
-#include <tui/Theme.hpp>
-#include <tui/TimerUtils.hpp>
-#include <tui/Unicode.hpp>
-#include <tui/completer/Completer.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/GhostTextHelper.hpp>
+#include <core/tui/Screen.hpp>
+#include <core/tui/Sixel.hpp>
+#include <core/tui/Theme.hpp>
+#include <core/tui/TimerUtils.hpp>
+#include <core/tui/Unicode.hpp>
+#include <core/tui/completer/Completer.hpp>
 
 #include <algorithm>
 #include <utility>
@@ -48,7 +48,7 @@
     #pragma clang diagnostic pop
 #endif
 
-using tui::operator""_rgb;
+using core::tui::operator""_rgb;
 
 namespace endo
 {
@@ -57,26 +57,27 @@ namespace endo
 // PromptTextDecorator implementation
 // ============================================================================
 
-auto PromptComponent::PromptTextDecorator::foreground(tui::TextPosition pos) const
-    -> std::optional<tui::RgbColor>
+auto PromptComponent::PromptTextDecorator::foreground(core::tui::TextPosition pos) const
+    -> std::optional<core::tui::RgbColor>
 {
     if (highlightMap && pos.graphemeIndex < highlightMap->size() && theme)
         return categoryColor((*highlightMap)[pos.graphemeIndex], *theme);
     return {};
 }
 
-auto PromptComponent::PromptTextDecorator::underline(tui::TextPosition pos) const
+auto PromptComponent::PromptTextDecorator::underline(core::tui::TextPosition pos) const
     -> std::optional<UnderlineDecoration>
 {
     if (errorMap && pos.graphemeIndex < errorMap->size() && (*errorMap)[pos.graphemeIndex])
     {
-        using tui::operator""_rgb;
-        return UnderlineDecoration { .style = tui::UnderlineStyle::Curly, .color = 0xC0C000_rgb };
+        using core::tui::operator""_rgb;
+        return UnderlineDecoration { .style = core::tui::UnderlineStyle::Curly, .color = 0xC0C000_rgb };
     }
     return {};
 }
 
-auto PromptComponent::PromptTextDecorator::background(int displayCol) const -> std::optional<tui::RgbColor>
+auto PromptComponent::PromptTextDecorator::background(int displayCol) const
+    -> std::optional<core::tui::RgbColor>
 {
     auto const idx = displayCol + bgOffset;
     if (bgColors && !bgColors->empty() && idx >= 0 && std::cmp_less(idx, bgColors->size()))
@@ -97,7 +98,7 @@ PromptComponent::PromptComponent()
 
     // Add fuzzy file finder as child component for proper tree-based rendering.
     // Starts hidden; shown on Ctrl+G. High z-index ensures overlay rendering.
-    addChild(_fuzzyFileFinder, tui::LayoutParams { .visible = false, .zIndex = 10 });
+    addChild(_fuzzyFileFinder, core::tui::LayoutParams { .visible = false, .zIndex = 10 });
 }
 
 void PromptComponent::initializeModules()
@@ -303,7 +304,7 @@ void PromptComponent::setTerminalFocused(bool focused) noexcept
     }
 }
 
-void PromptComponent::render(tui::Canvas& canvas)
+void PromptComponent::render(core::tui::Canvas& canvas)
 {
     // Resolve dynamic prompt fields before module evaluation. Each configured
     // `*Fn` names a user F# function; the installed resolver runs it and returns
@@ -315,7 +316,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     else
         _context.indicatorOverride.reset();
 
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
     auto const promptTextWidth = displayWidth(_promptStr);
@@ -380,11 +381,11 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Guard: null out after render scope (see end of this function).
 
     // Resolve concrete background (nullptr when transparent)
-    auto const* concreteBg = std::get_if<tui::RgbColor>(&resolved.background);
+    auto const* concreteBg = std::get_if<core::tui::RgbColor>(&resolved.background);
 
     // Build aurora background color cache when configured
     auto const hasAurora = !_config.auroraBackground.empty() && !_config.colorOverrides.transparentBackground;
-    auto bgColors = std::vector<tui::RgbColor> {};
+    auto bgColors = std::vector<core::tui::RgbColor> {};
     if (hasAurora && contentWidth > 0)
     {
         bgColors.resize(static_cast<std::size_t>(contentWidth));
@@ -395,7 +396,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
     // Returns the aurora bg color at the given column, or the flat bg (nullopt when transparent).
-    auto const bgAt = [&](int col) -> std::optional<tui::RgbColor> {
+    auto const bgAt = [&](int col) -> std::optional<core::tui::RgbColor> {
         auto const idx = col - HorizontalMargin;
         if (!bgColors.empty() && idx >= 0 && std::cmp_less(idx, bgColors.size()))
             return bgColors[static_cast<std::size_t>(idx)];
@@ -407,30 +408,30 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Create styles
     auto const dimChrome = !_terminalFocused; // Dim decorative elements when terminal unfocused
 
-    tui::Style bgStyle;
+    core::tui::Style bgStyle;
     if (concreteBg)
         bgStyle.bg = *concreteBg;
 
-    tui::Style leftBarStyle;
+    core::tui::Style leftBarStyle;
     leftBarStyle.fg = resolved.separator.solid();
     if (concreteBg)
         leftBarStyle.bg = *concreteBg;
     leftBarStyle.dim = dimChrome;
 
-    tui::Style promptStyle;
+    core::tui::Style promptStyle;
     promptStyle.fg = resolved.badgeText.solid();
     if (concreteBg)
         promptStyle.bg = *concreteBg;
     promptStyle.dim = dimChrome;
 
-    tui::Style ghostStyle;
+    core::tui::Style ghostStyle;
     ghostStyle.fg = resolved.badgeText.solid();
     if (concreteBg)
         ghostStyle.bg = *concreteBg;
     ghostStyle.dim = true;
 
     // Helper: apply optional background to a style
-    auto const applyBg = [](tui::Style& style, std::optional<tui::RgbColor> const& bg) {
+    auto const applyBg = [](core::tui::Style& style, std::optional<core::tui::RgbColor> const& bg) {
         if (bg)
             style.bg = *bg;
     };
@@ -501,7 +502,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         {
             for (int c = 0; c < contentWidth; ++c)
             {
-                tui::Style cellStyle;
+                core::tui::Style cellStyle;
                 cellStyle.bg = bgColors[static_cast<std::size_t>(c)];
                 canvas.put(infoLineRow, HorizontalMargin + c, " ", cellStyle);
             }
@@ -509,7 +510,8 @@ void PromptComponent::render(tui::Canvas& canvas)
         else if (concreteBg)
         {
             canvas.fill(
-                tui::Rect { .x = HorizontalMargin, .y = infoLineRow, .width = contentWidth, .height = 1 },
+                core::tui::Rect {
+                    .x = HorizontalMargin, .y = infoLineRow, .width = contentWidth, .height = 1 },
                 ' ',
                 bgStyle);
         }
@@ -521,21 +523,21 @@ void PromptComponent::render(tui::Canvas& canvas)
         {
             applyBg(leftBarStyle, bgAt(col));
             col += canvas.putString(infoLineRow, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
-            tui::Style spStyle;
+            core::tui::Style spStyle;
             applyBg(spStyle, bgAt(col));
             canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
-            tui::Style sepStyle;
+            core::tui::Style sepStyle;
             sepStyle.fg = resolved.separator.solid();
             applyBg(sepStyle, bgAt(col));
             sepStyle.dim = dimChrome;
             col += canvas.putString(infoLineRow, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
             applyBg(sepStyle, bgAt(col));
             col += canvas.putString(infoLineRow, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
-            tui::Style spStyle;
+            core::tui::Style spStyle;
             applyBg(spStyle, bgAt(col));
             canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
@@ -585,11 +587,11 @@ void PromptComponent::render(tui::Canvas& canvas)
                 if (_config.separator == SeparatorStyle::Rounded)
                 {
                     // Dim │ pipe separator between module groups
-                    tui::Style spStyle;
+                    core::tui::Style spStyle;
                     applyBg(spStyle, bgAt(col));
                     canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
-                    tui::Style dimPipeStyle;
+                    core::tui::Style dimPipeStyle;
                     dimPipeStyle.fg = resolved.separator.solid();
                     applyBg(dimPipeStyle, bgAt(col));
                     dimPipeStyle.dim = true;
@@ -600,7 +602,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                 }
                 else
                 {
-                    tui::Style spStyle;
+                    core::tui::Style spStyle;
                     applyBg(spStyle, bgAt(col));
                     canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
@@ -629,7 +631,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                 {
                     if (i > 0)
                     {
-                        tui::Style spStyle;
+                        core::tui::Style spStyle;
                         applyBg(spStyle, bgAt(rightCol));
                         canvas.put(infoLineRow, rightCol, " ", spStyle);
                         ++rightCol;
@@ -689,16 +691,17 @@ void PromptComponent::render(tui::Canvas& canvas)
         {
             for (int c = 0; c < contentWidth; ++c)
             {
-                tui::Style cellStyle;
+                core::tui::Style cellStyle;
                 cellStyle.bg = bgColors[static_cast<std::size_t>(c)];
                 canvas.put(row, HorizontalMargin + c, " ", cellStyle);
             }
         }
         else if (concreteBg)
         {
-            canvas.fill(tui::Rect { .x = HorizontalMargin, .y = row, .width = contentWidth, .height = 1 },
-                        ' ',
-                        bgStyle);
+            canvas.fill(
+                core::tui::Rect { .x = HorizontalMargin, .y = row, .width = contentWidth, .height = 1 },
+                ' ',
+                bgStyle);
         }
 
         // Draw separator on input lines
@@ -710,7 +713,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
-            tui::Style sepStyle;
+            core::tui::Style sepStyle;
             sepStyle.fg = resolved.separator.solid();
             applyBg(sepStyle, bgAt(HorizontalMargin));
             sepStyle.dim = dimChrome;
@@ -727,7 +730,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         else if (_config.separator == SeparatorStyle::None)
         {
-            tui::Style spStyle;
+            core::tui::Style spStyle;
             applyBg(spStyle, bgAt(HorizontalMargin));
             canvas.put(row, HorizontalMargin, " ", spStyle);
         }
@@ -735,7 +738,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         // Padding after separator
         {
             auto const padCol = HorizontalMargin + leftBarWidth();
-            tui::Style padStyle;
+            core::tui::Style padStyle;
             applyBg(padStyle, bgAt(padCol));
             canvas.put(row, padCol, " ", padStyle);
         }
@@ -756,7 +759,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     // (via evaluateDynamicCallback) replaces the static `_promptStr` for this frame.
     _inputField.setPrompt(_context.indicatorOverride.value_or(_promptStr));
     _inputField.setContinuationPrompt(continuationStr);
-    _inputField.setStyles(tui::InputFieldStyles {
+    _inputField.setStyles(core::tui::InputFieldStyles {
         .text = promptStyle,
         .ghost = ghostStyle,
     });
@@ -766,14 +769,14 @@ void PromptComponent::render(tui::Canvas& canvas)
     _decorator.highlightMap = &_highlightCacheMap;
     _decorator.errorMap = &_errorMap;
     _decorator.bgColors = bgColors.empty() ? nullptr : &bgColors;
-    _decorator.flatBg = concreteBg ? *concreteBg : tui::RgbColor {};
+    _decorator.flatBg = concreteBg ? *concreteBg : core::tui::RgbColor {};
     _decorator.transparentBg = !concreteBg && !hasAurora;
     _decorator.bgOffset = fieldOriginCol - HorizontalMargin; // Map field col 0 to aurora col offset
     _decorator.theme = &theme;
     _inputField.setTextDecorator(&_decorator);
 
     // Render InputField into a subcanvas that starts after the left chrome
-    auto const fieldArea = tui::Rect {
+    auto const fieldArea = core::tui::Rect {
         .x = fieldOriginCol,
         .y = inputStartRow,
         .width = canvasWidth - fieldOriginCol - HorizontalMargin,
@@ -798,7 +801,7 @@ void PromptComponent::render(tui::Canvas& canvas)
 
         // In fullscreen/fixed mode, choose direction based on available space
         // In inline mode, always render below (Screen handles scrolling via preferredSize)
-        if (auto* scr = screen(); scr && scr->viewport() != tui::Viewport::Inline)
+        if (auto* scr = screen(); scr && scr->viewport() != core::tui::Viewport::Inline)
         {
             // Prefer below, but use above if below has < 3 rows and above has more space
             if (availableBelow < 3 && availableAbove > availableBelow)
@@ -812,11 +815,12 @@ void PromptComponent::render(tui::Canvas& canvas)
 
         if (popupHeight >= 3) // Minimum: border (2) + 1 item
         {
-            auto popupRect = tui::Rect { .x = totalPromptWidth, // x (column) - where prompt ends
-                                         .y = popupRow,         // y (row) - below or above cursor
-                                         .width = std::min(popupSize.width,
-                                                           canvasWidth - totalPromptWidth - HorizontalMargin),
-                                         .height = popupHeight };
+            auto popupRect =
+                core::tui::Rect { .x = totalPromptWidth, // x (column) - where prompt ends
+                                  .y = popupRow,         // y (row) - below or above cursor
+                                  .width = std::min(popupSize.width,
+                                                    canvasWidth - totalPromptWidth - HorizontalMargin),
+                                  .height = popupHeight };
 
             _completionPopup.setArea(popupRect);
             auto popupCanvas = canvas.subcanvas(popupRect);
@@ -834,8 +838,9 @@ void PromptComponent::render(tui::Canvas& canvas)
         if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
         {
             auto const paletteX = std::max(0, (canvasWidth - paletteWidth) / 2);
-            auto const paletteRect =
-                tui::Rect { .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight };
+            auto const paletteRect = core::tui::Rect {
+                .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight
+            };
             _commandPalette.setArea(paletteRect);
             auto paletteCanvas = canvas.subcanvas(paletteRect);
             _commandPalette.render(paletteCanvas);
@@ -853,8 +858,8 @@ void PromptComponent::render(tui::Canvas& canvas)
         if (finderHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
         {
             auto const finderX = std::max(0, (canvasWidth - finderWidth) / 2);
-            _fuzzyFileFinder.setArea(
-                tui::Rect { .x = finderX, .y = finderRow, .width = finderWidth, .height = finderHeight });
+            _fuzzyFileFinder.setArea(core::tui::Rect {
+                .x = finderX, .y = finderRow, .width = finderWidth, .height = finderHeight });
         }
         else
         {
@@ -870,7 +875,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     _context.resolvedColors = nullptr;
 }
 
-tui::Size PromptComponent::preferredSize() const
+core::tui::Size PromptComponent::preferredSize() const
 {
     auto const inputLineCount = _inputField.lineCount();
     auto const pw = this->promptWidth();
@@ -958,28 +963,30 @@ int PromptComponent::displayWidth(std::string_view text)
     int width = 0;
     auto segmenter = unicode::utf8_grapheme_segmenter(text);
     for (auto const& cluster: segmenter)
-        width += tui::graphemeClusterWidth(cluster);
+        width += core::tui::graphemeClusterWidth(cluster);
     return width;
 }
 
-tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
+core::tui::EventResult PromptComponent::onEvent(core::tui::InputEvent const& event)
 {
-    auto const* mouse = std::get_if<tui::MouseEvent>(&event);
+    auto const* mouse = std::get_if<core::tui::MouseEvent>(&event);
     if (!mouse)
-        return tui::EventResult::Ignored;
+        return core::tui::EventResult::Ignored;
 
     auto const action = handleMouseEvent(*mouse);
-    return (action != tui::InputFieldAction::None) ? tui::EventResult::Handled : tui::EventResult::Ignored;
+    return (action != core::tui::InputFieldAction::None) ? core::tui::EventResult::Handled
+                                                         : core::tui::EventResult::Ignored;
 }
 
-tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& mouse)
+core::tui::InputFieldAction PromptComponent::handleMouseEvent(core::tui::MouseEvent const& mouse)
 {
     // Convert 1-based component-relative to 0-based
     auto const compCol = mouse.x - 1;
     auto const compRow = mouse.y - 1;
 
     // For scroll events, pass through directly
-    if (mouse.type == tui::MouseEvent::Type::ScrollUp || mouse.type == tui::MouseEvent::Type::ScrollDown)
+    if (mouse.type == core::tui::MouseEvent::Type::ScrollUp
+        || mouse.type == core::tui::MouseEvent::Type::ScrollDown)
         return _inputField.handleMouse(mouse.type, 0, 0, mouse.modifiers);
 
     // Compute which input line this falls on
@@ -1007,7 +1014,7 @@ tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& m
         auto displayCol = 0;
         for (auto const& cluster: segmenter)
         {
-            auto const w = tui::graphemeClusterWidth(cluster);
+            auto const w = core::tui::graphemeClusterWidth(cluster);
             if (displayCol + w > textDisplayCol)
                 break;
             displayCol += w;
@@ -1018,10 +1025,10 @@ tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& m
     return _inputField.handleMouse(mouse.type, clampedLine, graphemeIndex, mouse.modifiers);
 }
 
-PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
+PromptComponent::Action PromptComponent::processInput(core::tui::InputEvent const& event)
 {
     // Mouse events are handled by onEvent/handleMouseEvent, not here.
-    if (std::holds_alternative<tui::MouseEvent>(event))
+    if (std::holds_alternative<core::tui::MouseEvent>(event))
         return Action::None;
 
     // Handle command palette events first (takes priority over everything)
@@ -1030,9 +1037,9 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         auto const paletteAction = _commandPalette.processEvent(event);
         switch (paletteAction)
         {
-            case tui::CommandPaletteAction::Changed: return Action::Changed;
-            case tui::CommandPaletteAction::Executed:
-            case tui::CommandPaletteAction::Dismissed: return Action::Changed;
+            case core::tui::CommandPaletteAction::Changed: return Action::Changed;
+            case core::tui::CommandPaletteAction::Executed:
+            case core::tui::CommandPaletteAction::Dismissed: return Action::Changed;
         }
         return Action::Changed;
     }
@@ -1043,13 +1050,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         auto const finderAction = _fuzzyFileFinder.processEvent(event);
         switch (finderAction)
         {
-            case tui::FuzzyPickerAction::Accepted:
+            case core::tui::FuzzyPickerAction::Accepted:
                 if (auto const* selected = _fuzzyFileFinder.selectedItem())
                     insertCompletion(*selected);
                 _fuzzyFileFinder.hide();
                 return Action::Changed;
-            case tui::FuzzyPickerAction::Dismissed: return Action::Changed;
-            case tui::FuzzyPickerAction::Changed: return Action::Changed;
+            case core::tui::FuzzyPickerAction::Dismissed: return Action::Changed;
+            case core::tui::FuzzyPickerAction::Changed: return Action::Changed;
         }
         return Action::Changed;
     }
@@ -1062,12 +1069,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     if (_completionPopup.visible())
     {
         // Intercept Tab for partial completion (longest common prefix)
-        if (auto const* key = std::get_if<tui::KeyEvent>(&event);
-            key && key->key == tui::KeyCode::Tab
-            && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+        if (auto const* key = std::get_if<core::tui::KeyEvent>(&event);
+            key && key->key == core::tui::KeyCode::Tab
+            && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None
             && _completionPopup.itemCount() > 1)
         {
-            auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
+            auto const commonPrefix =
+                core::tui::completer::Completer::findCommonPrefix(_completionPopup.items());
             if (!commonPrefix.empty())
             {
                 auto const ctx = Completer::analyzeContext(_inputField.text(), _inputField.cursor());
@@ -1083,8 +1091,8 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         auto completionResult = _completionPopup.processEvent(event);
         switch (completionResult)
         {
-            case tui::CompletionAction::Changed: return Action::Changed;
-            case tui::CompletionAction::Accepted:
+            case core::tui::CompletionAction::Changed: return Action::Changed;
+            case core::tui::CompletionAction::Accepted:
                 if (auto const* selected = _completionPopup.selectedItem())
                 {
                     if (_historySearchMode)
@@ -1095,10 +1103,10 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 dismissPopup();
                 updateGhostText(); // Clear/update ghost text after completion
                 return Action::Changed;
-            case tui::CompletionAction::Dismissed:
+            case core::tui::CompletionAction::Dismissed:
                 // Escape should just close the popup without passing through to InputField
-                if (auto const* key = std::get_if<tui::KeyEvent>(&event);
-                    key && key->key == tui::KeyCode::Escape)
+                if (auto const* key = std::get_if<core::tui::KeyEvent>(&event);
+                    key && key->key == core::tui::KeyCode::Escape)
                 {
                     dismissPopup();
                     return Action::Changed;
@@ -1112,12 +1120,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     // Inline history cycling: Up/Down cycles through history (prefix-matched when input is non-empty)
     if (!_completionPopup.visible())
     {
-        if (auto const* key = std::get_if<tui::KeyEvent>(&event))
+        if (auto const* key = std::get_if<core::tui::KeyEvent>(&event))
         {
             auto const inputText = std::string(_inputField.text());
-            if (key->key == tui::KeyCode::Up || key->key == tui::KeyCode::Down)
+            if (key->key == core::tui::KeyCode::Up || key->key == core::tui::KeyCode::Down)
             {
-                if (key->key == tui::KeyCode::Up)
+                if (key->key == core::tui::KeyCode::Up)
                 {
                     if (!_historyCycleIndex.has_value())
                     {
@@ -1169,10 +1177,11 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     }
 
     // Handle key events with special completion handling
-    if (auto const* key = std::get_if<tui::KeyEvent>(&event))
+    if (auto const* key = std::get_if<core::tui::KeyEvent>(&event))
     {
         // Tab triggers completion (double-Tab forces popup to show)
-        if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None)
+        if (key->key == core::tui::KeyCode::Tab
+            && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None)
         {
             auto const now = std::chrono::steady_clock::now();
             bool const isDoubleTab = (now - _lastTabTime) < DoubleTabThreshold;
@@ -1182,20 +1191,20 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         }
 
         // Ctrl+Space triggers completion (always shows popup)
-        if (key->codepoint == ' ' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        if (key->codepoint == ' ' && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl))
         {
             triggerCompletion(true);
             return Action::Changed;
         }
 
         // Ctrl+L clears the screen
-        if (key->codepoint == 'l' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        if (key->codepoint == 'l' && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl))
         {
             return Action::ClearScreen;
         }
 
         // Ctrl+R triggers history search (fuzzy popup over all history)
-        if (key->codepoint == 'r' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        if (key->codepoint == 'r' && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl))
         {
             _historySearchMode = true;
             triggerHistorySearch();
@@ -1205,15 +1214,16 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         // Right arrow or End at end of line accepts ghost text
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
-            if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
-                || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
+            if (key->key == core::tui::KeyCode::Right || key->key == core::tui::KeyCode::End
+                || (key->codepoint == 'e'
+                    && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl)))
             {
                 // Confirm and accept the suggestion, suppressing the pending recompute so the
                 // consumed-prefix seed survives for a synchronous restore-on-backspace. The recompute
                 // may clear a re-prepended guess the completer no longer offers; in that case nothing
                 // is accepted. Right/End/Ctrl+E at end-of-buffer are no-ops anyway, so swallowing the
                 // key (always Changed) is harmless.
-                (void) tui::acceptGhostText(
+                (void) core::tui::acceptGhostText(
                     _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince);
                 return Action::Changed;
             }
@@ -1221,7 +1231,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
         // '#' on empty input enters agent mode
-        if (key->codepoint == '#' && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+        if (key->codepoint == '#' && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None
             && _inputField.text().empty())
             return Action::AgentMode;
 #endif
@@ -1232,7 +1242,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
 
     switch (action)
     {
-        case tui::InputFieldAction::Submit:
+        case core::tui::InputFieldAction::Submit:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
@@ -1240,19 +1250,19 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (std::ranges::all_of(_inputField.text(), [](unsigned char c) { return std::isspace(c); }))
                 return Action::None;
             return Action::Submit;
-        case tui::InputFieldAction::Abort:
+        case core::tui::InputFieldAction::Abort:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
             _exitHintVisible = false;
             return Action::Abort;
-        case tui::InputFieldAction::NewPrompt:
+        case core::tui::InputFieldAction::NewPrompt:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
             _exitHintVisible = false;
             return Action::NewPrompt;
-        case tui::InputFieldAction::Eof: {
+        case core::tui::InputFieldAction::Eof: {
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
@@ -1275,30 +1285,30 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             _inputField.setGhostText("Press Ctrl+D again to exit, or Ctrl+L to clear");
             return Action::Changed;
         }
-        case tui::InputFieldAction::AgentMode:
+        case core::tui::InputFieldAction::AgentMode:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
             return Action::AgentMode;
-        case tui::InputFieldAction::CommandPalette:
+        case core::tui::InputFieldAction::CommandPalette:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
             if (_commandRegistry)
-                _commandPalette.show(*_commandRegistry, tui::CommandContext::Shell);
+                _commandPalette.show(*_commandRegistry, core::tui::CommandContext::Shell);
             return Action::Changed;
-        case tui::InputFieldAction::FuzzyFileFinder:
+        case core::tui::InputFieldAction::FuzzyFileFinder:
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
             triggerFuzzyFileFinder();
             return Action::Changed;
-        case tui::InputFieldAction::CycleAgentMode:
-        case tui::InputFieldAction::CycleThinkingMode:
-        case tui::InputFieldAction::CycleModel:
+        case core::tui::InputFieldAction::CycleAgentMode:
+        case core::tui::InputFieldAction::CycleThinkingMode:
+        case core::tui::InputFieldAction::CycleModel:
             // Not applicable in shell prompt context; ignore.
             break;
-        case tui::InputFieldAction::Changed:
+        case core::tui::InputFieldAction::Changed:
             resetHistoryCycling();
             if (_exitHintVisible)
             {
@@ -1311,7 +1321,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             if (popupWasVisible && popupDismissedByTyping)
                 _completionPopupDirty = true;
             return Action::Changed;
-        case tui::InputFieldAction::None:
+        case core::tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)
             {
@@ -1330,7 +1340,7 @@ void PromptComponent::updateGhostText()
     // back to the Completer. With neither available there is nothing to suggest.
     if (_suggestFn)
     {
-        tui::updateGhostText(_inputField, _suggestCacheText, _suggestCacheResult, _suggestFn);
+        core::tui::updateGhostText(_inputField, _suggestCacheText, _suggestCacheResult, _suggestFn);
         return;
     }
 
@@ -1340,10 +1350,10 @@ void PromptComponent::updateGhostText()
         return;
     }
 
-    tui::updateGhostText(_inputField,
-                         _suggestCacheText,
-                         _suggestCacheResult,
-                         [this](auto const& text, auto cursor) { return _completer->suggest(text, cursor); });
+    core::tui::updateGhostText(
+        _inputField, _suggestCacheText, _suggestCacheResult, [this](auto const& text, auto cursor) {
+            return _completer->suggest(text, cursor);
+        });
 }
 
 void PromptComponent::triggerCompletion(bool forceShowPopup)
@@ -1400,7 +1410,7 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
         // prefix no longer extends the typed word. Fuzzy-only candidates are excluded —
         // they share no meaningful leading prefix — so an all-fuzzy result shows the popup
         // immediately.
-        std::vector<tui::CompletionItem> prefixMatches;
+        std::vector<core::tui::completer::CompletionItem> prefixMatches;
         for (auto const& item: completions)
             if (isPrefixMatch(item))
                 prefixMatches.push_back(item);
@@ -1408,7 +1418,7 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
         if (prefixMatches.size() > 1)
         {
             auto const ctx = Completer::analyzeContext(text, cursor);
-            auto const commonPrefix = tui::Completer::findCommonPrefix(prefixMatches);
+            auto const commonPrefix = core::tui::completer::Completer::findCommonPrefix(prefixMatches);
             if (commonPrefix.size() > ctx.prefix.size())
             {
                 insertCompletion(commonPrefix);
@@ -1420,11 +1430,11 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
     }
 
     // Multiple matches (or force-show): populate and show popup
-    std::vector<tui::CompletionItem> popupItems;
+    std::vector<core::tui::completer::CompletionItem> popupItems;
     popupItems.reserve(completions.size());
     for (auto const& item: completions)
     {
-        popupItems.push_back(tui::CompletionItem {
+        popupItems.push_back(core::tui::completer::CompletionItem {
             .text = item.text,
             .displayText = item.displayText.empty() ? item.text : item.displayText,
             .description = item.description,
@@ -1461,11 +1471,11 @@ void PromptComponent::updateCompletionPopup()
     }
 
     // Convert to popup items
-    std::vector<tui::CompletionItem> popupItems;
+    std::vector<core::tui::completer::CompletionItem> popupItems;
     popupItems.reserve(completions.size());
     for (auto const& item: completions)
     {
-        popupItems.push_back(tui::CompletionItem {
+        popupItems.push_back(core::tui::completer::CompletionItem {
             .text = item.text,
             .displayText = item.displayText.empty() ? item.text : item.displayText,
             .description = item.description,
@@ -1520,11 +1530,11 @@ void PromptComponent::triggerHistorySearch()
         return;
     }
 
-    std::vector<tui::CompletionItem> items;
+    std::vector<core::tui::completer::CompletionItem> items;
     items.reserve(results.size());
     for (auto const& result: results)
     {
-        items.push_back(tui::CompletionItem {
+        items.push_back(core::tui::completer::CompletionItem {
             .text = std::string(result.entry),
             .displayText = std::string(result.entry),
             .description = {},
@@ -1560,11 +1570,11 @@ void PromptComponent::updateHistorySearchPopup()
         return;
     }
 
-    std::vector<tui::CompletionItem> items;
+    std::vector<core::tui::completer::CompletionItem> items;
     items.reserve(results.size());
     for (auto const& result: results)
     {
-        items.push_back(tui::CompletionItem {
+        items.push_back(core::tui::completer::CompletionItem {
             .text = std::string(result.entry),
             .displayText = std::string(result.entry),
             .description = {},
@@ -1639,7 +1649,7 @@ void PromptComponent::insertCompletion(std::string_view text)
     _inputField.setText(newBuffer);
 }
 
-std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
+std::optional<core::tui::HoverResult> PromptComponent::onHover(int x, int y)
 {
     auto const sourcePos = screenToSourcePosition(x, y);
 
@@ -1651,10 +1661,10 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
             auto tooltipText = diag->message;
             for (auto const& hint: diag->suggestions)
                 tooltipText += "\nhint: " + hint;
-            return tui::HoverResult {
+            return core::tui::HoverResult {
                 .text = std::move(tooltipText),
                 .position = { .x = x, .y = y },
-                .contentType = tui::TooltipContentType::PlainText,
+                .contentType = core::tui::TooltipContentType::PlainText,
             };
         }
     }
@@ -1665,10 +1675,10 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
         auto const text = std::string(_inputField.text());
         if (auto hover = endo::computeHover(text, *sourcePos))
         {
-            return tui::HoverResult {
+            return core::tui::HoverResult {
                 .text = hover->markdownText,
                 .position = { .x = x, .y = y },
-                .contentType = tui::TooltipContentType::Markdown,
+                .contentType = core::tui::TooltipContentType::Markdown,
             };
         }
     }
@@ -1680,10 +1690,10 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
         {
             auto const info = _commandResolver->resolve(*cmd);
             auto const [cmdStart, _] = getCommandBounds();
-            return tui::HoverResult {
+            return core::tui::HoverResult {
                 .text = info.tooltip,
                 .position = { .x = cmdStart, .y = y },
-                .contentType = tui::TooltipContentType::PlainText,
+                .contentType = core::tui::TooltipContentType::PlainText,
             };
         }
     }
@@ -1694,7 +1704,7 @@ std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
 std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
                                                      int cellPixelHeight,
                                                      int contentWidthCols,
-                                                     tui::RgbColor bgColor) const
+                                                     core::tui::RgbColor bgColor) const
 {
     auto const imgWidth = contentWidthCols * cellPixelWidth;
     auto const imgHeight = cellPixelHeight;
@@ -1734,12 +1744,12 @@ std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
     }
 
     // Encode to sixel
-    auto const imageData = tui::ImageData {
+    auto const imageData = core::tui::ImageData {
         .pixels = std::span<const std::uint8_t>(pixels),
         .width = imgWidth,
         .height = imgHeight,
     };
-    auto result = tui::encodeSixel(imageData, 64);
+    auto result = core::tui::encodeSixel(imageData, 64);
     return result.has_value() ? std::move(*result) : std::string {};
 }
 
@@ -1813,19 +1823,19 @@ void PromptComponent::updateDiagnostics()
 
 int PromptComponent::diagnosticsTimeoutMs() const
 {
-    return tui::remainingMs(_diagnosticsPendingSince, DiagnosticsDebounceMs);
+    return core::tui::remainingMs(_diagnosticsPendingSince, DiagnosticsDebounceMs);
 }
 
 int PromptComponent::ghostTextTimeoutMs() const
 {
-    return tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
+    return core::tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
 }
 
 int PromptComponent::exitHintTimeoutMs() const
 {
     if (!_exitHintVisible)
         return -1;
-    return tui::remainingMs(_lastCtrlDTime, std::chrono::milliseconds(_config.exitConfirmTimeoutMs));
+    return core::tui::remainingMs(_lastCtrlDTime, std::chrono::milliseconds(_config.exitConfirmTimeoutMs));
 }
 
 std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, int character) const
@@ -1872,7 +1882,7 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
 
     for (auto const& cluster: segmenter)
     {
-        auto const w = tui::graphemeClusterWidth(cluster);
+        auto const w = core::tui::graphemeClusterWidth(cluster);
         if (displayCol + w > targetCol)
             break;
         displayCol += w;

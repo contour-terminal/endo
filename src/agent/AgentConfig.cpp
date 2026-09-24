@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "AgentConfig.hpp"
 
+#include <core/platform/UserPaths.hpp>
+
 #include <yaml-cpp/yaml.h>
 
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
-
-#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -226,7 +226,7 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
 auto loadAgentConfig() -> AgentConfig
 {
-    auto const configDir = platform::configHome();
+    auto const configDir = core::platform::configHome();
     if (!configDir)
         return AgentConfig {};
 
@@ -313,7 +313,7 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 
 auto saveAgentConfig(AgentConfig const& config) -> std::optional<std::string>
 {
-    auto const configDir = platform::configHome();
+    auto const configDir = core::platform::configHome();
     if (!configDir)
         return std::string("User config directory not available");
 

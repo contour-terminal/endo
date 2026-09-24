@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -52,8 +52,8 @@ class DirectoryConfigTrustStore
     /// @param fs Filesystem abstraction for file I/O.
     /// @param env Environment provider for resolving config home path.
     /// @param diag Diagnostic sink for error messages.
-    explicit DirectoryConfigTrustStore(FileSystem const& fs,
-                                       EnvironmentProvider& env,
+    explicit DirectoryConfigTrustStore(core::platform::FileSystem const& fs,
+                                       core::platform::EnvironmentProvider& env,
                                        DiagnosticSink diag);
 
     /// Load trust decisions from persistent storage.
@@ -79,8 +79,8 @@ class DirectoryConfigTrustStore
   private:
     [[nodiscard]] std::filesystem::path trustFilePath() const;
 
-    FileSystem const& _fs;
-    EnvironmentProvider& _env;
+    core::platform::FileSystem const& _fs;
+    core::platform::EnvironmentProvider& _env;
     DiagnosticSink _diag;
     std::unordered_map<std::string, TrustEntry> _entries; ///< canonical path -> trust entry
 };
@@ -99,8 +99,8 @@ class DirectoryConfigManager
     /// @param env Environment provider for directory and config home operations.
     /// @param diag Diagnostic sink for status and error messages.
     DirectoryConfigManager(Shell& shell,
-                           FileSystem const& fs,
-                           EnvironmentProvider& env,
+                           core::platform::FileSystem const& fs,
+                           core::platform::EnvironmentProvider& env,
                            DiagnosticSink diag);
 
     /// Called after cd or at shell startup. Loads/unloads configs as needed.
@@ -152,8 +152,8 @@ class DirectoryConfigManager
     void diag(std::string const& message);
 
     Shell& _shell;
-    FileSystem const& _fs;
-    EnvironmentProvider& _env;
+    core::platform::FileSystem const& _fs;
+    core::platform::EnvironmentProvider& _env;
     DirectoryConfigTrustStore _trustStore;
     DiagnosticSink _diag;
     std::vector<DirectoryConfigScope> _activeScopes;

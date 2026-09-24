@@ -5,14 +5,14 @@
 #include <shell/TTY.hpp>
 #include <shell/testing/InjectedShell.hpp>
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestEnvironmentProvider.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <filesystem>
 #include <memory>
-
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace std::string_view_literals;
 
@@ -34,7 +34,9 @@ endo::DiagnosticSink silentDiag()
 /// @param name       Directory name below /test.
 /// @param config     Config file contents; no file is written when empty.
 /// @return The directory's path.
-fs::path makeDir(endo::InMemoryFileSystem& fileSystem, std::string const& name, std::string_view config = {})
+fs::path makeDir(core::platform::testing::InMemoryFileSystem& fileSystem,
+                 std::string const& name,
+                 std::string_view config = {})
 {
     auto const dir = fs::path("/test") / name;
     fileSystem.addDirectory(dir);
@@ -44,7 +46,7 @@ fs::path makeDir(endo::InMemoryFileSystem& fileSystem, std::string const& name, 
 }
 
 /// Helper: set the test environment CWD and register the path as valid.
-void setCwd(endo::TestEnvironment& env, fs::path const& dir)
+void setCwd(core::platform::testing::TestEnvironmentProvider& env, fs::path const& dir)
 {
     env.addValidPath(dir.string());
     [[maybe_unused]] auto const result = env.changeDirectory(dir);
@@ -59,8 +61,8 @@ void setCwd(endo::TestEnvironment& env, fs::path const& dir)
 
 TEST_CASE("dirconfig.trust_store.round_trip")
 {
-    endo::InMemoryFileSystem fileSystem;
-    endo::TestEnvironment env;
+    core::platform::testing::InMemoryFileSystem fileSystem;
+    core::platform::testing::TestEnvironmentProvider env;
     env.set("HOME", "/test/home");
 
     // Create, set trust, save
@@ -90,8 +92,8 @@ TEST_CASE("dirconfig.trust_store.round_trip")
 
 TEST_CASE("dirconfig.trust_store.hash_change_invalidates")
 {
-    endo::InMemoryFileSystem fileSystem;
-    endo::TestEnvironment env;
+    core::platform::testing::InMemoryFileSystem fileSystem;
+    core::platform::testing::TestEnvironmentProvider env;
     env.set("HOME", "/test/home");
 
     auto store = endo::DirectoryConfigTrustStore(fileSystem, env, silentDiag());
@@ -109,8 +111,8 @@ TEST_CASE("dirconfig.trust_store.hash_change_invalidates")
 
 TEST_CASE("dirconfig.trust_store.revoke")
 {
-    endo::InMemoryFileSystem fileSystem;
-    endo::TestEnvironment env;
+    core::platform::testing::InMemoryFileSystem fileSystem;
+    core::platform::testing::TestEnvironmentProvider env;
     env.set("HOME", "/test/home");
 
     auto store = endo::DirectoryConfigTrustStore(fileSystem, env, silentDiag());

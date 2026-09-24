@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Installs testing::suppressWindowsDialogs() before main() runs, in an executable that links this.
+// Installs core::testing::suppressWindowsDialogs() before main() runs, in an executable that links this.
 //
 // It is linked into EVERY executable target by cmake/WindowsDialogs.cmake rather than called from each
 // main(), because a call each main() has to remember is the defect this closes: endo-test's main() had
@@ -16,9 +16,9 @@
 
 #if defined(_WIN32)
 
-    #include <Windows.h>
+    #include <core/testing/SuppressWindowsDialogs.hpp>
 
-    #include <testing/SuppressWindowsDialogs.hpp>
+    #include <Windows.h>
 
     #if defined(_MSC_VER)
         // Run in the library initialisation phase, ahead of every ordinary static initializer, so an
@@ -47,7 +47,7 @@ struct SuppressWindowsDialogsAtStartup
     SuppressWindowsDialogsAtStartup() noexcept
     {
         if (suppressionRequested())
-            testing::suppressWindowsDialogs();
+            core::testing::suppressWindowsDialogs();
     }
 };
 

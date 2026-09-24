@@ -15,7 +15,7 @@
 #
 # 1. links src/testing/SuppressWindowsDialogsAtStartup.cpp into EVERY executable target the build
 #    declares -- derived by walking the directories, never listed, so a test executable added tomorrow
-#    is covered without an edit, including the contour-fetched ones endo does not own;
+#    is covered without an edit, including any a dependency declares;
 # 2. sets ENDO_SUPPRESS_WINDOWS_DIALOGS in the environment of EVERY test ctest registers, which reaches
 #    any process a test starts, including the product binary a Python script launches.
 #
@@ -62,7 +62,7 @@ function(endo_install_windows_dialog_suppression)
     target_compile_definitions(endo-windows-dialogs-always PRIVATE ENDO_WINDOWS_DIALOGS_ALWAYS)
     add_library(endo-windows-dialogs-under-test OBJECT "${source}")
     foreach(variant IN ITEMS endo-windows-dialogs-always endo-windows-dialogs-under-test)
-        target_include_directories(${variant} PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(${variant} PRIVATE core::testing)
         target_compile_features(${variant} PRIVATE cxx_std_23)
     endforeach()
 
@@ -113,6 +113,12 @@ function(endo_install_windows_dialog_suppression)
 
     set(products 0)
     foreach(target IN LISTS executables)
+        # The objects call core::testing::suppressWindowsDialogs(), which core::testing defines; an
+        # object on a link line brings none of its library's dependencies with it. A property append
+        # rather than target_link_libraries(), whose plain and keyword forms may not mix on a target.
+        if(WIN32)
+            set_property(TARGET ${target} APPEND PROPERTY LINK_LIBRARIES core::testing)
+        endif()
         if(target IN_LIST productNames)
             target_sources(${target} PRIVATE $<TARGET_OBJECTS:endo-windows-dialogs-under-test>)
             math(EXPR products "${products} + 1")

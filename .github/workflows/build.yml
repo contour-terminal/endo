@@ -46,20 +46,11 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
 
-    # OpenSSL backs the TLS transport in the vendored net library.
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libssl-dev
-
     - name: Install Homebrew dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install llvm ninja openssl@3
+        brew install llvm ninja
         echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
-        # macOS ships no usable OpenSSL headers, so point find_package at Homebrew's.
-        echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
 
     # ── Common setup ──
 
@@ -75,9 +66,6 @@ jobs:
     - name: Install Ninja (Linux)
       if: runner.os == 'Linux'
       uses: seanmiddleditch/gha-setup-ninja@master
-
-    - name: "Get vendored contour sources"
-      run: python3 scripts/get_contour_dirs.py
 
     # ── Configure ──
 
@@ -145,13 +133,6 @@ jobs:
         # an unversioned binary, which apt.llvm.org does not install.
         sudo ln -sf /usr/bin/clang-tidy-${{ env.LLVM_VERSION }} /usr/local/bin/clang-tidy
 
-    # OpenSSL backs the TLS transport in the vendored net library and curl backs the
-    # `fetch` builtin; neither is agent-only, so both are still needed here.
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libssl-dev
-
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
@@ -163,9 +144,6 @@ jobs:
 
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
-
-    - name: "Get vendored contour sources"
-      run: python3 scripts/get_contour_dirs.py
 
     # clang-debug brings ASAN, UBSAN and clang-tidy, so the stub path is not merely
     # compiled but exercised and linted. ENDO_ENABLE_AGENT=OFF is the default; it is
@@ -206,9 +184,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        # libssl-dev ships libssl.a too, which the fully-static link needs
-        # (see OPENSSL_USE_STATIC_LIBS in cmake/EndoThirdParties.cmake).
-        sudo apt-get install -y libc6-dev ninja-build libssl-dev
+        sudo apt-get install -y libc6-dev ninja-build
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
@@ -218,9 +194,6 @@ jobs:
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
-
-    - name: "Get vendored contour sources"
-      run: python3 scripts/get_contour_dirs.py
 
     - name: Configure CMake
       run: >
@@ -270,9 +243,6 @@ jobs:
 
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
-
-    - name: "Get vendored contour sources"
-      run: python scripts/get_contour_dirs.py
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
 #include <string>
@@ -16,8 +16,8 @@ SlashCommandCompleter::SlashCommandCompleter(SlashCommandRegistry const& registr
 {
 }
 
-std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_view input,
-                                                                 size_t cursorPosition)
+std::vector<core::tui::completer::CompletionItem> SlashCommandCompleter::complete(std::string_view input,
+                                                                                  size_t cursorPosition)
 {
     // Only complete when input starts with '/'
     if (input.empty() || input[0] != '/')
@@ -42,7 +42,7 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
     // Extract the prefix after '/' up to cursor
     auto const prefix = inputUpToCursor.substr(1);
 
-    auto items = std::vector<tui::CompletionItem> {};
+    auto items = std::vector<core::tui::completer::CompletionItem> {};
 
     for (auto const& cmd: _registry.commands())
     {
@@ -50,10 +50,10 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
         auto const fullText = "/" + std::string(cmdName);
 
         // Try smart-case prefix match first
-        if (tui::SmartCaseMatch::matchesPrefix(cmdName, prefix))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(cmdName, prefix))
         {
-            auto score = tui::SmartCaseMatch::adjustScore(100, cmdName, prefix);
-            items.push_back(tui::CompletionItem {
+            auto score = core::tui::completer::SmartCaseMatch::adjustScore(100, cmdName, prefix);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(cmd->description()),
                 .score = score,
@@ -62,16 +62,17 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
         }
 
         // Fall back to fuzzy match on name
-        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(cmdName, prefix);
+        auto const fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(cmdName, prefix);
         if (fuzzyResult.matches)
         {
-            auto const score = tui::FuzzyMatch::calculateScore(50, cmdName, prefix, fuzzyResult);
+            auto const score =
+                core::tui::completer::FuzzyMatch::calculateScore(50, cmdName, prefix, fuzzyResult);
             // Adjust match positions to account for leading '/'
             auto positions = std::vector<size_t> {};
             positions.reserve(fuzzyResult.positions.size());
             for (auto pos: fuzzyResult.positions)
                 positions.push_back(pos + 1); // +1 for the leading '/'
-            items.push_back(tui::CompletionItem {
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(cmd->description()),
                 .score = score,
@@ -81,11 +82,12 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
         }
 
         // Fall back to fuzzy match on description
-        auto const descResult = tui::FuzzyMatch::matchSmartCase(cmd->description(), prefix);
+        auto const descResult = core::tui::completer::FuzzyMatch::matchSmartCase(cmd->description(), prefix);
         if (descResult.matches)
         {
-            auto const score = tui::FuzzyMatch::calculateScore(25, cmd->description(), prefix, descResult);
-            items.push_back(tui::CompletionItem {
+            auto const score =
+                core::tui::completer::FuzzyMatch::calculateScore(25, cmd->description(), prefix, descResult);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(cmd->description()),
                 .score = score,
@@ -103,10 +105,11 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
     return items;
 }
 
-std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(std::string_view prefix)
+std::vector<core::tui::completer::CompletionItem> SlashCommandCompleter::completeModelArgument(
+    std::string_view prefix)
 {
     auto const allModels = allKnownModels();
-    auto items = std::vector<tui::CompletionItem> {};
+    auto items = std::vector<core::tui::completer::CompletionItem> {};
 
     for (auto const& m: allModels)
     {
@@ -117,7 +120,7 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(st
         if (prefix.empty())
         {
             // Show all models when no prefix is given.
-            items.push_back(tui::CompletionItem {
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(m.providerName),
                 .score = 100,
@@ -126,10 +129,10 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(st
         }
 
         // Try smart-case prefix match
-        if (tui::SmartCaseMatch::matchesPrefix(modelName, prefix))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(modelName, prefix))
         {
-            auto score = tui::SmartCaseMatch::adjustScore(100, modelName, prefix);
-            items.push_back(tui::CompletionItem {
+            auto score = core::tui::completer::SmartCaseMatch::adjustScore(100, modelName, prefix);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(m.providerName),
                 .score = score,
@@ -138,11 +141,12 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(st
         }
 
         // Fall back to fuzzy match
-        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(modelName, prefix);
+        auto const fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(modelName, prefix);
         if (fuzzyResult.matches)
         {
-            auto const score = tui::FuzzyMatch::calculateScore(50, modelName, prefix, fuzzyResult);
-            items.push_back(tui::CompletionItem {
+            auto const score =
+                core::tui::completer::FuzzyMatch::calculateScore(50, modelName, prefix, fuzzyResult);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = std::string(m.providerName),
                 .score = score,
@@ -160,14 +164,14 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(st
     return items;
 }
 
-std::vector<tui::CompletionItem> SlashCommandCompleter::completeSessionArgument(std::string_view cmdName,
-                                                                                std::string_view prefix)
+std::vector<core::tui::completer::CompletionItem> SlashCommandCompleter::completeSessionArgument(
+    std::string_view cmdName, std::string_view prefix)
 {
     if (!_sessionNameProvider)
         return {};
 
     auto const names = _sessionNameProvider();
-    auto items = std::vector<tui::CompletionItem> {};
+    auto items = std::vector<core::tui::completer::CompletionItem> {};
 
     for (auto const& name: names)
     {
@@ -175,7 +179,7 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeSessionArgument(
 
         if (prefix.empty())
         {
-            items.push_back(tui::CompletionItem {
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = "session",
                 .score = 100,
@@ -184,10 +188,10 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeSessionArgument(
         }
 
         // Try smart-case prefix match.
-        if (tui::SmartCaseMatch::matchesPrefix(name, prefix))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(name, prefix))
         {
-            auto const score = tui::SmartCaseMatch::adjustScore(100, name, prefix);
-            items.push_back(tui::CompletionItem {
+            auto const score = core::tui::completer::SmartCaseMatch::adjustScore(100, name, prefix);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = "session",
                 .score = score,
@@ -196,11 +200,12 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeSessionArgument(
         }
 
         // Fall back to fuzzy match.
-        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
+        auto const fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(name, prefix);
         if (fuzzyResult.matches)
         {
-            auto const score = tui::FuzzyMatch::calculateScore(50, name, prefix, fuzzyResult);
-            items.push_back(tui::CompletionItem {
+            auto const score =
+                core::tui::completer::FuzzyMatch::calculateScore(50, name, prefix, fuzzyResult);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = fullText,
                 .description = "session",
                 .score = score,

@@ -2,10 +2,14 @@
 #include <shell/completion/Completer.hpp>
 #include <shell/ui/PromptPresets.hpp>
 
-#include <tui/Buffer.hpp>
-#include <tui/Canvas.hpp>
-#include <tui/InputEvent.hpp>
-#include <tui/Theme.hpp>
+#include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/testing/ScopedTempDir.hpp>
+#include <core/tui/Buffer.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/InputEvent.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,10 +19,6 @@
 #include <thread>
 
 #include "PromptComponent.hpp"
-#include <platform/NativeFileSystem.hpp>
-#include <platform/PathUtils.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
-#include <testing/ScopedTempDir.hpp>
 
 using namespace endo;
 
@@ -26,47 +26,48 @@ namespace
 {
 
 /// @brief Creates a Ctrl+D key event (EOF on empty input).
-tui::InputEvent ctrlD()
+core::tui::InputEvent ctrlD()
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('d'),
-                           .modifiers = tui::Modifier::Ctrl,
-                           .codepoint = 'd' };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>('d'),
+                                 .modifiers = core::tui::Modifier::Ctrl,
+                                 .codepoint = 'd' };
 }
 
 /// @brief Creates a regular character key event.
-tui::InputEvent charEvent(char ch)
+core::tui::InputEvent charEvent(char ch)
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>(ch),
-                           .modifiers = tui::Modifier::None,
-                           .codepoint = static_cast<char32_t>(ch) };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>(ch),
+                                 .modifiers = core::tui::Modifier::None,
+                                 .codepoint = static_cast<char32_t>(ch) };
 }
 
 /// @brief Creates a Backspace key event.
-tui::InputEvent backspaceEvent()
+core::tui::InputEvent backspaceEvent()
 {
-    return tui::KeyEvent { .key = tui::KeyCode::Backspace, .modifiers = tui::Modifier::None };
+    return core::tui::KeyEvent { .key = core::tui::KeyCode::Backspace,
+                                 .modifiers = core::tui::Modifier::None };
 }
 
 /// @brief Creates a Tab key event (triggers completion).
-tui::InputEvent tabEvent()
+core::tui::InputEvent tabEvent()
 {
-    return tui::KeyEvent { .key = tui::KeyCode::Tab, .modifiers = tui::Modifier::None };
+    return core::tui::KeyEvent { .key = core::tui::KeyCode::Tab, .modifiers = core::tui::Modifier::None };
 }
 
 /// @brief Creates a Ctrl+E key event (accepts ghost text at end of line).
-tui::InputEvent ctrlE()
+core::tui::InputEvent ctrlE()
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('e'),
-                           .modifiers = tui::Modifier::Ctrl,
-                           .codepoint = 'e' };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>('e'),
+                                 .modifiers = core::tui::Modifier::Ctrl,
+                                 .codepoint = 'e' };
 }
 
 /// @brief Creates a Ctrl+W key event (word-backward delete / DeleteWordBackward).
-tui::InputEvent ctrlW()
+core::tui::InputEvent ctrlW()
 {
-    return tui::KeyEvent { .key = static_cast<tui::KeyCode>('w'),
-                           .modifiers = tui::Modifier::Ctrl,
-                           .codepoint = 'w' };
+    return core::tui::KeyEvent { .key = static_cast<core::tui::KeyCode>('w'),
+                                 .modifiers = core::tui::Modifier::Ctrl,
+                                 .codepoint = 'w' };
 }
 
 /// @brief Builds a prefix-consistent suggest function: completes any prefix of @p word to @p word.
@@ -111,25 +112,25 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     // all candidates (e.g. "last" -> "lastrada-") without showing the popup; only the
     // next Tab opens the popup to disambiguate.
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_prompt_common_prefix" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_prompt_common_prefix" };
     auto const& base = baseGuard.path();
     fs::create_directories(base / "lastrada-tools");
     fs::create_directories(base / "lastrada-config");
 
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
+    core::platform::testing::TestEnvironmentProvider env;
     endo::FSharpPersistentState fsharpState;
     // Real filesystem: these complete against directories created on disk above,
     // and assert the on-disk capitalisation that only a real lookup can supply.
-    auto const& fileSystem = endo::NativeFileSystem::instance();
+    auto const& fileSystem = core::platform::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
     // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
     // The inserted prefix carries the directory's real on-disk capitalization, so the
     // expectation is built from canonicalCasePath(), not the raw (possibly short-name)
     // temp path.
-    auto const typed = "cd " + endo::platform::normalizePath((base / "last").string());
-    auto const expected = "cd " + endo::platform::canonicalCasePath(base) + "/lastrada-";
+    auto const typed = "cd " + core::platform::normalizePath((base / "last").string());
+    auto const expected = "cd " + core::platform::canonicalCasePath(base) + "/lastrada-";
 
     auto comp = PromptComponent();
     comp.setCompleter(&completer);
@@ -151,20 +152,20 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
     // double quote so it stays a single argument. A directory candidate leaves the
     // quote open so completion can continue inside it.
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_prompt_quote_space" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_prompt_quote_space" };
     auto const& base = baseGuard.path();
     fs::create_directories(base / "space dir");
 
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
+    core::platform::testing::TestEnvironmentProvider env;
     endo::FSharpPersistentState fsharpState;
     // Real filesystem: these complete against directories created on disk above,
     // and assert the on-disk capitalisation that only a real lookup can supply.
-    auto const& fileSystem = endo::NativeFileSystem::instance();
+    auto const& fileSystem = core::platform::NativeFileSystem::instance();
     endo::Completer completer(env, history, fsharpState, fileSystem);
 
-    auto const typed = "cd " + endo::platform::normalizePath((base / "space").string());
-    auto const expected = "cd \"" + endo::platform::canonicalCasePath(base) + "/space dir/";
+    auto const typed = "cd " + core::platform::normalizePath((base / "space").string());
+    auto const expected = "cd \"" + core::platform::canonicalCasePath(base) + "/space dir/";
 
     auto comp = PromptComponent();
     comp.setCompleter(&completer);
@@ -361,7 +362,8 @@ TEST_CASE("PromptComponent.non_tail_edit_after_accept_does_not_resurrect_wrong_g
 
     // Move cursor one left (now between 'l' and 'd'), then backspace deletes the 'l' — a mid-buffer
     // edit, not at end → no synchronous restore.
-    (void) comp.processInput(tui::InputEvent { tui::KeyEvent { .key = tui::KeyCode::Left } });
+    (void) comp.processInput(
+        core::tui::InputEvent { core::tui::KeyEvent { .key = core::tui::KeyCode::Left } });
     (void) comp.processInput(backspaceEvent());
     CHECK(comp.inputField().text() == "cmake buid");
     CHECK(comp.inputField().ghostText().empty()); // no wrong ghost invented
@@ -414,15 +416,15 @@ TEST_CASE("PromptComponent.mouse_click_positions_cursor", "[prompt]")
     // Input line at row = topPadding(1) + auroraFadeHeight(0) + chromeHeight(0) = 1
     // Component-relative 1-based: text starts at column 6 (5 + 1 for 1-based)
     // Click at grapheme 5 ("W") → column = 5 + 5 + 1 = 11
-    auto mousePress = tui::MouseEvent {
-        .type = tui::MouseEvent::Type::Press,
+    auto mousePress = core::tui::MouseEvent {
+        .type = core::tui::MouseEvent::Type::Press,
         .button = 0,
         .x = 11, // 1-based component-relative: 5 (field origin) + 5 (graphemes) + 1 (1-based)
         .y = 2,  // 1-based: row 1 (0-based) + 1
-        .modifiers = tui::Modifier::None,
+        .modifiers = core::tui::Modifier::None,
     };
-    auto const result = comp.onEvent(tui::InputEvent { mousePress });
-    CHECK(result == tui::EventResult::Handled);
+    auto const result = comp.onEvent(core::tui::InputEvent { mousePress });
+    CHECK(result == core::tui::EventResult::Handled);
     CHECK(comp.inputField().cursor() == 5); // Byte position of "W" in "Hello World"
 }
 
@@ -436,15 +438,15 @@ TEST_CASE("PromptComponent.mouse_click_in_prompt_area_snaps_to_col0", "[prompt]"
     comp.inputField().setText("Hello");
 
     // Click in the prompt decoration area (before text starts)
-    auto mousePress = tui::MouseEvent {
-        .type = tui::MouseEvent::Type::Press,
+    auto mousePress = core::tui::MouseEvent {
+        .type = core::tui::MouseEvent::Type::Press,
         .button = 0,
         .x = 2, // In the bar/margin area
         .y = 2,
-        .modifiers = tui::Modifier::None,
+        .modifiers = core::tui::Modifier::None,
     };
-    auto const result = comp.onEvent(tui::InputEvent { mousePress });
-    CHECK(result == tui::EventResult::Handled);
+    auto const result = comp.onEvent(core::tui::InputEvent { mousePress });
+    CHECK(result == core::tui::EventResult::Handled);
     CHECK(comp.inputField().cursor() == 0); // Snapped to beginning
 }
 
@@ -458,15 +460,15 @@ TEST_CASE("PromptComponent.mouse_click_beyond_text_snaps_to_end", "[prompt]")
     comp.inputField().setText("Hi");
 
     // Click far beyond text end
-    auto mousePress = tui::MouseEvent {
-        .type = tui::MouseEvent::Type::Press,
+    auto mousePress = core::tui::MouseEvent {
+        .type = core::tui::MouseEvent::Type::Press,
         .button = 0,
         .x = 50, // Way past "Hi"
         .y = 2,
-        .modifiers = tui::Modifier::None,
+        .modifiers = core::tui::Modifier::None,
     };
-    auto const result = comp.onEvent(tui::InputEvent { mousePress });
-    CHECK(result == tui::EventResult::Handled);
+    auto const result = comp.onEvent(core::tui::InputEvent { mousePress });
+    CHECK(result == core::tui::EventResult::Handled);
     CHECK(comp.inputField().cursor() == 2); // End of "Hi"
 }
 
@@ -475,7 +477,7 @@ TEST_CASE("PromptComponent.mouse_non_mouse_event_ignored", "[prompt]")
     auto comp = PromptComponent();
     // Key events should be ignored by onEvent (handled by processInput instead)
     auto const result = comp.onEvent(charEvent('a'));
-    CHECK(result == tui::EventResult::Ignored);
+    CHECK(result == core::tui::EventResult::Ignored);
 }
 
 TEST_CASE("PromptComponent.onHover_withinText_returnsHoverInfo", "[prompt]")
@@ -552,8 +554,8 @@ TEST_CASE("PromptComponent.gradient_path_registers_a_single_hyperlink_region", "
     auto config = comp.promptConfig();
     config.infoLineModules = { "path" };
     config.colorOverrides.path =
-        ColorSpec { .colors = { tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF },
-                                tui::RgbColor { .r = 0x00, .g = 0xDC, .b = 0xC8 } } };
+        ColorSpec { .colors = { core::tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF },
+                                core::tui::RgbColor { .r = 0x00, .g = 0xDC, .b = 0xC8 } } };
     comp.setPromptConfig(std::move(config));
 
     auto ctx = PromptContext {};
@@ -563,9 +565,9 @@ TEST_CASE("PromptComponent.gradient_path_registers_a_single_hyperlink_region", "
     ctx.hyperlinks = true;
     comp.setPromptContext(std::move(ctx));
 
-    auto buffer = tui::Buffer(8, 80);
-    auto canvas =
-        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto buffer = core::tui::Buffer(8, 80);
+    auto canvas = core::tui::Canvas(
+        buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, core::tui::currentTheme());
     comp.render(canvas);
 
     auto const links = buffer.hyperlinks();
@@ -595,9 +597,9 @@ TEST_CASE("PromptComponent.path_hyperlink_omitted_when_disabled", "[prompt]")
     ctx.hyperlinks = false;
     comp.setPromptContext(std::move(ctx));
 
-    auto buffer = tui::Buffer(8, 80);
-    auto canvas =
-        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto buffer = core::tui::Buffer(8, 80);
+    auto canvas = core::tui::Canvas(
+        buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, core::tui::currentTheme());
     comp.render(canvas);
 
     CHECK(buffer.hyperlinks().empty());
@@ -610,7 +612,7 @@ TEST_CASE("PromptComponent.solid_color_path_registers_one_region", "[prompt]")
     auto config = comp.promptConfig();
     config.infoLineModules = { "path" };
     config.colorOverrides.path =
-        ColorSpec { .colors = { tui::RgbColor { .r = 0xFF, .g = 0x66, .b = 0x00 } } };
+        ColorSpec { .colors = { core::tui::RgbColor { .r = 0xFF, .g = 0x66, .b = 0x00 } } };
     comp.setPromptConfig(std::move(config));
 
     auto ctx = PromptContext {};
@@ -619,9 +621,9 @@ TEST_CASE("PromptComponent.solid_color_path_registers_one_region", "[prompt]")
     ctx.hyperlinks = true;
     comp.setPromptContext(std::move(ctx));
 
-    auto buffer = tui::Buffer(8, 80);
-    auto canvas =
-        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto buffer = core::tui::Buffer(8, 80);
+    auto canvas = core::tui::Canvas(
+        buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, core::tui::currentTheme());
     comp.render(canvas);
 
     auto const links = buffer.hyperlinks();
@@ -647,13 +649,13 @@ TEST_CASE("PromptComponent.preset_switch_does_not_resurrect_disabled_hyperlinks"
     comp.setPromptContext(std::move(ctx));
 
     // A preset switch, as `shell_prompt_preset <- ...` performs it.
-    auto preset = promptPreset("powerline", tui::ColorScheme::Dark);
+    auto preset = promptPreset("powerline", core::tui::ColorScheme::Dark);
     preset.infoLineModules = { "path" };
     comp.setPromptConfig(std::move(preset));
 
-    auto buffer = tui::Buffer(8, 80);
-    auto canvas =
-        tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, tui::currentTheme());
+    auto buffer = core::tui::Buffer(8, 80);
+    auto canvas = core::tui::Canvas(
+        buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 8 }, core::tui::currentTheme());
     comp.render(canvas);
 
     CHECK(buffer.hyperlinks().empty());

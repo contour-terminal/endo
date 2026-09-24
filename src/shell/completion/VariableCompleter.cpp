@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "VariableCompleter.hpp"
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
 
 namespace endo
 {
 
-VariableCompleter::VariableCompleter(EnvironmentProvider const& env): _env(env)
+VariableCompleter::VariableCompleter(core::platform::EnvironmentProvider const& env): _env(env)
 {
 }
 
@@ -19,7 +19,7 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
     auto const& prefix = context.prefix;
 
     // Configuration for fuzzy matching
-    tui::FuzzyConfig fuzzyConfig;
+    core::tui::completer::FuzzyConfig fuzzyConfig;
     double const minThreshold = fuzzyConfig.minMatchThreshold;
 
     // Helper to check and add a variable match
@@ -35,14 +35,14 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
         }
 
         // Option C: Check both prefix and fuzzy matches
-        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
+        bool isPrefixMatch = core::tui::completer::SmartCaseMatch::matchesPrefix(name, prefix);
+        core::tui::completer::FuzzyMatchResult fuzzyResult;
         bool isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
-            size_t textLen = tui::FuzzyMatch::countGraphemes(name);
+            fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(name, prefix);
+            size_t textLen = core::tui::completer::FuzzyMatch::countGraphemes(name);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -56,12 +56,13 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
 
         if (isPrefixMatch)
         {
-            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(baseScore, name, prefix);
             score += fuzzyConfig.prefixMatchBonus;
         }
         else
         {
-            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
+            score = core::tui::completer::FuzzyMatch::calculateScore(
+                baseScore, name, prefix, fuzzyResult, fuzzyConfig);
             matchPositions = std::move(fuzzyResult.positions);
         }
 

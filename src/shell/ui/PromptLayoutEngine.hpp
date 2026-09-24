@@ -6,10 +6,10 @@
 
 #include <vector>
 
-namespace tui
+namespace core::tui
 {
 class Canvas;
-} // namespace tui
+} // namespace core::tui
 
 namespace endo
 {
@@ -32,7 +32,7 @@ class PromptLayoutEngine
     /// @param rightModules Evaluated segments for right-aligned modules.
     /// @param colors The resolved prompt colors (overrides merged with theme).
     /// @return The number of rows consumed by the prompt chrome.
-    static int render(tui::Canvas& canvas,
+    static int render(core::tui::Canvas& canvas,
                       PromptConfig const& config,
                       std::vector<PromptSegments> const& infoModules,
                       std::vector<PromptSegments> const& rightModules,
@@ -44,30 +44,30 @@ class PromptLayoutEngine
     [[nodiscard]] static int preferredHeight(PromptConfig const& config);
 
   private:
-    static int renderSingleLine(tui::Canvas& canvas,
+    static int renderSingleLine(core::tui::Canvas& canvas,
                                 PromptConfig const& config,
                                 std::vector<PromptSegments> const& infoModules,
                                 ResolvedPromptColors const& colors);
 
-    static int renderTwoLine(tui::Canvas& canvas,
+    static int renderTwoLine(core::tui::Canvas& canvas,
                              PromptConfig const& config,
                              std::vector<PromptSegments> const& infoModules,
                              std::vector<PromptSegments> const& rightModules,
                              ResolvedPromptColors const& colors);
 
-    static int renderBoxed(tui::Canvas& canvas,
+    static int renderBoxed(core::tui::Canvas& canvas,
                            PromptConfig const& config,
                            std::vector<PromptSegments> const& infoModules,
                            ResolvedPromptColors const& colors);
 
-    static int renderPowerline(tui::Canvas& canvas,
+    static int renderPowerline(core::tui::Canvas& canvas,
                                PromptConfig const& config,
                                std::vector<PromptSegments> const& infoModules,
                                ResolvedPromptColors const& colors);
 
     /// @brief Renders segments onto a canvas at the given position.
     /// @return The number of columns consumed.
-    static int renderSegments(tui::Canvas& canvas, int row, int col, PromptSegments const& segments);
+    static int renderSegments(core::tui::Canvas& canvas, int row, int col, PromptSegments const& segments);
 
     /// @brief Calculates the display width of segments.
     [[nodiscard]] static int segmentsWidth(PromptSegments const& segments);

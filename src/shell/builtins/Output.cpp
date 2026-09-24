@@ -6,16 +6,17 @@
 
 #include <http/HttpClient.hpp>
 
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/TerminalOutput.hpp>
-
 #include <CoreVM/types/TypedObject.hpp>
+
+#include <core/platform/SystemInfo.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <filesystem>
 #include <format>
 
-#include <platform/SystemInfo.hpp>
-#include <platform/Types.hpp>
+#include <platform/PosixCompat.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -33,7 +34,7 @@ void executeFetch(CoreVM::Params& args,
                   std::vector<std::string> headers,
                   bool interactive,
                   endo::TTY const& tty,
-                  endo::FileSystem const& fs)
+                  core::platform::FileSystem const& fs)
 {
     auto* runner = args.caller();
 
@@ -148,18 +149,18 @@ namespace endo
 void Shell::builtinPrint(CoreVM::Params& context)
 {
     std::string const& text = context.getString(1);
-    NativeHandle const outputFd =
+    core::platform::NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, text.data(), text.size());
 }
 
 void Shell::builtinPrintln(CoreVM::Params& context)
 {
     std::string const& text = context.getString(1);
-    NativeHandle const outputFd =
+    core::platform::NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
-    written = platformWrite(outputFd, "\n", 1);
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, text.data(), text.size());
+    written = core::platform::platformWrite(outputFd, "\n", 1);
 }
 
 void Shell::builtinMarkdownRender(CoreVM::Params& context)
@@ -170,31 +171,32 @@ void Shell::builtinMarkdownRender(CoreVM::Params& context)
     if (!content)
         return;
 
-    NativeHandle const outputFd =
+    core::platform::NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
-    if (isTerminal(outputFd))
+    if (core::platform::isTerminal(outputFd))
     {
-        tui::TerminalOutput termOutput;
-        tui::MarkdownRenderer renderer(termOutput);
+        core::tui::TerminalOutput termOutput;
+        core::tui::MarkdownRenderer renderer(
+            termOutput, core::tui::MarkdownRenderer::defaultTheme(), &_highlighters);
         renderer.render(*content);
         termOutput.flush();
         return;
     }
     // Fallback: write raw markdown text
     auto const& text = *content;
-    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
-    written = platformWrite(outputFd, "\n", 1);
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, text.data(), text.size());
+    written = core::platform::platformWrite(outputFd, "\n", 1);
 }
 
 void Shell::builtinDisplayResult(CoreVM::Params& context)
 {
     auto rawVal = static_cast<uint64_t>(context.getInt(1));
     auto* runner = context.caller();
-    NativeHandle const outputFd =
+    core::platform::NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
-    bool const useColor = isTerminal(outputFd);
+    bool const useColor = core::platform::isTerminal(outputFd);
 
     // Check if this is a Markdown object — render with terminal formatting
     if (runner->isKnownObject(rawVal))
@@ -209,16 +211,18 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
 #if !defined(_WIN32)
                 if (useColor)
                 {
-                    tui::TerminalOutput termOutput;
-                    tui::MarkdownRenderer renderer(termOutput);
+                    core::tui::TerminalOutput termOutput;
+                    core::tui::MarkdownRenderer renderer(
+                        termOutput, core::tui::MarkdownRenderer::defaultTheme(), &_highlighters);
                     renderer.render(*content);
                     termOutput.flush();
                     return;
                 }
 #endif
                 auto const& text = *content;
-                [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
-                written = platformWrite(outputFd, "\n", 1);
+                [[maybe_unused]] auto written =
+                    core::platform::platformWrite(outputFd, text.data(), text.size());
+                written = core::platform::platformWrite(outputFd, "\n", 1);
             }
             return;
         }
@@ -237,8 +241,8 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.showDirectorySlash = _lsDirectorySlash;
             // Gated on terminal-ness alone, not on color: escapes must not reach a pipe or a
             // redirect, but disabling colors or icons must not cost the user clickable names.
-            config.useHyperlinks = _hyperlinks && isTerminal(outputFd);
-            config.uriHost = platform::cachedHostName();
+            config.useHyperlinks = _hyperlinks && core::platform::isTerminal(outputFd);
+            config.uriHost = core::platform::cachedHostName();
             // Let the name column auto-grow for FileInfo records (ls output)
             auto* firstElem = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(obj->getSlot(0)));
             if (firstElem->type->id == CoreVM::BuiltinTypeId::FileInfo)
@@ -249,7 +253,8 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
                     config.terminalWidth = size->cols;
             }
             auto table = formatRecordTable(obj, runner, config);
-            [[maybe_unused]] auto written = platformWrite(outputFd, table.data(), table.size());
+            [[maybe_unused]] auto written =
+                core::platform::platformWrite(outputFd, table.data(), table.size());
             return;
         }
     }
@@ -259,14 +264,14 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     {
         auto const* coreStr = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal));
         auto str = std::format("\"{}\"\n", std::string_view(*coreStr));
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
         return;
     }
 
     // Fallback: convert to string and print with newline
     auto str = endo::builtins::valueToString(rawVal, runner);
     str += '\n';
-    [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const)

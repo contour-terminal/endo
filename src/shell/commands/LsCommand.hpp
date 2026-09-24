@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/FileInfoProvider.hpp>
+
 #include <string>
 
 #include "StructuredCommand.hpp"
-#include <platform/FileInfoProvider.hpp>
 
 namespace endo
 {
@@ -19,7 +20,7 @@ class LsCommand final: public StructuredCommand
     /// Constructs an LsCommand with the given file info provider and directory path.
     /// @param provider Platform-specific or mock file info provider.
     /// @param path Directory path to list (defaults to current directory).
-    explicit LsCommand(FileInfoProvider const& provider, std::string path = ".");
+    explicit LsCommand(core::platform::FileInfoProvider const& provider, std::string path = ".");
 
     /// @return BuiltinTypeId::FileInfo
     [[nodiscard]] uint16_t outputTypeId() const override;
@@ -30,7 +31,7 @@ class LsCommand final: public StructuredCommand
     [[nodiscard]] CoreVM::TypedObject* execute(CoreVM::Runner& runner) const override;
 
   private:
-    FileInfoProvider const& _provider;
+    core::platform::FileInfoProvider const& _provider;
     std::string _path;
 };
 

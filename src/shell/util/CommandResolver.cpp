@@ -3,18 +3,19 @@
 
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 
-#include <crispy/Utils.hpp>
+#include <core/Utils.hpp>
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/PathUtils.hpp>
 
 #include <array>
 #include <filesystem>
 
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/PathUtils.hpp>
-
 namespace endo
 {
 
-CommandResolver::CommandResolver(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
+CommandResolver::CommandResolver(core::platform::EnvironmentProvider const& env,
+                                 core::platform::FileSystem const& fs):
+    _env(env), _fs(fs)
 {
 }
 
@@ -68,7 +69,7 @@ namespace
     /// Trims leading/trailing ASCII whitespace from @p value.
     constexpr std::string_view trim(std::string_view value) noexcept
     {
-        value = crispy::trimRight(value);
+        value = core::trimRight(value);
         while (!value.empty() && std::string_view(" \t\r\n").find(value.front()) != std::string_view::npos)
             value.remove_prefix(1);
         return value;
@@ -83,13 +84,13 @@ namespace
     /// callers that *compare* an extension against this list need one canonical case;
     /// callers that build file names from it are unaffected, since the filesystem is
     /// case-insensitive.
-    std::vector<std::string> pathExtList(EnvironmentProvider const& env)
+    std::vector<std::string> pathExtList(core::platform::EnvironmentProvider const& env)
     {
         auto extensions = std::vector<std::string> {};
         if (auto const pathext = env.get("PATHEXT"))
-            for (auto const& raw: crispy::split(*pathext, ';'))
+            for (auto const& raw: core::split(*pathext, ';'))
                 if (auto const ext = trim(raw); !ext.empty())
-                    extensions.emplace_back(crispy::toLower(std::string(ext)));
+                    extensions.emplace_back(core::toLower(std::string(ext)));
 
         if (extensions.empty())
             for (auto const& ext: DefaultPathExt)
@@ -101,7 +102,7 @@ namespace
 #endif
 
 std::vector<std::string> CommandResolver::executableExtensions(
-    [[maybe_unused]] EnvironmentProvider const& env)
+    [[maybe_unused]] core::platform::EnvironmentProvider const& env)
 {
 #if defined(_WIN32)
     return pathExtList(env);
@@ -110,8 +111,8 @@ std::vector<std::string> CommandResolver::executableExtensions(
 #endif
 }
 
-std::vector<std::string> CommandResolver::candidateNames([[maybe_unused]] EnvironmentProvider const& env,
-                                                         std::string_view command)
+std::vector<std::string> CommandResolver::candidateNames(
+    [[maybe_unused]] core::platform::EnvironmentProvider const& env, std::string_view command)
 {
 #if !defined(_WIN32)
     return { std::string(command) };
@@ -159,7 +160,7 @@ std::vector<std::string> CommandResolver::search(std::string_view command, bool 
             if (!_fs.isExecutableFile(candidate))
                 continue;
 #if defined(_WIN32)
-            results.push_back(platform::normalizePath(candidate));
+            results.push_back(core::platform::normalizePath(candidate));
 #else
             results.push_back(candidate.string());
 #endif
@@ -183,7 +184,7 @@ void CommandResolver::refreshCacheIfNeeded() const
     }
 }
 
-std::string CommandResolver::resolutionCacheKey(EnvironmentProvider const& env)
+std::string CommandResolver::resolutionCacheKey(core::platform::EnvironmentProvider const& env)
 {
     auto key = env.get("PATH").value_or(std::string {});
 #if defined(_WIN32)
@@ -194,7 +195,8 @@ std::string CommandResolver::resolutionCacheKey(EnvironmentProvider const& env)
     return key;
 }
 
-std::vector<std::filesystem::path> CommandResolver::pathDirectories(EnvironmentProvider const& env)
+std::vector<std::filesystem::path> CommandResolver::pathDirectories(
+    core::platform::EnvironmentProvider const& env)
 {
     auto const pathEnv = env.get("PATH");
     if (!pathEnv)
@@ -207,7 +209,7 @@ std::vector<std::filesystem::path> CommandResolver::pathDirectories(EnvironmentP
 #endif
 
     auto directories = std::vector<std::filesystem::path> {};
-    for (auto const& pathStr: crispy::split(*pathEnv, pathSep))
+    for (auto const& pathStr: core::split(*pathEnv, pathSep))
         if (!pathStr.empty())
             directories.emplace_back(pathStr);
     return directories;

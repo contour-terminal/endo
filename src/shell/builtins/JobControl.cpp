@@ -4,10 +4,12 @@
 
 #include <endo-language/LogCategories.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <format>
 
+#include <platform/PosixCompat.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <csignal>
@@ -107,7 +109,7 @@ void Shell::builtinFg(CoreVM::Params& context)
     }
 
     // Wait for the job to complete or stop
-    for (ProcessId const pid: job->pids)
+    for (core::platform::ProcessId const pid: job->pids)
     {
         int status = 0;
         pid_t const waitedPid = waitpid(static_cast<pid_t>(pid), &status, WUNTRACED);
@@ -175,7 +177,7 @@ void Shell::builtinFg(CoreVM::Params& context)
     // If the job was stopped (suspended threads), resume it
     if (job->state == JobState::Stopped)
     {
-        for (ProcessId const pid: job->pids)
+        for (core::platform::ProcessId const pid: job->pids)
         {
             auto const sigResult = _processManager.sendSignal(pid, SIGCONT);
             if (!sigResult.has_value())
@@ -185,7 +187,7 @@ void Shell::builtinFg(CoreVM::Params& context)
     }
 
     // Wait for the job to complete
-    for (ProcessId const pid: job->pids)
+    for (core::platform::ProcessId const pid: job->pids)
     {
         auto const waitResult = _processManager.wait(pid);
         if (waitResult.has_value())
@@ -291,7 +293,7 @@ void Shell::builtinBg(CoreVM::Params& context)
     _tty.writeToStdout(std::format("[{}]+ {} &\n", job->id, job->command));
 
     // Resume suspended process threads
-    for (ProcessId const pid: job->pids)
+    for (core::platform::ProcessId const pid: job->pids)
     {
         auto const sigResult = _processManager.sendSignal(pid, SIGCONT);
         if (!sigResult.has_value())
@@ -326,7 +328,7 @@ void Shell::builtinWait(CoreVM::Params& context)
         }
 
         // Wait for all processes in the job
-        for (ProcessId const pid: job->pids)
+        for (core::platform::ProcessId const pid: job->pids)
         {
             int status = 0;
             waitpid(static_cast<pid_t>(pid), &status, 0);
@@ -353,7 +355,7 @@ void Shell::builtinWait(CoreVM::Params& context)
             if (!job)
                 continue;
 
-            for (ProcessId const pid: job->pids)
+            for (core::platform::ProcessId const pid: job->pids)
             {
                 int status = 0;
                 waitpid(static_cast<pid_t>(pid), &status, 0);
@@ -384,7 +386,7 @@ void Shell::builtinWait(CoreVM::Params& context)
             return;
         }
 
-        for (ProcessId const pid: job->pids)
+        for (core::platform::ProcessId const pid: job->pids)
         {
             auto const waitResult = _processManager.wait(pid);
             if (waitResult.has_value())
@@ -410,7 +412,7 @@ void Shell::builtinWait(CoreVM::Params& context)
             if (!job)
                 continue;
 
-            for (ProcessId const pid: job->pids)
+            for (core::platform::ProcessId const pid: job->pids)
             {
                 auto const waitResult = _processManager.wait(pid);
                 if (waitResult.has_value())
@@ -476,11 +478,11 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
         return;
     }
 
-    ProcessId const pid = spawnResult.value();
+    core::platform::ProcessId const pid = spawnResult.value();
     _lastBackgroundPid = pid;
 
     // Add to job table
-    std::vector<ProcessId> pids;
+    std::vector<core::platform::ProcessId> pids;
     pids.push_back(pid);
     int const jobId = jobTable.addJob(pid, std::move(pids), command);
 
@@ -509,17 +511,17 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
 
     // Try inline builtins first (they run synchronously on Windows since they are instant)
     {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        NativeHandle const inputFd =
+        core::platform::NativeHandle const inputFd =
             _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
         if (auto const executed = tryExecuteInlineBuiltin(program, cmdBuilderArgs(), outputFd, inputFd))
         {
-            _lastBackgroundPid = static_cast<ProcessId>(GetCurrentProcessId());
+            _lastBackgroundPid = static_cast<core::platform::ProcessId>(GetCurrentProcessId());
 
             // Add to job table as completed
-            std::vector<ProcessId> pids;
+            std::vector<core::platform::ProcessId> pids;
             pids.push_back(*_lastBackgroundPid);
             int const jobId = jobTable.addJob(*_lastBackgroundPid, std::move(pids), command);
             _tty.writeToStdout(std::format("[{}] {}\n", jobId, *_lastBackgroundPid));
@@ -565,11 +567,11 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
         return;
     }
 
-    ProcessId const pid = spawnResult.value();
+    core::platform::ProcessId const pid = spawnResult.value();
     _lastBackgroundPid = pid;
 
     // Add to job table
-    std::vector<ProcessId> pids;
+    std::vector<core::platform::ProcessId> pids;
     pids.push_back(pid);
     int const jobId = jobTable.addJob(pid, std::move(pids), command);
 

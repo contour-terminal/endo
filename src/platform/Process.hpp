@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <crispy/Flags.hpp>
+#include <core/Flags.hpp>
+#include <core/platform/PlatformError.hpp>
+#include <core/platform/Types.hpp>
 
 #include <expected>
 #include <filesystem>
@@ -10,8 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <platform/PlatformError.hpp>
-#include <platform/Types.hpp>
 #include <platform/WaitResult.hpp>
 
 namespace endo::platform
@@ -20,17 +20,20 @@ namespace endo::platform
 /// Configuration for spawning a new process.
 struct SpawnConfig
 {
-    std::filesystem::path program;         ///< Path to the program to execute
-    std::vector<std::string> arguments;    ///< Command line arguments (excluding program name)
-    NativeHandle stdinFd = InvalidHandle;  ///< File descriptor/handle for stdin (InvalidHandle = standard)
-    NativeHandle stdoutFd = InvalidHandle; ///< File descriptor/handle for stdout (InvalidHandle = standard)
-    NativeHandle stderrFd = InvalidHandle; ///< File descriptor/handle for stderr (InvalidHandle = standard)
+    std::filesystem::path program;      ///< Path to the program to execute
+    std::vector<std::string> arguments; ///< Command line arguments (excluding program name)
+    core::platform::NativeHandle stdinFd =
+        core::platform::InvalidHandle; ///< File descriptor/handle for stdin (InvalidHandle = standard)
+    core::platform::NativeHandle stdoutFd =
+        core::platform::InvalidHandle; ///< File descriptor/handle for stdout (InvalidHandle = standard)
+    core::platform::NativeHandle stderrFd =
+        core::platform::InvalidHandle; ///< File descriptor/handle for stderr (InvalidHandle = standard)
     /// POSIX process group ID (0 for a new group), driving setpgid. On Windows this only
     /// feeds process-group bookkeeping for waitPgid; creating a new *console* process group
     /// (CREATE_NEW_PROCESS_GROUP) is controlled separately by @ref newConsoleProcessGroup.
-    std::optional<ProcessId> processGroup = std::nullopt;
-    bool closeExtraFds = true;             ///< Close file descriptors > 2 after fork
-    std::vector<NativeHandle> keepOpenFds; ///< Fds to keep open even with closeExtraFds
+    std::optional<core::platform::ProcessId> processGroup = std::nullopt;
+    bool closeExtraFds = true;                             ///< Close file descriptors > 2 after fork
+    std::vector<core::platform::NativeHandle> keepOpenFds; ///< Fds to keep open even with closeExtraFds
 
     /// On Windows, create the child in a new console process group
     /// (CREATE_NEW_PROCESS_GROUP), shielding it from the console's Ctrl+C. Set this
@@ -62,7 +65,7 @@ enum class WaitFlag // NOLINT(performance-enum-size)
 };
 
 /// Type-safe flags for wait operations.
-using WaitFlags = crispy::Flags<WaitFlag>;
+using WaitFlags = core::Flags<WaitFlag>;
 
 /// Abstract interface for process management operations.
 ///
@@ -77,44 +80,48 @@ class ProcessManager
     ///
     /// @param config Process spawn configuration
     /// @return The PID of the spawned process on success, or an error
-    [[nodiscard]] virtual std::expected<ProcessId, PlatformError> spawn(SpawnConfig const& config) = 0;
+    [[nodiscard]] virtual std::expected<core::platform::ProcessId, core::platform::PlatformError> spawn(
+        SpawnConfig const& config) = 0;
 
     /// Waits for a process to terminate or stop.
     ///
     /// @param pid Process ID to wait for
     /// @param flags Wait flags (default: blocking wait without stop detection)
     /// @return Wait result on success, or an error
-    [[nodiscard]] virtual std::expected<WaitResult, PlatformError> wait(ProcessId pid,
-                                                                        WaitFlags flags = {}) = 0;
+    [[nodiscard]] virtual std::expected<WaitResult, core::platform::PlatformError> wait(
+        core::platform::ProcessId pid, WaitFlags flags = {}) = 0;
 
     /// Non-blocking wait for any process in a process group.
     ///
     /// @param pgid Process group ID (negative pid waits for any in group)
     /// @param flags Wait flags (NoHang, Untraced)
     /// @return Optional pair of (pid, result) if a process changed state, nullopt if no change
-    [[nodiscard]] virtual std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError>
-    waitPgid(ProcessId pgid, WaitFlags flags) = 0;
+    [[nodiscard]] virtual std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>,
+                                        core::platform::PlatformError>
+    waitPgid(core::platform::ProcessId pgid, WaitFlags flags) = 0;
 
     /// Sends a signal to a process or process group.
     ///
     /// @param pid Process ID (positive) or process group ID (negative)
     /// @param signal Signal number to send
     /// @return Success or an error
-    [[nodiscard]] virtual std::expected<void, PlatformError> sendSignal(ProcessId pid, int signal) = 0;
+    [[nodiscard]] virtual std::expected<void, core::platform::PlatformError> sendSignal(
+        core::platform::ProcessId pid, int signal) = 0;
 
     /// Gets the foreground process group of a terminal.
     ///
     /// @param fd File descriptor of the terminal
     /// @return Process group ID on success, or an error
-    [[nodiscard]] virtual std::expected<ProcessId, PlatformError> getForegroundPgrp(NativeHandle fd) = 0;
+    [[nodiscard]] virtual std::expected<core::platform::ProcessId, core::platform::PlatformError>
+    getForegroundPgrp(core::platform::NativeHandle fd) = 0;
 
     /// Sets the foreground process group of a terminal.
     ///
     /// @param fd File descriptor of the terminal
     /// @param pgid Process group ID to set as foreground
     /// @return Success or an error
-    [[nodiscard]] virtual std::expected<void, PlatformError> setForegroundPgrp(NativeHandle fd,
-                                                                               ProcessId pgid) = 0;
+    [[nodiscard]] virtual std::expected<void, core::platform::PlatformError> setForegroundPgrp(
+        core::platform::NativeHandle fd, core::platform::ProcessId pgid) = 0;
 
     /// Opens a file with the specified flags and mode.
     ///
@@ -122,34 +129,35 @@ class ProcessManager
     /// @param flags Open flags (O_RDONLY, O_WRONLY, etc.)
     /// @param mode File mode for creation (default 0644)
     /// @return File descriptor/handle on success, or an error
-    [[nodiscard]] virtual std::expected<NativeHandle, PlatformError> openFile(
+    [[nodiscard]] virtual std::expected<core::platform::NativeHandle, core::platform::PlatformError> openFile(
         std::filesystem::path const& path, int flags, int mode = 0644) = 0;
 
     /// Creates a new session (becomes session leader).
     ///
     /// @return New session ID on success, or an error
-    [[nodiscard]] virtual std::expected<ProcessId, PlatformError> createSession() = 0;
+    [[nodiscard]] virtual std::expected<core::platform::ProcessId, core::platform::PlatformError>
+    createSession() = 0;
 
     /// Sets the process group for a process.
     ///
     /// @param pid Process ID (0 for current process)
     /// @param pgid Process group ID (0 for new group with pid as leader)
     /// @return Success or an error
-    [[nodiscard]] virtual std::expected<void, PlatformError> setProcessGroup(ProcessId pid,
-                                                                             ProcessId pgid) = 0;
+    [[nodiscard]] virtual std::expected<void, core::platform::PlatformError> setProcessGroup(
+        core::platform::ProcessId pid, core::platform::ProcessId pgid) = 0;
 
     /// Duplicates a file descriptor/handle.
     ///
     /// @param src Source file descriptor/handle
     /// @param dst Destination file descriptor/handle
     /// @return Success or an error
-    [[nodiscard]] virtual std::expected<void, PlatformError> duplicateFd(NativeHandle src,
-                                                                         NativeHandle dst) = 0;
+    [[nodiscard]] virtual std::expected<void, core::platform::PlatformError> duplicateFd(
+        core::platform::NativeHandle src, core::platform::NativeHandle dst) = 0;
 
     /// Closes a file descriptor/handle.
     ///
     /// @param handle Handle to close
-    virtual void closeHandle(NativeHandle handle) noexcept = 0;
+    virtual void closeHandle(core::platform::NativeHandle handle) noexcept = 0;
 
     /// Closes all file descriptors/handles above stderr.
     virtual void closeExtraHandles() noexcept = 0;
@@ -168,26 +176,35 @@ class WindowsProcessManager final: public ProcessManager
     /// Returns the singleton instance of WindowsProcessManager.
     [[nodiscard]] static WindowsProcessManager& instance();
 
-    [[nodiscard]] std::expected<ProcessId, PlatformError> spawn(SpawnConfig const& config) override;
-    [[nodiscard]] std::expected<WaitResult, PlatformError> wait(ProcessId pid, WaitFlags flags = {}) override;
-    [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> waitPgid(
-        ProcessId pgid, WaitFlags flags) override;
-    [[nodiscard]] std::expected<void, PlatformError> sendSignal(ProcessId pid, int signal) override;
-    [[nodiscard]] std::expected<ProcessId, PlatformError> getForegroundPgrp(NativeHandle fd) override;
-    [[nodiscard]] std::expected<void, PlatformError> setForegroundPgrp(NativeHandle fd,
-                                                                       ProcessId pgid) override;
-    [[nodiscard]] std::expected<NativeHandle, PlatformError> openFile(std::filesystem::path const& path,
-                                                                      int flags,
-                                                                      int mode = 0644) override;
-    [[nodiscard]] std::expected<ProcessId, PlatformError> createSession() override;
-    [[nodiscard]] std::expected<void, PlatformError> setProcessGroup(ProcessId pid, ProcessId pgid) override;
-    [[nodiscard]] std::expected<void, PlatformError> duplicateFd(NativeHandle src, NativeHandle dst) override;
-    void closeHandle(NativeHandle handle) noexcept override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> spawn(
+        SpawnConfig const& config) override;
+    [[nodiscard]] std::expected<WaitResult, core::platform::PlatformError> wait(
+        core::platform::ProcessId pid, WaitFlags flags = {}) override;
+    [[nodiscard]] std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>,
+                                core::platform::PlatformError>
+    waitPgid(core::platform::ProcessId pgid, WaitFlags flags) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> sendSignal(core::platform::ProcessId pid,
+                                                                                int signal) override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> getForegroundPgrp(
+        core::platform::NativeHandle fd) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setForegroundPgrp(
+        core::platform::NativeHandle fd, core::platform::ProcessId pgid) override;
+    [[nodiscard]] std::expected<core::platform::NativeHandle, core::platform::PlatformError> openFile(
+        std::filesystem::path const& path, int flags, int mode = 0644) override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> createSession()
+        override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setProcessGroup(
+        core::platform::ProcessId pid, core::platform::ProcessId pgid) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> duplicateFd(
+        core::platform::NativeHandle src, core::platform::NativeHandle dst) override;
+    void closeHandle(core::platform::NativeHandle handle) noexcept override;
     void closeExtraHandles() noexcept override;
 
   private:
-    std::unordered_map<ProcessId, HANDLE> _processHandles;               ///< PID -> process HANDLE
-    std::unordered_map<ProcessId, std::vector<ProcessId>> _groupMembers; ///< group -> PIDs
+    std::unordered_map<core::platform::ProcessId, core::platform::NativeHandle>
+        _processHandles; ///< PID -> process HANDLE
+    std::unordered_map<core::platform::ProcessId, std::vector<core::platform::ProcessId>>
+        _groupMembers; ///< group -> PIDs
 
     /// @brief Terminates a process by its tracked handle.
     ///
@@ -197,11 +214,14 @@ class WindowsProcessManager final: public ProcessManager
     ///
     /// @param pid Process ID whose handle should be terminated.
     /// @return Success, or PlatformError::SignalFailed if the handle is unknown or termination fails.
-    [[nodiscard]] auto terminateByHandle(ProcessId pid) -> std::expected<void, PlatformError>;
+    [[nodiscard]] auto terminateByHandle(core::platform::ProcessId pid)
+        -> std::expected<void, core::platform::PlatformError>;
     /// @brief Suspends all threads of a process using Toolhelp32.
-    [[nodiscard]] auto suspendProcess(ProcessId pid) -> std::expected<void, PlatformError>;
+    [[nodiscard]] auto suspendProcess(core::platform::ProcessId pid)
+        -> std::expected<void, core::platform::PlatformError>;
     /// @brief Resumes all threads of a process using Toolhelp32.
-    [[nodiscard]] auto resumeProcess(ProcessId pid) -> std::expected<void, PlatformError>;
+    [[nodiscard]] auto resumeProcess(core::platform::ProcessId pid)
+        -> std::expected<void, core::platform::PlatformError>;
 };
 #else
 /// POSIX implementation of ProcessManager.
@@ -211,25 +231,32 @@ class PosixProcessManager final: public ProcessManager
     /// Returns the singleton instance of PosixProcessManager.
     [[nodiscard]] static PosixProcessManager& instance();
 
-    [[nodiscard]] std::expected<ProcessId, PlatformError> spawn(SpawnConfig const& config) override;
-    [[nodiscard]] std::expected<WaitResult, PlatformError> wait(ProcessId pid, WaitFlags flags = {}) override;
-    [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> waitPgid(
-        ProcessId pgid, WaitFlags flags) override;
-    [[nodiscard]] std::expected<void, PlatformError> sendSignal(ProcessId pid, int signal) override;
-    [[nodiscard]] std::expected<ProcessId, PlatformError> getForegroundPgrp(NativeHandle fd) override;
-    [[nodiscard]] std::expected<void, PlatformError> setForegroundPgrp(NativeHandle fd,
-                                                                       ProcessId pgid) override;
-    [[nodiscard]] std::expected<NativeHandle, PlatformError> openFile(std::filesystem::path const& path,
-                                                                      int flags,
-                                                                      int mode = 0644) override;
-    [[nodiscard]] std::expected<ProcessId, PlatformError> createSession() override;
-    [[nodiscard]] std::expected<void, PlatformError> setProcessGroup(ProcessId pid, ProcessId pgid) override;
-    [[nodiscard]] std::expected<void, PlatformError> duplicateFd(NativeHandle src, NativeHandle dst) override;
-    void closeHandle(NativeHandle handle) noexcept override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> spawn(
+        SpawnConfig const& config) override;
+    [[nodiscard]] std::expected<WaitResult, core::platform::PlatformError> wait(
+        core::platform::ProcessId pid, WaitFlags flags = {}) override;
+    [[nodiscard]] std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>,
+                                core::platform::PlatformError>
+    waitPgid(core::platform::ProcessId pgid, WaitFlags flags) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> sendSignal(core::platform::ProcessId pid,
+                                                                                int signal) override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> getForegroundPgrp(
+        core::platform::NativeHandle fd) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setForegroundPgrp(
+        core::platform::NativeHandle fd, core::platform::ProcessId pgid) override;
+    [[nodiscard]] std::expected<core::platform::NativeHandle, core::platform::PlatformError> openFile(
+        std::filesystem::path const& path, int flags, int mode = 0644) override;
+    [[nodiscard]] std::expected<core::platform::ProcessId, core::platform::PlatformError> createSession()
+        override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> setProcessGroup(
+        core::platform::ProcessId pid, core::platform::ProcessId pgid) override;
+    [[nodiscard]] std::expected<void, core::platform::PlatformError> duplicateFd(
+        core::platform::NativeHandle src, core::platform::NativeHandle dst) override;
+    void closeHandle(core::platform::NativeHandle handle) noexcept override;
     void closeExtraHandles() noexcept override;
 
     /// Closes all file descriptors > 2 except those in the keepOpen list.
-    static void closeExtraHandlesExcept(std::vector<NativeHandle> const& keepOpen) noexcept;
+    static void closeExtraHandlesExcept(std::vector<core::platform::NativeHandle> const& keepOpen) noexcept;
 };
 #endif
 

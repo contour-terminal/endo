@@ -11,19 +11,20 @@ namespace
 {
 
     /// @brief Wraps a single RgbColor into a ColorSpec.
-    [[nodiscard]] ColorSpec wrapSolid(tui::RgbColor color)
+    [[nodiscard]] ColorSpec wrapSolid(core::tui::RgbColor color)
     {
         return ColorSpec { .colors = { color } };
     }
 
     /// @brief Resolves an optional override against a theme default.
-    [[nodiscard]] ColorSpec resolveField(std::optional<ColorSpec> const& override, tui::RgbColor themeDefault)
+    [[nodiscard]] ColorSpec resolveField(std::optional<ColorSpec> const& override,
+                                         core::tui::RgbColor themeDefault)
     {
         return override.value_or(wrapSolid(themeDefault));
     }
 
     /// @brief Parses a single hex color string (e.g., "#RRGGBB" or "0xRRGGBB").
-    [[nodiscard]] std::optional<tui::RgbColor> parseHexColor(std::string_view str)
+    [[nodiscard]] std::optional<core::tui::RgbColor> parseHexColor(std::string_view str)
     {
         // Strip prefix
         if (str.starts_with('#'))
@@ -41,15 +42,15 @@ namespace
         if (ec != std::errc {} || ptr != str.data() + str.size())
             return std::nullopt;
 
-        return tui::RgbColor { .r = static_cast<std::uint8_t>((value >> 16) & 0xFF),
-                               .g = static_cast<std::uint8_t>((value >> 8) & 0xFF),
-                               .b = static_cast<std::uint8_t>(value & 0xFF) };
+        return core::tui::RgbColor { .r = static_cast<std::uint8_t>((value >> 16) & 0xFF),
+                                     .g = static_cast<std::uint8_t>((value >> 8) & 0xFF),
+                                     .b = static_cast<std::uint8_t>(value & 0xFF) };
     }
 
 } // namespace
 
 ResolvedPromptColors resolvePromptColors(PromptColorOverrides const& overrides,
-                                         tui::Theme::PromptColorPalette const& themeColors)
+                                         core::tui::Theme::PromptColorPalette const& themeColors)
 {
     auto resolved = ResolvedPromptColors {};
 
@@ -70,7 +71,7 @@ ResolvedPromptColors resolvePromptColors(PromptColorOverrides const& overrides,
 
     // Background: transparent flag takes priority, then override, then theme default
     if (overrides.transparentBackground)
-        resolved.background = tui::Color {}; // std::monostate — no background emitted
+        resolved.background = core::tui::Color {}; // std::monostate — no background emitted
     else if (overrides.background)
         resolved.background = overrides.background->solid();
     else
@@ -84,7 +85,7 @@ std::optional<ColorSpec> parseColorSpec(std::string_view str)
     if (str.empty())
         return std::nullopt;
 
-    auto colors = std::vector<tui::RgbColor> {};
+    auto colors = std::vector<core::tui::RgbColor> {};
 
     // Split on colons for gradient stops
     while (!str.empty())

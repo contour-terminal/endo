@@ -2,8 +2,9 @@
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
 
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/TerminalOutput.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <chrono>
 #include <format>
@@ -11,7 +12,6 @@
 #include <print>
 
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <poll.h>
@@ -82,7 +82,7 @@ std::vector<std::string> Shell::splitByIFS(std::string_view input) const
     return result;
 }
 
-std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& options)
+std::string Shell::readInputLine(core::platform::NativeHandle inputFd, ReadOptions const& options)
 {
     std::string line;
     bool escape = false;
@@ -149,7 +149,7 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
 
         // Read one byte
         char ch {};
-        auto const bytesRead = platformRead(inputFd, &ch, 1);
+        auto const bytesRead = core::platform::platformRead(inputFd, &ch, 1);
         if (bytesRead <= 0)
             break; // EOF or error
 
@@ -189,7 +189,8 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
         if (options.silent)
         {
             // Print newline after silent input
-            [[maybe_unused]] auto w = platformWrite(standardOutput(), "\n", 1);
+            [[maybe_unused]] auto w =
+                core::platform::platformWrite(core::platform::standardOutput(), "\n", 1);
         }
     }
 #endif
@@ -199,7 +200,7 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
 
 void Shell::builtinReadDefault(CoreVM::Params& context)
 {
-    NativeHandle const inputFd =
+    core::platform::NativeHandle const inputFd =
         _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
     ReadOptions options;
@@ -225,7 +226,7 @@ void Shell::builtinRead(CoreVM::Params& context)
 
         if (arg == "-h" || arg == "--help")
         {
-            NativeHandle const outputFd =
+            core::platform::NativeHandle const outputFd =
                 _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
             (void) renderMarkdownHelp(outputFd,
                                       "# read\n"
@@ -331,13 +332,14 @@ void Shell::builtinRead(CoreVM::Params& context)
     // Display prompt if specified
     if (!options.prompt.empty())
     {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        [[maybe_unused]] auto w = platformWrite(outputFd, options.prompt.data(), options.prompt.size());
+        [[maybe_unused]] auto w =
+            core::platform::platformWrite(outputFd, options.prompt.data(), options.prompt.size());
     }
 
     // Read input
-    NativeHandle const inputFd =
+    core::platform::NativeHandle const inputFd =
         _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
     auto const line = readInputLine(inputFd, options);
 

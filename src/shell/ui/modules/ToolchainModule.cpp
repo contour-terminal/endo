@@ -2,7 +2,7 @@
 #include "ToolchainModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <array>
 #include <filesystem>
@@ -68,7 +68,7 @@ PromptSegments ToolchainModule::evaluate(PromptContext const& ctx) const
     if (!info.valid)
         return {};
 
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->badgeText.solid();
     else if (ctx.theme)

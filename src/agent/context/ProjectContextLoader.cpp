@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/UserPaths.hpp>
+
 #include <algorithm>
 #include <cstdlib>
 #include <format>
@@ -7,7 +9,6 @@
 
 #include <agent/context/ProjectContextLoader.hpp>
 #include <platform/ProjectFileTree.hpp>
-#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -29,7 +30,7 @@ namespace
     /// Returns the user's home directory path.
     [[nodiscard]] auto homeDirectory() -> std::filesystem::path
     {
-        return platform::homeDirectory().value_or(std::filesystem::path {});
+        return core::platform::homeDirectory().value_or(std::filesystem::path {});
     }
 
     /// Loads all .md files from a directory, each wrapped with a filename header.

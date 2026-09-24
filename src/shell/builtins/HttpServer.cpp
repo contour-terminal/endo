@@ -16,12 +16,12 @@
     #include <unistd.h>
 #endif
 
-#include <coro/Task.hpp>
-#include <net/DefaultEventSource.hpp>
-#include <net/EventLoop.hpp>
-#include <net/HttpServer.hpp>
-#include <net/Sockets.hpp>
-#include <net/platform/SystemPipe.hpp>
+#include <core/async/Task.hpp>
+#include <core/net/EventLoop.hpp>
+#include <core/net/HttpServer.hpp>
+#include <core/net/IoBackend.hpp>
+#include <core/net/Sockets.hpp>
+#include <core/platform/SystemPipe.hpp>
 
 namespace endo
 {
@@ -87,7 +87,7 @@ namespace
     /// @param loop The loop to stop (a pointer, since coroutine reference
     ///        parameters dangle once the coroutine suspends).
     /// @param readFd The self-pipe's read end.
-    coro::Task<void> watchForInterrupt(net::EventLoop* loop, net::NativeHandle readFd)
+    core::async::Task<void> watchForInterrupt(core::net::EventLoop* loop, core::platform::NativeHandle readFd)
     {
         co_await loop->waitReadable(readFd);
         loop->requestStop();
@@ -105,10 +105,10 @@ namespace
     {
       public:
         /// @param loop The loop to stop when SIGINT arrives.
-        explicit ScopedInterruptRedirect([[maybe_unused]] net::EventLoop& loop)
+        explicit ScopedInterruptRedirect([[maybe_unused]] core::net::EventLoop& loop)
         {
 #if !defined(_WIN32)
-            auto pipe = net::createSystemPipe();
+            auto pipe = core::platform::createSystemPipe();
             if (!pipe)
                 return;
             _pipe = std::move(*pipe);
@@ -133,8 +133,8 @@ namespace
         ScopedInterruptRedirect& operator=(ScopedInterruptRedirect&&) = delete;
 
       private:
-        std::unique_ptr<net::SystemPipe> _pipe; ///< Wakes the loop from the handler.
-        void (*_previous)(int) = SIG_ERR;       ///< Disposition to restore.
+        std::unique_ptr<core::platform::SystemPipe> _pipe; ///< Wakes the loop from the handler.
+        void (*_previous)(int) = SIG_ERR;                  ///< Disposition to restore.
     };
 } // namespace
 
@@ -150,12 +150,12 @@ void Shell::builtinHttpServe(CoreVM::Params& context)
     }
 
     // The server drives its own reactor rather than the shell's TUI runtime:
-    // makeDefaultEventSource picks epoll/kqueue where available and falls back to
+    // makeDefaultBackend picks epoll/kqueue where available and falls back to
     // poll, so a wait costs O(ready) rather than O(registered).
-    auto source = net::makeDefaultEventSource();
-    auto loop = net::EventLoop { *source };
+    auto source = core::net::makeDefaultBackend();
+    auto loop = core::net::EventLoop { *source };
 
-    auto listener = net::listen(loop, "127.0.0.1", port);
+    auto listener = core::net::listen(loop, "127.0.0.1", port);
     if (!listener.has_value())
     {
         error("httpServe: {}", listener.error().toString());
@@ -169,16 +169,16 @@ void Shell::builtinHttpServe(CoreVM::Params& context)
     auto const interruptRedirect = ScopedInterruptRedirect { loop };
 
     auto* const globals = &_globals;
-    auto requestHandler = [handler, globals](net::HttpRequest const& request) {
-        return net::HttpResponse::ok(invokeHandler(handler, globals, request.path));
+    auto requestHandler = [handler, globals](core::net::HttpRequest const& request) {
+        return core::net::HttpResponse::ok(invokeHandler(handler, globals, request.path));
     };
 
-    auto serveFlow = net::serve(listener->get(), std::move(requestHandler));
+    auto serveFlow = core::net::serve(listener->get(), std::move(requestHandler));
     try
     {
         loop.blockOn(std::move(serveFlow));
     }
-    catch (coro::OperationCancelled const&)
+    catch (core::async::OperationCancelled const&)
     {
         // Interrupted (Ctrl+C): a clean shutdown, not an error. Close the listener
         // so the OS port is released before we return.

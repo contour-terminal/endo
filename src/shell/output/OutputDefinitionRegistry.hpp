@@ -7,7 +7,7 @@
 
 #include "OutputDefinition.hpp"
 
-#include <platform/FileSystem.hpp>
+#include <core/platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -21,13 +21,13 @@ class OutputDefinitionRegistry
     /// Loads all *.endo-output.yml files from a directory. Silently skips if directory doesn't exist.
     /// @param dir The directory to scan for *.endo-output.yml files.
     /// @param fs The filesystem interface to use for directory listing and file reading.
-    void loadFromDirectory(std::filesystem::path const& dir, FileSystem const& fs);
+    void loadFromDirectory(std::filesystem::path const& dir, core::platform::FileSystem const& fs);
 
     /// Loads a single YAML definition file.
     /// @param path The path to the YAML definition file.
     /// @param fs The filesystem interface to use for file reading.
     /// @return true on success, false on parse error
-    bool loadFromFile(std::filesystem::path const& path, FileSystem const& fs);
+    bool loadFromFile(std::filesystem::path const& path, core::platform::FileSystem const& fs);
 
     /// Finds the best matching variant for the given command and arguments.
     /// @return Pointer to matching variant (owned by this registry), or nullptr if no match.

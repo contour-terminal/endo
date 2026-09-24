@@ -38,11 +38,10 @@ macro(EndoThirdPartiesSummary2)
     endif()
     message(STATUS "libunicode          ${THIRDPARTY_BUILTIN_libunicode}")
     message(STATUS "boxed-cpp           ${THIRDPARTY_BUILTIN_boxed_cpp}")
-    message(STATUS "reflection-cpp      ${THIRDPARTY_BUILTIN_reflection_cpp}")
+    message(STATUS "core-cpp            ${THIRDPARTY_BUILTIN_core_cpp}")
     if(NOT EMSCRIPTEN)
         message(STATUS "nlohmann_json       ${THIRDPARTY_BUILTIN_nlohmann_json}")
         message(STATUS "CURL                ${THIRDPARTY_BUILTIN_CURL}")
-        message(STATUS "OpenSSL             ${THIRDPARTY_BUILTIN_OpenSSL}")
         if(ENABLE_STATIC_LINKING)
             message(STATUS "mbedTLS             ${THIRDPARTY_BUILTIN_mbedtls}")
         endif()
@@ -149,9 +148,8 @@ endif()
 # scan_text() splits a run at the ASCII/non-ASCII boundary, and the zero-width codepoint arrives in
 # the non-ASCII half alone, joining the cluster the ASCII half left open without widening it — so
 # the reported end lags state.next and those bytes are never emitted. Endo is downstream of that
-# scanner through both its own grapheme handling and the vendored vtparser, whose
-# Parser.BulkText_ZeroWidthAfterAsciiBase case exists to catch it. Keep this at or above the
-# LIBUNICODE_MINIMAL_VERSION that contour declares, since the vendored sources are built against it.
+# scanner through its own grapheme handling and through core::tui, which resolves libunicode from
+# this target. Keep this at or above the version core-cpp's dependency table asks for (0.9.3).
 set(LIBUNICODE_REQUIRED_VERSION "0.9.3")
 if(NOT ENABLE_STATIC_LINKING)
     find_package(libunicode ${LIBUNICODE_REQUIRED_VERSION} QUIET)
@@ -192,37 +190,6 @@ else()
         SYSTEM YES
     )
     set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
-endif()
-
-# ==============================================================================
-# System dependency: OpenSSL (TLS transport in the vendored net library)
-# ==============================================================================
-# net/Tls.cpp keeps OpenSSL behind the ITlsContext seam and links it PRIVATE, so
-# no OpenSSL type crosses a net header. The vendored src/net/CMakeLists.txt calls
-# find_package(OpenSSL REQUIRED) itself and must not be patched, so all endo does
-# here is make that call resolve the way each build configuration needs.
-#
-# This is unrelated to the mbedTLS block below: mbedTLS is CURL's TLS backend for
-# static builds, chosen so the *fetch* builtin does not pull in system OpenSSL.
-# The two coexist.
-if(NOT EMSCRIPTEN)
-    if(ENABLE_STATIC_LINKING)
-        # Pick libssl.a/libcrypto.a so the fully-static link keeps working; the
-        # CI job asserts the result with ldd.
-        set(OPENSSL_USE_STATIC_LIBS ON)
-    endif()
-    find_package(OpenSSL QUIET)
-    if(OpenSSL_FOUND)
-        set(THIRDPARTY_BUILTIN_OpenSSL "system (${OPENSSL_VERSION})")
-    else()
-        # Not fatal here — the vendored net/CMakeLists.txt is what actually
-        # requires it, and this message is friendlier than its bare failure.
-        set(THIRDPARTY_BUILTIN_OpenSSL "NOT FOUND")
-        message(WARNING
-            "OpenSSL was not found. The vendored net library requires it; "
-            "install libssl-dev (Linux), `brew install openssl@3` plus "
-            "OPENSSL_ROOT_DIR (macOS), or the vcpkg openssl port (Windows).")
-    endif()
 endif()
 
 # ==============================================================================
@@ -377,13 +344,26 @@ if(NOT EMSCRIPTEN AND ENDO_ENABLE_AGENT)
 endif()
 
 # ==============================================================================
-# reflection-cpp - Required by crispy::core
+# core-cpp - the shared foundation of the Contour Terminal projects
 # ==============================================================================
+# core::base, core::log and core::cli everywhere; core::platform, core::async, core::net and
+# core::tui natively. Declared last, so libunicode and stb_image above are the parent's targets
+# core-cpp resolves its own dependencies from, and one copy of each is built. TLS stays off: endo
+# has no TLS transport, so it links no OpenSSL. CPM_core-cpp_SOURCE points it at a local checkout.
+set(_endo_core_cpp_native ON)
+if(EMSCRIPTEN)
+    set(_endo_core_cpp_native OFF)
+endif()
 CPMAddPackage(
-    NAME reflection-cpp
-    GITHUB_REPOSITORY contour-terminal/reflection-cpp
-    GIT_TAG v0.4.0
+    NAME core-cpp
+    GITHUB_REPOSITORY contour-terminal/core-cpp
+    GIT_TAG v0.4.3
+    VERSION 0.4.3
     EXCLUDE_FROM_ALL YES
     SYSTEM YES
+    OPTIONS
+        "CORE_CPP_TESTING OFF"
+        "CORE_CPP_WITH_TLS OFF"
+        "CORE_CPP_WITH_TUI ${_endo_core_cpp_native}"
 )
-set(THIRDPARTY_BUILTIN_reflection_cpp "CPM (v0.4.0)")
+set(THIRDPARTY_BUILTIN_core_cpp "CPM (v0.4.3)")

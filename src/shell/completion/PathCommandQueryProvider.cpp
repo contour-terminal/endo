@@ -6,7 +6,7 @@ namespace endo
 {
 
 PathCommandQueryProvider::PathCommandQueryProvider(PathCommandIndex const& index,
-                                                   EnvironmentProvider const& env):
+                                                   core::platform::EnvironmentProvider const& env):
     _index(index), _env(env)
 {
 }

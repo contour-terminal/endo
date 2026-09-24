@@ -4,7 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 using namespace endo;
-using tui::LanguageId;
+using core::tui::LanguageId;
 
 namespace
 {

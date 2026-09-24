@@ -11,13 +11,19 @@
 #include <shell/commands/TimeoutCommand.hpp>
 #include <shell/history/RequiredPaths.hpp>
 
-#include <tui/GenericSyntaxHighlighter.hpp>
-#include <tui/ImageLoader.hpp>
-#include <tui/ImageProvider.hpp>
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/Sixel.hpp>
-#include <tui/TerminalOutput.hpp>
-#include <tui/Theme.hpp>
+#include <core/Generator.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/SignalHandler.hpp>
+#include <core/platform/SystemInfo.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/FilesystemImageProvider.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/ImageLoader.hpp>
+#include <core/tui/ImageProvider.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/Sixel.hpp>
+#include <core/tui/TerminalOutput.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -36,14 +42,9 @@
 
 #include <fcntl.h>
 
-#include <platform/Generator.hpp>
 #include <platform/InterruptThrottle.hpp>
-#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
 #include <platform/ProcessProvider.hpp>
-#include <platform/SignalHandler.hpp>
-#include <platform/SystemInfo.hpp>
-#include <platform/Types.hpp>
 
 #if defined(_WIN32)
     #include <io.h>
@@ -218,7 +219,7 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
 /// Calls onChunk(data, size) for each chunk of data read.
 ///
 /// @return 0 on EOF, 1 on I/O error, 130 on SIGINT interruption.
-int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
+int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
 {
     using namespace endo;
     using namespace endo::platform;
@@ -227,10 +228,10 @@ int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
 
     while (true)
     {
-        SignalHandler::processSignalFd();
-        if (SignalHandler::hasPendingSigint())
+        core::platform::SignalHandler::processSignalFd();
+        if (core::platform::SignalHandler::hasPendingSigint())
         {
-            SignalHandler::clearPendingSigint();
+            core::platform::SignalHandler::clearPendingSigint();
             return 130;
         }
 #if !defined(_WIN32)
@@ -249,7 +250,7 @@ int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
 #else
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #endif
-        auto const bytesRead = platformRead(fd, buffer.data(), buffer.size());
+        auto const bytesRead = core::platform::platformRead(fd, buffer.data(), buffer.size());
         if (bytesRead < 0)
             return 1;
         if (bytesRead == 0)
@@ -262,7 +263,7 @@ int interruptibleReadLoop(endo::NativeHandle fd, auto const& onChunk)
 /// Reads all data from fd interruptibly.
 ///
 /// @return {data, exitCode} where exitCode is 0 on EOF or 130 on SIGINT.
-std::pair<std::string, int> interruptibleReadAll(endo::NativeHandle fd)
+std::pair<std::string, int> interruptibleReadAll(core::platform::NativeHandle fd)
 {
     std::string data;
     auto const exitCode =
@@ -288,10 +289,10 @@ std::pair<std::string, int> interruptibleReadAll(std::istream& stream)
 
     while (true)
     {
-        SignalHandler::processSignalFd();
-        if (SignalHandler::hasPendingSigint())
+        core::platform::SignalHandler::processSignalFd();
+        if (core::platform::SignalHandler::hasPendingSigint())
         {
-            SignalHandler::clearPendingSigint();
+            core::platform::SignalHandler::clearPendingSigint();
             return { std::move(data), 130 };
         }
 
@@ -309,16 +310,16 @@ std::pair<std::string, int> interruptibleReadAll(std::istream& stream)
 
 /// @brief A TerminalOutput that writes to a caller-supplied file descriptor.
 ///
-/// tui::TerminalOutput composes escape sequences into an internal buffer and, by
+/// core::tui::TerminalOutput composes escape sequences into an internal buffer and, by
 /// default, flushes them to standard output. Retargeting the sink lets `cat`
 /// render to whatever descriptor the shell's redirection model handed it.
-class FdTerminalOutput final: public tui::TerminalOutput
+class FdTerminalOutput final: public core::tui::TerminalOutput
 {
   public:
     /// @param fd The descriptor to write to.
     /// @param columns Terminal width in cells.
     /// @param rows Terminal height in cells.
-    FdTerminalOutput(endo::NativeHandle fd, int columns, int rows) noexcept:
+    FdTerminalOutput(core::platform::NativeHandle fd, int columns, int rows) noexcept:
         _fd(fd), _columns(columns), _rows(rows)
     {
     }
@@ -333,11 +334,11 @@ class FdTerminalOutput final: public tui::TerminalOutput
   protected:
     void writeToDestination(std::string_view bytes) override
     {
-        [[maybe_unused]] auto const written = endo::platformWrite(_fd, bytes.data(), bytes.size());
+        [[maybe_unused]] auto const written = core::platform::platformWrite(_fd, bytes.data(), bytes.size());
     }
 
   private:
-    endo::NativeHandle _fd;
+    core::platform::NativeHandle _fd;
     int _columns;
     int _rows;
 };
@@ -347,24 +348,27 @@ class FdTerminalOutput final: public tui::TerminalOutput
 namespace endo
 {
 
-int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent)
+int Shell::renderMarkdownHelp(core::platform::NativeHandle outputFd, std::string_view markdownContent)
 {
-    if (outputFd == standardOutput() && isTerminal(standardOutput()))
+    if (outputFd == core::platform::standardOutput()
+        && core::platform::isTerminal(core::platform::standardOutput()))
     {
-        tui::TerminalOutput termOutput;
+        core::tui::TerminalOutput termOutput;
         termOutput.updateDimensions();
-        tui::MarkdownRenderer renderer(termOutput);
+        core::tui::MarkdownRenderer renderer(
+            termOutput, core::tui::MarkdownRenderer::defaultTheme(), &_highlighters);
         renderer.setMaxWidth(termOutput.columns());
         renderer.render(markdownContent);
         termOutput.flush();
         return 0;
     }
-    [[maybe_unused]] auto written = platformWrite(outputFd, markdownContent.data(), markdownContent.size());
-    written = platformWrite(outputFd, "\n", 1);
+    [[maybe_unused]] auto written =
+        core::platform::platformWrite(outputFd, markdownContent.data(), markdownContent.size());
+    written = core::platform::platformWrite(outputFd, "\n", 1);
     return 0;
 }
 
-int Shell::renderMarkdownDocument(NativeHandle outputFd,
+int Shell::renderMarkdownDocument(core::platform::NativeHandle outputFd,
                                   std::string_view markdownContent,
                                   std::filesystem::path const& baseDir,
                                   int indent)
@@ -387,13 +391,14 @@ int Shell::renderMarkdownDocument(NativeHandle outputFd,
 
     auto output = FdTerminalOutput(outputFd, columns, rows);
     auto imageProvider =
-        tui::FilesystemImageProvider(tui::ImageRenderConfig { .baseDir = baseDir,
-                                                              .cellWidthPx = cellWidthPx,
-                                                              .cellHeightPx = cellHeightPx,
-                                                              .maxColumns = columns - indent },
-                                     [this] { return _sixelCapability->supportsSixel(); });
+        core::tui::FilesystemImageProvider(core::tui::ImageRenderConfig { .baseDir = baseDir,
+                                                                          .cellWidthPx = cellWidthPx,
+                                                                          .cellHeightPx = cellHeightPx,
+                                                                          .maxColumns = columns - indent },
+                                           [this] { return _sixelCapability->supportsSixel(); });
 
-    auto renderer = tui::MarkdownRenderer(output);
+    auto renderer =
+        core::tui::MarkdownRenderer(output, core::tui::MarkdownRenderer::defaultTheme(), &_highlighters);
     renderer.setMaxWidth(columns);
     renderer.setIndent(indent);
     renderer.setFullWidthMode(true); // double-width/height H1 and H2 titles
@@ -404,7 +409,7 @@ int Shell::renderMarkdownDocument(NativeHandle outputFd,
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     std::vector<std::string> echoArgs;
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -510,11 +515,13 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
     if (!suppressNewline)
         output += '\n';
 
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
-int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineCat(CoreVM::CoreStringArray const& args,
+                            core::platform::NativeHandle outputFd,
+                            core::platform::NativeHandle stdinFd)
 {
     std::vector<std::string> catArgs;
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -802,7 +809,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         numberLines = false;
 
     auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     if (showHelp)
@@ -849,14 +856,14 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     }
 
     // Detect whether output goes to a TTY for syntax highlighting
-    bool const outputIsTty = isTerminal(outputFd);
+    bool const outputIsTty = core::platform::isTerminal(outputFd);
 
     int lineNumber = 1;
     bool lastLineWasBlank = false;
 
-    auto processContent = [&](std::string const& content, tui::LanguageId language) {
-        auto highlightState = tui::HighlightState::Normal;
-        auto const& theme = tui::currentTheme();
+    auto processContent = [&](std::string const& content, core::tui::LanguageId language) {
+        auto highlightState = core::tui::HighlightState::Normal;
+        auto const& theme = core::tui::currentTheme();
         // Highlighting is a rendering, so --raw suppresses it too.
         auto const highlight = shouldHighlightCatOutput(outputIsTty, rawMode, language);
         int physicalLineNumber = 0;
@@ -893,9 +900,10 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 auto displayLine = std::string {};
                 if (highlight && !isBlank)
                 {
-                    auto [highlights, nextState] = tui::highlightLine(line, language, highlightState);
+                    auto [highlights, nextState] =
+                        _highlighters.highlightLine(line, language, highlightState);
                     highlightState = nextState;
-                    displayLine = tui::renderHighlightedLineToString(line, highlights, theme);
+                    displayLine = core::tui::renderHighlightedLineToString(line, highlights, theme);
                 }
                 else
                 {
@@ -949,8 +957,8 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             auto displayLine = std::string {};
             if (highlight)
             {
-                auto [highlights, nextState] = tui::highlightLine(line, language, highlightState);
-                displayLine = tui::renderHighlightedLineToString(line, highlights, theme);
+                auto [highlights, nextState] = _highlighters.highlightLine(line, language, highlightState);
+                displayLine = core::tui::renderHighlightedLineToString(line, highlights, theme);
             }
             else
             {
@@ -997,13 +1005,13 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 auto [content, exitCode] = interruptibleReadAll(stdinFd);
                 if (exitCode != 0)
                     return exitCode;
-                processContent(content, tui::LanguageId::None);
+                processContent(content, core::tui::LanguageId::None);
             }
             else
             {
                 // Stream directly for plain cat (best UX for interactive stdin)
                 auto const exitCode = interruptibleReadLoop(stdinFd, [outputFd](char const* buf, size_t len) {
-                    [[maybe_unused]] auto written = platformWrite(outputFd, buf, len);
+                    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
                 });
                 if (exitCode != 0)
                     return exitCode;
@@ -1016,15 +1024,15 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 CatRenderContext { .rawMode = rawMode,
                                    .outputIsTty = outputIsTty,
                                    .hasProcessingFlags = hasProcessingFlags,
-                                   .isImageExt = tui::isImageExtension(ext),
+                                   .isImageExt = core::tui::isImageExtension(ext),
                                    .forceImage = imageColumns.has_value() || imageRows.has_value(),
-                                   .language = tui::detectLanguageFromPath(file) };
+                                   .language = _highlighters.detectFromPath(file) };
             auto const renderMode = chooseCatRenderMode(renderContext);
 
             // Resolved once, and every probe below asks about the same path: on Windows
             // "/dev/null" resolves to "NUL", and querying the unresolved spelling would
             // describe a path that was never opened.
-            auto const resolvedFile = platform::resolveDevicePath(file);
+            auto const resolvedFile = core::platform::resolveDevicePath(file);
 
             if (renderMode == CatRenderMode::SixelImage)
             {
@@ -1042,7 +1050,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 auto imageBuffer = std::ostringstream {};
                 imageBuffer << (*imageStream)->rdbuf();
                 auto const imageBytes = std::move(imageBuffer).str();
-                auto imageResult = tui::loadImageFromMemory(std::span<std::uint8_t const> {
+                auto imageResult = core::tui::loadImageFromMemory(std::span<std::uint8_t const> {
                     reinterpret_cast<std::uint8_t const*>(imageBytes.data()), imageBytes.size() });
                 if (!imageResult.has_value())
                 {
@@ -1090,7 +1098,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                     auto const th = targetPixelHeight > 0 ? targetPixelHeight : 0;
                     if (tw != image.width || th != image.height)
                     {
-                        auto resized = tui::resizeImage(image, tw, th);
+                        auto resized = core::tui::resizeImage(image, tw, th);
                         if (!resized.has_value())
                         {
                             error("cat: {}: {}", file, resized.error());
@@ -1102,9 +1110,10 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 }
 
                 // Encode as sixel
-                auto const imageData =
-                    tui::ImageData { .pixels = image.pixels, .width = image.width, .height = image.height };
-                auto sixelResult = tui::encodeSixel(imageData, 256);
+                auto const imageData = core::tui::ImageData { .pixels = image.pixels,
+                                                              .width = image.width,
+                                                              .height = image.height };
+                auto sixelResult = core::tui::encodeSixel(imageData, 256);
                 if (!sixelResult.has_value())
                 {
                     error("cat: {}: sixel encode failed: {}", file, sixelResult.error());
@@ -1115,7 +1124,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 // Write DCS-framed sixel sequence
                 auto const sixelOutput = std::format("\033P0;1q{}\033\\", sixelResult.value());
                 [[maybe_unused]] auto written =
-                    platformWrite(outputFd, sixelOutput.data(), sixelOutput.size());
+                    core::platform::platformWrite(outputFd, sixelOutput.data(), sixelOutput.size());
 
                 // Trailing newline
                 writeOutput("\n");
@@ -1214,7 +1223,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     return success ? 0 : 1;
 }
 
-int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     std::vector<std::string> sleepArgs;
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -1315,15 +1324,15 @@ int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle 
     // Sleep in short intervals to allow Ctrl+C (SIGINT) interruption
     if (totalSeconds > 0)
     {
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         auto const deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>(totalSeconds);
         while (std::chrono::steady_clock::now() < deadline)
         {
             // Drain any pending signals from signalfd (Linux) so SIGINT flag gets set
-            SignalHandler::processSignalFd();
-            if (SignalHandler::hasPendingSigint())
+            core::platform::SignalHandler::processSignalFd();
+            if (core::platform::SignalHandler::hasPendingSigint())
             {
-                SignalHandler::clearPendingSigint();
+                core::platform::SignalHandler::clearPendingSigint();
                 return 130; // 128 + SIGINT(2)
             }
             auto const remaining = deadline - std::chrono::steady_clock::now();
@@ -1338,10 +1347,10 @@ int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle 
     return 0;
 }
 
-int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     bool recursive = false;
@@ -1486,7 +1495,8 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
             else
                 prompt = std::format("rm: remove file '{}'? ", path);
             // Write prompt to stderr, read response from stdin
-            [[maybe_unused]] auto w = platformWrite(standardError(), prompt.data(), prompt.size());
+            [[maybe_unused]] auto w =
+                core::platform::platformWrite(core::platform::standardError(), prompt.data(), prompt.size());
             // In non-interactive/test contexts, skip (treat as 'no')
             if (!_tty.isTerminal())
                 continue;
@@ -1534,13 +1544,13 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
                     if (!removeResult.has_value() || !removeResult.value())
                     {
                         error("rm: cannot remove '{}': {}",
-                              platform::normalizePath(entry),
+                              core::platform::normalizePath(entry),
                               removeResult.has_value() ? "Unknown error" : removeResult.error());
                         allOk = false;
                         break;
                     }
                     if (verbose)
-                        writeOutput(std::format("removed '{}'\n", platform::normalizePath(entry)));
+                        writeOutput(std::format("removed '{}'\n", core::platform::normalizePath(entry)));
                 }
 
                 if (!allOk)
@@ -1604,10 +1614,10 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
     return success ? 0 : 1;
 }
 
-int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     bool parents = false;
@@ -1722,10 +1732,10 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
     return success ? 0 : 1;
 }
 
-int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     bool recursive = false;
@@ -1836,11 +1846,12 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
     auto const dest = std::filesystem::path(paths.back());
     auto const sources = std::span(paths.data(), paths.size() - 1);
     auto const destIsDir = _fs.isDirectory(dest);
-    auto const overwrite = !noClobber;
+    auto const overwrite =
+        noClobber ? core::platform::OverwritePolicy::Refuse : core::platform::OverwritePolicy::Replace;
 
     if (sources.size() > 1 && !destIsDir)
     {
-        error("cp: target '{}' is not a directory", platform::normalizePath(dest));
+        error("cp: target '{}' is not a directory", core::platform::normalizePath(dest));
         return 1;
     }
 
@@ -1878,7 +1889,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
             if (auto const mkResult = _fs.createDirectories(target); !mkResult.has_value())
             {
                 error("cp: cannot create directory '{}': {}",
-                      platform::normalizePath(target),
+                      core::platform::normalizePath(target),
                       mkResult.error());
                 success = false;
                 continue;
@@ -1899,7 +1910,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                     if (auto const mkResult = _fs.createDirectories(entryTarget); !mkResult.has_value())
                     {
                         error("cp: cannot create directory '{}': {}",
-                              platform::normalizePath(entryTarget),
+                              core::platform::normalizePath(entryTarget),
                               mkResult.error());
                         success = false;
                     }
@@ -1915,7 +1926,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                         !mkResult.has_value())
                     {
                         error("cp: cannot create directory '{}': {}",
-                              platform::normalizePath(entryTarget.parent_path()),
+                              core::platform::normalizePath(entryTarget.parent_path()),
                               mkResult.error());
                         success = false;
                         continue;
@@ -1924,15 +1935,15 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
                         !cpResult.has_value())
                     {
                         error("cp: cannot copy '{}': {}",
-                              platform::normalizePath(entry.path),
+                              core::platform::normalizePath(entry.path),
                               cpResult.error());
                         success = false;
                         continue;
                     }
                     if (verbose)
                         writeOutput(std::format("'{}' -> '{}'\n",
-                                                platform::normalizePath(entry.path),
-                                                platform::normalizePath(entryTarget)));
+                                                core::platform::normalizePath(entry.path),
+                                                core::platform::normalizePath(entryTarget)));
                 }
             }
 
@@ -1954,24 +1965,24 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
             {
                 error("cp: cannot copy '{}' to '{}': {}",
                       src,
-                      platform::normalizePath(target),
+                      core::platform::normalizePath(target),
                       cpResult.error());
                 success = false;
                 continue;
             }
 
             if (verbose)
-                writeOutput(std::format("'{}' -> '{}'\n", src, platform::normalizePath(target)));
+                writeOutput(std::format("'{}' -> '{}'\n", src, core::platform::normalizePath(target)));
         }
     }
 
     return success ? 0 : 1;
 }
 
-int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     bool force = false;
@@ -2099,11 +2110,11 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
     // `Foo/foo`) or rejected as a self-overwrite. Detect it up front so the entry itself
     // is renamed; NativeFileSystem::rename performs the underlying recase safely.
     auto const caseOnlyRename =
-        sources.size() == 1 && platform::isCaseOnlyRename(std::filesystem::path(sources.front()), dest);
+        sources.size() == 1 && core::platform::isCaseOnlyRename(std::filesystem::path(sources.front()), dest);
 
     if (sources.size() > 1 && !destIsDir)
     {
-        error("mv: target '{}' is not a directory", platform::normalizePath(dest));
+        error("mv: target '{}' is not a directory", core::platform::normalizePath(dest));
         return 1;
     }
 
@@ -2130,8 +2141,10 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (interactive && !force)
             {
-                auto const prompt = std::format("mv: overwrite '{}'? ", platform::normalizePath(target));
-                [[maybe_unused]] auto w = platformWrite(standardError(), prompt.data(), prompt.size());
+                auto const prompt =
+                    std::format("mv: overwrite '{}'? ", core::platform::normalizePath(target));
+                [[maybe_unused]] auto w = core::platform::platformWrite(
+                    core::platform::standardError(), prompt.data(), prompt.size());
                 if (!_tty.isTerminal())
                     continue;
                 std::string response;
@@ -2152,7 +2165,10 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                                        || renameError.find("EXDEV") != std::string::npos;
             if (!isCrossDevice)
             {
-                error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), renameError);
+                error("mv: cannot move '{}' to '{}': {}",
+                      src,
+                      core::platform::normalizePath(target),
+                      renameError);
                 success = false;
                 continue;
             }
@@ -2167,7 +2183,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                 {
                     error("mv: cannot move '{}' to '{}': {}",
                           src,
-                          platform::normalizePath(target),
+                          core::platform::normalizePath(target),
                           mkResult.error());
                     success = false;
                     continue;
@@ -2206,7 +2222,8 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
                             copyError = mkResult.error();
                             break;
                         }
-                        if (auto const cpResult = _fs.copyFile(entry.path, entryTarget, true);
+                        if (auto const cpResult = _fs.copyFile(
+                                entry.path, entryTarget, core::platform::OverwritePolicy::Replace);
                             !cpResult.has_value())
                         {
                             copyFailed = true;
@@ -2226,7 +2243,9 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             }
             else
             {
-                if (auto const cpResult = _fs.copyFile(srcPath, target, true); !cpResult.has_value())
+                if (auto const cpResult =
+                        _fs.copyFile(srcPath, target, core::platform::OverwritePolicy::Replace);
+                    !cpResult.has_value())
                 {
                     copyFailed = true;
                     copyError = cpResult.error();
@@ -2235,7 +2254,10 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
 
             if (copyFailed)
             {
-                error("mv: cannot move '{}' to '{}': {}", src, platform::normalizePath(target), copyError);
+                error("mv: cannot move '{}' to '{}': {}",
+                      src,
+                      core::platform::normalizePath(target),
+                      copyError);
                 success = false;
                 continue;
             }
@@ -2245,7 +2267,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             {
                 error("mv: moved '{}' to '{}' but failed to remove source: {}",
                       src,
-                      platform::normalizePath(target),
+                      core::platform::normalizePath(target),
                       removeResult.error());
                 success = false;
                 continue;
@@ -2253,7 +2275,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         }
 
         if (verbose)
-            writeOutput(std::format("'{}' -> '{}'\n", src, platform::normalizePath(target)));
+            writeOutput(std::format("'{}' -> '{}'\n", src, core::platform::normalizePath(target)));
     }
 
     return success ? 0 : 1;
@@ -2278,7 +2300,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
     if (lastInChain)
     {
         // Wait for downstream processes to complete
-        for (ProcessId const processPid: _currentProcessGroupPids)
+        for (core::platform::ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid);
             if (waitResult.has_value())
@@ -2298,7 +2320,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
     context.setResult(static_cast<CoreVM::CoreNumber>(_exitCode));
 }
 
-int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Parse arguments (skip args[0] which is "find")
     std::vector<std::string> findArgs;
@@ -2372,7 +2394,8 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const needsMtime = expression && expression->requiresMtime();
 
     // Helper to derive std::filesystem::file_type from FileSystem::DirectoryEntry booleans
-    auto entryFileType = [](FileSystem::DirectoryEntry const& de) -> std::filesystem::file_type {
+    auto entryFileType =
+        [](core::platform::FileSystem::DirectoryEntry const& de) -> std::filesystem::file_type {
         if (de.isSymlink)
             return std::filesystem::file_type::symlink;
         if (de.isDirectory)
@@ -2400,7 +2423,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
         {
             if (!_fs.exists(searchPath))
             {
-                error("find: '{}': No such file or directory", platform::normalizePath(searchPath));
+                error("find: '{}': No such file or directory", core::platform::normalizePath(searchPath));
                 continue;
             }
 
@@ -2423,8 +2446,8 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
             if (!expression || expression->evaluate(entry))
             {
-                auto const output = platform::normalizePath(searchPath) + std::string(separator);
-                platformWrite(outputFd, output.data(), output.size());
+                auto const output = core::platform::normalizePath(searchPath) + std::string(separator);
+                core::platform::platformWrite(outputFd, output.data(), output.size());
             }
         }
 
@@ -2470,8 +2493,8 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
             if (!expression || expression->evaluate(entry))
             {
-                auto const output = platform::normalizePath(dirEntry.path) + std::string(separator);
-                platformWrite(outputFd, output.data(), output.size());
+                auto const output = core::platform::normalizePath(dirEntry.path) + std::string(separator);
+                core::platform::platformWrite(outputFd, output.data(), output.size());
             }
         }
     }
@@ -2479,7 +2502,9 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
     return 0;
 }
 
-int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
 {
     // Parse arguments (skip args[0] which is "grep")
     std::vector<std::string> grepArgs;
@@ -2559,7 +2584,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     // Determine color mode
-    auto const toTerminal = isTerminal(outputFd);
+    auto const toTerminal = core::platform::isTerminal(outputFd);
     bool useColor = false;
     if (opts.colorMode == grep::ColorMode::Always)
     {
@@ -2578,14 +2603,14 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     auto const render = grep::GrepRenderOptions {
         .useColor = useColor,
         .useHyperlinks = useHyperlinks,
-        .uriHost = platform::cachedHostName(),
+        .uriHost = core::platform::cachedHostName(),
         // Gated because resolving the base directory is a getcwd; the host name is already cached.
-        .baseDirectory = useHyperlinks ? platform::normalizePath(_fs.currentPath()) : std::string {},
+        .baseDirectory = useHyperlinks ? core::platform::normalizePath(_fs.currentPath()) : std::string {},
     };
 
     // Output + error writer lambdas
     auto const writer = [outputFd](std::string_view sv) {
-        platformWrite(outputFd, sv.data(), sv.size());
+        core::platform::platformWrite(outputFd, sv.data(), sv.size());
     };
 
     bool hasError = false;
@@ -2598,9 +2623,9 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     // consumes it once and the driver exits with 130.
     auto throttle = InterruptThrottle {};
     auto const interrupted = [] {
-        if (!SignalHandler::hasPendingSigint())
+        if (!core::platform::SignalHandler::hasPendingSigint())
             return false;
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         return true;
     };
 
@@ -2662,7 +2687,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             if (!fileStream)
             {
                 if (!opts.suppressErrors)
-                    error("grep: {}: {}", platform::normalizePath(filePath), fileStream.error());
+                    error("grep: {}: {}", core::platform::normalizePath(filePath), fileStream.error());
                 hasError = true;
                 continue;
             }
@@ -2684,7 +2709,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
             auto const matches = grep::searchLines(lines,
                                                    *regex,
                                                    opts,
-                                                   platform::normalizePath(filePath),
+                                                   core::platform::normalizePath(filePath),
                                                    showFilename,
                                                    render,
                                                    writer,
@@ -2707,7 +2732,7 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args, NativeHandle o
     return totalMatches > 0 ? 0 : 1;
 }
 
-int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Parse arguments (skip args[0] which is "timeout")
     auto timeoutArgs = std::vector<std::string>();
@@ -2891,7 +2916,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, NativeHandl
     return timedOut ? 124 : finalResult->exitCode;
 }
 
-int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Parse arguments (skip args[0] which is "kill")
     auto killArgs = std::vector<std::string>();
@@ -2962,7 +2987,8 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
             output += std::format("{:2}) {:<8}", num, name);
 
         output += '\n';
-        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto const written =
+            core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 
@@ -3009,7 +3035,8 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
                 continue;
             }
 
-            auto const result = _processManager.sendSignal(static_cast<ProcessId>(pid), opts.signal);
+            auto const result =
+                _processManager.sendSignal(static_cast<core::platform::ProcessId>(pid), opts.signal);
             if (!result.has_value())
             {
                 error("kill: ({}) - No such process", pid);
@@ -3025,7 +3052,7 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, NativeHandle o
 // pkill
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto pkillArgs = std::vector<std::string> {};
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -3114,20 +3141,23 @@ int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle 
         auto output = std::string {};
         for (auto const& m: matches)
             output += std::format("{} {}\n", m.pid, m.command);
-        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto const written =
+            core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 
     if (opts.countOnly)
     {
         auto const output = std::format("{}\n", matches.size());
-        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto const written =
+            core::platform::platformWrite(outputFd, output.data(), output.size());
     }
 
     auto exitCode = 0;
     for (auto const& m: matches)
     {
-        auto const result = _processManager.sendSignal(static_cast<ProcessId>(m.pid), opts.signal);
+        auto const result =
+            _processManager.sendSignal(static_cast<core::platform::ProcessId>(m.pid), opts.signal);
         if (!result.has_value())
         {
             error("pkill: ({}) - {}", m.pid, toString(result.error()));
@@ -3141,7 +3171,7 @@ int Shell::executeInlinePkill(CoreVM::CoreStringArray const& args, NativeHandle 
 // pgrep
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto pgrepArgs = std::vector<std::string> {};
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -3227,7 +3257,8 @@ int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle 
     if (opts.countOnly)
     {
         auto const output = std::format("{}\n", matches.size());
-        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto const written =
+            core::platform::platformWrite(outputFd, output.data(), output.size());
         return matches.empty() ? 1 : 0;
     }
 
@@ -3245,7 +3276,8 @@ int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle 
             output += std::format("{}", m.pid);
     }
     output += '\n';
-    [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto const written =
+        core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -3253,7 +3285,7 @@ int Shell::executeInlinePgrep(CoreVM::CoreStringArray const& args, NativeHandle 
 // pidof
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlinePidof(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto pidofArgs = std::vector<std::string> {};
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -3329,7 +3361,8 @@ int Shell::executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle 
             output += std::format("{}", pid);
         }
         output += '\n';
-        [[maybe_unused]] auto const written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto const written =
+            core::platform::platformWrite(outputFd, output.data(), output.size());
     }
     return 0;
 }
@@ -3338,7 +3371,7 @@ int Shell::executeInlinePidof(CoreVM::CoreStringArray const& args, NativeHandle 
 // whoami
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     for (auto const i: std::views::iota(1uz, args.size()))
     {
@@ -3366,7 +3399,7 @@ int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle
     if (GetUserNameA(username, &size))
     {
         auto output = std::format("{}\n", username);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
     error("whoami: cannot determine username");
@@ -3375,7 +3408,7 @@ int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle
     if (auto const* pw = getpwuid(geteuid()))
     {
         auto output = std::format("{}\n", pw->pw_name);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
     error("whoami: cannot determine username");
@@ -3387,7 +3420,7 @@ int Shell::executeInlineWhoami(CoreVM::CoreStringArray const& args, NativeHandle
 // nproc
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineNproc(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     unsigned ignore = 0;
 
@@ -3431,7 +3464,7 @@ int Shell::executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle 
     auto const total = std::thread::hardware_concurrency();
     auto const available = (total > ignore) ? (total - ignore) : 1u;
     auto output = std::format("{}\n", available);
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -3439,7 +3472,7 @@ int Shell::executeInlineNproc(CoreVM::CoreStringArray const& args, NativeHandle 
 // hostname
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     for (auto const i: std::views::iota(1uz, args.size()))
     {
@@ -3467,14 +3500,14 @@ int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHand
     if (GetComputerNameA(hostbuf.data(), &size))
     {
         auto output = std::format("{}\n", hostbuf.data());
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 #else
     if (gethostname(hostbuf.data(), hostbuf.size()) == 0)
     {
         auto output = std::format("{}\n", hostbuf.data());
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 #endif
@@ -3486,7 +3519,7 @@ int Shell::executeInlineHostname(CoreVM::CoreStringArray const& args, NativeHand
 // pwd
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     for (auto const i: std::views::iota(1uz, args.size()))
     {
@@ -3509,7 +3542,7 @@ int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle ou
     }
 
     auto output = std::format("{}\n", _env.currentDirectory());
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -3517,7 +3550,7 @@ int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, NativeHandle ou
 // date
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     bool useUtc = false;
     bool showEpoch = false;
@@ -3644,7 +3677,8 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
                 formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
             auto const len = strftime(buf.data(), buf.size(), std::string(fmt).c_str(), &timeBuf);
             auto output = std::format("{}\n", std::string_view(buf.data(), len));
-            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+            [[maybe_unused]] auto written =
+                core::platform::platformWrite(outputFd, output.data(), output.size());
             return 0;
         }
         error("date: unsupported date string '{}' (use @EPOCH)", dateStr);
@@ -3655,7 +3689,7 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
     {
         auto const epoch = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
         auto output = std::format("{}\n", epoch);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 
@@ -3677,7 +3711,7 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
         std::array<char, 64> buf {};
         auto const len = strftime(buf.data(), buf.size(), "%Y-%m-%dT%H:%M:%S%z", &timeBuf);
         auto output = std::format("{}\n", std::string_view(buf.data(), len));
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
         return 0;
     }
 
@@ -3686,7 +3720,7 @@ int Shell::executeInlineDate(CoreVM::CoreStringArray const& args, NativeHandle o
         formatStr.empty() ? std::string_view("%a %b %e %H:%M:%S %Z %Y") : std::string_view(formatStr);
     auto const len = strftime(buf.data(), buf.size(), std::string(fmt).c_str(), &timeBuf);
     auto output = std::format("{}\n", std::string_view(buf.data(), len));
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -3910,7 +3944,7 @@ namespace
 
 } // namespace
 
-int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     bool threeMonth = false;
     bool yearMode = false;
@@ -4040,8 +4074,8 @@ int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle ou
 
     // Resolve color capability.
     auto const* noColorEnv = std::getenv("NO_COLOR");
-    bool const useColor =
-        !forceNoColor && isTerminal(outputFd) && (noColorEnv == nullptr || noColorEnv[0] == '\0');
+    bool const useColor = !forceNoColor && core::platform::isTerminal(outputFd)
+                          && (noColorEnv == nullptr || noColorEnv[0] == '\0');
 
     CalStyle const style { .useColor = useColor, .startMonday = startMondayOverride.value_or(true) };
 
@@ -4096,7 +4130,7 @@ int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle ou
         }
     }
 
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -4104,7 +4138,7 @@ int Shell::executeInlineCal(CoreVM::CoreStringArray const& args, NativeHandle ou
 // uname
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     bool showAll = false;
     bool showSysname = false;
@@ -4210,7 +4244,7 @@ int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle 
         append(machine);
 
     result += '\n';
-    [[maybe_unused]] auto written = platformWrite(outputFd, result.data(), result.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, result.data(), result.size());
     return 0;
 }
 
@@ -4218,7 +4252,7 @@ int Shell::executeInlineUname(CoreVM::CoreStringArray const& args, NativeHandle 
 // basename
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineBasename(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     if (args.size() < 2)
     {
@@ -4258,7 +4292,7 @@ int Shell::executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHand
     }
 
     auto output = std::format("{}\n", name);
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -4266,7 +4300,7 @@ int Shell::executeInlineBasename(CoreVM::CoreStringArray const& args, NativeHand
 // dirname
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     if (args.size() < 2)
     {
@@ -4293,12 +4327,12 @@ int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandl
                                       "| `--help` | Display this help |\n");
     }
 
-    auto parent = platform::normalizePath(std::filesystem::path(args.at(1)).parent_path());
+    auto parent = core::platform::normalizePath(std::filesystem::path(args.at(1)).parent_path());
     if (parent.empty())
         parent = ".";
 
     auto output = std::format("{}\n", parent);
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -4306,7 +4340,7 @@ int Shell::executeInlineDirname(CoreVM::CoreStringArray const& args, NativeHandl
 // realpath
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     if (args.size() < 2)
     {
@@ -4344,8 +4378,8 @@ int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHand
             exitCode = 1;
             continue;
         }
-        auto output = std::format("{}\n", platform::normalizePath(canonical));
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        auto output = std::format("{}\n", core::platform::normalizePath(canonical));
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     }
     return exitCode;
 }
@@ -4354,7 +4388,7 @@ int Shell::executeInlineRealpath(CoreVM::CoreStringArray const& args, NativeHand
 // touch
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     bool noCreate = false;
     std::vector<std::string> files;
@@ -4431,7 +4465,7 @@ int Shell::executeInlineTouch(CoreVM::CoreStringArray const& args, NativeHandle 
 // ln
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     namespace fs = std::filesystem;
 
@@ -4564,7 +4598,7 @@ int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle out
         if (verbose)
         {
             auto msg = std::format("'{}' -> '{}'\n", linkName, target);
-            [[maybe_unused]] auto written = platformWrite(outputFd, msg.data(), msg.size());
+            [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, msg.data(), msg.size());
         }
         return 0;
     };
@@ -4615,7 +4649,7 @@ int Shell::executeInlineLn(CoreVM::CoreStringArray const& args, NativeHandle out
 // mktemp
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     bool createDir = false;
     std::string basedir;
@@ -4682,7 +4716,9 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         std::filesystem::create_directories(path, ec);
         if (ec)
         {
-            error("mktemp: failed to create directory '{}': {}", platform::normalizePath(path), ec.message());
+            error("mktemp: failed to create directory '{}': {}",
+                  core::platform::normalizePath(path),
+                  ec.message());
             return 1;
         }
     }
@@ -4691,13 +4727,13 @@ int Shell::executeInlineMktemp(CoreVM::CoreStringArray const& args, NativeHandle
         std::ofstream ofs(path);
         if (!ofs)
         {
-            error("mktemp: failed to create file '{}'", platform::normalizePath(path));
+            error("mktemp: failed to create file '{}'", core::platform::normalizePath(path));
             return 1;
         }
     }
 
-    auto output = std::format("{}\n", platform::normalizePath(path));
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    auto output = std::format("{}\n", core::platform::normalizePath(path));
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -4720,8 +4756,8 @@ namespace
     /// Takes the filesystem rather than opening an ifstream directly, so the six builtins
     /// sharing this helper -- head, tail, wc, sort, uniq and cut -- read through the same
     /// injected filesystem as the rest of the shell instead of going straight to disk.
-    ReadLinesResult readLinesFromInput(endo::platform::FileSystem const& fs,
-                                       endo::NativeHandle stdinFd,
+    ReadLinesResult readLinesFromInput(core::platform::FileSystem const& fs,
+                                       core::platform::NativeHandle stdinFd,
                                        std::span<std::string const> files,
                                        auto const& errorFn)
     {
@@ -4733,10 +4769,10 @@ namespace
             std::string line;
             while (std::getline(stream, line))
             {
-                SignalHandler::processSignalFd();
-                if (SignalHandler::hasPendingSigint())
+                core::platform::SignalHandler::processSignalFd();
+                if (core::platform::SignalHandler::hasPendingSigint())
                 {
-                    SignalHandler::clearPendingSigint();
+                    core::platform::SignalHandler::clearPendingSigint();
                     result.exitCode = 130;
                     return;
                 }
@@ -4773,7 +4809,7 @@ namespace
                 }
                 else
                 {
-                    auto stream = fs.openRead(platform::resolveDevicePath(file));
+                    auto stream = fs.openRead(core::platform::resolveDevicePath(file));
                     if (!stream)
                     {
                         errorFn(std::format("{}: {}", file, stream.error()));
@@ -4793,7 +4829,9 @@ namespace
 // head
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineHead(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
 {
     int numLines = 10;
     std::vector<std::string> files;
@@ -4850,7 +4888,7 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
     for (auto const i: std::views::iota(0uz, count))
     {
         auto output = std::format("{}\n", lines[i]);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     }
     return 0;
 }
@@ -4859,7 +4897,9 @@ int Shell::executeInlineHead(CoreVM::CoreStringArray const& args, NativeHandle o
 // tail
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineTail(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
 {
     int numLines = 10;
     bool follow = false;
@@ -4910,8 +4950,8 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
     }
 
     auto const writeLine = [outputFd](std::string_view line) {
-        [[maybe_unused]] auto w1 = platformWrite(outputFd, line.data(), line.size());
-        [[maybe_unused]] auto w2 = platformWrite(outputFd, "\n", 1);
+        [[maybe_unused]] auto w1 = core::platform::platformWrite(outputFd, line.data(), line.size());
+        [[maybe_unused]] auto w2 = core::platform::platformWrite(outputFd, "\n", 1);
     };
 
     if (follow && !files.empty())
@@ -4922,7 +4962,7 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         // filesystem hands back a snapshot rather than a growing file, so follow mode
         // observes no further appends there -- but it reads the file the rest of the shell
         // would read, instead of a same-named one on the host's disk.
-        auto const stream = _fs.openRead(platform::resolveDevicePath(filePath));
+        auto const stream = _fs.openRead(core::platform::resolveDevicePath(filePath));
         if (!stream)
         {
             error("tail: cannot open '{}': {}", filePath, stream.error());
@@ -4947,13 +4987,13 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         // getline() set EOF; clear it so subsequent reads can pick up appended data
         ifs.clear();
 
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         while (true)
         {
-            SignalHandler::processSignalFd();
-            if (SignalHandler::hasPendingSigint())
+            core::platform::SignalHandler::processSignalFd();
+            if (core::platform::SignalHandler::hasPendingSigint())
             {
-                SignalHandler::clearPendingSigint();
+                core::platform::SignalHandler::clearPendingSigint();
                 return 130;
             }
 
@@ -4983,14 +5023,14 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
         for (auto const i: std::views::iota(start, lines.size()))
             writeLine(lines[i]);
 
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         std::array<char, 4096> readBuf {};
         while (true)
         {
-            SignalHandler::processSignalFd();
-            if (SignalHandler::hasPendingSigint())
+            core::platform::SignalHandler::processSignalFd();
+            if (core::platform::SignalHandler::hasPendingSigint())
             {
-                SignalHandler::clearPendingSigint();
+                core::platform::SignalHandler::clearPendingSigint();
                 return 130;
             }
 #if !defined(_WIN32)
@@ -5000,19 +5040,19 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
                 break;
             if (pollResult > 0)
             {
-                auto const bytesRead = platformRead(stdinFd, readBuf.data(), readBuf.size());
+                auto const bytesRead = core::platform::platformRead(stdinFd, readBuf.data(), readBuf.size());
                 if (bytesRead <= 0)
                     break;
                 [[maybe_unused]] auto written =
-                    platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
+                    core::platform::platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
             }
 #else
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            auto const bytesRead = platformRead(stdinFd, readBuf.data(), readBuf.size());
+            auto const bytesRead = core::platform::platformRead(stdinFd, readBuf.data(), readBuf.size());
             if (bytesRead <= 0)
                 break;
             [[maybe_unused]] auto written =
-                platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
+                core::platform::platformWrite(outputFd, readBuf.data(), static_cast<size_t>(bytesRead));
 #endif
         }
         return 0;
@@ -5041,32 +5081,33 @@ int Shell::executeInlineTail(CoreVM::CoreStringArray const& args, NativeHandle o
 // history
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Detect whether output goes to a TTY for syntax highlighting.
-    bool const outputIsTty = isTerminal(outputFd);
+    bool const outputIsTty = core::platform::isTerminal(outputFd);
     auto const* noColor = std::getenv("NO_COLOR");
     bool const useColor = outputIsTty && (noColor == nullptr || noColor[0] == '\0');
 
     auto const printNumberedEntries = [&](size_t maxCount) {
         auto const& entries = history.entries();
         auto const start = entries.size() > maxCount ? entries.size() - maxCount : 0uz;
-        auto const& theme = tui::currentTheme();
+        auto const& theme = core::tui::currentTheme();
         std::string buf;
         for (auto const i: std::views::iota(start, entries.size()))
         {
             buf.clear();
             if (useColor)
             {
-                auto [highlights, _] = tui::highlightLine(entries[i], tui::LanguageId::Endo);
-                auto const coloredEntry = tui::renderHighlightedLineToString(entries[i], highlights, theme);
+                auto [highlights, _] = _highlighters.highlightLine(entries[i], _endoLanguage);
+                auto const coloredEntry =
+                    core::tui::renderHighlightedLineToString(entries[i], highlights, theme);
                 std::format_to(std::back_inserter(buf), "  \033[32m{:>5}\033[m  {}\n", i + 1, coloredEntry);
             }
             else
             {
                 std::format_to(std::back_inserter(buf), "  {:>5}  {}\n", i + 1, entries[i]);
             }
-            [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
+            [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf.data(), buf.size());
         }
     };
 
@@ -5147,7 +5188,7 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
             auto const currentCwdCanonical = canonicalizeForHistory(options.currentCwd, options.home);
             auto const results = history.searchFuzzy(pattern, 50, options);
 
-            auto const& theme = tui::currentTheme();
+            auto const& theme = core::tui::currentTheme();
             std::string buf;
             for (auto const& match: results)
             {
@@ -5174,16 +5215,17 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
                 buf.clear();
                 if (useColor)
                 {
-                    auto [highlights, _] = tui::highlightLine(entry, tui::LanguageId::Endo);
+                    auto [highlights, _] = _highlighters.highlightLine(entry, _endoLanguage);
                     std::format_to(std::back_inserter(buf),
                                    "{}\n",
-                                   tui::renderHighlightedLineToString(entry, highlights, theme));
+                                   core::tui::renderHighlightedLineToString(entry, highlights, theme));
                 }
                 else
                 {
                     std::format_to(std::back_inserter(buf), "{}\n", entry);
                 }
-                [[maybe_unused]] auto written = platformWrite(outputFd, buf.data(), buf.size());
+                [[maybe_unused]] auto written =
+                    core::platform::platformWrite(outputFd, buf.data(), buf.size());
             }
             return 0;
         }
@@ -5214,7 +5256,7 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, NativeHandl
 // source / .
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     if (args.size() < 2)
     {
@@ -5254,7 +5296,9 @@ int Shell::executeInlineSource(CoreVM::CoreStringArray const& args, NativeHandle
 // wc
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineWc(CoreVM::CoreStringArray const& args,
+                           core::platform::NativeHandle outputFd,
+                           core::platform::NativeHandle stdinFd)
 {
     bool countLines = false;
     bool countWords = false;
@@ -5357,7 +5401,7 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
         output += std::format("{}", totalChars);
     }
     output += '\n';
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -5365,7 +5409,9 @@ int Shell::executeInlineWc(CoreVM::CoreStringArray const& args, NativeHandle out
 // sort
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineSort(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
 {
     bool reverse = false;
     bool numeric = false;
@@ -5491,7 +5537,7 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
     for (auto const& line: lines)
     {
         auto output = std::format("{}\n", line);
-        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     }
     return 0;
 }
@@ -5500,7 +5546,9 @@ int Shell::executeInlineSort(CoreVM::CoreStringArray const& args, NativeHandle o
 // uniq
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
 {
     bool showCount = false;
     bool duplicatesOnly = false;
@@ -5583,7 +5631,8 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
                 output = std::format("{:>7} {}\n", count, lines[i]);
             else
                 output = std::format("{}\n", lines[i]);
-            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+            [[maybe_unused]] auto written =
+                core::platform::platformWrite(outputFd, output.data(), output.size());
         }
         i += count;
     }
@@ -5594,7 +5643,9 @@ int Shell::executeInlineUniq(CoreVM::CoreStringArray const& args, NativeHandle o
 // cut
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineCut(CoreVM::CoreStringArray const& args,
+                            core::platform::NativeHandle outputFd,
+                            core::platform::NativeHandle stdinFd)
 {
     char delimiter = '\t';
     std::string fieldSpec;
@@ -5738,7 +5789,8 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
                 }
             }
             output += '\n';
-            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+            [[maybe_unused]] auto written =
+                core::platform::platformWrite(outputFd, output.data(), output.size());
         }
     }
     else
@@ -5753,7 +5805,8 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
                     output += line[static_cast<size_t>(c - 1)];
             }
             output += '\n';
-            [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+            [[maybe_unused]] auto written =
+                core::platform::platformWrite(outputFd, output.data(), output.size());
         }
     }
     return 0;
@@ -5763,7 +5816,9 @@ int Shell::executeInlineCut(CoreVM::CoreStringArray const& args, NativeHandle ou
 // tr
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineTr(CoreVM::CoreStringArray const& args,
+                           core::platform::NativeHandle outputFd,
+                           core::platform::NativeHandle stdinFd)
 {
     bool deleteMode = false;
     bool squeezeMode = false;
@@ -5903,7 +5958,7 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle out
         output = inputData;
     }
 
-    [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
+    [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
 
@@ -5911,7 +5966,9 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args, NativeHandle out
 // tee
 // ---------------------------------------------------------------------------
 
-int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
+int Shell::executeInlineTee(CoreVM::CoreStringArray const& args,
+                            core::platform::NativeHandle outputFd,
+                            core::platform::NativeHandle stdinFd)
 {
     bool appendMode = false;
     std::vector<std::string> files;
@@ -5950,7 +6007,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle ou
         auto mode = std::ios::out;
         if (appendMode)
             mode |= std::ios::app;
-        outStreams.emplace_back(platform::resolveDevicePath(file), mode);
+        outStreams.emplace_back(core::platform::resolveDevicePath(file), mode);
         if (!outStreams.back())
         {
             error("tee: {}: Permission denied", file);
@@ -5960,7 +6017,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args, NativeHandle ou
 
     // Read from stdin, write to stdout + files
     auto const exitCode = interruptibleReadLoop(stdinFd, [&](char const* buf, size_t len) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, buf, len);
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
         for (auto& ofs: outStreams)
             ofs.write(buf, static_cast<std::streamsize>(len));
     });

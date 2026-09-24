@@ -9,7 +9,7 @@
 #include <shell/completion/ProcessNameQueryProvider.hpp>
 #include <shell/completion/ScriptedCompleter.hpp>
 
-#include <tui/completer/Completer.hpp>
+#include <core/tui/completer/Completer.hpp>
 
 #include <algorithm>
 #include <ranges>
@@ -18,10 +18,10 @@
 namespace endo
 {
 
-Completer::Completer(EnvironmentProvider const& env,
+Completer::Completer(core::platform::EnvironmentProvider const& env,
                      History const& history,
                      FSharpPersistentState const& fsharpState,
-                     FileSystem const& fs):
+                     core::platform::FileSystem const& fs):
     _pathCommands(env, fs)
 {
     _processProvider = createNativeProcessProvider();
@@ -202,7 +202,7 @@ std::vector<std::string> Completer::takeLastErrors()
 
 std::string Completer::findCommonPrefix(std::vector<CompletionItem> const& items)
 {
-    return tui::Completer::findCommonPrefix(items);
+    return core::tui::completer::Completer::findCommonPrefix(items);
 }
 
 } // namespace endo

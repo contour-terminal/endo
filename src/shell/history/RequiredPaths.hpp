@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/EnvironmentProvider.hpp>
+
 #include <cstddef>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <platform/EnvironmentProvider.hpp>
 
 namespace endo
 {
@@ -19,7 +19,7 @@ namespace endo
 /// forward slashes regardless of platform, matching the convention used by
 /// @c EnvironmentProvider::currentDirectory() and the rest of the shell.
 /// Returns an empty string if neither variable is set.
-[[nodiscard]] std::string normalizedHomeDirectory(EnvironmentProvider const& env);
+[[nodiscard]] std::string normalizedHomeDirectory(core::platform::EnvironmentProvider const& env);
 
 /// Maximum number of required paths to record per history entry.
 ///

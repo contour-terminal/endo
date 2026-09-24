@@ -5,13 +5,13 @@
 #include <shell/SixelCapability.hpp>
 #include <shell/TTY.hpp>
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestEnvironmentProvider.hpp>
+
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
-
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace endo::testing
 {
@@ -27,7 +27,9 @@ namespace endo::testing
 /// @param fs    The injected filesystem to seed.
 /// @param env   The injected environment to keep in step with it.
 /// @param shell The shell owning them.
-inline void seedInjectedShell(endo::InMemoryFileSystem& fs, endo::TestEnvironment& env, endo::Shell& shell)
+inline void seedInjectedShell(core::platform::testing::InMemoryFileSystem& fs,
+                              core::platform::testing::TestEnvironmentProvider& env,
+                              endo::Shell& shell)
 {
     fs.addDirectory("/test");
     fs.setCurrentPath("/test");
@@ -54,8 +56,8 @@ inline void seedInjectedShell(endo::InMemoryFileSystem& fs, endo::TestEnvironmen
 struct InMemoryShell
 {
     endo::TestPTY pty;
-    endo::InMemoryFileSystem fs;
-    endo::TestEnvironment env { "/test" };
+    core::platform::testing::InMemoryFileSystem fs;
+    core::platform::testing::TestEnvironmentProvider env { "/test" };
     int exitCode = -1;
 
     endo::Shell shell { pty, env, fs };

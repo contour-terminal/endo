@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/Component.hpp>
-#include <tui/Spinner.hpp>
+#include <core/tui/Component.hpp>
+#include <core/tui/Spinner.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -44,17 +44,17 @@ struct ToolEntry
 /// │ ✓ read_file src/main.cpp                                    1.2s  4.8 KB
 /// │ ✗ edit_file src/foo.cpp                                     0.8s  error
 /// @endcode
-class ToolStatusComponent: public tui::Component
+class ToolStatusComponent: public core::tui::Component
 {
   public:
     ToolStatusComponent() = default;
     ~ToolStatusComponent() override = default;
 
     /// @brief Renders the tool status entries to the given canvas.
-    void render(tui::Canvas& canvas) override;
+    void render(core::tui::Canvas& canvas) override;
 
     /// @brief Returns the preferred size (height = number of visible entries).
-    [[nodiscard]] tui::Size preferredSize() const override;
+    [[nodiscard]] core::tui::Size preferredSize() const override;
 
     /// @brief Records a tool starting execution.
     /// @param call The tool call that started.
@@ -96,7 +96,7 @@ class ToolStatusComponent: public tui::Component
 
   private:
     std::vector<ToolEntry> _entries;
-    tui::Spinner _spinner { tui::SpinnerType::Dots };
+    core::tui::Spinner _spinner { core::tui::SpinnerType::Dots };
 
     /// Maximum number of completed entries to show.
     static constexpr auto MaxVisibleCompleted = size_t { 5 }; // NOLINT(readability-identifier-naming)

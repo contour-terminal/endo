@@ -3,11 +3,11 @@
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <filesystem>
 #include <format>
 #include <string>
-
-#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -18,10 +18,10 @@ void Shell::registerDirectoryConfigBuiltins()
     // dispatched from tryExecuteInlineBuiltin, not a runtime-registered function.
 }
 
-int Shell::executeInlineDirConfig(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineDirConfig(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     auto const writeOutput = [outputFd](std::string const& msg) {
-        [[maybe_unused]] auto const written = platformWrite(outputFd, msg.data(), msg.size());
+        [[maybe_unused]] auto const written = core::platform::platformWrite(outputFd, msg.data(), msg.size());
     };
 
     if (args.size() < 2)

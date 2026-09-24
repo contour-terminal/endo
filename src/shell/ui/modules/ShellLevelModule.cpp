@@ -2,7 +2,7 @@
 #include "ShellLevelModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <format>
 
@@ -16,7 +16,7 @@ bool ShellLevelModule::shouldShow(PromptContext const& ctx) const
 
 PromptSegments ShellLevelModule::evaluate(PromptContext const& ctx) const
 {
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->hostname.solid();
     else if (ctx.theme)

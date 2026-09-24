@@ -4,7 +4,7 @@
 
 #include <lsp/LspServer.hpp>
 
-#include <crispy/LogStore.hpp>
+#include <core/log/LogStore.hpp>
 
 #include <clocale>
 #include <cstdlib>
@@ -47,7 +47,7 @@ void printLogCategories()
     std::print("  {:<20} {:<10} {}\n", "Name", "State", "Description");
     std::print("  {:-<20} {:-<10} {:-<40}\n", "", "", "");
 
-    for (auto const& cat: logstore::get())
+    for (auto const& cat: core::log::get())
     {
         auto const& category = cat.get();
         auto const state = category.isEnabled() ? "enabled"sv : "disabled"sv;
@@ -348,7 +348,7 @@ int main(int argc, char const* argv[])
     {
         endo::log::Config::instance().setPatterns(parsed.logPatterns);
         // Enable the console sink so log output is visible
-        logstore::Sink::console().setEnabled(true);
+        core::log::Sink::console().setEnabled(true);
     }
 
     // Register all known log categories so they appear in --log-list

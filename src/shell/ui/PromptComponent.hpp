@@ -9,13 +9,15 @@
 #include <endo-language/ide/HoverInfo.hpp>
 #include <endo-language/lexer/TokenClassification.hpp>
 
-#include <tui/CommandPalettePopup.hpp>
-#include <tui/CommandRegistry.hpp>
-#include <tui/CompletionPopup.hpp>
-#include <tui/Component.hpp>
-#include <tui/FuzzyPickerPopup.hpp>
-#include <tui/InputField.hpp>
-#include <tui/TextDecorator.hpp>
+#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/FileSystem.hpp>
+#include <core/tui/CommandPalettePopup.hpp>
+#include <core/tui/CommandRegistry.hpp>
+#include <core/tui/CompletionPopup.hpp>
+#include <core/tui/Component.hpp>
+#include <core/tui/FuzzyPickerPopup.hpp>
+#include <core/tui/InputField.hpp>
+#include <core/tui/TextDecorator.hpp>
 
 #include <chrono>
 #include <functional>
@@ -25,9 +27,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -49,7 +48,7 @@ class History;
 ///
 /// This component is designed to work with Screen's Inline viewport mode,
 /// rendering at the current cursor position and growing downward.
-class PromptComponent: public tui::Component
+class PromptComponent: public core::tui::Component
 {
   public:
     PromptComponent();
@@ -57,14 +56,17 @@ class PromptComponent: public tui::Component
 
     // --- Component Interface ---
 
-    void render(tui::Canvas& canvas) override;
+    void render(core::tui::Canvas& canvas) override;
 
     [[nodiscard]] bool focusable() const override { return true; }
 
     /// @brief PromptComponent uses I-beam cursor when focused.
-    [[nodiscard]] tui::CursorShape cursorShape() const override { return tui::CursorShape::SteadyBar; }
+    [[nodiscard]] core::tui::CursorShape cursorShape() const override
+    {
+        return core::tui::CursorShape::SteadyBar;
+    }
 
-    [[nodiscard]] tui::Size preferredSize() const override;
+    [[nodiscard]] core::tui::Size preferredSize() const override;
 
     // --- Prompt-specific API ---
 
@@ -129,11 +131,11 @@ class PromptComponent: public tui::Component
 
     /// @brief Sets the environment provider used to read the current CWD and $HOME
     /// when querying history with CWD-aware ranking.
-    void setEnvironmentProvider(EnvironmentProvider const* env) { _envProvider = env; }
+    void setEnvironmentProvider(core::platform::EnvironmentProvider const* env) { _envProvider = env; }
 
     /// @brief Sets the filesystem used for required-paths validation in history search.
     /// Pass nullptr to disable validation.
-    void setFileSystem(FileSystem const* fs) { _historyFs = fs; }
+    void setFileSystem(core::platform::FileSystem const* fs) { _historyFs = fs; }
 
     /// @brief Handles input events dispatched by Screen (mouse events).
     ///
@@ -141,19 +143,19 @@ class PromptComponent: public tui::Component
     /// and delegates to InputField::handleMouse().
     /// @param event The input event to process (only MouseEvent is handled).
     /// @return Handled if the mouse event changed state, Ignored otherwise.
-    [[nodiscard]] tui::EventResult onEvent(tui::InputEvent const& event) override;
+    [[nodiscard]] core::tui::EventResult onEvent(core::tui::InputEvent const& event) override;
 
     /// @brief Called when the user hovers over this component after the hover delay.
     ///
     /// Returns tooltip content for diagnostics, language hover info, or command tooltips.
     /// Coordinates are component-relative (0-based).
-    [[nodiscard]] std::optional<tui::HoverResult> onHover(int x, int y) override;
+    [[nodiscard]] std::optional<core::tui::HoverResult> onHover(int x, int y) override;
 
     /// @brief Returns whether the completion popup is visible.
     [[nodiscard]] bool completionVisible() const noexcept { return _completionPopup.visible(); }
 
     /// @brief Sets the clipboard callback for copy operations.
-    void setClipboardCallback(tui::InputField::ClipboardCallback callback)
+    void setClipboardCallback(core::tui::InputField::ClipboardCallback callback)
     {
         _inputField.setClipboardCallback(std::move(callback));
     }
@@ -218,9 +220,9 @@ class PromptComponent: public tui::Component
     [[nodiscard]] bool isTerminalFocused() const noexcept { return _terminalFocused; }
 
     /// @brief Returns the InputField for direct access.
-    [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
+    [[nodiscard]] core::tui::InputField& inputField() noexcept { return _inputField; }
 
-    [[nodiscard]] tui::InputField const& inputField() const noexcept { return _inputField; }
+    [[nodiscard]] core::tui::InputField const& inputField() const noexcept { return _inputField; }
 
     /// @brief Returns the GitModule for accessing cached git info.
     [[nodiscard]] GitModule const* gitModule() const noexcept;
@@ -241,16 +243,19 @@ class PromptComponent: public tui::Component
     [[nodiscard]] int cursorRowFromTop() const noexcept;
 
     /// @brief Returns the CompletionPopup for direct access.
-    [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
+    [[nodiscard]] core::tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
-    [[nodiscard]] tui::CompletionPopup const& completionPopup() const noexcept { return _completionPopup; }
+    [[nodiscard]] core::tui::CompletionPopup const& completionPopup() const noexcept
+    {
+        return _completionPopup;
+    }
 
     /// @brief Returns the CommandPalettePopup for direct access.
-    [[nodiscard]] tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
+    [[nodiscard]] core::tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
 
     /// @brief Sets the command registry used by the command palette.
     /// @param registry Pointer to the registry (caller owns, must outlive PromptComponent).
-    void setCommandRegistry(tui::CommandRegistry* registry) { _commandRegistry = registry; }
+    void setCommandRegistry(core::tui::CommandRegistry* registry) { _commandRegistry = registry; }
 
     /// @brief Takes and clears any pending completion errors for display.
     /// @return Formatted error messages from the last completion attempt.
@@ -274,21 +279,21 @@ class PromptComponent: public tui::Component
     };
 
     /// @brief Processes an input event and returns the action.
-    [[nodiscard]] Action processInput(tui::InputEvent const& event);
+    [[nodiscard]] Action processInput(core::tui::InputEvent const& event);
 
   private:
-    tui::InputField _inputField;
-    tui::CompletionPopup _completionPopup;
-    tui::CommandPalettePopup _commandPalette;
-    tui::FuzzyPickerPopup _fuzzyFileFinder;
-    tui::CommandRegistry* _commandRegistry = nullptr;
+    core::tui::InputField _inputField;
+    core::tui::CompletionPopup _completionPopup;
+    core::tui::CommandPalettePopup _commandPalette;
+    core::tui::FuzzyPickerPopup _fuzzyFileFinder;
+    core::tui::CommandRegistry* _commandRegistry = nullptr;
     Completer* _completer = nullptr;
     SuggestFn _suggestFn;         ///< Optional injected ghost-text source; overrides _completer when set.
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
-    EnvironmentProvider const* _envProvider = nullptr;
-    FileSystem const* _historyFs = nullptr;
+    core::platform::EnvironmentProvider const* _envProvider = nullptr;
+    core::platform::FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
 
     // Prompt theming
@@ -332,7 +337,7 @@ class PromptComponent: public tui::Component
     /// and delegates to InputField::handleMouse().
     /// @param mouse The mouse event with component-relative 1-based coordinates.
     /// @return The InputFieldAction resulting from the mouse event.
-    [[nodiscard]] tui::InputFieldAction handleMouseEvent(tui::MouseEvent const& mouse);
+    [[nodiscard]] core::tui::InputFieldAction handleMouseEvent(core::tui::MouseEvent const& mouse);
 
     /// @brief Returns the effective left bar width (2 for Rounded separator with ─, 1 otherwise).
     [[nodiscard]] int leftBarWidth() const noexcept
@@ -399,21 +404,22 @@ class PromptComponent: public tui::Component
     ///
     /// Populated before each render frame and passed to InputField via setTextDecorator().
     /// Uses per-grapheme highlight map and error map, plus per-column aurora background.
-    class PromptTextDecorator: public tui::TextDecorator
+    class PromptTextDecorator: public core::tui::TextDecorator
     {
       public:
-        std::vector<TokenCategory> const* highlightMap = nullptr; ///< Per-grapheme TokenCategory.
-        std::vector<bool> const* errorMap = nullptr;              ///< Per-grapheme error flags.
-        std::vector<tui::RgbColor> const* bgColors = nullptr;     ///< Aurora gradient (per display col).
-        tui::RgbColor flatBg {};                                  ///< Fallback background color.
-        bool transparentBg = false;                               ///< True when background is transparent.
-        int bgOffset = 0;                                         ///< Column offset into bgColors.
-        tui::Theme const* theme = nullptr;
+        std::vector<TokenCategory> const* highlightMap = nullptr;   ///< Per-grapheme TokenCategory.
+        std::vector<bool> const* errorMap = nullptr;                ///< Per-grapheme error flags.
+        std::vector<core::tui::RgbColor> const* bgColors = nullptr; ///< Aurora gradient (per display col).
+        core::tui::RgbColor flatBg {};                              ///< Fallback background color.
+        bool transparentBg = false;                                 ///< True when background is transparent.
+        int bgOffset = 0;                                           ///< Column offset into bgColors.
+        core::tui::Theme const* theme = nullptr;
 
-        [[nodiscard]] auto foreground(tui::TextPosition pos) const -> std::optional<tui::RgbColor> override;
-        [[nodiscard]] auto underline(tui::TextPosition pos) const
+        [[nodiscard]] auto foreground(core::tui::TextPosition pos) const
+            -> std::optional<core::tui::RgbColor> override;
+        [[nodiscard]] auto underline(core::tui::TextPosition pos) const
             -> std::optional<UnderlineDecoration> override;
-        [[nodiscard]] auto background(int displayCol) const -> std::optional<tui::RgbColor> override;
+        [[nodiscard]] auto background(int displayCol) const -> std::optional<core::tui::RgbColor> override;
     };
 
     PromptTextDecorator _decorator; ///< Decorator instance, populated per render frame.
@@ -485,11 +491,11 @@ class PromptComponent: public tui::Component
     std::vector<std::string> _pendingCompletionErrors; ///< Errors from last completion for TUI display.
 
     // Aurora sixel fade cache
-    std::string _auroraFadeSixelCache;        ///< Pre-encoded sixel string.
-    int _auroraFadeCacheWidth = 0;            ///< Content width (cols) for which cache is valid.
-    int _auroraFadeCacheCellW = 0;            ///< Cell pixel width for which cache is valid.
-    int _auroraFadeCacheCellH = 0;            ///< Cell pixel height for which cache is valid.
-    tui::RgbColor _auroraFadeCacheBgColor {}; ///< Background color for which cache is valid.
+    std::string _auroraFadeSixelCache;              ///< Pre-encoded sixel string.
+    int _auroraFadeCacheWidth = 0;                  ///< Content width (cols) for which cache is valid.
+    int _auroraFadeCacheCellW = 0;                  ///< Cell pixel width for which cache is valid.
+    int _auroraFadeCacheCellH = 0;                  ///< Cell pixel height for which cache is valid.
+    core::tui::RgbColor _auroraFadeCacheBgColor {}; ///< Background color for which cache is valid.
 
     /// @brief Generates a pre-encoded sixel string for the aurora fade effect.
     /// @param cellPixelWidth Pixel width per cell.
@@ -499,7 +505,7 @@ class PromptComponent: public tui::Component
     [[nodiscard]] std::string generateAuroraFadeSixel(int cellPixelWidth,
                                                       int cellPixelHeight,
                                                       int contentWidthCols,
-                                                      tui::RgbColor bgColor) const;
+                                                      core::tui::RgbColor bgColor) const;
 };
 
 } // namespace endo

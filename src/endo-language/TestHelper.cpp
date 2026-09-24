@@ -19,8 +19,8 @@
 #include <filesystem>
 #include <ranges>
 
-#include <platform/GlobMatch.hpp>
-#include <platform/NativeFileSystem.hpp>
+#include <core/platform/GlobMatch.hpp>
+#include <core/platform/NativeFileSystem.hpp>
 
 namespace endo::test
 {
@@ -118,7 +118,7 @@ namespace
         };
 
         // Determine which entries to include based on the path argument.
-        auto const hasGlob = endo::containsGlobChars(path);
+        auto const hasGlob = core::platform::containsGlobChars(path);
 
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         // Build the cons-list right-to-left so the result keeps AllFiles order.
@@ -131,7 +131,7 @@ namespace
                 auto const nameOrPattern = std::filesystem::path(path).filename().string();
                 if (hasGlob)
                 {
-                    if (!endo::globMatchFilename(f.name, nameOrPattern))
+                    if (!core::platform::globMatchFilename(f.name, nameOrPattern))
                         continue;
                 }
                 else
@@ -813,7 +813,7 @@ bool generatesIRWithError(std::string const& source,
     // Create persistent state with module loader
     FSharpPersistentState fsharpState;
     fsharpState.moduleLoader =
-        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, core::platform::NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 
@@ -915,7 +915,7 @@ ExecutionResult executeSource(std::string const& source,
     // Create persistent state with module loader
     FSharpPersistentState fsharpState;
     fsharpState.moduleLoader =
-        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, core::platform::NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 
@@ -1034,7 +1034,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
     fsharpState.moduleLoader =
-        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, core::platform::NativeFileSystem::instance());
 
     ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
 
@@ -1110,7 +1110,7 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts,
     auto& testRuntime = TestRuntime::instance();
     FSharpPersistentState fsharpState;
     fsharpState.moduleLoader =
-        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, NativeFileSystem::instance());
+        std::make_shared<ModuleLoader>(testRuntime.runtime, testRuntime.report, core::platform::NativeFileSystem::instance());
     for (auto const& path: modulePaths)
         fsharpState.moduleLoader->addSearchPath(path);
 

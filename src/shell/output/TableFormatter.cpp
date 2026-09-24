@@ -3,11 +3,12 @@
 
 #include <endo-language/builtins/BuiltinImpls.hpp>
 
-#include <tui/Box.hpp>
-#include <tui/TerminalProtocols.hpp>
-
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
+
+#include <core/platform/FileUri.hpp>
+#include <core/tui/Box.hpp>
+#include <core/tui/TerminalProtocols.hpp>
 
 #include <algorithm>
 #include <bit>
@@ -16,7 +17,6 @@
 #include <vector>
 
 #include "FileTypeStyle.hpp"
-#include <platform/FileUri.hpp>
 
 namespace endo
 {
@@ -352,7 +352,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             auto const* pathStr =
                 reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(pathSlot));
             fileUris.push_back(pathStr != nullptr && !pathStr->empty()
-                                   ? platform::fileUri(*pathStr, config.uriHost)
+                                   ? core::platform::fileUri(*pathStr, config.uriHost)
                                    : std::string {});
         }
 
@@ -449,7 +449,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             auto const pad = std::max(0, width - (displayWidth(cellText) + nameIconWidth));
 
             if (!uri.empty())
-                tui::protocols::appendHyperlinkOpen(out, uri);
+                core::tui::protocols::appendHyperlinkOpen(out, uri);
             out += sgr;
             if (showIcons)
             {
@@ -459,7 +459,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             out += cellText;
             out += sgrReset;
             if (!uri.empty())
-                out += tui::protocols::HyperlinkClose;
+                out += core::tui::protocols::HyperlinkClose;
             out.append(static_cast<size_t>(pad), ' ');
         }
         else if (config.useColor && isFileModeCol[col])
@@ -480,7 +480,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
 
     if (config.style == TableStyle::Bordered)
     {
-        auto const bc = tui::BorderChars::fromStyle(tui::BorderStyle::Rounded);
+        auto const bc = core::tui::BorderChars::fromStyle(core::tui::BorderStyle::Rounded);
         auto const* const dim = config.useColor ? "\033[2m" : "";
         auto const* const bold = config.useColor ? "\033[1m" : "";
         auto const* const reset = config.useColor ? "\033[0m" : "";
