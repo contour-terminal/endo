@@ -7,6 +7,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
@@ -65,8 +66,11 @@ RealTTY::RealTTY()
 
 RealTTY::~RealTTY()
 {
+    // Restores the mode directly rather than through restoreMode(), which throws when tcsetattr()
+    // fails: a destructor must not throw, and a terminal that hung up has no mode left to restore
+    // -- tcsetattr() then fails with EIO, and throwing here at exit aborted the shell.
     if (_hasTTY)
-        restoreMode();
+        std::ignore = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_originalTermios);
 }
 
 RealTTY& RealTTY::instance()
