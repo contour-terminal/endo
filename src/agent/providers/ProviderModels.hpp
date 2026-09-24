@@ -191,24 +191,24 @@ struct ModelMatch
     auto diffs = std::vector<DiffRow> {};
 
     if (oldInfo.contextSize != newInfo.contextSize)
-        diffs.push_back({ "Context size",
-                          std::format(std::locale(""), "{:L}", oldInfo.contextSize),
-                          std::format(std::locale(""), "{:L}", newInfo.contextSize) });
+        diffs.push_back({ .capability = "Context size",
+                          .oldValue = std::format(std::locale(""), "{:L}", oldInfo.contextSize),
+                          .newValue = std::format(std::locale(""), "{:L}", newInfo.contextSize) });
     auto const boolStr = [](bool v) -> std::string_view {
         return v ? "\u2705" : "\u274C";
     };
     if (oldInfo.supportsToolUse != newInfo.supportsToolUse)
-        diffs.push_back({ "Tool use",
-                          std::string(boolStr(oldInfo.supportsToolUse)),
-                          std::string(boolStr(newInfo.supportsToolUse)) });
+        diffs.push_back({ .capability = "Tool use",
+                          .oldValue = std::string(boolStr(oldInfo.supportsToolUse)),
+                          .newValue = std::string(boolStr(newInfo.supportsToolUse)) });
     if (oldInfo.supportsImageInput != newInfo.supportsImageInput)
-        diffs.push_back({ "Image input",
-                          std::string(boolStr(oldInfo.supportsImageInput)),
-                          std::string(boolStr(newInfo.supportsImageInput)) });
+        diffs.push_back({ .capability = "Image input",
+                          .oldValue = std::string(boolStr(oldInfo.supportsImageInput)),
+                          .newValue = std::string(boolStr(newInfo.supportsImageInput)) });
     if (oldInfo.supportsImageOutput != newInfo.supportsImageOutput)
-        diffs.push_back({ "Image output",
-                          std::string(boolStr(oldInfo.supportsImageOutput)),
-                          std::string(boolStr(newInfo.supportsImageOutput)) });
+        diffs.push_back({ .capability = "Image output",
+                          .oldValue = std::string(boolStr(oldInfo.supportsImageOutput)),
+                          .newValue = std::string(boolStr(newInfo.supportsImageOutput)) });
 
     if (!diffs.empty())
     {
