@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "contour-terminal",
   "license": "Apache-2.0",
+  "icon": "images/endo.png",
+  "galleryBanner": {
+    "color": "#000000",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/contour-terminal/endo"
@@ -162,7 +167,7 @@
   "scripts": {
     "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap --target=es2022",
     "watch": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap --target=es2022 --watch",
-    "package": "npm run compile -- --minify && cp ../../LICENSE.txt LICENSE.txt && vsce package --no-dependencies",
+    "package": "npm run compile -- --minify && cp ../../LICENSE.txt LICENSE.txt && mkdir -p images && cp ../../packaging/icons/hicolor/256x256/apps/endo.png images/endo.png && vsce package --no-dependencies",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -13,6 +13,13 @@ in this directory is rendered from them:
 | `endo.icns` (16–512 px) | the same split | the macOS DMG volume icon |
 | `hicolor/<N>x<N>/apps/endo.png` | the same split | the freedesktop icon theme on Linux, next to `endo.desktop` |
 
+The VS Code extension takes the 256 px PNG as its Marketplace icon. The Marketplace wants
+a PNG of at least 128 px and rejects SVG, and `vsce` packages only what sits below the
+extension folder, so [`editors/vscode/package.json`](../../editors/vscode/package.json)'s
+`package` script copies it to `images/endo.png` on its way to building the `.vsix` — the
+same way it copies `LICENSE.txt` in. The copy is gitignored, so re-rendering the icons
+needs nothing extra.
+
 The WiX installer's banner and Welcome/Finish image are not committed:
 [`../windows/compose-installer-bitmaps.ps1`](../windows/compose-installer-bitmaps.ps1)
 composes them from the 48 and 128 px PNGs at build time.
