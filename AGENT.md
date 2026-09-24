@@ -18,18 +18,13 @@ Source → Lexer → Parser → AST → Semantic Analysis → Code Generation �
 | `src/endo-language/` | Compiler frontend: lexer, parser, AST, semantic analysis, codegen, formatter, IDE support |
 | `src/shell/` | Interactive shell: builtins, job control, completion, history, TTY abstraction |
 | `src/lsp/` | Language Server Protocol implementation (50+ providers across 4 tiers) |
-| `src/platform/` | OS abstraction: `ProcessProvider`, `FileInfoProvider`, `EnvironmentProvider`, `FileSystem` |
+| `src/platform/` | endo's own OS abstraction: processes (`ProcessManager`), `Pipe`, `ProcessProvider`, `ProjectFileTree`, install paths. The generic layer is core-cpp's `core::platform` |
 | `src/agent/` | AI agent integration (LLM providers, MCP client) |
 | `src/dap/` | Debug Adapter Protocol |
 | `src/editor-protocol/` | Editor communication abstractions (`DocumentStore`, JSON transport) |
-| `src/tui/` | Terminal UI components |
 | `src/http/` | HTTP client abstraction (for `fetch` builtin) |
 | `src/endo-test/` | E2E test runner for `.endo` test files |
-| `src/testing/` | Shared testing utilities (test helpers, dialog suppression) |
-| `src/crispy/` | Vendored utility library (from Contour Terminal) |
-| `src/vtparser/` | Vendored VT terminal sequence parser (from Contour Terminal) |
-| `src/coro/` | Vendored C++23 coroutine primitives — `Task`, `whenAll`/`whenAny`, cancellation (from Contour Terminal) |
-| `src/net/` | Vendored coroutine-native networking — `EventLoop`, sockets, TLS, HTTP server (from Contour Terminal) |
+| `src/testing/` | The Windows dialog suppression linked into every executable (`cmake/WindowsDialogs.cmake`) |
 | `tests/` | E2E test files organized by category (37+ subdirectories) |
 | `docs/language/` | Language specification (18 pages, MkDocs site) |
 
@@ -45,9 +40,9 @@ All OS, file system, network, and I/O access is abstracted behind interfaces and
 
 Canonical examples:
 - `src/shell/TTY.hpp` — abstract terminal interface with `PosixTTY` / `WindowsTTY` implementations
-- `src/platform/FileSystem.hpp` — file system abstraction (exists, read, write, list, metadata)
+- `core::platform::FileSystem` (`<core/platform/FileSystem.hpp>`, core-cpp) — file system abstraction (exists, read, write, list, metadata)
 - `src/platform/ProcessProvider.hpp` — process listing abstraction (Linux, Darwin, Windows)
-- `src/platform/EnvironmentProvider.hpp` — env var access abstraction (POSIX, Windows)
+- `core::platform::EnvironmentProvider` (`<core/platform/EnvironmentProvider.hpp>`, core-cpp) — env var access abstraction (POSIX, Windows)
 - `src/http/HttpClient.hpp` — HTTP abstraction injected into `ProviderFactory`, `McpClient`
 
 When adding new functionality that touches the OS or network, define an abstract interface in `src/platform/` (or the relevant component), implement per-platform, and inject it.
@@ -126,28 +121,38 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
 
 ---
 
-## Vendored sources
+## core-cpp
 
-`src/crispy`, `src/vtparser`, `src/coro` and `src/net` are **not** part of this
-repository. They are sparse-checked-out from
-[contour-terminal/contour](https://github.com/contour-terminal/contour), which is their
-source of truth, and are gitignored here. CMake fetches them automatically at configure
-time when they are missing; `scripts/get_contour_dirs.py` does it manually.
+The generic code endo shares with the other Contour Terminal projects comes from
+[core-cpp](https://github.com/contour-terminal/core-cpp), pinned by tag in
+`cmake/EndoThirdParties.cmake` (`CPMAddPackage(NAME core-cpp ... GIT_TAG v0.4.3)`):
 
-Which directories are fetched, from which repository, and at which ref are declared in
-`scripts/contour-pin.json` — the single source of truth, read by both the script and
-`src/CMakeLists.txt`. To vendor another directory or move to a different upstream branch,
-edit that file; no code changes are needed.
+| Module | Namespace, headers | Replaces |
+|---|---|---|
+| `core::base`, `core::log`, `core::cli` | `core::`, `<core/...>` | contour's `src/crispy` (generic half) |
+| `core::platform` | `core::platform::`, `<core/platform/...>` | the generic half of `src/platform` |
+| `core::async` | `core::async::`, `<core/async/...>` | contour's `src/coro` |
+| `core::net` | `core::net::`, `<core/net/...>` | contour's `src/net` (`httpServe`) |
+| `core::tui` | `core::tui::`, `<core/tui/...>` | `src/tui` |
+| `core::testing` | `core::testing::`, `<core/testing/...>` | the `src/testing` helpers |
+
+Under Emscripten only core-cpp's WebAssembly subset is built: `core::base`, `core::log`,
+`core::cli` and the subset of `core::platform` that the compiler's `ModuleLoader` needs.
+
+**Never work around core-cpp from here.** A defect or a missing seam is fixed in core-cpp,
+released, and picked up by moving the pin. To build against a local core-cpp checkout:
 
 ```bash
-python3 scripts/get_contour_dirs.py                  # fetch at the pinned ref
-python3 scripts/get_contour_dirs.py --ref some/branch # override the ref once
-ENDO_CONTOUR_REF=some/branch python3 scripts/get_contour_dirs.py  # same, via env
+cmake --preset clang-debug -DCPM_core-cpp_SOURCE=/path/to/core-cpp -DUSE_COMPILER_CACHE=OFF
 ```
 
-**Never edit files under these directories** — every fetch overwrites them. Fixes belong
-upstream in contour, and flow back here on the next fetch. Endo-side code adapts to their
-APIs, not the other way around.
+`USE_COMPILER_CACHE=OFF` because fastcache-cc can replay a stale object after a header under
+that path changes
+([fastcached#1597](https://github.com/LASTRADA-Software/fastcached/issues/1597)).
+
+endo's own language highlighting is not core-cpp's: `Shell` owns a
+`core::tui::SyntaxHighlighterRegistry`, registers the endo language in it (`.endo` files,
+```` ```endo ```` fences), and hands it to every renderer that highlights.
 
 ---
 
