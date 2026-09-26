@@ -600,7 +600,7 @@ Module resolution fix for script execution: `sourceFilePath` now set on `FSharpP
 
 **Dependency:** Milestone 1 complete (need full language for practical editing)
 
-**Implementation Summary:** A comprehensive TUI library has been integrated into the project (`src/tui/`).
+**Implementation Summary:** A comprehensive TUI library has been integrated into the project (core-cpp `src/core/tui/`).
 The library includes:
 - Terminal input/output abstraction (`Terminal`, `TerminalInput`, `TerminalOutput`) with polymorphic output for DI-based testing (`MockTerminalOutput`)
 - VT sequence parser (`VtParser`) with support for CSI, SGR mouse, bracketed paste, UTF-8
@@ -715,7 +715,7 @@ The library includes:
 - [x] Replace `GitBranchCompleter` with generic `CommandSpecCompleter` framework — data-driven command completion with `CommandSpec` definitions, `CommandQueryProvider` interface for dynamic data, `QueryCache` (2s TTL) for caching, and `CommandLineParser` for structured parsing. Git as first target: 49 subcommand definitions (Tier 1: full options/args, Tier 2: key options, Tier 3: name+description), dynamic queries for branches, tags, remotes, stashes, status files, config keys, aliases, recent commits. Extensible to any command (docker, cargo, npm, etc.) via `registerCommand()`. — 29 tests
 
 **Implementation Notes:**
-- Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`, `FuzzyMatch`) in `src/tui/completer/` as pure TUI model
+- Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`, `FuzzyMatch`) in core-cpp `src/core/tui/completer/` as pure TUI model
 - Shell-specific providers reorganized into `src/shell/CompletionProviders/` subdirectory for cleaner structure
 - Smart case matching: lowercase patterns match case-insensitively; patterns with uppercase match case-sensitively (like Vim's smartcase)
 - Fuzzy matching: Typing `ds` matches `Downloads` and `Documents` (matches non-contiguous characters `d...s`); prefix matches scored higher than fuzzy; fuzzy matches have highlighted match positions in completion menu (using `completionMatch` theme style)
@@ -736,7 +736,7 @@ The library includes:
 - `Environment` class extracted to `Environment.hpp` for cleaner dependency management
 - Shell class creates `Completer` with environment and history, connects to Prompt via `setCompleter()`
 - Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
-- Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.) and `MockTerminalOutput` for cursor positioning tests
+- Test utilities in core-cpp `src/core/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.) and `MockTerminalOutput` for cursor positioning tests
 - 44 completion-related tests covering Completer, CompletionPopup, items accessor, LCP integration, and updateItems functionality
 - F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
 - Ghost text two-phase matching: Phase 1 queries Command-capable providers (History, Command, LetBinding, FSharp) with full-line prefix matching in reverse priority order (history preferred); Phase 2 falls back to word-level prefix matching from all context-appropriate providers via `gatherCompletions()`. Enables ghost text for variables (`$PA` → `TH`), file paths, arguments, and history recall in any position
@@ -842,9 +842,9 @@ cursor/overlay teardown — the main source of bugs and cursor drift. A single C
 coroutine runtime now drives I/O so flows are expressed with `co_await`.
 
 **Tasks:**
-- [x] `endo-coro` library (`src/coro/`): `Task<T>` (lazy, symmetric transfer), `whenAll`,
+- [x] `endo-coro` library (core-cpp `src/core/async/`): `Task<T>` (lazy, symmetric transfer), `whenAll`,
   awaitable concepts, and `std::stop_token`-based cancellation
-- [x] `TuiRuntime` (`src/tui/runtime/`): single-threaded driver multiplexing terminal input,
+- [x] `TuiRuntime` (core-cpp `src/core/tui/runtime/`): single-threaded driver multiplexing terminal input,
   the agent-message wakeup, the interrupt wakeup, and timers over an injected `EventSource`
 - [x] Awaitables: `nextEvent`, `nextEventFor(timeout)`, `nextActivity(timeout)`, `delay`,
   `nextAgentReady`
@@ -880,13 +880,13 @@ and — as the flagship language consumer — a builtin HTTP server.
   cancellation and proactive unparking (`requeueForCancellation`); `sleepUntil`
 - [x] `SystemPipe` (`src/platform/`): cross-platform reactor-waitable byte channel
   (socketpair / loopback + WSAEventSelect)
-- [x] `whenAny` + `withTimeout` combinators (`src/coro/WhenAny.hpp`, `src/tui/runtime/`)
+- [x] `whenAny` + `withTimeout` combinators (core-cpp `src/core/async/WhenAny.hpp`, core-cpp `src/core/tui/runtime/`)
   with loser-cancellation
-- [x] Async socket layer (`src/net/`): `ISocket`/`IListener` as `Task<IoResult>`,
+- [x] Async socket layer (core-cpp `src/core/net/`): `ISocket`/`IListener` as `Task<IoResult>`,
   POSIX (`poll`-driven) and Windows (`WSAEventSelect`) backends, `InMemoryTransport`,
   `listen`/`connect` factories
 - [x] `Runner::invoke(args)`: native→script function-value call with arguments + result
-- [x] `httpServe` builtin: async HTTP/1.1 server (`src/net/HttpServer`) dispatching to a
+- [x] `httpServe` builtin: async HTTP/1.1 server (core-cpp `src/core/net/HttpServer`) dispatching to a
   script `string -> string` handler. Typed as `int -> (string -> string) -> int` in the
   Hindley-Milner inference env (`TypeEnv`, also feeding LSP inlay hints); registered as a
   statement-level builtin (`compilerBuiltins`) and a `stdlib` descriptor (`httpServe(IH)I`),

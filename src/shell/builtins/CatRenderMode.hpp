@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
 
 #include <cstdint>
 
@@ -29,12 +29,12 @@ enum class CatRenderMode : std::uint8_t
 /// unit-tested, rather than a set of conditions buried in the builtin.
 struct CatRenderContext
 {
-    bool rawMode = false;                             ///< `--raw` was given.
-    bool outputIsTty = false;                         ///< The output handle refers to a terminal.
-    bool hasProcessingFlags = false;                  ///< Any of -n, -b, -s, -E, -T, -r was given.
-    bool isImageExt = false;                          ///< The path carries a supported image extension.
-    bool forceImage = false;                          ///< `-c/--columns` or `-R/--rows` was given.
-    tui::LanguageId language = tui::LanguageId::None; ///< Language detected from the path.
+    bool rawMode = false;            ///< `--raw` was given.
+    bool outputIsTty = false;        ///< The output handle refers to a terminal.
+    bool hasProcessingFlags = false; ///< Any of -n, -b, -s, -E, -T, -r was given.
+    bool isImageExt = false;         ///< The path carries a supported image extension.
+    bool forceImage = false;         ///< `-c/--columns` or `-R/--rows` was given.
+    core::tui::LanguageId language = core::tui::LanguageId::None; ///< Language detected from the path.
 };
 
 /// @brief Decides how `cat` should present a file.
@@ -57,7 +57,8 @@ struct CatRenderContext
     if (context.isImageExt && (context.outputIsTty || context.forceImage))
         return CatRenderMode::SixelImage;
 
-    if (context.language == tui::LanguageId::Markdown && context.outputIsTty && !context.hasProcessingFlags)
+    if (context.language == core::tui::LanguageId::Markdown && context.outputIsTty
+        && !context.hasProcessingFlags)
         return CatRenderMode::Markdown;
 
     return CatRenderMode::Text;
@@ -74,9 +75,9 @@ struct CatRenderContext
 /// @return true when highlighted output should be produced.
 [[nodiscard]] constexpr auto shouldHighlightCatOutput(bool outputIsTty,
                                                       bool rawMode,
-                                                      tui::LanguageId language) noexcept -> bool
+                                                      core::tui::LanguageId language) noexcept -> bool
 {
-    return outputIsTty && !rawMode && language != tui::LanguageId::None;
+    return outputIsTty && !rawMode && language != core::tui::LanguageId::None;
 }
 
 } // namespace endo

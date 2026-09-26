@@ -51,7 +51,7 @@ void Shell::builtinForNext(CoreVM::Params& context)
 
     if (state.index < state.items.size())
     {
-        _env.set(varName, state.items[state.index]);
+        reportEnvironmentError(std::format("for {}", varName), _env.set(varName, state.items[state.index]));
         ++state.index;
     }
 }
@@ -68,7 +68,7 @@ void Shell::builtinCaseMatch(CoreVM::Params& context)
     auto const& word = context.getString(1);
     auto const& pattern = context.getString(2);
 
-    bool const matched = globMatchFilename(word, pattern);
+    bool const matched = core::platform::globMatchFilename(word, pattern);
     context.setResult(matched);
 }
 

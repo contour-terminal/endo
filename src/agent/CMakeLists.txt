@@ -115,10 +115,12 @@ endif()
 target_link_libraries(endo-agent PUBLIC
     endo-http
     endo-platform
-    tui
+    core::tui
     nlohmann_json::nlohmann_json
     yaml-cpp::yaml-cpp
-    crispy::core
+    core::base
+    core::log
+    core::cli
 )
 if(ENDO_HAS_LOCAL_LLM)
     target_link_libraries(endo-agent PUBLIC llama)
@@ -223,7 +225,7 @@ add_executable(test-endo-agent
     mcp/ServerManager_test.cpp
     mcp/McpToolAdapter_test.cpp
 )
-target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
+target_link_libraries(test-endo-agent endo-agent core::testing Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
 
 enable_sanitizers(test-endo-agent)

@@ -33,23 +33,23 @@
 | Need | Already Exists | Location |
 |------|---------------|----------|
 | HTTP + streaming | `HttpClient` (libcurl, RAII) | `src/http/HttpClient.hpp` |
-| Markdown streaming | `MarkdownRenderer::beginStream()/feedToken()/endStream()` | `src/tui/MarkdownRenderer.hpp` |
-| Inline UI | `Screen` (Inline viewport, diff-based flush) | `src/tui/Screen.hpp` |
-| Component system | `Component`, focus groups, overlays | `src/tui/Component.hpp` |
-| Text input | `InputField` (multiline, undo, clipboard, kill ring) | `src/tui/InputField.hpp` |
-| Completion | `CompletionPopup` + `CompletionProvider` | `src/tui/CompletionPopup.hpp` |
+| Markdown streaming | `MarkdownRenderer::beginStream()/feedToken()/endStream()` | core-cpp `src/core/tui/MarkdownRenderer.hpp` |
+| Inline UI | `Screen` (Inline viewport, diff-based flush) | core-cpp `src/core/tui/Screen.hpp` |
+| Component system | `Component`, focus groups, overlays | core-cpp `src/core/tui/Component.hpp` |
+| Text input | `InputField` (multiline, undo, clipboard, kill ring) | core-cpp `src/core/tui/InputField.hpp` |
+| Completion | `CompletionPopup` + `CompletionProvider` | core-cpp `src/core/tui/CompletionPopup.hpp` |
 | Shell execution | `Shell::execute(string const& lineBuffer) -> int` | `src/shell/Shell.hpp` |
-| Spinner animation | `tui::Spinner` (10+ styles, label support) | `src/tui/Spinner.hpp` |
+| Spinner animation | `tui::Spinner` (10+ styles, label support) | core-cpp `src/core/tui/Spinner.hpp` |
 | Git info | `GitModule` (branch, status, dirty/clean) | `src/shell/modules/GitModule.hpp` |
 | YAML parsing | yaml-cpp | Already a dependency |
 | Terminal suspend | `Prompt::ScopedSuspend` (RAII guard) | `src/shell/Prompt.hpp` |
 | OSC 133 markers | `emitCommandStart()`/`emitCommandFinished()` | `src/shell/Shell.cpp` |
 | Prompt actions | `PromptComponent::Action` enum + `processInput()` | `src/shell/PromptComponent.hpp` |
 | Syntax highlighting | Token-based highlighting in prompt | `src/shell/PromptComponent.hpp` |
-| Sixel encoder | `encodeSixel(ImageData)` — pure C++ median-cut quantization | `src/tui/Sixel.hpp` |
-| Inline image rendering | `Canvas::drawImage()` → `Buffer::addImage()` → sixel flush | `src/tui/Canvas.hpp`, `src/tui/Buffer.hpp` |
-| Cell pixel dimensions | `CSI 16 t` query → `CellSizeReport` event | `src/tui/platform/Terminal.cpp` |
-| Sixel output | `TerminalOutput::writeSixel()` (POSIX + Win32) | `src/tui/TerminalOutput.hpp` |
+| Sixel encoder | `encodeSixel(ImageData)` — pure C++ median-cut quantization | core-cpp `src/core/tui/Sixel.hpp` |
+| Inline image rendering | `Canvas::drawImage()` → `Buffer::addImage()` → sixel flush | core-cpp `src/core/tui/Canvas.hpp`, core-cpp `src/core/tui/Buffer.hpp` |
+| Cell pixel dimensions | `CSI 16 t` query → `CellSizeReport` event | core-cpp `src/core/tui/Terminal.cpp` |
+| Sixel output | `TerminalOutput::writeSixel()` (POSIX + Win32) | core-cpp `src/core/tui/TerminalOutput.hpp` |
 
 ---
 
@@ -214,15 +214,15 @@ before writing the file.
 **Status:** Completed | **Effort:** Medium
 
 Multi-language syntax highlighting for diffs and markdown code blocks in agent mode.
-Regex/pattern-based highlighter in `src/tui/` supporting C++, CMake, Python, bash/sh,
+Regex/pattern-based highlighter in core-cpp `src/core/tui/` supporting C++, CMake, Python, bash/sh,
 Markdown, JSON, YAML, and git diff. Endo language support via callback registration
 (avoids `tui` → `endo-language` dependency).
 
 - Generic syntax highlighter (`tui::GenericSyntaxHighlighter`) with per-line scanning ✅
 - Syntax-highlighted diffs in `edit_file` tool (additions: full color, context: dim, deletions: red) ✅
 - Syntax-highlighted markdown code blocks (batch + streaming, language from fence tag) ✅
-- Endo language highlighting via `registerEndoHighlighter()` callback from shell startup ✅
-- Key files: `src/tui/GenericSyntaxHighlighter.hpp/cpp`, `src/tui/MarkdownRenderer.cpp`,
+- Endo language highlighting via a `SyntaxHighlighterRegistry` the Shell owns (core-cpp removed the `registerEndoHighlighter()` callback) ✅
+- Key files: core-cpp `src/core/tui/GenericSyntaxHighlighter.hpp/cpp`, core-cpp `src/core/tui/MarkdownRenderer.cpp`,
   `src/agent/tools/DiffRenderer.cpp`, `src/shell/Shell.cpp`
 
 ### @-file Context Injection ✅
@@ -473,8 +473,8 @@ output without re-execution:
   user stays in agent mode for follow-up investigation
 - **Graceful fallback:** Silent no-op when terminal doesn't support DEC Mode 2034
 
-Key files: `src/tui/VtParser.hpp/cpp` (DCS states), `src/tui/InputEvent.hpp` (DcsResponse, DecModeReport),
-`src/tui/SemanticBlockClient.hpp/cpp`, `src/agent/AgentConfig.hpp/cpp` (ErrorRecoveryConfig),
+Key files: core-cpp `src/core/tui/VtParser.hpp/cpp` (DCS states), core-cpp `src/core/tui/InputEvent.hpp` (DcsResponse, DecModeReport),
+core-cpp `src/core/tui/SemanticBlockClient.hpp/cpp`, `src/agent/AgentConfig.hpp/cpp` (ErrorRecoveryConfig),
 `src/shell/Shell.hpp/cpp` (offerErrorRecovery, runAgentMode initial message)
 
 ### Tool Execution Visualization (Phase 9.2) ✅

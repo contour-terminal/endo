@@ -15,7 +15,7 @@ TEST_CASE("promptPreset.endo_signature_defaults_to_transparent_background", "[pr
 
 TEST_CASE("promptPreset.endo_signature_transparent_background_in_light_mode", "[prompt-presets]")
 {
-    auto const config = endo::promptPreset("endo-signature"sv, tui::ColorScheme::Light);
+    auto const config = endo::promptPreset("endo-signature"sv, core::tui::ColorScheme::Light);
     CHECK(config.colorOverrides.transparentBackground);
     CHECK_FALSE(config.colorOverrides.background.has_value());
 }

@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/WorkingDirectory.hpp>
+
 #include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -52,8 +53,8 @@ class DirectoryConfigTrustStore
     /// @param fs Filesystem abstraction for file I/O.
     /// @param env Environment provider for resolving config home path.
     /// @param diag Diagnostic sink for error messages.
-    explicit DirectoryConfigTrustStore(FileSystem const& fs,
-                                       EnvironmentProvider& env,
+    explicit DirectoryConfigTrustStore(core::platform::FileSystem const& fs,
+                                       core::platform::ProcessEnvironment& env,
                                        DiagnosticSink diag);
 
     /// Load trust decisions from persistent storage.
@@ -79,8 +80,8 @@ class DirectoryConfigTrustStore
   private:
     [[nodiscard]] std::filesystem::path trustFilePath() const;
 
-    FileSystem const& _fs;
-    EnvironmentProvider& _env;
+    core::platform::FileSystem const& _fs;
+    core::platform::ProcessEnvironment& _env;
     DiagnosticSink _diag;
     std::unordered_map<std::string, TrustEntry> _entries; ///< canonical path -> trust entry
 };
@@ -96,11 +97,13 @@ class DirectoryConfigManager
   public:
     /// @param shell Shell instance for executing config scripts and accessing persistent state.
     /// @param fs Filesystem abstraction for file I/O.
-    /// @param env Environment provider for directory and config home operations.
+    /// @param env Environment the configs' variables are set in, and $HOME and the config home read from.
+    /// @param workingDirectory The working directory whose ancestry is searched for configs.
     /// @param diag Diagnostic sink for status and error messages.
     DirectoryConfigManager(Shell& shell,
-                           FileSystem const& fs,
-                           EnvironmentProvider& env,
+                           core::platform::FileSystem const& fs,
+                           core::platform::ProcessEnvironment& env,
+                           core::platform::WorkingDirectory const& workingDirectory,
                            DiagnosticSink diag);
 
     /// Called after cd or at shell startup. Loads/unloads configs as needed.
@@ -152,8 +155,9 @@ class DirectoryConfigManager
     void diag(std::string const& message);
 
     Shell& _shell;
-    FileSystem const& _fs;
-    EnvironmentProvider& _env;
+    core::platform::FileSystem const& _fs;
+    core::platform::ProcessEnvironment& _env;
+    core::platform::WorkingDirectory const& _workingDirectory;
     DirectoryConfigTrustStore _trustStore;
     DiagnosticSink _diag;
     std::vector<DirectoryConfigScope> _activeScopes;

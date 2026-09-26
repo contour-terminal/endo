@@ -63,14 +63,14 @@ TEST_CASE("HostnameModule.hidden_when_identity_unknown")
 TEST_CASE("HostnameModule.colors_user_and_host_independently")
 {
     auto colors = ResolvedPromptColors {};
-    colors.username = ColorSpec { .colors = { tui::RgbColor { .r = 1, .g = 2, .b = 3 } } };
-    colors.hostname = ColorSpec { .colors = { tui::RgbColor { .r = 4, .g = 5, .b = 6 } } };
+    colors.username = ColorSpec { .colors = { core::tui::RgbColor { .r = 1, .g = 2, .b = 3 } } };
+    colors.hostname = ColorSpec { .colors = { core::tui::RgbColor { .r = 4, .g = 5, .b = 6 } } };
 
     auto ctx = makeContext("alice", "web-prod-01");
     ctx.resolvedColors = &colors;
 
-    auto const userColor = tui::Color { colors.username.solid() };
-    auto const hostColor = tui::Color { colors.hostname.solid() };
+    auto const userColor = core::tui::Color { colors.username.solid() };
+    auto const hostColor = core::tui::Color { colors.hostname.solid() };
 
     auto const segments = HostnameModule {}.evaluate(ctx);
     REQUIRE(segments.size() == 3);

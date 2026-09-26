@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <crispy/LogStore.hpp>
+#include <core/log/LogStore.hpp>
 
 #include <format>
 #include <string>
@@ -36,5 +36,5 @@ struct ScopedLogger
 
   private:
     std::string _message;
-    logstore::Category const& _category;
+    core::log::Category const& _category;
 };

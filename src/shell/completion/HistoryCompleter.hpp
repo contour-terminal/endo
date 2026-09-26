@@ -4,10 +4,11 @@
 #include <shell/completion/CompletionProvider.hpp>
 #include <shell/history/History.hpp>
 
-#include <vector>
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 
-#include <platform/EnvironmentProvider.hpp>
-#include <platform/FileSystem.hpp>
+#include <vector>
 
 namespace endo
 {
@@ -23,9 +24,13 @@ class HistoryCompleter: public CompletionProvider
   public:
     /// @brief Constructs a history completer.
     /// @param history The history to search.
-    /// @param env     Environment provider (for current CWD and $HOME).
+    /// @param env     Environment ($HOME).
+    /// @param workingDirectory The working directory entries recorded there rank higher in.
     /// @param fs      Filesystem used for required-paths validation.
-    HistoryCompleter(History const& history, EnvironmentProvider const& env, FileSystem const& fs);
+    HistoryCompleter(History const& history,
+                     core::platform::ProcessEnvironment const& env,
+                     core::platform::WorkingDirectory const& workingDirectory,
+                     core::platform::FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -34,8 +39,9 @@ class HistoryCompleter: public CompletionProvider
 
   private:
     History const& _history;
-    EnvironmentProvider const& _env;
-    FileSystem const& _fs;
+    core::platform::ProcessEnvironment const& _env;
+    core::platform::WorkingDirectory const& _workingDirectory;
+    core::platform::FileSystem const& _fs;
 };
 
 } // namespace endo

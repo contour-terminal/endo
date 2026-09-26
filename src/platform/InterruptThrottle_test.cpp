@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/SignalHandler.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <ranges>
 
 #include <platform/InterruptThrottle.hpp>
-#include <platform/SignalHandler.hpp>
 
+using core::platform::SignalHandler;
 using endo::platform::InterruptThrottle;
-using endo::platform::SignalHandler;
 
 namespace
 {
@@ -15,9 +16,9 @@ namespace
 /// cases do not leak interrupt state into one another.
 struct SigintGuard
 {
-    SigintGuard() { SignalHandler::clearPendingSigint(); }
+    SigintGuard() { core::platform::SignalHandler::clearPendingSigint(); }
 
-    ~SigintGuard() { SignalHandler::clearPendingSigint(); }
+    ~SigintGuard() { core::platform::SignalHandler::clearPendingSigint(); }
 };
 } // namespace
 
@@ -35,11 +36,11 @@ TEST_CASE("InterruptThrottle detects and consumes a pending interrupt", "[Interr
     auto const _ = SigintGuard {};
     auto throttle = InterruptThrottle { 1 };
 
-    SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     REQUIRE(throttle.pending());
 
     // The flag is consumed, so a subsequent poll is clean.
-    REQUIRE_FALSE(SignalHandler::hasPendingSigint());
+    REQUIRE_FALSE(core::platform::SignalHandler::hasPendingSigint());
     REQUIRE_FALSE(throttle.pending());
 }
 
@@ -52,16 +53,16 @@ TEST_CASE("InterruptThrottle polls on the first call and then every `interval` c
     // with no interrupt pending it returns false.
     REQUIRE_FALSE(throttle.pending());
 
-    SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
 
     // The next three calls are between poll boundaries, so they ignore the pending
     // interrupt and leave the flag untouched.
     REQUIRE_FALSE(throttle.pending());
     REQUIRE_FALSE(throttle.pending());
     REQUIRE_FALSE(throttle.pending());
-    REQUIRE(SignalHandler::hasPendingSigint());
+    REQUIRE(core::platform::SignalHandler::hasPendingSigint());
 
     // The next call reaches the interval boundary, polls, and observes the interrupt.
     REQUIRE(throttle.pending());
-    REQUIRE_FALSE(SignalHandler::hasPendingSigint());
+    REQUIRE_FALSE(core::platform::SignalHandler::hasPendingSigint());
 }

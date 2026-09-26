@@ -3,7 +3,9 @@
 
 #include <http/HttpClient.hpp>
 
-#include <crispy/Base64.hpp>
+#include <core/Base64.hpp>
+#include <core/platform/FileUri.hpp>
+#include <core/platform/UserPaths.hpp>
 
 #include <yaml-cpp/yaml.h>
 
@@ -20,8 +22,6 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
-#include <platform/FileUri.hpp>
-#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -46,7 +46,7 @@ namespace
     /// obfuscated to prevent push-protection false positives).
     auto deobfuscate(std::string_view encoded) -> std::string
     {
-        auto result = crispy::base64::decode(encoded);
+        auto result = core::base64::decode(encoded);
         for (auto& ch: result)
             ch ^= 0x5A;
         return result;
@@ -259,7 +259,7 @@ namespace
     /// is locale-dependent and leaves high bytes unencoded under some locales.
     auto urlEncode(std::string_view input) -> std::string
     {
-        return platform::percentEncode(input);
+        return core::platform::percentEncode(input);
     }
 
     // ── Random Bytes ─────────────────────────────────────────────────────────
@@ -575,7 +575,7 @@ auto refreshGoogleOAuthToken(http::HttpClient const& httpClient, std::string_vie
 
 auto oauthStorePath() -> std::filesystem::path
 {
-    if (auto const configDir = platform::configHome())
+    if (auto const configDir = core::platform::configHome())
         return *configDir / "endo" / "agent-oauth.yaml";
     return {};
 }

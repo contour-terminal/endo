@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 
-#include <crispy/Assert.hpp>
+#include <core/Assert.hpp>
 
 #include <cassert>
 #include <format>
@@ -35,7 +35,7 @@ const char* cstr(UnaryOperator op) // {{{
         case UnaryOperator::SIsEmpty: return "sisempty";
         case UnaryOperator::FNeg: return "fneg";
     }
-    crispy::unreachable();
+    core::unreachable();
 }
 
 // }}}

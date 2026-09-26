@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "History.hpp"
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
 
@@ -59,7 +59,7 @@ std::vector<std::string_view> InMemoryHistory::search(std::string_view prefix, s
     // Search from newest to oldest (reverse order)
     for (auto it = _entries.rbegin(); it != _entries.rend() && results.size() < maxResults; ++it)
     {
-        if (tui::SmartCaseMatch::matchesPrefix(*it, prefix))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(*it, prefix))
         {
             // Avoid duplicates in results
             bool isDuplicate = false;
@@ -85,7 +85,7 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(
     std::vector<FuzzySearchResult> results;
     results.reserve(std::min(maxResults * 2, _entries.size())); // Reserve extra for sorting
 
-    tui::FuzzyConfig fuzzyConfig;
+    core::tui::completer::FuzzyConfig fuzzyConfig;
     double const minThreshold = fuzzyConfig.minMatchThreshold;
 
     // Track seen entries to avoid duplicates
@@ -111,14 +111,14 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(
         seen.emplace_back(*it);
 
         // Check prefix match first
-        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(*it, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
+        bool isPrefixMatch = core::tui::completer::SmartCaseMatch::matchesPrefix(*it, prefix);
+        core::tui::completer::FuzzyMatchResult fuzzyResult;
         bool isFuzzyMatch = false;
 
         if (!isPrefixMatch && !prefix.empty())
         {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(*it, prefix);
-            size_t textLen = tui::FuzzyMatch::countGraphemes(*it);
+            fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(*it, prefix);
+            size_t textLen = core::tui::completer::FuzzyMatch::countGraphemes(*it);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -132,12 +132,13 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(
 
         if (isPrefixMatch)
         {
-            score = tui::SmartCaseMatch::adjustScore(100, *it, prefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(100, *it, prefix);
             score += fuzzyConfig.prefixMatchBonus + recencyBonus; // Prefix + recency bonus
         }
         else
         {
-            score = tui::FuzzyMatch::calculateScore(50, *it, prefix, fuzzyResult, fuzzyConfig);
+            score =
+                core::tui::completer::FuzzyMatch::calculateScore(50, *it, prefix, fuzzyResult, fuzzyConfig);
             score += recencyBonus; // Recency bonus
             matchPositions = std::move(fuzzyResult.positions);
         }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Prompt.hpp"
 
-#include <tui/Screen.hpp>
+#include <core/tui/Screen.hpp>
 
 #include "PromptPresets.hpp"
 #include "modules/GitModule.hpp"
@@ -19,13 +19,10 @@
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/util/CommandResolver.hpp>
 
+#include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+
 #include "PromptComponent.hpp"
-#include <platform/NativeFileSystem.hpp>
-#if defined(_WIN32)
-    #include <platform/windows/WindowsEnvironmentProvider.hpp>
-#else
-    #include <platform/posix/PosixEnvironmentProvider.hpp>
-#endif
 
 namespace endo
 {
@@ -70,14 +67,14 @@ void Prompt::initialize()
     // Ensure any protocol enable sequences are flushed
     _terminal.output().flush();
 
-    // Create CommandResolver for tooltip support. It shares the filesystem the Shell
-    // injected via setFileSystem(); fall back to the native filesystem if none was set.
-    auto const& fs = _historyFs ? *_historyFs : NativeFileSystem::instance();
-#if defined(_WIN32)
-    _commandResolver = std::make_unique<CommandResolver>(WindowsEnvironmentProvider::instance(), fs);
-#else
-    _commandResolver = std::make_unique<CommandResolver>(PosixEnvironmentProvider::instance(), fs);
-#endif
+    // Create CommandResolver for tooltip support. It shares the environment and the filesystem the
+    // Shell injected via setEnvironmentProvider() and setFileSystem(); fall back to the native ones
+    // if none was set.
+    auto const& fs = _historyFs ? *_historyFs : core::platform::NativeFileSystem::instance();
+    if (!_envProvider && !_nativeEnvProvider)
+        _nativeEnvProvider = core::platform::nativeProcessEnvironment();
+    auto const& env = _envProvider ? *_envProvider : *_nativeEnvProvider;
+    _commandResolver = std::make_unique<CommandResolver>(env, fs);
 
     // Create PromptComponent
     _promptComponent = std::make_unique<PromptComponent>();
@@ -100,17 +97,17 @@ void Prompt::initialize()
     _terminal.onFocusChanged([this](bool focused) { _promptComponent->setTerminalFocused(focused); });
 
     // Create Screen with Inline viewport mode
-    auto screenConfig = tui::ScreenConfig {
-        .viewport = tui::Viewport::Inline,
+    auto screenConfig = core::tui::ScreenConfig {
+        .viewport = core::tui::Viewport::Inline,
         .fixedArea = {},
         .inlineMaxHeight = _terminal.rows() / 2, // Max 50% of terminal height
         .inhibitReflow = true,
     };
-    _screen = std::make_unique<tui::Screen>(_terminal, screenConfig);
+    _screen = std::make_unique<core::tui::Screen>(_terminal, screenConfig);
 
     // Add PromptComponent to the screen's root
     // Set initial area to full width, 1 row (will grow as needed)
-    _promptComponent->setArea(tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = 1 });
+    _promptComponent->setArea(core::tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = 1 });
     _screen->root().addChild(*_promptComponent);
 
     // Set initial focus
@@ -119,7 +116,7 @@ void Prompt::initialize()
     _initialized = true;
 }
 
-coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
+core::async::Task<std::string> Prompt::read(core::tui::runtime::TuiRuntime* runtime)
 {
     initialize();
     if (_aborted)
@@ -133,7 +130,7 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
     auto const resizeToContent = [this] {
         auto const pSize = _promptComponent->preferredSize();
         _promptComponent->setArea(
-            tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
+            core::tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = pSize.height });
     };
     resizeToContent();
 
@@ -174,14 +171,23 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         // event", so use nextEventFor with a long sentinel for the blocking case.
         constexpr auto IdleSentinel = std::chrono::milliseconds { 60'000 };
         auto const waitFor = (timeout < 0) ? IdleSentinel : std::chrono::milliseconds { timeout };
-        auto event = std::optional<tui::InputEvent> {};
+        auto event = std::optional<core::tui::InputEvent> {};
         try
         {
             event = co_await runtime->nextEventFor(waitFor);
         }
-        catch (coro::OperationCancelled const&)
+        catch (core::async::OperationCancelled const&)
         {
-            // SIGINT/cancellation while waiting — abandon this read.
+            // The terminal's input has ended (it hung up, or its handle closed): no read will
+            // ever return anything again, so the prompt is done, exactly as after Ctrl+D. Treating
+            // it as "try again" would re-enter this wait at once, forever, at full CPU.
+            if (runtime->inputClosed())
+            {
+                _aborted = true;
+                _terminalGone = true;
+                _lastAction = PromptComponent::Action::Eof;
+            }
+            // Otherwise SIGINT/cancellation while waiting: abandon this read.
             co_return {};
         }
 
@@ -216,13 +222,14 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         auto const& ev = *event;
 
         // Handle resize events
-        if (std::holds_alternative<tui::ResizeEvent>(ev))
+        if (std::holds_alternative<core::tui::ResizeEvent>(ev))
         {
             onResize();
             needsRedraw = true;
         }
         // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
-        else if (auto const* key = std::get_if<tui::KeyEvent>(&ev); key && tui::isModifierOnlyKey(key->key))
+        else if (auto const* key = std::get_if<core::tui::KeyEvent>(&ev);
+                 key && core::tui::isModifierOnlyKey(key->key))
         {
             // No-op: produces no text or editing action.
         }
@@ -230,7 +237,8 @@ coro::Task<std::string> Prompt::read(tui::runtime::TuiRuntime* runtime)
         {
             // Dispatch through Screen (hover, tooltip hide, mouse → click-to-cursor)
             auto const screenResult = _screen->dispatchEvent(ev);
-            if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(ev))
+            if (screenResult == core::tui::EventResult::Handled
+                && std::holds_alternative<core::tui::MouseEvent>(ev))
                 needsRedraw = true;
 
             switch (_promptComponent->processInput(ev))
@@ -401,7 +409,7 @@ void Prompt::display()
     // Update component area
     auto prefSize = _promptComponent->preferredSize();
     _promptComponent->setArea(
-        tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
+        core::tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
 
     // Render
     _screen->draw();
@@ -425,7 +433,7 @@ void Prompt::resume()
         // indicating output that didn't end with a newline. Show a dim indicator
         // (like fish shell) and move to a fresh line.
         if (auto const cursor = _terminal.queryCursorPosition(); cursor && cursor->second > 1)
-            emitPartialLineIndicator(standardOutput(), cursor->second);
+            emitPartialLineIndicator(core::platform::standardOutput(), cursor->second);
 
         if (_screen)
         {
@@ -436,7 +444,7 @@ void Prompt::resume()
     }
 }
 
-void Prompt::setTheme(tui::Theme theme)
+void Prompt::setTheme(core::tui::Theme theme)
 {
     if (_screen)
         _screen->setTheme(theme);
@@ -501,21 +509,28 @@ void Prompt::setHistory(History const* history)
         _promptComponent->setHistory(history);
 }
 
-void Prompt::setEnvironmentProvider(EnvironmentProvider const* env)
+void Prompt::setEnvironmentProvider(core::platform::ProcessEnvironment const* env)
 {
     _envProvider = env;
     if (_promptComponent)
         _promptComponent->setEnvironmentProvider(env);
 }
 
-void Prompt::setFileSystem(FileSystem const* fs)
+void Prompt::setWorkingDirectory(core::platform::WorkingDirectory const* workingDirectory)
+{
+    _workingDirectory = workingDirectory;
+    if (_promptComponent)
+        _promptComponent->setWorkingDirectory(workingDirectory);
+}
+
+void Prompt::setFileSystem(core::platform::FileSystem const* fs)
 {
     _historyFs = fs;
     if (_promptComponent)
         _promptComponent->setFileSystem(fs);
 }
 
-void Prompt::setCommandRegistry(tui::CommandRegistry* registry)
+void Prompt::setCommandRegistry(core::tui::CommandRegistry* registry)
 {
     if (_promptComponent)
         _promptComponent->setCommandRegistry(registry);
@@ -533,14 +548,14 @@ bool Prompt::isMultilineEnabled() const noexcept
     return _multilineEnabled;
 }
 
-void Prompt::bindKey(tui::KeyChord chord, tui::EditAction action)
+void Prompt::bindKey(core::tui::KeyChord chord, core::tui::EditAction action)
 {
     initialize();
     if (_promptComponent)
         _promptComponent->inputField().keyBindings().bind(chord, action);
 }
 
-void Prompt::unbindKey(tui::KeyChord chord)
+void Prompt::unbindKey(core::tui::KeyChord chord)
 {
     initialize();
     if (_promptComponent)
@@ -551,20 +566,20 @@ void Prompt::resetKeyBindings()
 {
     initialize();
     if (_promptComponent)
-        _promptComponent->inputField().setKeyBindings(tui::KeyBindings::defaults());
+        _promptComponent->inputField().setKeyBindings(core::tui::KeyBindings::defaults());
 }
 
-tui::KeyBindings const& Prompt::keyBindings() const
+core::tui::KeyBindings const& Prompt::keyBindings() const
 {
     // This const version needs to handle the case where promptComponent isn't initialized yet
     // Return a static default bindings as fallback
-    static auto const defaultBindings = tui::KeyBindings::defaults();
+    static auto const defaultBindings = core::tui::KeyBindings::defaults();
     if (_promptComponent)
         return _promptComponent->inputField().keyBindings();
     return defaultBindings;
 }
 
-tui::KeyBindings& Prompt::keyBindings()
+core::tui::KeyBindings& Prompt::keyBindings()
 {
     // Initialize to ensure _promptComponent exists
     const_cast<Prompt*>(this)->initialize();
@@ -576,7 +591,7 @@ tui::KeyBindings& Prompt::keyBindings()
 /// @brief Writes text to the terminal output with per-grapheme syntax highlighting.
 /// @param out The terminal output to write to.
 /// @param text The source text to highlight and write.
-static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view text)
+static void writeSyntaxHighlighted(core::tui::TerminalOutput& out, std::string_view text)
 {
     auto const highlights = computeHighlightMap(text);
     if (highlights.empty())
@@ -600,7 +615,7 @@ static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view te
         {
             // Flush the previous segment
             out.writeText(text.substr(segStartByte, clusterByte - segStartByte),
-                          tui::Style { .fg = categoryColor(currentCat) });
+                          core::tui::Style { .fg = categoryColor(currentCat) });
             segStartByte = clusterByte;
             currentCat = cat;
         }
@@ -608,7 +623,7 @@ static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view te
 
     // Flush remaining segment
     if (segStartByte < text.size())
-        out.writeText(text.substr(segStartByte), tui::Style { .fg = categoryColor(currentCat) });
+        out.writeText(text.substr(segStartByte), core::tui::Style { .fg = categoryColor(currentCat) });
 }
 
 void Prompt::emitTransientPrompt(std::string_view inputText)
@@ -643,7 +658,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     out.clearLine();
 
     if (_promptConfig.transient == TransientMode::Arrow)
-        out.writeText("\u276F ", tui::Style { .dim = true });
+        out.writeText("\u276F ", core::tui::Style { .dim = true });
 
     // Show full command input, each line on its own terminal row
     auto linesWritten = 0;
@@ -679,14 +694,14 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         out.moveUp(excessRows);
 }
 
-void emitPartialLineIndicator(NativeHandle handle, int cursorColumn)
+void emitPartialLineIndicator(core::platform::NativeHandle handle, int cursorColumn)
 {
     if (cursorColumn <= 1)
         return;
 
     // SGR 2 (dim) + U+23CE (return symbol) + SGR 0 (reset) + CSI K (clear to EOL) + CR LF
     static constexpr std::string_view Indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
-    platformWrite(handle, Indicator.data(), Indicator.size());
+    core::platform::platformWrite(handle, Indicator.data(), Indicator.size());
 }
 
 } // namespace endo

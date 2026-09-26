@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

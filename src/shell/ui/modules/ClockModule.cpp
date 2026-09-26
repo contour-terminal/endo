@@ -2,7 +2,7 @@
 #include "ClockModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <chrono>
 #include <format>
@@ -18,7 +18,7 @@ PromptSegments ClockModule::evaluate(PromptContext const& ctx) const
 
     auto text = std::format("{:02d}:{:02d}:{:02d}", tm->tm_hour, tm->tm_min, tm->tm_sec);
 
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->clock.solid();
     else if (ctx.theme)

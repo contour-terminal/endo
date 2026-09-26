@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/testing/ScopedTempDir.hpp>
+#include <core/testing/ScopedWorkingDirectory.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -9,14 +14,10 @@
 #include <vector>
 
 #include "GlobMatcher.hpp"
-#include <platform/NativeFileSystem.hpp>
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <testing/ScopedTempDir.hpp>
-#include <testing/ScopedWorkingDirectory.hpp>
 
+using core::platform::testing::InMemoryFileSystem;
 using endo::expandGlobPattern;
 using endo::expandRecursiveGlob;
-using endo::platform::testing::InMemoryFileSystem;
 
 // ============================================================================
 // Recursive globs must be spelled the same way whichever filesystem answers
@@ -45,7 +46,7 @@ TEST_CASE("expandRecursiveGlob agrees with the real filesystem", "[glob]")
     // The real walk yields "./sub/a.txt" for a root of "." -- relative, where the injected one
     // yields an absolute path. Both must arrive at the same spelling, which is the one
     // expandGlobPattern() already produces for a match in ".": no leading "./".
-    auto const dir = endo::testing::ScopedTempDir { "endo_glob_shape" };
+    auto const dir = core::testing::ScopedTempDir { "endo_glob_shape" };
     std::filesystem::create_directories(dir / "sub" / "deep");
     {
         std::ofstream { dir / "sub" / "b.txt" } << "b";
@@ -57,9 +58,9 @@ TEST_CASE("expandRecursiveGlob agrees with the real filesystem", "[glob]")
         std::ofstream { dir / "sub" / "c.log" } << "c";
     }
 
-    auto const guard = endo::testing::ScopedWorkingDirectory { dir.path() };
+    auto const guard = core::testing::ScopedWorkingDirectory { dir.path() };
 
-    auto matches = expandRecursiveGlob(endo::platform::NativeFileSystem::instance(), "**/*.txt");
+    auto matches = expandRecursiveGlob(core::platform::NativeFileSystem::instance(), "**/*.txt");
     std::ranges::sort(matches);
 
     CHECK(matches == std::vector<std::string> { "sub/b.txt", "sub/deep/a.txt" });

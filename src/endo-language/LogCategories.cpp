@@ -6,35 +6,35 @@
 namespace endo::log
 {
 
-logstore::Category& shellDebug()
+core::log::Category& shellDebug()
 {
     static auto instance =
-        logstore::Category("shell.debug", "Shell execution debug output", categoryState("shell.debug"));
+        core::log::Category("shell.debug", "Shell execution debug output", categoryState("shell.debug"));
     return instance;
 }
 
-logstore::Category& vmTrace()
+core::log::Category& vmTrace()
 {
     static auto instance =
-        logstore::Category("vm.trace", "VM instruction execution trace", categoryState("vm.trace"));
+        core::log::Category("vm.trace", "VM instruction execution trace", categoryState("vm.trace"));
     return instance;
 }
 
-logstore::Category& vmIR()
+core::log::Category& vmIR()
 {
-    static auto instance = logstore::Category("vm.ir", "VM IR and bytecode dump", categoryState("vm.ir"));
+    static auto instance = core::log::Category("vm.ir", "VM IR and bytecode dump", categoryState("vm.ir"));
     return instance;
 }
 
-logstore::Category& parser()
+core::log::Category& parser()
 {
-    static auto instance = logstore::Category("parser", "Parser debug output", categoryState("parser"));
+    static auto instance = core::log::Category("parser", "Parser debug output", categoryState("parser"));
     return instance;
 }
 
-logstore::Category& pipe()
+core::log::Category& pipe()
 {
-    static auto instance = logstore::Category("pipe", "Unix pipe operations", categoryState("pipe"));
+    static auto instance = core::log::Category("pipe", "Unix pipe operations", categoryState("pipe"));
     return instance;
 }
 

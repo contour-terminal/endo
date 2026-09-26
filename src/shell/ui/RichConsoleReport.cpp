@@ -5,15 +5,14 @@
 
 #include <endo-language/parser/DiagnosticsAdapter.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <cstdlib>
 #include <format>
 #include <iostream>
 #include <string>
 #include <string_view>
-
-#include <platform/Types.hpp>
 
 using CoreVM::diagnostics::Message;
 using CoreVM::diagnostics::Type;
@@ -45,7 +44,7 @@ namespace
     }
 
     /// Appends an SGR foreground color escape sequence.
-    void appendFg(std::string& out, tui::RgbColor const& color)
+    void appendFg(std::string& out, core::tui::RgbColor const& color)
     {
         out += std::format("\033[38;2;{};{};{}m", color.r, color.g, color.b);
     }
@@ -64,7 +63,7 @@ namespace
 
     /// Appends a curly underline with the given color.
     /// Uses SGR 4:3 (curly underline style) and SGR 58:2:R:G:B (underline color).
-    void appendCurlyUnderline(std::string& out, tui::RgbColor const& color)
+    void appendCurlyUnderline(std::string& out, core::tui::RgbColor const& color)
     {
         out += "\033[1;4:3m";
         out += std::format("\033[58:2:{}:{}:{}m", color.r, color.g, color.b);
@@ -75,11 +74,11 @@ namespace
     /// directly to the source characters within the span instead of using a separate caret line.
     void appendHighlightedSource(std::string& out,
                                  std::string_view source,
-                                 tui::Theme const& theme,
+                                 core::tui::Theme const& theme,
                                  bool useColor,
                                  size_t underlineColumn = 0,
                                  size_t underlineLength = 0,
-                                 tui::RgbColor const* underlineColor = nullptr)
+                                 core::tui::RgbColor const* underlineColor = nullptr)
     {
         if (!useColor)
         {
@@ -135,7 +134,7 @@ namespace
 std::string formatDiagnostic(Message const& message, bool useColor)
 {
     auto const& loc = message.sourceLocation;
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
     auto const label = typeLabel(message.type);
     auto const warning = isWarning(message.type);
     auto const& semanticColor = warning ? theme.colors.warning : theme.colors.error;
@@ -262,7 +261,8 @@ std::string formatDiagnostic(Message const& message, bool useColor)
 RichConsoleReport::RichConsoleReport()
 {
     auto const* noColor = std::getenv("NO_COLOR");
-    _useColor = endo::isTerminal(endo::standardError()) && (noColor == nullptr || noColor[0] == '\0');
+    _useColor = core::platform::isTerminal(core::platform::standardError())
+                && (noColor == nullptr || noColor[0] == '\0');
 }
 
 RichConsoleReport::RichConsoleReport(TTY const& tty): _tty(&tty)
@@ -321,7 +321,8 @@ BufferingConsoleReport::BufferingConsoleReport(ColorMode colorMode)
         case ColorMode::Disabled: _useColor = false; break;
         case ColorMode::Auto: {
             auto const* noColor = std::getenv("NO_COLOR");
-            _useColor = endo::isTerminal(endo::standardError()) && (noColor == nullptr || noColor[0] == '\0');
+            _useColor = core::platform::isTerminal(core::platform::standardError())
+                        && (noColor == nullptr || noColor[0] == '\0');
             break;
         }
     }

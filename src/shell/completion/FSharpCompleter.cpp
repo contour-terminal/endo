@@ -3,8 +3,8 @@
 
 #include <endo-language/ide/CompletionCandidates.hpp>
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
 
@@ -53,9 +53,9 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
                                           pipelineType,
                                           _state.moduleFunctions);
 
-    // Convert to tui::CompletionItem with fuzzy scoring on the member name (not full text)
+    // Convert to core::tui::completer::CompletionItem with fuzzy scoring on the member name (not full text)
     std::vector<CompletionItem> results;
-    tui::FuzzyConfig fuzzyConfig;
+    core::tui::completer::FuzzyConfig fuzzyConfig;
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
     for (auto const& candidate: candidates)
@@ -66,14 +66,15 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
                                     ? candidate.text.substr(candidateDotPos + 1)
                                     : candidate.text;
 
-        auto const isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(memberName, memberPrefix);
-        tui::FuzzyMatchResult fuzzyResult;
+        auto const isPrefixMatch =
+            core::tui::completer::SmartCaseMatch::matchesPrefix(memberName, memberPrefix);
+        core::tui::completer::FuzzyMatchResult fuzzyResult;
         auto isFuzzyMatch = false;
 
         if (!isPrefixMatch && !memberPrefix.empty())
         {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(memberName, memberPrefix);
-            auto const textLen = tui::FuzzyMatch::countGraphemes(memberName);
+            fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(memberName, memberPrefix);
+            auto const textLen = core::tui::completer::FuzzyMatch::countGraphemes(memberName);
             isFuzzyMatch =
                 fuzzyResult.matches
                 && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
@@ -94,13 +95,13 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
 
         if (isPrefixMatch || memberPrefix.empty())
         {
-            score = tui::SmartCaseMatch::adjustScore(baseScore, memberName, memberPrefix);
+            score = core::tui::completer::SmartCaseMatch::adjustScore(baseScore, memberName, memberPrefix);
             if (isPrefixMatch)
                 score += fuzzyConfig.prefixMatchBonus;
         }
         else
         {
-            score = tui::FuzzyMatch::calculateScore(
+            score = core::tui::completer::FuzzyMatch::calculateScore(
                 baseScore, memberName, memberPrefix, fuzzyResult, fuzzyConfig);
             matchPositions = std::move(fuzzyResult.positions);
         }

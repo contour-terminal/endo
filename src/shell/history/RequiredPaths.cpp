@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "RequiredPaths.hpp"
 
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/UserPaths.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <string>
-
-#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -208,12 +209,12 @@ std::vector<std::string> collectRequiredPathsFromCommandLine(std::string_view co
     return collectRequiredPaths(tokens, cwdAbs, home);
 }
 
-std::string normalizedHomeDirectory(EnvironmentProvider const& env)
+std::string normalizedHomeDirectory(core::Environment const& env)
 {
-    auto const home = env.homeDirectory();
+    auto const home = core::platform::homeDirectory(env);
     if (!home)
         return {};
-    return platform::normalizePath(*home);
+    return core::platform::normalizePath(*home);
 }
 
 } // namespace endo

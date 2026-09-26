@@ -27,9 +27,6 @@ jobs:
         key: ccache-clang-tidy
         max-size: 256M
 
-    - name: Get vendor libraries
-      run: python3 scripts/get_contour_dirs.py
-
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
 
@@ -41,8 +38,7 @@ jobs:
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ env.LLVM_VERSION }}
-        # libssl-dev backs the TLS transport in the vendored net library.
-        sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }} libssl-dev
+        sudo apt-get install -y clang-tidy-${{ env.LLVM_VERSION }}
 
     - name: Install binaryen (WASM backend headers)
       run: sudo apt-get install -y binaryen
@@ -91,7 +87,6 @@ jobs:
         fi
         git diff -U0 origin/${{ github.base_ref }}...HEAD \
             -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
-            ':!src/crispy/*' ':!src/vtparser/*' ':!src/coro/*' ':!src/net/*' \
             ':!src/shell/platform/Windows*' \
             ':!src/endo-language/wasm_bridge.cpp' \
             "${WASM_EXCLUDES[@]}" \

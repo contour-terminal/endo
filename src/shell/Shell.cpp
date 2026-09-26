@@ -19,25 +19,27 @@
 #include <endo-language/module/ModuleLoader.hpp>
 #include <endo-language/parser/Parser.hpp>
 
-#include <tui/Canvas.hpp>
-#include <tui/CommandRegistry.hpp>
-#include <tui/GenericSyntaxHighlighter.hpp>
-#include <tui/ImageLoader.hpp>
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/QuestionComponent.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Theme.hpp>
-#include <tui/runtime/TerminalEventSource.hpp>
-#include <tui/runtime/TuiRuntime.hpp>
-
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypeRegistry.hpp>
 
-#include <crispy/Assert.hpp>
+#include <core/Assert.hpp>
+#include <core/net/EventLoop.hpp>
+#include <core/net/IoBackend.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/CommandRegistry.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/ImageLoader.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/QuestionComponent.hpp>
+#include <core/tui/Screen.hpp>
+#include <core/tui/Theme.hpp>
+#include <core/tui/runtime/TerminalInputSource.hpp>
+#include <core/tui/runtime/TuiRuntime.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <charconv>
 #include <chrono>
 #include <filesystem>
@@ -100,20 +102,22 @@
     #include <agent/ui/AgentResponseRenderer.hpp>
     #include <agent/ui/ToolStatusComponent.hpp>
 #endif
+#include <core/platform/FileUri.hpp>
+#include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/SignalHandler.hpp>
+#include <core/platform/SystemInfo.hpp>
+#include <core/platform/Types.hpp>
+#include <core/platform/UserPaths.hpp>
+#include <core/platform/WorkingDirectory.hpp>
+
 #include <nlohmann/json.hpp>
-#include <platform/FileUri.hpp>
 #include <platform/InstallPaths.hpp>
-#include <platform/NativeFileSystem.hpp>
-#include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
+#include <platform/PosixCompat.hpp>
 #include <platform/Process.hpp>
-#include <platform/SignalHandler.hpp>
-#include <platform/SystemInfo.hpp>
-#include <platform/Types.hpp>
-#include <platform/UserPaths.hpp>
-#if defined(_WIN32)
-    #include <platform/windows/WindowsEnvironmentProvider.hpp>
-#else
+#if !defined(_WIN32)
     #include <cerrno>
     #include <csignal>
 
@@ -122,8 +126,6 @@
     #include <fcntl.h>
     #include <poll.h>
     #include <unistd.h>
-
-    #include <platform/posix/PosixEnvironmentProvider.hpp>
 #endif
 
 namespace
@@ -383,7 +385,7 @@ std::string readLine(TTY& tty, std::string_view prompt)
     while (true)
     {
         char ch {};
-        auto const n = platformRead(tty.inputFd(), &ch, 1);
+        auto const n = core::platform::platformRead(tty.inputFd(), &ch, 1);
         if (n == 0)
         {
             break;
@@ -413,15 +415,16 @@ std::string readLine(TTY& tty, std::string_view prompt)
 
 auto Shell::PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
 {
-    NativeHandle const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
-    lastReleasedReaderFd = (stdinFd != defaultStdinFd) ? stdinFd : InvalidHandle;
+    core::platform::NativeHandle const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
+    lastReleasedReaderFd = (stdinFd != defaultStdinFd) ? stdinFd : core::platform::InvalidHandle;
     if (lastInChain)
         currentPipe = nullptr;
     else if (auto pipeResult = createPipe(); pipeResult.has_value())
         currentPipe = std::move(pipeResult.value());
     else
         currentPipe = nullptr; // Error case - will result in using default stdout
-    NativeHandle const stdoutFd = lastInChain || !currentPipe ? defaultStdoutFd : currentPipe->writer();
+    core::platform::NativeHandle const stdoutFd =
+        lastInChain || !currentPipe ? defaultStdoutFd : currentPipe->writer();
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
 
@@ -433,10 +436,10 @@ void Shell::PipelineBuilder::closeCurrentPipeWriter() const
 
 void Shell::PipelineBuilder::closePipeFdsInParent()
 {
-    if (lastReleasedReaderFd != InvalidHandle)
+    if (lastReleasedReaderFd != core::platform::InvalidHandle)
     {
-        platformClose(lastReleasedReaderFd);
-        lastReleasedReaderFd = InvalidHandle;
+        core::platform::platformClose(lastReleasedReaderFd);
+        lastReleasedReaderFd = core::platform::InvalidHandle;
     }
     closeCurrentPipeWriter();
 }
@@ -476,14 +479,15 @@ void Shell::RedirectState::addHereString(int targetFd, std::string content)
     entries.push_back({ .type = Type::HereString, .targetFd = targetFd, .content = std::move(content) });
 }
 
-NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, ProcessManager& pm)
+core::platform::NativeHandle Shell::RedirectState::getEffectiveStdoutFd(
+    core::platform::NativeHandle defaultFd, ProcessManager& pm)
 {
     for (auto& entry: entries)
     {
         if (entry.type == Type::OutputFile && entry.sourceFd == STDOUT_FILENO)
         {
             // Open the file if not already open
-            if (entry.openedFd == InvalidHandle)
+            if (entry.openedFd == core::platform::InvalidHandle)
             {
                 int const oflags =
                     entry.append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
@@ -491,52 +495,53 @@ NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, 
                 if (result.has_value())
                     entry.openedFd = result.value();
             }
-            if (entry.openedFd != InvalidHandle)
+            if (entry.openedFd != core::platform::InvalidHandle)
                 return entry.openedFd;
         }
     }
     return defaultFd;
 }
 
-NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, ProcessManager& pm)
+core::platform::NativeHandle Shell::RedirectState::getEffectiveStdinFd(core::platform::NativeHandle defaultFd,
+                                                                       ProcessManager& pm)
 {
     for (auto& entry: entries)
     {
         if (entry.type == Type::InputFile && entry.targetFd == STDIN_FILENO)
         {
             // Open the file if not already open
-            if (entry.openedFd == InvalidHandle)
+            if (entry.openedFd == core::platform::InvalidHandle)
             {
                 auto const result = pm.openFile(entry.path, O_RDONLY);
                 if (result.has_value())
                     entry.openedFd = result.value();
             }
-            if (entry.openedFd != InvalidHandle)
+            if (entry.openedFd != core::platform::InvalidHandle)
                 return entry.openedFd;
         }
         else if ((entry.type == Type::HereDoc || entry.type == Type::HereString)
                  && entry.targetFd == STDIN_FILENO)
         {
             // Lazily create the pipe if not already created
-            if (entry.openedFd == InvalidHandle)
+            if (entry.openedFd == core::platform::InvalidHandle)
             {
                 auto pipeResult = createPipe();
                 if (pipeResult.has_value())
                 {
                     auto pipe = std::move(pipeResult.value());
                     // Write content to pipe
-                    platformWrite(pipe->writer(), entry.content.data(), entry.content.size());
+                    core::platform::platformWrite(pipe->writer(), entry.content.data(), entry.content.size());
                     // Add trailing newline for herestrings if needed
                     if (entry.type == Type::HereString && !entry.content.empty()
                         && entry.content.back() != '\n')
                     {
-                        platformWrite(pipe->writer(), "\n", 1);
+                        core::platform::platformWrite(pipe->writer(), "\n", 1);
                     }
                     pipe->closeWriter();
                     entry.openedFd = pipe->releaseReader();
                 }
             }
-            if (entry.openedFd != InvalidHandle)
+            if (entry.openedFd != core::platform::InvalidHandle)
                 return entry.openedFd;
         }
     }
@@ -550,9 +555,9 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
 void Shell::SubstitutionCapture::clear()
 {
     pipe.reset();
-    if (savedStdout != InvalidHandle)
+    if (savedStdout != core::platform::InvalidHandle)
     {
-        savedStdout = InvalidHandle;
+        savedStdout = core::platform::InvalidHandle;
     }
     output.clear();
 }
@@ -609,17 +614,42 @@ namespace
 // Shell implementation
 // ========================================================================
 
+namespace
+{
+
+    /// The process's environment, which a shell run by a user reads and exports to.
+    ///
+    /// One for the life of the process: it holds the variables set but not yet exported, and the
+    /// prompt's command resolver reads the same object the shell writes.
+    core::platform::ProcessEnvironment& nativeEnvironment()
+    {
+        static auto const provider = core::platform::nativeProcessEnvironment();
+        return *provider;
+    }
+
+    /// The process's working directory, which `cd` changes: one for the process, as the directory is.
+    core::platform::WorkingDirectory& nativeWorkingDirectory()
+    {
+        static auto const workingDirectory = core::platform::nativeWorkingDirectory();
+        return *workingDirectory;
+    }
+
+} // namespace
+
 #if defined(_WIN32)
-Shell::Shell(): Shell(WindowsTTY::instance(), WindowsEnvironmentProvider::instance())
+Shell::Shell(): Shell(WindowsTTY::instance(), nativeEnvironment(), nativeWorkingDirectory())
 {
 }
 #else
-Shell::Shell(): Shell(RealTTY::instance(), PosixEnvironmentProvider::instance())
+Shell::Shell(): Shell(RealTTY::instance(), nativeEnvironment(), nativeWorkingDirectory())
 {
 }
 #endif
 
-Shell::Shell(TTY& tty, EnvironmentProvider& env): Shell(tty, env, NativeFileSystem::instance())
+Shell::Shell(TTY& tty,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory):
+    Shell(tty, env, workingDirectory, core::platform::NativeFileSystem::instance())
 {
 }
 
@@ -628,9 +658,13 @@ void Shell::setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider
     _sixelCapability = std::move(provider);
 }
 
-Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
+Shell::Shell(TTY& tty,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory,
+             core::platform::FileSystem& fs):
     Shell(tty,
           env,
+          workingDirectory,
           fs,
 #if defined(_WIN32)
           WindowsProcessManager::instance()
@@ -641,9 +675,14 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs):
 {
 }
 
-Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager& processManager):
+Shell::Shell(TTY& tty,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory,
+             core::platform::FileSystem& fs,
+             ProcessManager& processManager):
     _fs { fs },
     _env { env },
+    _workingDirectory { workingDirectory },
     _tty { tty },
     _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
     _processManager { processManager }
@@ -655,10 +694,11 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager&
     // sudo-rs' `sudo -s` read SHELL and refuse to spawn it unless it resolves to
     // an absolute path. Fall back to "endo" only if the path cannot be determined.
     if (auto const exePath = endo::platform::executablePath())
-        _env.setAndExport("SHELL", endo::platform::normalizePath(*exePath));
+        reportEnvironmentError("export SHELL",
+                               _env.setAndExport("SHELL", core::platform::normalizePath(*exePath)));
     else
-        _env.setAndExport("SHELL", "endo");
-    _env.set("PWD", _env.currentDirectory());
+        reportEnvironmentError("export SHELL", _env.setAndExport("SHELL", "endo"));
+    reportEnvironmentError("set PWD", _env.set("PWD", currentDirectoryText()));
 
     // Track shell nesting level (0 = outermost)
     if (auto const shlvl = _env.get("ENDO_SHLVL"); shlvl.has_value())
@@ -672,27 +712,27 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager&
             _shellLevel = 0;
         }
     }
-    _env.setAndExport("ENDO_SHLVL", std::to_string(_shellLevel));
+    reportEnvironmentError("export ENDO_SHLVL", _env.setAndExport("ENDO_SHLVL", std::to_string(_shellLevel)));
 
     updateTerminalSizeEnv();
 
     // Capture the shell's process ID at startup
 #if !defined(_WIN32)
-    _shellPid = static_cast<ProcessId>(getpid());
-    _shellPgid = static_cast<ProcessId>(getpgrp());
+    _shellPid = static_cast<core::platform::ProcessId>(getpid());
+    _shellPgid = static_cast<core::platform::ProcessId>(getpgrp());
 #else
-    _shellPid = static_cast<ProcessId>(GetCurrentProcessId());
+    _shellPid = static_cast<core::platform::ProcessId>(GetCurrentProcessId());
     _shellPgid = 0;
 #endif
 
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
-    _signalFd = SignalHandler::initialize(this);
+    _signalFd = core::platform::SignalHandler::initialize(this);
 
     // Let a blocked event-source wait wake promptly on Ctrl+C. On Windows the
     // console control handler runs on another thread and WaitForMultipleObjects has
     // no EINTR, so without this an agent/auth wait would not wake until the next
     // event or timeout. The wakeup outlives the registration (member of this Shell).
-    SignalHandler::setInterruptWakeup(&_interruptWakeup);
+    core::platform::SignalHandler::setInterruptWakeup(&_interruptWakeup);
 
     // Seed built-in record type fields, module functions, and command output types from TypeRegistry (cached)
     {
@@ -810,16 +850,25 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager&
     // recognized — no separate list to maintain.
     registerInlineBuiltins(inlineBuiltinInfos(inlineCommandDescriptors()));
 
-    // Register Endo syntax highlighter for agent-mode code blocks and diffs
-    tui::registerEndoHighlighter(
-        [](std::string_view line,
-           tui::HighlightState /*state*/) -> std::pair<tui::HighlightMap, tui::HighlightState> {
+    // Teach the highlighters endo's own language, for .endo files, ```endo fences, agent-mode
+    // code blocks and diffs, and the history listings.
+    auto const endoLanguage = _highlighters.registerLanguage(core::tui::LanguageDefinition {
+        .name = "endo",
+        .extensions = { ".endo" },
+        .fenceTags = { "endo" },
+        .highlight = [](std::string_view line, core::tui::HighlightState /*state*/)
+            -> std::pair<core::tui::HighlightMap, core::tui::HighlightState> {
             auto const endoMap = endo::computeHighlightMap(line);
-            auto map = tui::HighlightMap(line.size(), tui::HighlightCategory::Default);
+            auto map = core::tui::HighlightMap(line.size(), core::tui::HighlightCategory::Default);
             for (std::size_t i = 0; i < endoMap.size() && i < map.size(); ++i)
-                map[i] = static_cast<tui::HighlightCategory>(endoMap[i]);
-            return { std::move(map), tui::HighlightState::Normal };
-        });
+                map[i] = static_cast<core::tui::HighlightCategory>(endoMap[i]);
+            return { std::move(map), core::tui::HighlightState::Normal };
+        },
+    });
+    // A fresh registry refuses only a name, extension or tag core::tui already ships, and it
+    // ships none of endo's.
+    assert(endoLanguage.has_value() && "core::tui claims a name, extension or fence tag of endo's");
+    _endoLanguage = endoLanguage.value_or(core::tui::LanguageId::None);
 
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
@@ -831,13 +880,14 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env, FileSystem& fs, ProcessManager&
     prompt.setDynamicFieldResolver(
         [this](std::string const& fnName) { return invokePromptCallback(fnName); });
 
-    _dirConfigManager =
-        std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
+    _dirConfigManager = std::make_unique<DirectoryConfigManager>(
+        *this, _fs, _env, _workingDirectory, stderrDiagnosticSink(_tty));
 
     // Register dark/light mode auto-switching via terminal color scheme detection
-    prompt.terminal().onColorSchemeChanged([this](tui::ColorScheme scheme) {
-        auto& mgr = tui::ThemeManager::instance();
-        mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
+    prompt.terminal().onColorSchemeChanged([this](core::tui::ColorScheme scheme) {
+        auto& mgr = core::tui::ThemeManager::instance();
+        mgr.setCurrent(scheme == core::tui::ColorScheme::Light ? core::tui::lightTheme()
+                                                               : core::tui::darkTheme());
         prompt.setTheme(mgr.current());
         // Re-apply prompt preset with appropriate colors for new color scheme,
         // but preserve user color overrides (e.g., from init.endo or interactive config).
@@ -856,18 +906,37 @@ Shell::~Shell()
 {
     // Clear the interrupt-wakeup registration before _interruptWakeup is destroyed,
     // so a late signal cannot dereference a dangling pointer.
-    SignalHandler::setInterruptWakeup(nullptr);
-    SignalHandler::restore();
+    core::platform::SignalHandler::setInterruptWakeup(nullptr);
+    core::platform::SignalHandler::restore();
 }
 
-EnvironmentProvider& Shell::environment() noexcept
+core::platform::ProcessEnvironment& Shell::environment() noexcept
 {
     return _env;
 }
 
-EnvironmentProvider const& Shell::environment() const noexcept
+core::platform::ProcessEnvironment const& Shell::environment() const noexcept
 {
     return _env;
+}
+
+core::platform::WorkingDirectory& Shell::workingDirectory() noexcept
+{
+    return _workingDirectory;
+}
+
+std::string Shell::currentDirectoryText() const
+{
+    return core::platform::normalizePath(_workingDirectory.currentDirectory());
+}
+
+bool Shell::reportEnvironmentError(std::string_view what,
+                                   std::expected<void, core::platform::PlatformError> const& result)
+{
+    if (result.has_value())
+        return true;
+    error("endo: {}: {}", what, toString(result.error()));
+    return false;
 }
 
 void Shell::setOptimize(bool optimize)
@@ -908,8 +977,8 @@ void Shell::updateTerminalSizeEnv()
 {
     if (auto const size = _tty.getSize(); size.has_value())
     {
-        _env.set("LINES", std::to_string(size->rows));
-        _env.set("COLUMNS", std::to_string(size->cols));
+        reportEnvironmentError("set LINES", _env.set("LINES", std::to_string(size->rows)));
+        reportEnvironmentError("set COLUMNS", _env.set("COLUMNS", std::to_string(size->cols)));
     }
 }
 
@@ -946,10 +1015,11 @@ void Shell::emitCurrentWorkingDirectory()
     if (!_interactive || !_tty.isTerminal())
         return;
 
-    auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
+    auto const cwd = _env.get("PWD").value_or(currentDirectoryText());
 
     _tty.writeToStdout(std::format(
-        "\033]7;{}\033\\", platform::fileUri(platform::normalizePath(cwd), platform::cachedHostName())));
+        "\033]7;{}\033\\",
+        core::platform::fileUri(core::platform::normalizePath(cwd), core::platform::cachedHostName())));
 }
 
 void Shell::emitWindowTitle(std::string_view title)
@@ -980,14 +1050,15 @@ void Shell::loadInitScript()
 #endif
 
     // Auto-execute init.endo if it exists.
-    if (auto const configDir = platform::configHome())
+    if (auto const configDir = core::platform::configHome())
     {
         auto const initPath = *configDir / "endo" / "init.endo";
         if (_fs.exists(initPath))
         {
             if (auto content = _fs.readFile(initPath))
             {
-                if (auto const initResult = executeConfigScript(*content, platform::normalizePath(initPath));
+                if (auto const initResult =
+                        executeConfigScript(*content, core::platform::normalizePath(initPath));
                     initResult != 0)
                     _tty.writeToStderr(
                         std::format("endo: warning: init.endo exited with code {}\n", initResult));
@@ -995,7 +1066,7 @@ void Shell::loadInitScript()
             else
             {
                 _tty.writeToStderr(std::format("endo: warning: error loading {}: {}\n",
-                                               platform::normalizePath(initPath),
+                                               core::platform::normalizePath(initPath),
                                                content.error()));
             }
         }
@@ -1035,7 +1106,7 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
 void Shell::onDirectoryChanged()
 {
     if (_dirConfigManager)
-        _dirConfigManager->onDirectoryChanged(_env.currentDirectory());
+        _dirConfigManager->onDirectoryChanged(currentDirectoryText());
 }
 
 void Shell::loadCompleters()
@@ -1068,19 +1139,19 @@ void Shell::loadCompleters()
 
             if (auto content = _fs.readFile(path))
             {
-                (void) executeConfigScript(*content, platform::normalizePath(path));
+                (void) executeConfigScript(*content, core::platform::normalizePath(path));
             }
             else
             {
                 _tty.writeToStderr(std::format("endo: warning: error loading completer {}: {}\n",
-                                               platform::normalizePath(path),
+                                               core::platform::normalizePath(path),
                                                content.error()));
             }
         }
     };
 
     // User overrides first
-    if (auto const configDir = platform::configHome())
+    if (auto const configDir = core::platform::configHome())
         loadDir(*configDir / "endo" / "completers");
 
     // Installed location (relative to executable)
@@ -1181,10 +1252,11 @@ void Shell::ensureInteractiveReady()
     history.autoImportIfEmpty();
 
     // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history, _fsharpState, _fs);
+    completer = std::make_unique<Completer>(_env, _workingDirectory, history, _fsharpState, _fs);
     prompt.setCompleter(completer.get());
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);
+    prompt.setWorkingDirectory(&_workingDirectory);
     prompt.setFileSystem(&_fs);
 }
 
@@ -1280,7 +1352,7 @@ namespace
     /// spuriously return 130 with no output.
     void clearStalePendingInterrupt() noexcept
     {
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
     }
 } // namespace
 
@@ -1289,22 +1361,22 @@ void Shell::updatePromptContext()
     auto ctx = PromptContext {};
     // Canonicalize on-disk capitalization so the prompt shows the real path case
     // (e.g. "D:/Lastrada" after `cd d:/lastrada`) rather than the typed case.
-    ctx.cwd = platform::canonicalCasePath(_fs.currentPath());
+    ctx.cwd = core::platform::canonicalCasePath(_fs.currentPath());
     emitWindowTitle(ctx.cwd);
     // Resolve home via the environment abstraction (HOME, then USERPROFILE on Windows)
     // and canonicalize it the same way as cwd, so the tilde-contraction prefix match in
     // PathModule compares matching separators and case.
-    if (auto const home = _env.homeDirectory())
-        ctx.homePath = platform::canonicalCasePath(*home);
+    if (auto const home = core::platform::homeDirectory(_env))
+        ctx.homePath = core::platform::canonicalCasePath(*home);
     ctx.lastExitCode = _exitCode;
     ctx.lastDuration = _lastCommandDuration;
     ctx.terminalWidth = prompt.terminal().columns();
     ctx.isSSH = _env.get("SSH_CONNECTION").has_value();
     // Populate identity unconditionally so the prompt can show user@host in every session.
-    ctx.hostname = platform::cachedHostName();
-    ctx.username = _env.userName().value_or("");
+    ctx.hostname = core::platform::cachedHostName();
+    ctx.username = core::platform::userName(_env).value_or("");
     ctx.hyperlinks = _hyperlinks;
-    ctx.theme = &tui::currentTheme();
+    ctx.theme = &core::tui::currentTheme();
     ctx.fsharpState = &_fsharpState;
     ctx.outputDefs = &_outputDefinitions;
     ctx.shellLevel = _shellLevel;
@@ -1324,7 +1396,7 @@ int Shell::run()
     ensureInteractiveReady();
 
     // Set up command palette registry for shell mode
-    auto shellCommandRegistry = tui::CommandRegistry {};
+    auto shellCommandRegistry = core::tui::CommandRegistry {};
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     shellCommandRegistry.add({
         .id = "shell.enter_agent_mode",
@@ -1332,7 +1404,7 @@ int Shell::run()
         .description = "Switch to the AI agent chat interface",
         .category = "Mode",
         .keybinding = "#",
-        .context = tui::CommandContext::Shell,
+        .context = core::tui::CommandContext::Shell,
         .action = [] {}, // Handled via Action::AgentMode
     });
 #endif
@@ -1342,7 +1414,7 @@ int Shell::run()
         .description = "Clear the terminal screen",
         .category = "View",
         .keybinding = "Ctrl+L",
-        .context = tui::CommandContext::Both,
+        .context = core::tui::CommandContext::Both,
         .action = [] {}, // Handled via Action::ClearScreen
     });
     prompt.setCommandRegistry(&shellCommandRegistry);
@@ -1359,8 +1431,8 @@ int Shell::run()
     // Must run after terminal initialization so response bytes aren't echoed.
     if (_interactive && _tty.isTerminal() && prompt.ready())
     {
-        _semanticBlockClient =
-            std::make_unique<tui::SemanticBlockClient>(prompt.terminal().output(), prompt.terminal().input());
+        _semanticBlockClient = std::make_unique<core::tui::SemanticBlockClient>(prompt.terminal().output(),
+                                                                                prompt.terminal().input());
         (void) _semanticBlockClient->enable(); // Silently ignore failure (unsupported terminal).
     }
 
@@ -1369,17 +1441,17 @@ int Shell::run()
     loadCompleters();
     onDirectoryChanged();
 
-    // Drive the interactive prompt through the coroutine runtime. The event source
-    // multiplexes terminal input with the POSIX signal fd (job control); Ctrl+C at
-    // the prompt is a key in raw mode, so SIGINT is ignored here (a no-op interrupt
-    // handler keeps it from tripping the runtime's root cancellation across reads).
-#if defined(_WIN32)
-    auto promptEventSource = tui::runtime::TerminalEventSource(prompt.terminal(), nullptr, &_interruptWakeup);
-#else
-    auto promptEventSource =
-        tui::runtime::TerminalEventSource(prompt.terminal(), nullptr, &_interruptWakeup, _signalFd);
-#endif
-    auto promptRuntime = tui::runtime::TuiRuntime(promptEventSource);
+    // Drive the interactive prompt through the coroutine runtime. Its loop waits on
+    // terminal input and on the POSIX signal fd (job control); Ctrl+C at the prompt
+    // is a key in raw mode, so SIGINT is ignored here (a no-op interrupt handler
+    // keeps it from tripping the loop's root cancellation across reads).
+    auto const promptBackend = core::net::makeDefaultBackend();
+    auto promptLoop = core::net::EventLoop { *promptBackend };
+    auto promptRuntime = core::tui::runtime::TuiRuntime(
+        promptLoop,
+        prompt.terminal(),
+        core::tui::runtime::TuiRuntimeOptions { .interruptWakeup = &_interruptWakeup,
+                                                .signalFd = core::platform::SignalHandler::nativeHandle() });
     promptRuntime.setInterruptHandler([] {});
 
     // While read() is blocked waiting for input, the event source reaps job-control
@@ -1387,7 +1459,7 @@ int Shell::run()
     // activity wake. Report finished jobs on that idle wake so a background job's
     // completion is announced promptly rather than at the next keystroke.
     prompt.setOnIdle([this] {
-        SignalHandler::processPendingSignals();
+        core::platform::SignalHandler::processPendingSignals();
         reportJobStatus();
     });
 
@@ -1395,7 +1467,7 @@ int Shell::run()
     while (!_quit && prompt.ready())
     {
         // Check for pending signals on non-signalfd platforms
-        SignalHandler::processPendingSignals();
+        core::platform::SignalHandler::processPendingSignals();
         updateTerminalSizeEnv();
 
         // Report completed jobs before prompting
@@ -1416,8 +1488,12 @@ int Shell::run()
         // Wait for input. The runtime's event source multiplexes the signal fd,
         // so job-control signals are handled during the wait; report them after.
         auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
+        // The terminal hung up: there is no one to prompt, and every write to it fails, so the
+        // interactive session ends here rather than running the rest of this turn against it.
+        if (prompt.terminalGone())
+            break;
 
-        SignalHandler::processPendingSignals();
+        core::platform::SignalHandler::processPendingSignals();
         reportJobStatus();
 
         {
@@ -1442,7 +1518,7 @@ int Shell::run()
             {
                 prompt.addHistory(lineBuffer);
                 auto const homeEnv = normalizedHomeDirectory(_env);
-                auto const cwdAbs = _env.currentDirectory();
+                auto const cwdAbs = currentDirectoryText();
                 history.add(
                     lineBuffer,
                     HistoryAddContext {
@@ -1515,6 +1591,10 @@ int Shell::run()
         emitPromptEnd();
 
         auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
+        // The terminal hung up: there is no one to prompt, and every write to it fails, so the
+        // interactive session ends here rather than running the rest of this turn against it.
+        if (prompt.terminalGone())
+            break;
         debugLog()()("input buffer: {}", lineBuffer);
 
     #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -1536,7 +1616,7 @@ int Shell::run()
         {
             prompt.addHistory(lineBuffer);
             auto const homeEnv = normalizedHomeDirectory(_env);
-            auto const cwdAbs = _env.currentDirectory();
+            auto const cwdAbs = currentDirectoryText();
             history.add(lineBuffer,
                         HistoryAddContext {
                             .cwd = canonicalizeForHistory(cwdAbs, homeEnv),
@@ -1582,8 +1662,8 @@ int Shell::run()
     }
 #endif
 
-    // Disable semantic block extension on exit.
-    if (_semanticBlockClient)
+    // Disable semantic block extension on exit, on a terminal that is still there.
+    if (_semanticBlockClient && !prompt.terminalGone())
         _semanticBlockClient->disable();
 
     return _quit ? _exitCode : EXIT_SUCCESS;
@@ -1789,7 +1869,7 @@ void Shell::onSigchld()
         }
 
         // Update job table with this result
-        jobTable.updateJobState(static_cast<ProcessId>(pid), result);
+        jobTable.updateJobState(static_cast<core::platform::ProcessId>(pid), result);
     }
 #else
     // Windows: non-blocking check for terminated background processes
@@ -1799,7 +1879,7 @@ void Shell::onSigchld()
         if (constJob->state != JobState::Running)
             continue;
 
-        for (ProcessId const pid: constJob->pids)
+        for (core::platform::ProcessId const pid: constJob->pids)
         {
             auto const waitResult = _processManager.wait(pid, WaitFlag::NoHang);
             if (waitResult.has_value() && (waitResult->exitCode != 0 || !waitResult->stopped))
@@ -1816,7 +1896,7 @@ void Shell::onSigtstp()
     prompt.suspend();
 
     // Step 2: Actually stop the shell process by re-raising SIGTSTP with default handling
-    SignalHandler::suspendSelf();
+    core::platform::SignalHandler::suspendSelf();
 
     // Step 3: When we reach here, we've been resumed (SIGCONT was received)
     // Restore terminal to raw mode and redraw
@@ -1908,10 +1988,10 @@ namespace
     class ScrollRegionGuard
     {
       public:
-        tui::TerminalOutput& output;
+        core::tui::TerminalOutput& output;
         bool active = false;
 
-        explicit ScrollRegionGuard(tui::TerminalOutput& out): output(out) {}
+        explicit ScrollRegionGuard(core::tui::TerminalOutput& out): output(out) {}
 
         ~ScrollRegionGuard()
         {
@@ -1935,18 +2015,18 @@ namespace
     class StreamingPromptManager
     {
       public:
-        tui::Terminal& terminal;
+        core::tui::Terminal& terminal;
         agent::AgentInputComponent& inputComponent;
-        tui::TerminalOutput& output;
+        core::tui::TerminalOutput& output;
 
         int responseLineCount = 0;
         bool scrollRegionActive = false;
         bool cancelled = false;
         int promptHeight = 0;
 
-        StreamingPromptManager(tui::Terminal& term,
+        StreamingPromptManager(core::tui::Terminal& term,
                                agent::AgentInputComponent& input,
-                               tui::TerminalOutput& out):
+                               core::tui::TerminalOutput& out):
             terminal(term), inputComponent(input), output(out), _scrollGuard(out)
         {
         }
@@ -1975,7 +2055,7 @@ namespace
             auto events = terminal.poll(0);
             for (auto const& event: events)
             {
-                if (std::holds_alternative<tui::ResizeEvent>(event))
+                if (std::holds_alternative<core::tui::ResizeEvent>(event))
                 {
                     handleResize();
                     continue;
@@ -2073,10 +2153,10 @@ namespace
         /// @param startRow The 1-based row to start rendering at.
         void renderPromptDirect(int startRow)
         {
-            auto const& theme = tui::currentTheme();
-            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-            auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
-            auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
+            auto const& theme = core::tui::currentTheme();
+            auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+            auto const labelStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+            auto const statusStyle = core::tui::Style { .fg = theme.agentColors.statusText };
 
             // Header line: ╭─ agent
             output.moveTo(startRow, 1);
@@ -2225,7 +2305,7 @@ namespace
             cachedContext ? std::move(*cachedContext) : agent::ProjectContextLoader::load(cwd);
 
         auto promptBuilder = agent::SystemPromptBuilder {};
-        promptBuilder.setWorkingDirectory(platform::normalizePath(cwd));
+        promptBuilder.setWorkingDirectory(core::platform::normalizePath(cwd));
         promptBuilder.setShellInfo("endo");
         promptBuilder.setProjectRules(projectContext.rulesFiles);
         promptBuilder.setGlobalRules(projectContext.globalRules);
@@ -2245,7 +2325,7 @@ namespace
         else
         {
             // Fallback: query git directly (e.g., first agent entry before prompt displayed)
-            auto const cwdStr = platform::normalizePath(cwd);
+            auto const cwdStr = core::platform::normalizePath(cwd);
     #if defined(_WIN32)
             gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
     #else
@@ -2266,10 +2346,10 @@ namespace
         }
 
         // Tilde-contract the project path for display
-        auto projectPath = platform::normalizePath(cwd);
-        if (auto const home = platform::homeDirectory())
+        auto projectPath = core::platform::normalizePath(cwd);
+        if (auto const home = core::platform::homeDirectory())
         {
-            auto const homeStr = platform::normalizePath(*home);
+            auto const homeStr = core::platform::normalizePath(*home);
             if (projectPath.starts_with(homeStr))
             {
                 auto contracted = "~" + projectPath.substr(homeStr.size());
@@ -2287,7 +2367,7 @@ namespace
             "Be thorough but concise. Reference file paths with line numbers. "
             "Do not ask follow-up questions — produce a complete answer. "
             "Do not suggest code changes — only report findings.");
-        explorePromptBuilder.setWorkingDirectory(platform::normalizePath(cwd));
+        explorePromptBuilder.setWorkingDirectory(core::platform::normalizePath(cwd));
         explorePromptBuilder.setShellInfo("endo");
         explorePromptBuilder.setProjectRules(projectContext.rulesFiles);
         explorePromptBuilder.setGlobalRules(projectContext.globalRules);
@@ -2597,7 +2677,7 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     if (_semanticBlockClient && _semanticBlockClient->isEnabled())
     {
         auto const result = _semanticBlockClient->queryLastCommand();
-        if (result.status == tui::SemanticBlockStatus::Success && result.block.has_value())
+        if (result.status == core::tui::SemanticBlockStatus::Success && result.block.has_value())
             commandOutput = result.block->output;
     }
 
@@ -2614,14 +2694,14 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
         // Ask the user via QuestionComponent.
         auto& terminal = prompt.terminal();
         auto& out = terminal.output();
-        auto const& theme = tui::currentTheme();
+        auto const& theme = core::tui::currentTheme();
 
-        auto questionConfig = tui::QuestionConfig {
+        auto questionConfig = core::tui::QuestionConfig {
             .questionText = std::format("Command failed (exit {}). Analyze this error?", exitCode),
             .options = { "Analyze", "Analyze (always)", "Ignore", "Ignore (always)" },
             .allowOther = false,
         };
-        auto question = tui::QuestionComponent(questionConfig);
+        auto question = core::tui::QuestionComponent(questionConfig);
 
         // Render the question inline.
         auto const width = terminal.columns();
@@ -2636,11 +2716,11 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
 
         auto renderQuestion = [&] {
             out.restoreCursor();
-            auto buffer = tui::Buffer(height, width);
-            auto canvas =
-                tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
-            question.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
-            question.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+            auto buffer = core::tui::Buffer(height, width);
+            auto canvas = core::tui::Canvas(
+                buffer, core::tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+            question.setArea(core::tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+            question.setScreenBounds(core::tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
             question.render(canvas);
             buffer.writeTo(out);
             out.showCursor();
@@ -2659,16 +2739,16 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
                 auto const action = question.processInput(event);
                 switch (action)
                 {
-                    case tui::QuestionAction::Confirmed: answered = true; break;
-                    case tui::QuestionAction::Cancelled: {
+                    case core::tui::QuestionAction::Confirmed: answered = true; break;
+                    case core::tui::QuestionAction::Cancelled: {
                         // Clean up the question display.
                         out.restoreCursor();
                         out.clearToEndOfDisplay();
                         out.flush();
                         return; // User cancelled — do nothing.
                     }
-                    case tui::QuestionAction::Changed: renderQuestion(); break;
-                    case tui::QuestionAction::None: break;
+                    case core::tui::QuestionAction::Changed: renderQuestion(); break;
+                    case core::tui::QuestionAction::None: break;
                 }
                 if (answered)
                     break;
@@ -2794,22 +2874,62 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     prompt.terminal().output().updateDimensions();
 }
 
+namespace
+{
+
+    /// Tells @p runtime about every agent message the worker signals on @p wakeup.
+    ///
+    /// The worker's outbound queue and the terminal signal a wakeup, from other threads; the runtime
+    /// learns of a message through notifyAgentReady(), on its loop's thread. This flow is the bridge:
+    /// parked on the wakeup's handle, it resets the wakeup and notifies, for as long as the loop runs.
+    /// The loop owns it; ~EventLoop cancels it where it is parked, so it never runs past the runtime.
+    /// @param runtime The runtime to notify (a pointer: a coroutine's reference parameter dangles).
+    /// @param wakeup The wakeup the worker signals (outlives the loop).
+    core::async::Task<void> relayAgentWakeup(core::tui::runtime::TuiRuntime* runtime,
+                                             core::platform::Wakeup const* wakeup)
+    {
+        while (true)
+        {
+            try
+            {
+                co_await runtime->waitReadable(wakeup->nativeHandle());
+            }
+            catch (core::net::FdRegistrationFailed const& failure)
+            {
+                // The backend will not watch the wakeup's handle. Re-parking would ask the same
+                // refused question every turn, so the relay ends, as TuiRuntime's own source flows
+                // do -- and says so, because agent messages now arrive only with other activity.
+                debugLog()()("agent wakeup relay: the backend refused the wakeup handle: {}",
+                             failure.reason.toString());
+                co_return;
+            }
+            wakeup->reset();
+            runtime->notifyAgentReady();
+        }
+    }
+
+} // namespace
+
 void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
-    // Own a runtime + event source for the duration of agent mode. The event source
-    // multiplexes terminal input with the agent-message wakeup (fixing the Windows
-    // gap where the input poll never woke on agent messages). SIGINT is ignored here:
-    // Ctrl+C in agent mode is a key the input component turns into an Abort.
+    // Own a loop and a runtime for the duration of agent mode. The loop waits on
+    // terminal input and on the agent-message wakeup (fixing the Windows gap where
+    // the input poll never woke on agent messages). SIGINT is ignored here: Ctrl+C in
+    // agent mode is a key the input component turns into an Abort.
     auto& agentTerminal = prompt.terminal();
-    auto agentEventSource =
-        tui::runtime::TerminalEventSource(agentTerminal, &_agentWakeup, &_interruptWakeup);
-    auto runtime = tui::runtime::TuiRuntime(agentEventSource);
+    auto const agentBackend = core::net::makeDefaultBackend();
+    auto agentLoop = core::net::EventLoop { *agentBackend };
+    auto runtime = core::tui::runtime::TuiRuntime(
+        agentLoop,
+        agentTerminal,
+        core::tui::runtime::TuiRuntimeOptions { .interruptWakeup = &_interruptWakeup });
     runtime.setInterruptHandler([] {});
+    runtime.spawn(relayAgentWakeup(&runtime, &_agentWakeup));
     runtime.blockOn(runAgentModeFlow(&runtime, std::move(initialMessage)));
 }
 
-coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
-                                         std::optional<std::string> initialMessage)
+core::async::Task<void> Shell::runAgentModeFlow(core::tui::runtime::TuiRuntime* runtime,
+                                                std::optional<std::string> initialMessage)
 {
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
@@ -2821,10 +2941,10 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     auto* provider = _agentProviderFactory->activeProvider();
     if (!provider)
     {
-        auto const& theme = tui::currentTheme();
+        auto const& theme = core::tui::currentTheme();
         auto& out = prompt.terminal().output();
-        auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-        auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const errorStyle = core::tui::Style { .fg = theme.agentColors.errorText };
+        auto const mutedStyle = core::tui::Style { .fg = theme.agentColors.statusText };
         if (!agentConfig.activeProvider.empty())
         {
             out.writeText(std::format("Provider '{}' is not available.\n", agentConfig.activeProvider),
@@ -3064,7 +3184,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
             auto const now = std::chrono::system_clock::now();
             auto const timestamp =
                 std::format("{:%Y%m%d-%H%M%S}", std::chrono::floor<std::chrono::seconds>(now));
-            tracePath = platform::normalizePath(traceDir / ("agent-trace-" + timestamp + ".jsonl"));
+            tracePath = core::platform::normalizePath(traceDir / ("agent-trace-" + timestamp + ".jsonl"));
         }
 
         auto tracerResult = agent::AgentTracer::create(tracePath);
@@ -3086,7 +3206,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     }
 
     // --- Set up outbound queue and AgentWorker ---
-    auto agentOutbound = platform::MessageQueue<agent::FromAgentMessage> {};
+    auto agentOutbound = core::platform::MessageQueue<agent::FromAgentMessage> {};
     agentOutbound.setWakeup(&_agentWakeup);
 
     auto worker = agent::AgentWorker(*_agentSession, agentOutbound);
@@ -3104,12 +3224,12 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     // --- Agent input loop ---
     auto& terminal = prompt.terminal();
     auto& out = terminal.output();
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
 
-    // Point the outbound-message wakeup at the terminal input. The agent loop now
-    // waits via the coroutine runtime's event source (which also selects on this
-    // wakeup directly), so this keeps any residual TerminalInput::poll() path in
-    // sync; the event source is what actually wakes the agent loop on a message.
+    // Point the outbound-message wakeup at the terminal input as well. What wakes the
+    // agent loop on a message is relayAgentWakeup(), parked on this wakeup's handle in
+    // the runtime's loop (see runAgentMode()); this keeps any residual
+    // TerminalInput::poll() path in sync with it.
     terminal.input().setWakeup(&_agentWakeup);
 
     // Wake the runtime's wait on focus changes so the poll timeout (focused vs
@@ -3117,11 +3237,11 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     terminal.onFocusChanged([this](bool) { _agentWakeup.signal(); });
 
     // Create inline Screen with AgentInputComponent
-    auto screenConfig = tui::ScreenConfig {
-        .viewport = tui::Viewport::Inline,
+    auto screenConfig = core::tui::ScreenConfig {
+        .viewport = core::tui::Viewport::Inline,
         .inhibitReflow = true,
     };
-    auto screen = tui::Screen(terminal, screenConfig);
+    auto screen = core::tui::Screen(terminal, screenConfig);
     auto inputComponent = agent::AgentInputComponent {};
     auto toolStatusComponent = agent::ToolStatusComponent {};
 
@@ -3201,14 +3321,14 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     inputComponent.addCompletionProvider(std::move(historyProvider));
 
     // Set up command palette registry for agent mode
-    auto agentCommandRegistry = tui::CommandRegistry {};
+    auto agentCommandRegistry = core::tui::CommandRegistry {};
     agentCommandRegistry.add({
         .id = "agent.toggle_plan_mode",
         .label = "Toggle Plan Mode",
         .description = "Switch between plan and execute mode",
         .category = "Mode",
         .keybinding = "S-Tab",
-        .context = tui::CommandContext::Agent,
+        .context = core::tui::CommandContext::Agent,
         .action = [] {}, // Handled via Action::CycleMode
     });
     agentCommandRegistry.add({
@@ -3217,7 +3337,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         .description = "Cycle through off/normal/extended thinking",
         .category = "Mode",
         .keybinding = "Ctrl+/",
-        .context = tui::CommandContext::Agent,
+        .context = core::tui::CommandContext::Agent,
         .action = [] {}, // Handled via Action::CycleThinkingMode
     });
     agentCommandRegistry.add({
@@ -3226,7 +3346,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         .description = "Cycle through available AI models",
         .category = "Provider",
         .keybinding = "Ctrl+.",
-        .context = tui::CommandContext::Agent,
+        .context = core::tui::CommandContext::Agent,
         .action = [] {}, // Handled via Action::CycleModel
     });
     agentCommandRegistry.add({
@@ -3235,7 +3355,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         .description = "Return to shell prompt",
         .category = "Mode",
         .keybinding = "Esc",
-        .context = tui::CommandContext::Agent,
+        .context = core::tui::CommandContext::Agent,
         .action = [] {}, // Handled via Action::Abort
     });
     agentCommandRegistry.add({
@@ -3244,7 +3364,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         .description = "Clear the terminal screen",
         .category = "View",
         .keybinding = "Ctrl+L",
-        .context = tui::CommandContext::Both,
+        .context = core::tui::CommandContext::Both,
         .action = [] {}, // Handled via Action::ClearScreen
     });
     inputComponent.setCommandRegistry(&agentCommandRegistry);
@@ -3254,7 +3374,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
 
     auto const prefSize = inputComponent.preferredSize();
     inputComponent.setArea(
-        tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = prefSize.height });
+        core::tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = prefSize.height });
     screen.root().addChild(inputComponent);
     screen.setFocus(&inputComponent);
     screen.invalidate();
@@ -3264,7 +3384,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
     // Show auto-resume context message if a named session was loaded.
     if (loadedFromNamedSession && agentConfig.session.showResumeContext)
     {
-        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText };
         auto const total =
             _agentSession->sessionUsage().inputTokens + _agentSession->sessionUsage().outputTokens;
         out.writeText(std::format("Resumed session '{}' ({} turns, ~{}k tokens).\n",
@@ -3334,13 +3454,13 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
 
         // 3. Wait for input, an agent message, or a timeout (whichever happens first).
         auto const activity = co_await runtime->nextActivity(std::chrono::milliseconds { pollTimeout });
-        if (activity.kind == tui::runtime::ActivityKind::AgentReady)
+        if (activity.kind == core::tui::runtime::ActivityKind::AgentReady)
             continue; // Loop back to drain the agent messages at the top.
 
         // Re-read focus state after the wait — a FocusEvent may have been consumed.
         auto const terminalFocused = terminal.isFocused();
 
-        if (activity.kind == tui::runtime::ActivityKind::Timeout)
+        if (activity.kind == core::tui::runtime::ActivityKind::Timeout)
         {
             // Check background context loading. ensureSystemPromptReady() applies
             // the built context (system prompt, git/project info, file paths) and
@@ -3350,8 +3470,8 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
             {
                 session.ensureSystemPromptReady();
                 auto const newPrefSize = inputComponent.preferredSize();
-                inputComponent.setArea(
-                    tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+                inputComponent.setArea(core::tui::Rect {
+                    .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                 screen.draw();
             }
 
@@ -3384,7 +3504,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                 else if (inputTicked && !session.anyPromptActive())
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect {
+                    inputComponent.setArea(core::tui::Rect {
                         .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                     screen.draw();
                 }
@@ -3411,7 +3531,7 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
                     || inputComponent.ghostTextTimeoutMs() >= 0 || inputComponent.escapeHintTimeoutMs() >= 0)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect {
+                    inputComponent.setArea(core::tui::Rect {
                         .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                     screen.draw();
                 }
@@ -3426,13 +3546,14 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
             // A resize only needs a redraw; skip all per-event dispatch and fall
             // through to the redraw blocks below, which re-layout the input
             // component and re-render any active inline prompt at the new width.
-            auto const isResize = std::holds_alternative<tui::ResizeEvent>(event);
+            auto const isResize = std::holds_alternative<core::tui::ResizeEvent>(event);
             if (isResize)
                 needsRedraw = true;
 
             // A modifier-only keypress (bare Ctrl/Shift/Alt) produces no text or
             // action; ignore it with no redraw. (Never a resize, so order is moot.)
-            if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
+            if (auto const* key = std::get_if<core::tui::KeyEvent>(&event);
+                key && core::tui::isModifierOnlyKey(key->key))
                 continue;
 
             // Dispatch the event only when it is not a resize.
@@ -3445,8 +3566,8 @@ coro::Task<void> Shell::runAgentModeFlow(tui::runtime::TuiRuntime* runtime,
         {
             inputComponent.flushDeferredUpdates();
             auto const newPrefSize = inputComponent.preferredSize();
-            inputComponent.setArea(
-                tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+            inputComponent.setArea(core::tui::Rect {
+                .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
             screen.draw();
         }
 

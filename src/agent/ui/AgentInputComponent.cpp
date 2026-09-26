@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/Canvas.hpp>
-#include <tui/GhostTextHelper.hpp>
-#include <tui/ImageLoader.hpp>
-#include <tui/Sixel.hpp>
-#include <tui/Theme.hpp>
-#include <tui/TimerUtils.hpp>
-#include <tui/completer/CompletionProvider.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/GhostTextHelper.hpp>
+#include <core/tui/ImageLoader.hpp>
+#include <core/tui/Sixel.hpp>
+#include <core/tui/Theme.hpp>
+#include <core/tui/TimerUtils.hpp>
+#include <core/tui/completer/CompletionProvider.hpp>
 
 #include <format>
 #include <ranges>
@@ -27,17 +27,18 @@ void AgentInputComponent::setPromptIndicator(std::string indicator)
     _inputField.setPrompt(std::move(indicator) + " ");
 }
 
-void AgentInputComponent::addCompletionProvider(std::unique_ptr<tui::CompletionProvider> provider)
+void AgentInputComponent::addCompletionProvider(
+    std::unique_ptr<core::tui::completer::CompletionProvider> provider)
 {
     _completer.addProvider(std::move(provider));
 }
 
-void AgentInputComponent::render(tui::Canvas& canvas)
+void AgentInputComponent::render(core::tui::Canvas& canvas)
 {
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const labelStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const infoStyle = core::tui::Style { .fg = theme.agentColors.statusText };
 
     auto const area = screenBounds();
     auto const lineCount = _inputField.lineCount();
@@ -53,20 +54,20 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
     // Show mode indicator (plan vs execute)
     {
-        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto dimPipeStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
         col += canvas.putString(rowOff, col, " ", {});
         col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
         col += canvas.putString(rowOff, col, " ", {});
-        auto const modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.planModeText }
-                                         : tui::Style { .fg = theme.agentColors.executeModeText };
+        auto const modeStyle = _planMode ? core::tui::Style { .fg = theme.agentColors.planModeText }
+                                         : core::tui::Style { .fg = theme.agentColors.executeModeText };
         col += canvas.putString(rowOff, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
     // Show provider and model info if available
     if (!_providerName.empty() || !_modelName.empty())
     {
-        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto dimPipeStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
         col += canvas.putString(rowOff, col, " ", {});
         col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
@@ -83,27 +84,27 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     // Show thinking mode if not off
     if (_thinkingMode != ThinkingMode::Off)
     {
-        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto dimPipeStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
         col += canvas.putString(rowOff, col, " ", {});
         col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // | separator
         col += canvas.putString(rowOff, col, " ", {});
 
         auto const modeStr = std::string("thinking:") + std::string(thinkingModeToString(_thinkingMode));
-        auto thinkingStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto thinkingStyle = core::tui::Style { .fg = theme.agentColors.statusText };
         col += canvas.putString(rowOff, col, modeStr, thinkingStyle);
     }
 
     // Show git branch and/or project path (appears after background context loading completes)
     if (!_gitBranch.empty() || !_projectPath.empty())
     {
-        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto dimPipeStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
         col += canvas.putString(rowOff, col, " ", {});
         col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
         col += canvas.putString(rowOff, col, " ", {});
 
-        auto dimTextStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto dimTextStyle = core::tui::Style { .fg = theme.agentColors.statusText };
         dimTextStyle.dim = true;
 
         // Render project path with blue→teal gradient coloring.
@@ -113,9 +114,10 @@ void AgentInputComponent::render(tui::Canvas& canvas)
                 auto const t = _projectPath.size() == 1
                                    ? 0.0f
                                    : static_cast<float>(i) / static_cast<float>(_projectPath.size() - 1);
-                auto const color =
-                    tui::lerpColor(theme.agentColors.pathGradientStart, theme.agentColors.pathGradientEnd, t);
-                col += canvas.putString(rowOff, col, _projectPath.substr(i, 1), tui::Style { .fg = color });
+                auto const color = core::tui::lerpColor(
+                    theme.agentColors.pathGradientStart, theme.agentColors.pathGradientEnd, t);
+                col += canvas.putString(
+                    rowOff, col, _projectPath.substr(i, 1), core::tui::Style { .fg = color });
             }
         };
 
@@ -157,7 +159,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     }
 
     // Render InputField offset by top padding, header height, and left chrome
-    auto const fieldArea = tui::Rect {
+    auto const fieldArea = core::tui::Rect {
         .x = LeftBarWidth + BarPadding,
         .y = rowOff + HeaderHeight,
         .width = area.width - LeftBarWidth - BarPadding,
@@ -179,7 +181,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         if (popupHeight > 0 && popupWidth > 0)
         {
             auto const popupRect =
-                tui::Rect { .x = popupCol, .y = popupRow, .width = popupWidth, .height = popupHeight };
+                core::tui::Rect { .x = popupCol, .y = popupRow, .width = popupWidth, .height = popupHeight };
             _completionPopup.setArea(popupRect);
             auto popupCanvas = canvas.subcanvas(popupRect);
             _completionPopup.render(popupCanvas);
@@ -196,8 +198,9 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
         {
             auto const paletteX = std::max(0, (area.width - paletteWidth) / 2);
-            auto const paletteRect =
-                tui::Rect { .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight };
+            auto const paletteRect = core::tui::Rect {
+                .x = paletteX, .y = paletteRow, .width = paletteWidth, .height = paletteHeight
+            };
             _commandPalette.setArea(paletteRect);
             auto paletteCanvas = canvas.subcanvas(paletteRect);
             _commandPalette.render(paletteCanvas);
@@ -209,7 +212,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     auto previewRow = rowOff + HeaderHeight + fieldHeight;
     if (previewHeight > 0 && previewRow < area.height)
     {
-        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText, .dim = true };
         for (size_t i = 0; i < _attachedImages.size() && previewRow < area.height; ++i)
         {
             auto const& img = _attachedImages[i];
@@ -249,13 +252,13 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         canvas.put(paddingRow, 0, "\xc2\xa0", {}); // U+00A0 non-breaking space
 }
 
-tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
+core::tui::EventResult AgentInputComponent::onEvent(core::tui::InputEvent const& event)
 {
     auto const action = processInput(event);
-    return action != Action::None ? tui::EventResult::Handled : tui::EventResult::Ignored;
+    return action != Action::None ? core::tui::EventResult::Handled : core::tui::EventResult::Ignored;
 }
 
-tui::Size AgentInputComponent::preferredSize() const
+core::tui::Size AgentInputComponent::preferredSize() const
 {
     auto const fieldSize = _inputField.preferredSize();
     auto totalHeight = _topPadding + fieldSize.height + HeaderHeight + imagePreviewHeight() + FooterHeight;
@@ -277,7 +280,7 @@ tui::Size AgentInputComponent::preferredSize() const
     return { .width = fieldSize.width + LeftBarWidth + BarPadding, .height = totalHeight };
 }
 
-AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent const& event)
+AgentInputComponent::Action AgentInputComponent::processInput(core::tui::InputEvent const& event)
 {
     // Handle command palette events first (takes priority over everything)
     if (_commandPalette.visible())
@@ -285,9 +288,9 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         auto const paletteAction = _commandPalette.processEvent(event);
         switch (paletteAction)
         {
-            case tui::CommandPaletteAction::Changed: return Action::Changed;
-            case tui::CommandPaletteAction::Executed:
-            case tui::CommandPaletteAction::Dismissed: return Action::Changed;
+            case core::tui::CommandPaletteAction::Changed: return Action::Changed;
+            case core::tui::CommandPaletteAction::Executed:
+            case core::tui::CommandPaletteAction::Dismissed: return Action::Changed;
         }
         return Action::Changed;
     }
@@ -297,11 +300,11 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     auto popupDismissedByTyping = false;
 
     // Intercept paste events: detect image data before forwarding to InputField.
-    if (auto const* paste = std::get_if<tui::PasteEvent>(&event))
+    if (auto const* paste = std::get_if<core::tui::PasteEvent>(&event))
     {
         auto const raw = std::span<std::uint8_t const>(
             reinterpret_cast<std::uint8_t const*>(paste->text.data()), paste->text.size());
-        auto const mediaType = tui::detectImageMediaType(raw);
+        auto const mediaType = core::tui::detectImageMediaType(raw);
         if (!mediaType.empty())
         {
             attachImage(std::vector<std::uint8_t>(raw.begin(), raw.end()), mediaType);
@@ -312,7 +315,7 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         // that it couldn't convert to text. Try reading image from the system clipboard.
         if (paste->text.empty())
         {
-            if (auto clipboardImage = tui::readClipboardImage())
+            if (auto clipboardImage = core::tui::readClipboardImage())
             {
                 attachImage(std::move(clipboardImage->data), std::move(clipboardImage->mediaType));
                 return Action::Changed;
@@ -325,12 +328,13 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     if (_completionPopup.visible())
     {
         // Intercept Tab for partial completion (longest common prefix)
-        if (auto const* key = std::get_if<tui::KeyEvent>(&event);
-            key && key->key == tui::KeyCode::Tab
-            && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+        if (auto const* key = std::get_if<core::tui::KeyEvent>(&event);
+            key && key->key == core::tui::KeyCode::Tab
+            && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None
             && _completionPopup.itemCount() > 1)
         {
-            auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
+            auto const commonPrefix =
+                core::tui::completer::Completer::findCommonPrefix(_completionPopup.items());
             auto const inputText = std::string(_inputField.text());
             auto const cursor = _inputField.cursor();
 
@@ -359,13 +363,13 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         auto const completionResult = _completionPopup.processEvent(event);
         switch (completionResult)
         {
-            case tui::CompletionAction::Changed: return Action::Changed;
-            case tui::CompletionAction::Accepted:
+            case core::tui::CompletionAction::Changed: return Action::Changed;
+            case core::tui::CompletionAction::Accepted:
                 if (auto const* selected = _completionPopup.selectedItem())
                     insertCompletion(selected->text);
                 dismissPopup();
                 return Action::Changed;
-            case tui::CompletionAction::Dismissed:
+            case core::tui::CompletionAction::Dismissed:
                 // Don't hide yet — let event pass through and potentially re-filter
                 popupDismissedByTyping = true;
                 break;
@@ -373,9 +377,9 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     }
 
     // Check for Escape to abort (only if popup is not visible)
-    if (auto const* key = std::get_if<tui::KeyEvent>(&event))
+    if (auto const* key = std::get_if<core::tui::KeyEvent>(&event))
     {
-        if (key->key == tui::KeyCode::Escape)
+        if (key->key == core::tui::KeyCode::Escape)
         {
             if (_completionPopup.visible())
             {
@@ -415,14 +419,15 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             restoreFromEscapeHint();
 
         // Tab with ghost text: accept ghost text before trying completion.
-        if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+        if (key->key == core::tui::KeyCode::Tab
+            && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None
             && _inputField.hasGhostText())
         {
             // Confirm and accept the suggestion, suppressing the pending recompute so the
             // consumed-prefix seed survives for a synchronous restore-on-backspace. If the recompute
             // clears a re-prepended guess the completer no longer offers, nothing is accepted — fall
             // through to the no-ghost Tab handling below so Tab still triggers completion.
-            if (tui::acceptGhostText(
+            if (core::tui::acceptGhostText(
                     _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince))
                 return Action::Changed;
         }
@@ -430,30 +435,32 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         // Right arrow or End at end of line accepts ghost text.
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
-            if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
-                || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
+            if (key->key == core::tui::KeyCode::Right || key->key == core::tui::KeyCode::End
+                || (key->codepoint == 'e'
+                    && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl)))
             {
                 // Right/End/Ctrl+E at end-of-buffer are no-ops anyway, so swallowing the key when the
                 // recompute leaves nothing to accept is harmless.
-                (void) tui::acceptGhostText(
+                (void) core::tui::acceptGhostText(
                     _inputField, [this] { updateGhostText(); }, _ghostTextDirty, _ghostTextPendingSince);
                 return Action::Changed;
             }
         }
 
         // Ctrl+L clears the screen
-        if (key->codepoint == 'l' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        if (key->codepoint == 'l' && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl))
             return Action::ClearScreen;
 
         // Tab triggers completion (no ghost text case)
-        if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None)
+        if (key->key == core::tui::KeyCode::Tab
+            && core::tui::withoutLockKeys(key->modifiers) == core::tui::Modifier::None)
         {
             triggerCompletion(false);
             return Action::Changed;
         }
 
         // Ctrl+Space triggers completion (always shows popup)
-        if (key->codepoint == ' ' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        if (key->codepoint == ' ' && core::tui::hasModifier(key->modifiers, core::tui::Modifier::Ctrl))
         {
             triggerCompletion(true);
             return Action::Changed;
@@ -464,21 +471,21 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     auto const action = _inputField.processEvent(event);
     switch (action)
     {
-        case tui::InputFieldAction::Submit:
+        case core::tui::InputFieldAction::Submit:
             _inputField.clearGhostText();
             dismissPopup();
             if (std::ranges::all_of(_inputField.text(), [](unsigned char c) { return std::isspace(c); }))
                 return Action::None;
             return Action::Submit;
-        case tui::InputFieldAction::Abort:
+        case core::tui::InputFieldAction::Abort:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::Abort;
-        case tui::InputFieldAction::Eof:
+        case core::tui::InputFieldAction::Eof:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::Abort;
-        case tui::InputFieldAction::Changed:
+        case core::tui::InputFieldAction::Changed:
             _ghostTextDirty = true;
             _ghostTextPendingSince = std::chrono::steady_clock::now();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
@@ -496,36 +503,36 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             else if (_completionPopup.visible())
                 dismissPopup();
             return Action::Changed;
-        case tui::InputFieldAction::CommandPalette:
+        case core::tui::InputFieldAction::CommandPalette:
             _inputField.clearGhostText();
             dismissPopup();
             if (_commandRegistry)
-                _commandPalette.show(*_commandRegistry, tui::CommandContext::Agent);
+                _commandPalette.show(*_commandRegistry, core::tui::CommandContext::Agent);
             return Action::Changed;
-        case tui::InputFieldAction::AgentMode:
+        case core::tui::InputFieldAction::AgentMode:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::Abort; // Toggle back to shell
-        case tui::InputFieldAction::CycleAgentMode:
+        case core::tui::InputFieldAction::CycleAgentMode:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleMode;
-        case tui::InputFieldAction::CycleThinkingMode:
+        case core::tui::InputFieldAction::CycleThinkingMode:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleThinkingMode;
-        case tui::InputFieldAction::CycleModel:
+        case core::tui::InputFieldAction::CycleModel:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleModel;
-        case tui::InputFieldAction::FuzzyFileFinder:
+        case core::tui::InputFieldAction::FuzzyFileFinder:
             // Not applicable in agent mode; ignore.
             break;
-        case tui::InputFieldAction::NewPrompt:
+        case core::tui::InputFieldAction::NewPrompt:
             _inputField.clearGhostText();
             dismissPopup();
             return Action::NewPrompt;
-        case tui::InputFieldAction::None:
+        case core::tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)
             {
@@ -636,10 +643,10 @@ void AgentInputComponent::updateGhostText()
         return;
     }
 
-    tui::updateGhostText(_inputField,
-                         _suggestCacheText,
-                         _suggestCacheResult,
-                         [this](auto const& text, auto cursor) { return _completer.suggest(text, cursor); });
+    core::tui::updateGhostText(
+        _inputField, _suggestCacheText, _suggestCacheResult, [this](auto const& text, auto cursor) {
+            return _completer.suggest(text, cursor);
+        });
 }
 
 void AgentInputComponent::flushDeferredUpdates()
@@ -670,14 +677,14 @@ void AgentInputComponent::flushDeferredUpdates()
 
 int AgentInputComponent::ghostTextTimeoutMs() const
 {
-    return tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
+    return core::tui::remainingMs(_ghostTextPendingSince, GhostTextDebounceMs);
 }
 
 int AgentInputComponent::escapeHintTimeoutMs() const
 {
     if (!_escapeHintVisible)
         return -1;
-    return tui::remainingMs(_lastEscapeTime, EscapeHintTimeout);
+    return core::tui::remainingMs(_lastEscapeTime, EscapeHintTimeout);
 }
 
 void AgentInputComponent::restoreFromEscapeHint()
@@ -731,17 +738,17 @@ int AgentInputComponent::spinnerTimeoutMs() const
     return static_cast<int>(_spinner.interval().count());
 }
 
-void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
+void AgentInputComponent::renderInfoLine(core::tui::Canvas& canvas, int row)
 {
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
     auto const area = screenBounds();
     auto col = 1; // Indent to align with content (past the left bar chrome).
 
     if (_thinkingActive)
     {
         // Spinner + activity label
-        auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
-        auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const spinnerStyle = core::tui::Style { .fg = theme.agentColors.spinnerColor };
+        auto const labelStyle = core::tui::Style { .fg = theme.agentColors.statusText };
         col += canvas.putString(row, col, _spinner.currentFrame(), spinnerStyle);
         col += canvas.putString(row, col, " ", {});
         canvas.putString(row, col, _activityLabel, labelStyle);
@@ -749,8 +756,8 @@ void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
     else
     {
         // Shortcut hints
-        auto const keyStyle = tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
-        auto const descStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        auto const keyStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
+        auto const descStyle = core::tui::Style { .fg = theme.agentColors.statusText, .dim = true };
 
         struct Hint
         {
@@ -779,7 +786,7 @@ void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
         // Show image attachment count
         if (!_attachedImages.empty() && col < area.width)
         {
-            auto const imageCountStyle = tui::Style { .fg = theme.agentColors.leftBar };
+            auto const imageCountStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
             auto const label = _attachedImages.size() == 1
                                    ? std::string("1 image attached")
                                    : std::format("{} images attached", _attachedImages.size());
@@ -804,7 +811,8 @@ bool AgentInputComponent::attachImage(std::vector<std::uint8_t> data, std::strin
 
     // Generate sixel preview (best-effort — failure doesn't block attachment).
     auto const& img = _attachedImages.back();
-    auto loaded = tui::loadImageFromMemory(std::span<std::uint8_t const>(img.data.data(), img.data.size()));
+    auto loaded =
+        core::tui::loadImageFromMemory(std::span<std::uint8_t const>(img.data.data(), img.data.size()));
     if (!loaded.has_value())
     {
         _imagePreviews.emplace_back();
@@ -836,19 +844,19 @@ bool AgentInputComponent::attachImage(std::vector<std::uint8_t> data, std::strin
     auto const lineSpan = std::max(1, (std::max(1, targetH) + cellH - 1) / cellH);
     _previewLayouts.push_back(PreviewLayout { .colSpan = colSpan, .lineSpan = lineSpan });
 
-    auto resized = tui::resizeImage(*loaded, std::max(1, targetW), std::max(1, targetH));
+    auto resized = core::tui::resizeImage(*loaded, std::max(1, targetW), std::max(1, targetH));
     if (!resized.has_value())
     {
         _imagePreviews.emplace_back();
         return true;
     }
 
-    auto const imageData = tui::ImageData {
+    auto const imageData = core::tui::ImageData {
         .pixels = std::span(resized->pixels),
         .width = resized->width,
         .height = resized->height,
     };
-    auto sixel = tui::encodeSixel(imageData, 64);
+    auto sixel = core::tui::encodeSixel(imageData, 64);
     _imagePreviews.push_back(sixel.has_value() ? std::move(*sixel) : std::string {});
     return true;
 }

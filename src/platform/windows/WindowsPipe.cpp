@@ -17,7 +17,7 @@ class WindowsPipe final: public Pipe
     ///
     /// @param flags Creation flags (currently unused on Windows)
     explicit WindowsPipe([[maybe_unused]] unsigned flags = 0):
-        _readHandle(InvalidHandle), _writeHandle(InvalidHandle)
+        _readHandle(core::platform::InvalidHandle), _writeHandle(core::platform::InvalidHandle)
     {
         SECURITY_ATTRIBUTES sa;
         sa.nLength = sizeof(SECURITY_ATTRIBUTES);
@@ -33,8 +33,8 @@ class WindowsPipe final: public Pipe
     WindowsPipe(WindowsPipe&& other) noexcept:
         _readHandle(other._readHandle), _writeHandle(other._writeHandle)
     {
-        other._readHandle = InvalidHandle;
-        other._writeHandle = InvalidHandle;
+        other._readHandle = core::platform::InvalidHandle;
+        other._writeHandle = core::platform::InvalidHandle;
     }
 
     WindowsPipe& operator=(WindowsPipe&& other) noexcept
@@ -44,51 +44,51 @@ class WindowsPipe final: public Pipe
             close();
             _readHandle = other._readHandle;
             _writeHandle = other._writeHandle;
-            other._readHandle = InvalidHandle;
-            other._writeHandle = InvalidHandle;
+            other._readHandle = core::platform::InvalidHandle;
+            other._writeHandle = core::platform::InvalidHandle;
         }
         return *this;
     }
 
-    [[nodiscard]] NativeHandle reader() const noexcept override { return _readHandle; }
+    [[nodiscard]] core::platform::NativeHandle reader() const noexcept override { return _readHandle; }
 
-    [[nodiscard]] NativeHandle writer() const noexcept override { return _writeHandle; }
+    [[nodiscard]] core::platform::NativeHandle writer() const noexcept override { return _writeHandle; }
 
-    [[nodiscard]] NativeHandle releaseReader() noexcept override
+    [[nodiscard]] core::platform::NativeHandle releaseReader() noexcept override
     {
         auto const handle = _readHandle;
-        _readHandle = InvalidHandle;
+        _readHandle = core::platform::InvalidHandle;
         return handle;
     }
 
-    [[nodiscard]] NativeHandle releaseWriter() noexcept override
+    [[nodiscard]] core::platform::NativeHandle releaseWriter() noexcept override
     {
         auto const handle = _writeHandle;
-        _writeHandle = InvalidHandle;
+        _writeHandle = core::platform::InvalidHandle;
         return handle;
     }
 
     void closeReader() noexcept override
     {
-        if (_readHandle != InvalidHandle)
+        if (_readHandle != core::platform::InvalidHandle)
         {
             CloseHandle(_readHandle);
-            _readHandle = InvalidHandle;
+            _readHandle = core::platform::InvalidHandle;
         }
     }
 
     void closeWriter() noexcept override
     {
-        if (_writeHandle != InvalidHandle)
+        if (_writeHandle != core::platform::InvalidHandle)
         {
             CloseHandle(_writeHandle);
-            _writeHandle = InvalidHandle;
+            _writeHandle = core::platform::InvalidHandle;
         }
     }
 
     [[nodiscard]] bool good() const noexcept override
     {
-        return _readHandle != InvalidHandle && _writeHandle != InvalidHandle;
+        return _readHandle != core::platform::InvalidHandle && _writeHandle != core::platform::InvalidHandle;
     }
 
   private:
@@ -98,11 +98,11 @@ class WindowsPipe final: public Pipe
         closeWriter();
     }
 
-    NativeHandle _readHandle;
-    NativeHandle _writeHandle;
+    core::platform::NativeHandle _readHandle;
+    core::platform::NativeHandle _writeHandle;
 };
 
-std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags)
+std::expected<std::unique_ptr<Pipe>, core::platform::PlatformError> createPipe(unsigned flags)
 {
     try
     {
@@ -110,7 +110,7 @@ std::expected<std::unique_ptr<Pipe>, PlatformError> createPipe(unsigned flags)
     }
     catch (std::runtime_error const&)
     {
-        return std::unexpected(PlatformError::PipeCreationFailed);
+        return std::unexpected(core::platform::PlatformError::PipeCreationFailed);
     }
 }
 

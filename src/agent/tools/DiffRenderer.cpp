@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/GenericSyntaxHighlighter.hpp>
-#include <tui/Theme.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <algorithm>
 #include <format>
@@ -268,7 +268,7 @@ auto generateUnifiedDiff(std::string_view oldText, std::string_view newText, int
     return result;
 }
 
-void renderDiff(tui::TerminalOutput& output,
+void renderDiff(core::tui::TerminalOutput& output,
                 std::string_view filePath,
                 std::span<DiffLine const> diffLines,
                 bool truncated)
@@ -276,13 +276,13 @@ void renderDiff(tui::TerminalOutput& output,
     if (diffLines.empty())
         return;
 
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const addStyle = tui::Style { .fg = theme.colors.success };
-    auto const delStyle = tui::Style { .fg = theme.colors.error };
-    auto const ctxStyle = tui::Style { .fg = theme.agentColors.statusText };
-    auto const hunkStyle = tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
-    auto const headerStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const addStyle = core::tui::Style { .fg = theme.colors.success };
+    auto const delStyle = core::tui::Style { .fg = theme.colors.error };
+    auto const ctxStyle = core::tui::Style { .fg = theme.agentColors.statusText };
+    auto const hunkStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
+    auto const headerStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
 
     // Diff header line.
     output.writeText("\u2502 ", barStyle);
@@ -335,14 +335,15 @@ void renderDiff(tui::TerminalOutput& output,
     }
 }
 
-void renderDiff(tui::TerminalOutput& output,
+void renderDiff(core::tui::TerminalOutput& output,
                 std::string_view filePath,
                 std::span<DiffLine const> diffLines,
-                tui::LanguageId language,
-                bool truncated)
+                core::tui::LanguageId language,
+                bool truncated,
+                core::tui::SyntaxHighlighterRegistry const* highlighters)
 {
     // Fall back to non-highlighted rendering if no language detected
-    if (language == tui::LanguageId::None)
+    if (language == core::tui::LanguageId::None)
     {
         renderDiff(output, filePath, diffLines, truncated);
         return;
@@ -351,13 +352,13 @@ void renderDiff(tui::TerminalOutput& output,
     if (diffLines.empty())
         return;
 
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const addStyle = tui::Style { .fg = theme.colors.success };
-    auto const delStyle = tui::Style { .fg = theme.colors.error };
-    auto const ctxStyle = tui::Style { .fg = theme.agentColors.statusText };
-    auto const hunkStyle = tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
-    auto const headerStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const addStyle = core::tui::Style { .fg = theme.colors.success };
+    auto const delStyle = core::tui::Style { .fg = theme.colors.error };
+    auto const ctxStyle = core::tui::Style { .fg = theme.agentColors.statusText };
+    auto const hunkStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
+    auto const headerStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
 
     // Diff header line.
     output.writeText("\u2502 ", barStyle);
@@ -374,7 +375,7 @@ void renderDiff(tui::TerminalOutput& output,
     auto const lineNumWidth = maxLineNum > 0 ? static_cast<int>(std::to_string(maxLineNum).size()) : 1;
 
     // Track highlight state across lines (reset at hunk boundaries)
-    auto hlState = tui::HighlightState::Normal;
+    auto hlState = core::tui::HighlightState::Normal;
 
     for (auto const& line: diffLines)
     {
@@ -385,15 +386,16 @@ void renderDiff(tui::TerminalOutput& output,
             case DiffLineType::Hunk:
                 output.writeText(std::format("{:>{}}  ", "", lineNumWidth), ctxStyle);
                 output.writeText(line.text, hunkStyle);
-                hlState = tui::HighlightState::Normal; // Reset at hunk boundary
+                hlState = core::tui::HighlightState::Normal; // Reset at hunk boundary
                 break;
             case DiffLineType::Context: {
                 output.writeText(std::format("{:>{}}  ", line.oldLineNum, lineNumWidth), ctxStyle);
                 output.writeText("  ", ctxStyle);
-                auto [highlights, newState] = tui::highlightLine(line.text, language, hlState);
+                auto [highlights, newState] =
+                    core::tui::highlightLine(line.text, language, hlState, highlighters);
                 hlState = newState;
-                auto dimStyle = tui::Style { .dim = true };
-                tui::renderHighlightedLine(output, line.text, highlights, dimStyle, theme);
+                auto dimStyle = core::tui::Style { .dim = true };
+                core::tui::renderHighlightedLine(output, line.text, highlights, dimStyle, theme);
                 break;
             }
             case DiffLineType::Deletion:
@@ -404,9 +406,10 @@ void renderDiff(tui::TerminalOutput& output,
             case DiffLineType::Addition: {
                 output.writeText(std::format("{:>{}}  ", line.newLineNum, lineNumWidth), ctxStyle);
                 output.writeText("+ ", addStyle);
-                auto [highlights, newState] = tui::highlightLine(line.text, language, hlState);
+                auto [highlights, newState] =
+                    core::tui::highlightLine(line.text, language, hlState, highlighters);
                 hlState = newState;
-                tui::renderHighlightedLine(output, line.text, highlights, tui::Style {}, theme);
+                core::tui::renderHighlightedLine(output, line.text, highlights, core::tui::Style {}, theme);
                 break;
             }
         }

@@ -12,7 +12,7 @@ namespace
 auto& passManagerLog()
 {
     static auto instance =
-        logstore::Category("vm.pass", "VM pass manager log", endo::log::categoryState("vm.pass"));
+        core::log::Category("vm.pass", "VM pass manager log", endo::log::categoryState("vm.pass"));
     return instance;
 }
 } // namespace

@@ -2,12 +2,14 @@
 #include <shell/Shell.hpp>
 #include <shell/util/GlobMatcher.hpp>
 
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/Types.hpp>
+#include <core/platform/UserPaths.hpp>
+
 #include <charconv>
 #include <cmath>
 #include <filesystem>
-
-#include <platform/PathUtils.hpp>
-#include <platform/Types.hpp>
+#include <format>
 
 #if !defined(_WIN32)
     #include <pwd.h>
@@ -19,8 +21,8 @@ namespace endo
 void Shell::builtinExpandTilde(CoreVM::Params& context)
 {
     auto const& suffix = context.getString(1);
-    auto const home = _env.homeDirectory()
-                          .transform([](auto const& p) { return platform::normalizePath(p); })
+    auto const home = core::platform::homeDirectory(_env)
+                          .transform([](auto const& p) { return core::platform::normalizePath(p); })
                           .value_or(std::string {});
     context.setResult(home + suffix);
 }
@@ -43,7 +45,7 @@ void Shell::builtinExpandTildeUser(CoreVM::Params& context)
         auto const targetHome = usersDir / user;
         if (_fs.exists(targetHome))
         {
-            context.setResult(platform::normalizePath(targetHome) + suffix);
+            context.setResult(core::platform::normalizePath(targetHome) + suffix);
             return;
         }
     }
@@ -147,7 +149,7 @@ void Shell::builtinExpandParamAssign(CoreVM::Params& context)
     }
     else
     {
-        _env.set(varName, defaultValue);
+        reportEnvironmentError(std::format("set {}", varName), _env.set(varName, defaultValue));
         context.setResult(defaultValue);
     }
 }

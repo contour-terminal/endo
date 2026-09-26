@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/UserPaths.hpp>
+
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
 
 #include <agent/tools/SaveMemoryTool.hpp>
-#include <platform/UserPaths.hpp>
 
 namespace endo::agent
 {
@@ -46,7 +47,7 @@ auto SaveMemoryTool::definition() const -> ToolDefinition
 
 auto SaveMemoryTool::memoryDirectory() -> std::filesystem::path
 {
-    if (auto const configDir = platform::configHome())
+    if (auto const configDir = core::platform::configHome())
         return *configDir / "endo" / "agent-memory";
     return {};
 }

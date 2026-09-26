@@ -39,7 +39,7 @@ class FileReferenceExpander
 {
   public:
     /// Maximum number of lines to read per file.
-    static constexpr auto maxLinesPerFile = 2000;
+    static constexpr auto MaxLinesPerFile = 2000;
 
     /// Parse all @-file references from user input.
     ///
@@ -57,7 +57,7 @@ class FileReferenceExpander
     /// @param ref The file reference to read.
     /// @param maxLines Maximum lines to include (default: 2000).
     /// @return File contents on success, error message on failure.
-    [[nodiscard]] static auto readFile(FileReference const& ref, int maxLines = maxLinesPerFile)
+    [[nodiscard]] static auto readFile(FileReference const& ref, int maxLines = MaxLinesPerFile)
         -> std::expected<std::string, std::string>;
 
     /// Strip previously expanded <file> blocks from a message, returning the original user text.

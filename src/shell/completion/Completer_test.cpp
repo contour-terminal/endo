@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 
 #include "Completer.hpp"
 #include "ScriptedCompleter.hpp"
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace std::string_literals;
 
@@ -18,10 +20,11 @@ using namespace std::string_literals;
 TEST_CASE("Completer.suggest.empty_input_returns_nullopt")
 {
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     auto result = completer.suggest("", 0);
     CHECK_FALSE(result.has_value());
@@ -31,10 +34,11 @@ TEST_CASE("Completer.suggest.command_with_history_match")
 {
     endo::InMemoryHistory history;
     history.add("git push origin main");
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     auto result = completer.suggest("git p", 5);
     REQUIRE(result.has_value());
@@ -44,12 +48,13 @@ TEST_CASE("Completer.suggest.command_with_history_match")
 TEST_CASE("Completer.suggest.variable_context_word_level")
 {
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
-    env.set("PATH", "/usr/bin");
-    env.set("PAGER", "less");
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
+    REQUIRE(env.set("PATH", "/usr/bin"));
+    REQUIRE(env.set("PAGER", "less"));
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // $PA should suggest TH (completing PATH) or GER — we get whichever sorts first
     auto result = completer.suggest("$PA", 3);
@@ -62,10 +67,11 @@ TEST_CASE("Completer.suggest.argument_context_history_match")
 {
     endo::InMemoryHistory history;
     history.add("echo hello world");
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // Typing "echo he" in argument position — Phase 1 should match full line from history
     auto result = completer.suggest("echo he", 7);
@@ -76,10 +82,11 @@ TEST_CASE("Completer.suggest.argument_context_history_match")
 TEST_CASE("Completer.suggest.argument_context_no_match_returns_nullopt")
 {
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     auto result = completer.suggest("echo xyznonexistent", 19);
     CHECK_FALSE(result.has_value());
@@ -88,14 +95,15 @@ TEST_CASE("Completer.suggest.argument_context_no_match_returns_nullopt")
 TEST_CASE("Completer.suggest.let_binding_word_level_fallback")
 {
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
     fsharpState.functions["myFunction"] = endo::FSharpPersistentState::PersistedFunction {
         .parameters = { "x" },
         .parameterTypes = { std::nullopt },
     };
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // In command position, "myFun" should match the let binding via Phase 2
     auto result = completer.suggest("myFun", 5);
@@ -107,10 +115,11 @@ TEST_CASE("Completer.suggest.history_preferred_over_word_level")
 {
     endo::InMemoryHistory history;
     history.add("git commit -m \"fix bug\"");
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // Phase 1 should match the full history line "git commit -m ..." before Phase 2
     auto result = completer.suggest("git co", 6);
@@ -122,11 +131,12 @@ TEST_CASE("Completer.suggest.history_full_line_over_variable_word")
 {
     endo::InMemoryHistory history;
     history.add("$PATH/bin/something");
-    endo::TestEnvironment env;
-    env.set("PATH", "/usr/bin");
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
+    REQUIRE(env.set("PATH", "/usr/bin"));
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // History has a full line starting with $PATH — Phase 1 should find it
     auto result = completer.suggest("$PATH", 5);
@@ -141,8 +151,9 @@ TEST_CASE("Completer.suggest.history_full_line_over_variable_word")
 TEST_CASE("Completer.complete.exclusive_provider_suppresses_higher_priority_results")
 {
     endo::InMemoryHistory history;
-    endo::TestEnvironment env;
-    env.set("PATH", ""); // No PATH commands
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
+    REQUIRE(env.set("PATH", "")); // No PATH commands
     endo::FSharpPersistentState fsharpState;
 
     // Add a user-defined function so LetBindingCompleter has something to contribute
@@ -151,8 +162,8 @@ TEST_CASE("Completer.complete.exclusive_provider_suppresses_higher_priority_resu
         .parameterTypes = { std::nullopt },
     };
 
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     // Register a scripted completer for "testcmd" that claims exclusivity
     endo::CompleterFunctionRegistry registry;
@@ -182,11 +193,12 @@ TEST_CASE("Completer.complete.recency_boosts_command_score")
     endo::InMemoryHistory history;
     history.add("git status");
     history.add("grep foo");
-    endo::TestEnvironment env;
-    env.set("PATH", ""); // No real PATH — only builtins will appear plus history boost
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
+    REQUIRE(env.set("PATH", "")); // No real PATH — only builtins will appear plus history boost
     endo::FSharpPersistentState fsharpState;
-    endo::InMemoryFileSystem fs;
-    endo::Completer completer(env, history, fsharpState, fs);
+    core::platform::testing::InMemoryFileSystem fs;
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fs);
 
     auto const results = completer.complete("g", 1);
 

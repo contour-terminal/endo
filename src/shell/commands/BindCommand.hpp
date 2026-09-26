@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <tui/KeyBindings.hpp>
+#include <core/tui/KeyBindings.hpp>
 
 #include "StructuredCommand.hpp"
 
@@ -17,7 +17,7 @@ class BindCommand final: public StructuredCommand
   public:
     /// Constructs a BindCommand with the given key bindings.
     /// @param bindings The shell's current key bindings.
-    explicit BindCommand(tui::KeyBindings const& bindings);
+    explicit BindCommand(core::tui::KeyBindings const& bindings);
 
     /// @return BuiltinTypeId::KeyBindingInfo
     [[nodiscard]] uint16_t outputTypeId() const override;
@@ -28,7 +28,7 @@ class BindCommand final: public StructuredCommand
     [[nodiscard]] CoreVM::TypedObject* execute(CoreVM::Runner& runner) const override;
 
   private:
-    tui::KeyBindings const& _bindings;
+    core::tui::KeyBindings const& _bindings;
 };
 
 } // namespace endo

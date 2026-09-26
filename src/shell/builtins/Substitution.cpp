@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -45,7 +46,8 @@ void Shell::builtinSubstEnd(CoreVM::Params& context)
     char buffer[4096];
     while (true)
     {
-        auto const bytesRead = platformRead(_substitutionCapture->pipe->reader(), buffer, sizeof(buffer));
+        auto const bytesRead =
+            core::platform::platformRead(_substitutionCapture->pipe->reader(), buffer, sizeof(buffer));
         if (bytesRead <= 0)
             break;
         output.append(buffer, static_cast<size_t>(bytesRead));
@@ -104,9 +106,9 @@ void Shell::builtinProcSubstFork(CoreVM::Params& context)
         return;
     }
 
-    _procSubstChildPids.push_back(static_cast<ProcessId>(pid));
+    _procSubstChildPids.push_back(static_cast<core::platform::ProcessId>(pid));
 
-    NativeHandle exposedFd = InvalidHandle;
+    core::platform::NativeHandle exposedFd = core::platform::InvalidHandle;
     if (isWrite)
     {
         pipe->closeReader();

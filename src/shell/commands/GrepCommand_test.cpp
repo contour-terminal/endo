@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/commands/GrepCommand.hpp>
 
+#include <core/platform/SignalHandler.hpp>
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <vector>
 
 #include <platform/InterruptThrottle.hpp>
-#include <platform/SignalHandler.hpp>
-#include <platform/testing/InMemoryFileSystem.hpp>
 
 using namespace endo::grep;
 
@@ -390,7 +391,7 @@ TEST_CASE("grep.search.no_match", "[grep]")
 
 TEST_CASE("grep.collect.recursive_uses_filesystem", "[grep]")
 {
-    using endo::platform::testing::InMemoryFileSystem;
+    using core::platform::testing::InMemoryFileSystem;
 
     auto const fs = InMemoryFileSystem {
         { .path = "/root", .isDirectory = true },
@@ -415,8 +416,8 @@ TEST_CASE("grep.collect.recursive_uses_filesystem", "[grep]")
 
 TEST_CASE("grep.search.interrupt_aborts_early", "[grep]")
 {
-    using endo::platform::SignalHandler;
-    SignalHandler::clearPendingSigint();
+    using core::platform::SignalHandler;
+    core::platform::SignalHandler::clearPendingSigint();
 
     // More lines than the interrupt poll interval so the throttled check is reached.
     auto const lines = std::vector<std::string>(1000, "match");
@@ -427,15 +428,15 @@ TEST_CASE("grep.search.interrupt_aborts_early", "[grep]")
 
     // Simulate a pending Ctrl+C (consistent with InterruptThrottle_test); the throttle peeks at
     // it on its first poll and searchLines bails out, leaving the flag set for the caller.
-    SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     auto throttle = endo::platform::InterruptThrottle {};
 
     auto const count = searchLines(lines, *regex, opts, "", false, {}, [](std::string_view) {}, &throttle);
 
     // The match loop aborts at the first poll boundary, long before all 1000 lines.
     CHECK(count < 1000);
-    CHECK(SignalHandler::hasPendingSigint()); // peek does not consume the flag
-    SignalHandler::clearPendingSigint();      // do not leak into other tests
+    CHECK(core::platform::SignalHandler::hasPendingSigint()); // peek does not consume the flag
+    core::platform::SignalHandler::clearPendingSigint();      // do not leak into other tests
 }
 
 TEST_CASE("grep.search.invert_match", "[grep]")
@@ -597,14 +598,16 @@ TEST_CASE("grep.search.context_overlap", "[grep]")
 TEST_CASE("grep.binary.text_file", "[grep]")
 {
     auto const fs =
-        endo::InMemoryFileSystem { { .path = "/test/text.txt", .content = "hello world\nthis is text\n" } };
+        core::platform::testing::InMemoryFileSystem { { .path = "/test/text.txt",
+                                                        .content = "hello world\nthis is text\n" } };
     CHECK_FALSE(isBinaryFile(fs, "/test/text.txt"));
 }
 
 TEST_CASE("grep.binary.null_bytes", "[grep]")
 {
-    auto const fs = endo::InMemoryFileSystem { { .path = "/test/binary.bin",
-                                                 .content = std::string("hello\0world", 11) } };
+    auto const fs =
+        core::platform::testing::InMemoryFileSystem { { .path = "/test/binary.bin",
+                                                        .content = std::string("hello\0world", 11) } };
     CHECK(isBinaryFile(fs, "/test/binary.bin"));
 }
 
@@ -612,7 +615,7 @@ TEST_CASE("grep.binary.unreadable_is_not_binary", "[grep]")
 {
     // An unreadable file must not be classified as binary: that would make -I skip it
     // silently, where the caller's own open reports why.
-    auto fs = endo::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     fs.addFile("/test/locked.txt", "hello world\n");
     fs.denyAccess("/test/locked.txt");
 

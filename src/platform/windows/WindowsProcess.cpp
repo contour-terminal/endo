@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <platform/PosixCompat.hpp>
 #include <platform/Process.hpp>
 
 #if defined(_WIN32)
     #include <fcntl.h>
-    #include <tlhelp32.h>
     #include <windows.h>
+    // windows.h must precede tlhelp32.h; endo's own Types.hpp used to include it before this file did.
+    #include <tlhelp32.h>
 
 namespace endo::platform
 {
@@ -79,7 +81,8 @@ WindowsProcessManager& WindowsProcessManager::instance()
     return pm;
 }
 
-std::expected<ProcessId, PlatformError> WindowsProcessManager::spawn(SpawnConfig const& config)
+std::expected<core::platform::ProcessId, core::platform::PlatformError> WindowsProcessManager::spawn(
+    SpawnConfig const& config)
 {
     auto cmdLine = buildCommandLine(config.program, config.arguments);
 
@@ -87,7 +90,7 @@ std::expected<ProcessId, PlatformError> WindowsProcessManager::spawn(SpawnConfig
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESTDHANDLES;
 
-    auto const mapHandle = [](NativeHandle fd, DWORD stdType) -> HANDLE {
+    auto const mapHandle = [](core::platform::NativeHandle fd, DWORD stdType) -> HANDLE {
         if (fd == INVALID_HANDLE_VALUE)
             return GetStdHandle(stdType);
         return fd;
@@ -106,8 +109,8 @@ std::expected<ProcessId, PlatformError> WindowsProcessManager::spawn(SpawnConfig
     {
         auto const err = GetLastError();
         if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
-            return std::unexpected(PlatformError::ProgramNotFound);
-        return std::unexpected(PlatformError::ExecFailed);
+            return std::unexpected(core::platform::PlatformError::ProgramNotFound);
+        return std::unexpected(core::platform::PlatformError::ExecFailed);
     }
 
     auto const pid = pi.dwProcessId;
@@ -120,11 +123,12 @@ std::expected<ProcessId, PlatformError> WindowsProcessManager::spawn(SpawnConfig
     return pid;
 }
 
-std::expected<WaitResult, PlatformError> WindowsProcessManager::wait(ProcessId pid, WaitFlags flags)
+std::expected<WaitResult, core::platform::PlatformError> WindowsProcessManager::wait(
+    core::platform::ProcessId pid, WaitFlags flags)
 {
     auto const it = _processHandles.find(pid);
     if (it == _processHandles.end())
-        return std::unexpected(PlatformError::WaitFailed);
+        return std::unexpected(core::platform::PlatformError::WaitFailed);
 
     auto const handle = it->second;
     auto const timeout = flags.test(WaitFlag::NoHang) ? 0 : INFINITE;
@@ -135,7 +139,7 @@ std::expected<WaitResult, PlatformError> WindowsProcessManager::wait(ProcessId p
         return WaitResult { .exitCode = -1, .signaled = false, .stopped = false, .signal = 0 };
 
     if (waitResult != WAIT_OBJECT_0)
-        return std::unexpected(PlatformError::WaitFailed);
+        return std::unexpected(core::platform::PlatformError::WaitFailed);
 
     DWORD exitCode = 0;
     GetExitCodeProcess(handle, &exitCode);
@@ -148,8 +152,8 @@ std::expected<WaitResult, PlatformError> WindowsProcessManager::wait(ProcessId p
     };
 }
 
-std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> WindowsProcessManager::waitPgid(
-    ProcessId pgid, WaitFlags flags)
+std::expected<std::optional<std::pair<core::platform::ProcessId, WaitResult>>, core::platform::PlatformError>
+WindowsProcessManager::waitPgid(core::platform::ProcessId pgid, WaitFlags flags)
 {
     auto const groupIt = _groupMembers.find(pgid);
     if (groupIt == _groupMembers.end() || groupIt->second.empty())
@@ -157,7 +161,7 @@ std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> Wi
 
     auto const& members = groupIt->second;
     std::vector<HANDLE> handles;
-    std::vector<ProcessId> pids;
+    std::vector<core::platform::ProcessId> pids;
 
     for (auto const memberPid: members)
     {
@@ -195,10 +199,11 @@ std::expected<std::optional<std::pair<ProcessId, WaitResult>>, PlatformError> Wi
                                         .signal = 0 } };
     }
 
-    return std::unexpected(PlatformError::WaitFailed);
+    return std::unexpected(core::platform::PlatformError::WaitFailed);
 }
 
-std::expected<void, PlatformError> WindowsProcessManager::sendSignal(ProcessId pid, int signal)
+std::expected<void, core::platform::PlatformError> WindowsProcessManager::sendSignal(
+    core::platform::ProcessId pid, int signal)
 {
     if (signal == SIGINT)
     {
@@ -224,31 +229,32 @@ std::expected<void, PlatformError> WindowsProcessManager::sendSignal(ProcessId p
     return {};
 }
 
-auto WindowsProcessManager::terminateByHandle(ProcessId pid) -> std::expected<void, PlatformError>
+auto WindowsProcessManager::terminateByHandle(core::platform::ProcessId pid)
+    -> std::expected<void, core::platform::PlatformError>
 {
     auto const it = _processHandles.find(pid);
     if (it == _processHandles.end())
-        return std::unexpected(PlatformError::SignalFailed);
+        return std::unexpected(core::platform::PlatformError::SignalFailed);
 
     if (!TerminateProcess(it->second, 1))
-        return std::unexpected(PlatformError::SignalFailed);
+        return std::unexpected(core::platform::PlatformError::SignalFailed);
     return {};
 }
 
-std::expected<ProcessId, PlatformError> WindowsProcessManager::getForegroundPgrp(NativeHandle /*fd*/)
+std::expected<core::platform::ProcessId, core::platform::PlatformError> WindowsProcessManager::
+    getForegroundPgrp(core::platform::NativeHandle /*fd*/)
 {
-    return static_cast<ProcessId>(GetCurrentProcessId());
+    return static_cast<core::platform::ProcessId>(GetCurrentProcessId());
 }
 
-std::expected<void, PlatformError> WindowsProcessManager::setForegroundPgrp(NativeHandle /*fd*/,
-                                                                            ProcessId /*pgid*/)
+std::expected<void, core::platform::PlatformError> WindowsProcessManager::setForegroundPgrp(
+    core::platform::NativeHandle /*fd*/, core::platform::ProcessId /*pgid*/)
 {
     return {};
 }
 
-std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::filesystem::path const& path,
-                                                                           int flags,
-                                                                           int /*mode*/)
+std::expected<core::platform::NativeHandle, core::platform::PlatformError> WindowsProcessManager::openFile(
+    std::filesystem::path const& path, int flags, int /*mode*/)
 {
     DWORD access = 0;
     DWORD creation = OPEN_EXISTING;
@@ -289,7 +295,7 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
                                     nullptr);
 
     if (handle == INVALID_HANDLE_VALUE)
-        return std::unexpected(PlatformError::IoError);
+        return std::unexpected(core::platform::PlatformError::IoError);
 
     if (flags & O_APPEND)
         SetFilePointer(handle, 0, nullptr, FILE_END);
@@ -297,20 +303,22 @@ std::expected<NativeHandle, PlatformError> WindowsProcessManager::openFile(std::
     return handle;
 }
 
-std::expected<ProcessId, PlatformError> WindowsProcessManager::createSession()
+std::expected<core::platform::ProcessId, core::platform::PlatformError> WindowsProcessManager::createSession()
 {
-    return static_cast<ProcessId>(GetCurrentProcessId());
+    return static_cast<core::platform::ProcessId>(GetCurrentProcessId());
 }
 
-std::expected<void, PlatformError> WindowsProcessManager::setProcessGroup(ProcessId pid, ProcessId pgid)
+std::expected<void, core::platform::PlatformError> WindowsProcessManager::setProcessGroup(
+    core::platform::ProcessId pid, core::platform::ProcessId pgid)
 {
     _groupMembers[pgid].push_back(pid);
     return {};
 }
 
-std::expected<void, PlatformError> WindowsProcessManager::duplicateFd(NativeHandle src, NativeHandle dst)
+std::expected<void, core::platform::PlatformError> WindowsProcessManager::duplicateFd(
+    core::platform::NativeHandle src, core::platform::NativeHandle dst)
 {
-    auto const targetHandle = [](NativeHandle h) -> DWORD {
+    auto const targetHandle = [](core::platform::NativeHandle h) -> DWORD {
         auto const hStdin = GetStdHandle(STD_INPUT_HANDLE);
         auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
         auto const hStderr = GetStdHandle(STD_ERROR_HANDLE);
@@ -327,7 +335,7 @@ std::expected<void, PlatformError> WindowsProcessManager::duplicateFd(NativeHand
     if (stdHandleType != static_cast<DWORD>(-1))
     {
         if (!SetStdHandle(stdHandleType, src))
-            return std::unexpected(PlatformError::HandleDuplicationFailed);
+            return std::unexpected(core::platform::PlatformError::HandleDuplicationFailed);
         return {};
     }
 
@@ -335,15 +343,15 @@ std::expected<void, PlatformError> WindowsProcessManager::duplicateFd(NativeHand
     if (!DuplicateHandle(
             GetCurrentProcess(), src, GetCurrentProcess(), &dupHandle, 0, TRUE, DUPLICATE_SAME_ACCESS))
     {
-        return std::unexpected(PlatformError::HandleDuplicationFailed);
+        return std::unexpected(core::platform::PlatformError::HandleDuplicationFailed);
     }
 
     return {};
 }
 
-void WindowsProcessManager::closeHandle(NativeHandle handle) noexcept
+void WindowsProcessManager::closeHandle(core::platform::NativeHandle handle) noexcept
 {
-    if (handle != InvalidHandle)
+    if (handle != core::platform::InvalidHandle)
         CloseHandle(handle);
 }
 
@@ -352,11 +360,12 @@ void WindowsProcessManager::closeExtraHandles() noexcept
     // Windows handles are not inherited by default unless explicitly set
 }
 
-auto WindowsProcessManager::suspendProcess(ProcessId pid) -> std::expected<void, PlatformError>
+auto WindowsProcessManager::suspendProcess(core::platform::ProcessId pid)
+    -> std::expected<void, core::platform::PlatformError>
 {
     auto const snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE)
-        return std::unexpected(PlatformError::SignalFailed);
+        return std::unexpected(core::platform::PlatformError::SignalFailed);
 
     THREADENTRY32 te {};
     te.dwSize = sizeof(te);
@@ -381,11 +390,12 @@ auto WindowsProcessManager::suspendProcess(ProcessId pid) -> std::expected<void,
     return {};
 }
 
-auto WindowsProcessManager::resumeProcess(ProcessId pid) -> std::expected<void, PlatformError>
+auto WindowsProcessManager::resumeProcess(core::platform::ProcessId pid)
+    -> std::expected<void, core::platform::PlatformError>
 {
     auto const snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE)
-        return std::unexpected(PlatformError::SignalFailed);
+        return std::unexpected(core::platform::PlatformError::SignalFailed);
 
     THREADENTRY32 te {};
     te.dwSize = sizeof(te);

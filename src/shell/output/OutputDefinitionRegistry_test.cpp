@@ -5,7 +5,7 @@
 
 #include "OutputDefinitionRegistry.hpp"
 
-#include <platform/NativeFileSystem.hpp>
+#include <core/platform/NativeFileSystem.hpp>
 
 using namespace endo;
 
@@ -17,7 +17,7 @@ static constexpr auto DefinitionsDir = "";
 
 TEST_CASE("OutputDefinitionRegistry.load_yaml_file")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     auto const path = std::filesystem::path(DefinitionsDir) / "docker.endo-output.yml";
     REQUIRE(fs.exists(path));
@@ -29,7 +29,7 @@ TEST_CASE("OutputDefinitionRegistry.load_yaml_file")
 
 TEST_CASE("OutputDefinitionRegistry.load_from_directory")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
     CHECK(registry.definitions().size() >= 2); // docker + git
@@ -37,7 +37,7 @@ TEST_CASE("OutputDefinitionRegistry.load_from_directory")
 
 TEST_CASE("OutputDefinitionRegistry.match_exact_args")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -48,7 +48,7 @@ TEST_CASE("OutputDefinitionRegistry.match_exact_args")
 
 TEST_CASE("OutputDefinitionRegistry.match_with_extra_args")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -59,7 +59,7 @@ TEST_CASE("OutputDefinitionRegistry.match_with_extra_args")
 
 TEST_CASE("OutputDefinitionRegistry.no_match")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -69,7 +69,7 @@ TEST_CASE("OutputDefinitionRegistry.no_match")
 
 TEST_CASE("OutputDefinitionRegistry.git_log_match")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -81,7 +81,7 @@ TEST_CASE("OutputDefinitionRegistry.git_log_match")
 
 TEST_CASE("OutputDefinitionRegistry.git_status_match")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -94,7 +94,7 @@ TEST_CASE("OutputDefinitionRegistry.git_status_match")
 
 TEST_CASE("OutputDefinitionRegistry.docker_images_match")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -106,7 +106,7 @@ TEST_CASE("OutputDefinitionRegistry.docker_images_match")
 
 TEST_CASE("OutputDefinitionRegistry.all_variants")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -116,7 +116,7 @@ TEST_CASE("OutputDefinitionRegistry.all_variants")
 
 TEST_CASE("OutputDefinitionRegistry.record_type_name_derived")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     registry.loadFromDirectory(DefinitionsDir, fs);
 
@@ -127,7 +127,7 @@ TEST_CASE("OutputDefinitionRegistry.record_type_name_derived")
 
 TEST_CASE("OutputDefinitionRegistry.nonexistent_directory")
 {
-    auto const& fs = NativeFileSystem::instance();
+    auto const& fs = core::platform::NativeFileSystem::instance();
     OutputDefinitionRegistry registry;
     // Should not crash or throw on nonexistent directory
     registry.loadFromDirectory("/nonexistent/path/that/does/not/exist", fs);

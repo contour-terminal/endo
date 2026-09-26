@@ -3,7 +3,7 @@
 
 #include <shell/ui/PromptConfig.hpp>
 
-#include <tui/Terminal.hpp>
+#include <core/tui/Terminal.hpp>
 
 #include <string_view>
 #include <vector>
@@ -16,7 +16,7 @@ namespace endo
 /// @param scheme The terminal color scheme to select appropriate colors for dark/light mode.
 /// @return The corresponding PromptConfig, or the default if name is unknown.
 [[nodiscard]] PromptConfig promptPreset(std::string_view name,
-                                        tui::ColorScheme scheme = tui::ColorScheme::Dark);
+                                        core::tui::ColorScheme scheme = core::tui::ColorScheme::Dark);
 
 /// @brief Returns the list of all available preset names.
 [[nodiscard]] std::vector<std::string_view> promptPresetNames();

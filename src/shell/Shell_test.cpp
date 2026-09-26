@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include <crispy/Escape.hpp>
+#include <core/Escape.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/SystemInfo.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -12,13 +14,10 @@
 #include <string_view>
 #include <thread>
 
-#include <platform/PathUtils.hpp>
-#include <platform/SystemInfo.hpp>
-
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-using crispy::escape;
+using core::escape;
 
 #include <shell/completion/FileCompleter.hpp>
 #include <shell/completion/LetBindingCompleter.hpp>
@@ -31,15 +30,18 @@ using crispy::escape;
 
 #include <http/LocalTcpListener.hpp>
 
+#include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
+#include <core/testing/ScopedTempDir.hpp>
+#include <core/testing/ScopedWorkingDirectory.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include <platform/InstallPaths.hpp>
-#include <platform/NativeFileSystem.hpp>
-#include <platform/testing/InMemoryFileSystem.hpp>
 #include <platform/testing/MockProcessManager.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
-#include <testing/ScopedTempDir.hpp>
-#include <testing/ScopedWorkingDirectory.hpp>
 
 namespace
 {
@@ -48,10 +50,11 @@ using endo::testing::InMemoryShell;
 struct TestShell
 {
     endo::TestPTY pty;
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     int exitCode = -1;
 
-    endo::Shell shell { pty, env };
+    endo::Shell shell { pty, env, workingDirectory };
 
     std::string output() const { return pty.output(); }
 
@@ -60,12 +63,12 @@ struct TestShell
         // Seed essential environment variables from the real environment
         // so that external commands (echo, grep, etc.) can be resolved.
         if (auto const* path = std::getenv("PATH"))
-            env.set("PATH", path);
+            REQUIRE(env.set("PATH", path));
         if (auto const* home = std::getenv("HOME"))
-            env.set("HOME", home);
+            REQUIRE(env.set("HOME", home));
 #if defined(_WIN32)
         if (auto const* pathext = std::getenv("PATHEXT"))
-            env.set("PATHEXT", pathext);
+            REQUIRE(env.set("PATHEXT", pathext));
 #endif
         // Never probe the real terminal for Sixel support from a test.
         shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
@@ -84,12 +87,13 @@ struct TestShell
 struct MockedProcessShell
 {
     endo::TestPTY pty;
-    endo::InMemoryFileSystem fs;
-    endo::TestEnvironment env { "/test" };
+    core::platform::testing::InMemoryFileSystem fs;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory { "/test" };
     endo::platform::testing::MockProcessManager processManager;
     int exitCode = -1;
 
-    endo::Shell shell { pty, env, fs, processManager };
+    endo::Shell shell { pty, env, workingDirectory, fs, processManager };
 
     [[nodiscard]] std::string output() const { return pty.output(); }
 
@@ -134,7 +138,7 @@ TEST_CASE("shell.env.SHELL_is_absolute_path")
     CHECK(*value != "endo");
     auto const exe = endo::platform::executablePath();
     REQUIRE(exe.has_value());
-    CHECK(*value == endo::platform::normalizePath(*exe));
+    CHECK(*value == core::platform::normalizePath(*exe));
 }
 
 // ============================================================================
@@ -144,7 +148,7 @@ TEST_CASE("shell.env.SHELL_is_absolute_path")
 TEST_CASE("shell.cd.basic")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/tmp");
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/tmp");
@@ -153,8 +157,8 @@ TEST_CASE("shell.cd.basic")
 TEST_CASE("shell.cd.home")
 {
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
-    shell.env.addValidPath("/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
+    shell.workingDirectory.addValidPath("/home/testuser");
     shell("cd");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
@@ -168,9 +172,9 @@ TEST_CASE("shell.cd.home_falls_back_to_USERPROFILE")
     TestShell shell;
     // TestShell seeds HOME from the real environment so external commands resolve;
     // clear it here so USERPROFILE is the only home source under test.
-    shell.env.unset("HOME");
-    shell.env.set("USERPROFILE", "/home/winuser");
-    shell.env.addValidPath("/home/winuser");
+    REQUIRE(shell.env.unset("HOME"));
+    REQUIRE(shell.env.set("USERPROFILE", "/home/winuser"));
+    shell.workingDirectory.addValidPath("/home/winuser");
     shell("cd");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/home/winuser");
@@ -183,8 +187,8 @@ TEST_CASE("shell.cd.home_errors_when_no_home_set")
     TestShell shell;
     // TestShell seeds HOME from the real environment; clear both home sources so
     // bare `cd` has nothing to resolve and must report an error.
-    shell.env.unset("HOME");
-    shell.env.unset("USERPROFILE");
+    REQUIRE(shell.env.unset("HOME"));
+    REQUIRE(shell.env.unset("USERPROFILE"));
     shell("cd");
     CHECK(shell.exitCode == 1);
 }
@@ -192,8 +196,8 @@ TEST_CASE("shell.cd.home_errors_when_no_home_set")
 TEST_CASE("shell.cd.minus")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/var");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/var");
 
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
@@ -213,8 +217,8 @@ TEST_CASE("shell.cd.minus")
 TEST_CASE("shell.cd.minus_swaps")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/var");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/var");
 
     shell("cd /tmp");
     shell("cd /var");
@@ -231,8 +235,8 @@ TEST_CASE("shell.cd.minus_swaps")
 TEST_CASE("shell.cd.relative_then_minus")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/tmp/subdir");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/tmp/subdir");
 
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
@@ -254,8 +258,8 @@ TEST_CASE("shell.cd.relative_then_minus")
 TEST_CASE("shell.cd.minus_returns_to_initial_cwd")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/home/testuser");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/home/testuser");
 
     // First cd from initial directory
     shell("cd /tmp");
@@ -277,8 +281,8 @@ TEST_CASE("shell.cd.minus_no_oldpwd")
 TEST_CASE("shell.cd.invalid_path")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp"); // only /tmp is valid
-    shell.env.set("PWD", "/home/testuser");
+    shell.workingDirectory.addValidPath("/tmp"); // only /tmp is valid
+    REQUIRE(shell.env.set("PWD", "/home/testuser"));
 
     shell("cd /nonexistent");
     CHECK(shell.exitCode == 1);
@@ -517,7 +521,7 @@ TEST_CASE("shell.builtin.set_variable_with_spaces")
 TEST_CASE("shell.builtin.unset_variable")
 {
     TestShell shell;
-    shell.env.set("MYVAR", "myvalue");
+    REQUIRE(shell.env.set("MYVAR", "myvalue"));
     CHECK(shell.env.get("MYVAR").has_value());
     shell("unset MYVAR");
     CHECK_FALSE(shell.env.get("MYVAR").has_value());
@@ -529,6 +533,25 @@ TEST_CASE("shell.builtin.unset_nonexistent_variable")
     // Unsetting a nonexistent variable should not fail
     shell("unset NONEXISTENT");
     CHECK(shell.exitCode != EXIT_FAILURE);
+}
+
+TEST_CASE("shell.builtin.set_refused_name_is_reported")
+{
+    // '=' ends a name in an environment block, so the environment refuses it; the shell reports
+    // that and fails rather than dropping the variable without a word.
+    TestShell shell;
+    shell(R"(set "A=B" value)");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().contains("set A=B: invalid argument"));
+    CHECK_FALSE(shell.env.get("A=B").has_value());
+}
+
+TEST_CASE("shell.builtin.unset_refused_name_is_reported")
+{
+    TestShell shell;
+    shell(R"(unset "A=B")");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().contains("unset A=B: invalid argument"));
 }
 
 // ============================================================================
@@ -929,10 +952,10 @@ TEST_CASE("shell.builtin.cat_sigint_returns_130")
     // Issue #98: Simulate SIGINT before running cat with piped input.
     // The interruptible read loop should detect the pending SIGINT and return 130.
     TestShell shell;
-    endo::platform::SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     shell("echo hello | cat");
     CHECK(shell.exitCode == 130);
-    endo::platform::SignalHandler::clearPendingSigint(); // cleanup
+    core::platform::SignalHandler::clearPendingSigint(); // cleanup
 }
 
 TEST_CASE("shell.builtin.head_pipe_regression")
@@ -949,46 +972,46 @@ TEST_CASE("shell.builtin.grep_sigint_returns_130")
 {
     // Simulate SIGINT before grep reads stdin.
     TestShell shell;
-    endo::platform::SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     shell("echo hello | grep hello");
     CHECK(shell.exitCode == 130);
-    endo::platform::SignalHandler::clearPendingSigint();
+    core::platform::SignalHandler::clearPendingSigint();
 }
 
 TEST_CASE("shell.builtin.tr_sigint_returns_130")
 {
     // Simulate SIGINT before tr reads stdin.
     TestShell shell;
-    endo::platform::SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     shell("echo hello | tr a-z A-Z");
     CHECK(shell.exitCode == 130);
-    endo::platform::SignalHandler::clearPendingSigint();
+    core::platform::SignalHandler::clearPendingSigint();
 }
 
 TEST_CASE("shell.builtin.tee_sigint_returns_130")
 {
     // Simulate SIGINT before tee reads stdin.
     TestShell shell;
-    endo::platform::SignalHandler::simulateSigint();
+    core::platform::SignalHandler::simulateSigint();
     shell("echo hello | tee /dev/null");
     CHECK(shell.exitCode == 130);
-    endo::platform::SignalHandler::clearPendingSigint();
+    core::platform::SignalHandler::clearPendingSigint();
 }
 
 TEST_CASE("shell.signal.isInterruptCtrlEvent")
 {
-    using endo::platform::SignalHandler;
+    using core::platform::SignalHandler;
 
     // Win32 console control type values (CTRL_C_EVENT=0, CTRL_BREAK_EVENT=1, ...).
     // These are the events that must keep the shell alive while interrupting the
     // foreground command.
-    CHECK(SignalHandler::isInterruptCtrlEvent(0)); // CTRL_C_EVENT
-    CHECK(SignalHandler::isInterruptCtrlEvent(1)); // CTRL_BREAK_EVENT
+    CHECK(core::platform::SignalHandler::isInterruptCtrlEvent(0)); // CTRL_C_EVENT
+    CHECK(core::platform::SignalHandler::isInterruptCtrlEvent(1)); // CTRL_BREAK_EVENT
 
     // Other control events fall through to the default handler.
-    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(2)); // CTRL_CLOSE_EVENT
-    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(5)); // CTRL_LOGOFF_EVENT
-    CHECK_FALSE(SignalHandler::isInterruptCtrlEvent(6)); // CTRL_SHUTDOWN_EVENT
+    CHECK_FALSE(core::platform::SignalHandler::isInterruptCtrlEvent(2)); // CTRL_CLOSE_EVENT
+    CHECK_FALSE(core::platform::SignalHandler::isInterruptCtrlEvent(5)); // CTRL_LOGOFF_EVENT
+    CHECK_FALSE(core::platform::SignalHandler::isInterruptCtrlEvent(6)); // CTRL_SHUTDOWN_EVENT
 }
 
 // ============================================================================
@@ -1759,7 +1782,7 @@ TEST_CASE("shell.builtin.mv_double_dash")
 TEST_CASE("shell.builtin.mv_multiple_to_dir")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_multidir" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_multidir" };
     auto const& base = baseGuard.path();
     fs::create_directories(base / "target");
     auto const src1 = base / "a.txt";
@@ -1782,7 +1805,7 @@ TEST_CASE("shell.builtin.mv_multiple_to_dir")
 TEST_CASE("shell.builtin.mv_multiple_to_file")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_multifile" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_multifile" };
     auto const& base = baseGuard.path();
     auto const src1 = base / "a.txt";
     auto const src2 = base / "b.txt";
@@ -1802,7 +1825,7 @@ TEST_CASE("shell.builtin.mv_multiple_to_file")
 TEST_CASE("shell.builtin.mv_directory")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_dir" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_dir" };
     auto const& base = baseGuard.path();
     fs::create_directories(base / "srcdir" / "sub");
     auto const dst = base / "dstdir";
@@ -1823,7 +1846,7 @@ TEST_CASE("shell.builtin.mv_directory")
 TEST_CASE("shell.builtin.mv_combined_flags")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_combined" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_combined" };
     auto const& base = baseGuard.path();
     auto const src = base / "source.txt";
     auto const dst = base / "dest.txt";
@@ -1854,7 +1877,7 @@ std::filesystem::path onDiskName(std::filesystem::path const& parent, std::strin
     for (auto const& entry: fs::directory_iterator(parent))
     {
         auto candidate = entry.path().filename().string();
-        if (endo::platform::equalsCaseInsensitive(candidate, name))
+        if (core::platform::equalsCaseInsensitive(candidate, name))
             return candidate;
     }
     return {};
@@ -1864,7 +1887,7 @@ std::filesystem::path onDiskName(std::filesystem::path const& parent, std::strin
 TEST_CASE("shell.builtin.mv_case_only_rename_directory")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_recase_dir" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_recase_dir" };
     auto const& base = baseGuard.path();
     fs::create_directories(base / "foo");
     std::ofstream(base / "foo" / "keep.txt") << "data";
@@ -1882,7 +1905,7 @@ TEST_CASE("shell.builtin.mv_case_only_rename_directory")
 TEST_CASE("shell.builtin.mv_case_only_rename_file")
 {
     namespace fs = std::filesystem;
-    auto const baseGuard = endo::testing::ScopedTempDir { "endo_mv_test_recase_file" };
+    auto const baseGuard = core::testing::ScopedTempDir { "endo_mv_test_recase_file" };
     auto const& base = baseGuard.path();
     std::ofstream(base / "readme.txt") << "hello";
 
@@ -2072,7 +2095,7 @@ TEST_CASE("shell.variable.single_char_name")
 
 TEST_CASE("shell.redirect.output_to_file")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const tempDir = core::testing::ScopedTempDir { "endo_shell_test" };
     auto const outputPath = (tempDir / "output.txt").generic_string();
     TestShell shell;
     shell(std::format("echo hello > {}", outputPath));
@@ -2085,7 +2108,7 @@ TEST_CASE("shell.redirect.output_to_file")
 
 TEST_CASE("shell.redirect.output_append")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const tempDir = core::testing::ScopedTempDir { "endo_shell_test" };
     auto const appendPath = (tempDir / "append.txt").generic_string();
     TestShell shell;
     // Create initial file
@@ -2104,7 +2127,7 @@ TEST_CASE("shell.redirect.output_append")
 
 TEST_CASE("shell.redirect.input_from_file")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const tempDir = core::testing::ScopedTempDir { "endo_shell_test" };
     auto const inputPath = (tempDir / "input.txt").generic_string();
     TestShell shell;
     // Create test file (binary mode to avoid \r\n on Windows)
@@ -2153,7 +2176,7 @@ TEST_CASE("shell.redirect.stderr_to_stdout")
 TEST_CASE("shell.redirect.fd_to_file")
 {
     TestShell shell;
-    auto const tmpDir = endo::testing::ScopedTempDir { "endo_test_stderr" };
+    auto const tmpDir = core::testing::ScopedTempDir { "endo_test_stderr" };
     auto const tmpFile = tmpDir / "stderr.txt";
     auto const tmpFileStr = tmpFile.generic_string();
     // Redirect stderr (fd 2) to a file
@@ -2175,7 +2198,7 @@ TEST_CASE("shell.redirect.fd_to_file")
 
 TEST_CASE("shell.redirect.multiple_redirects")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const tempDir = core::testing::ScopedTempDir { "endo_shell_test" };
     auto const multiInPath = (tempDir / "in.txt").generic_string();
     auto const multiOutPath = (tempDir / "out.txt").generic_string();
     TestShell shell;
@@ -2377,7 +2400,7 @@ TEST_CASE("shell.subst.process_read_basic")
 
 TEST_CASE("shell.subst.process_read_multiple_lines")
 {
-    auto const tempDir = endo::testing::ScopedTempDir { "endo_shell_test" };
+    auto const tempDir = core::testing::ScopedTempDir { "endo_shell_test" };
     auto const procSubstPath = (tempDir / "procsubst.txt").generic_string();
     // Process substitution with multiple lines
     TestShell shell;
@@ -2395,7 +2418,7 @@ TEST_CASE("shell.expand.tilde_home")
 {
     // ~ should expand to $HOME
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~").output()) == escape("/home/testuser\n"));
 }
 
@@ -2403,7 +2426,7 @@ TEST_CASE("shell.expand.tilde_in_path")
 {
     // ~/Documents should expand to $HOME/Documents
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~/Documents").output()) == escape("/home/testuser/Documents\n"));
 }
 
@@ -2431,7 +2454,7 @@ TEST_CASE("shell.expand.tilde_multiple")
 {
     // Multiple tildes in one command
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~ ~").output()) == escape("/home/testuser /home/testuser\n"));
 }
 
@@ -2656,7 +2679,7 @@ TEST_CASE("shell.expand.param_remove_suffix_long")
 
 TEST_CASE("shell.expand.glob_star")
 {
-    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDirGuard = core::testing::ScopedTempDir { "endo_glob" };
     auto const globDir = globDirGuard.string();
     // *.txt should match .txt files in current directory
     TestShell shell;
@@ -2680,7 +2703,7 @@ TEST_CASE("shell.expand.glob_star")
 
 TEST_CASE("shell.expand.glob_question")
 {
-    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDirGuard = core::testing::ScopedTempDir { "endo_glob" };
     auto const globDir = globDirGuard.string();
     // ? matches single character
     TestShell shell;
@@ -2703,7 +2726,7 @@ TEST_CASE("shell.expand.glob_question")
 
 TEST_CASE("shell.expand.glob_bracket")
 {
-    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDirGuard = core::testing::ScopedTempDir { "endo_glob" };
     auto const globDir = globDirGuard.string();
     // [abc] matches any character in set
     TestShell shell;
@@ -2736,7 +2759,7 @@ TEST_CASE("shell.expand.glob_no_match")
 
 TEST_CASE("shell.expand.glob_bracket_range")
 {
-    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDirGuard = core::testing::ScopedTempDir { "endo_glob" };
     auto const globDir = globDirGuard.string();
     // [a-z] matches a range of characters
     TestShell shell;
@@ -2761,7 +2784,7 @@ TEST_CASE("shell.expand.glob_bracket_range")
 
 TEST_CASE("shell.expand.glob_recursive_starstar")
 {
-    auto const globDirGuard = endo::testing::ScopedTempDir { "endo_glob" };
+    auto const globDirGuard = core::testing::ScopedTempDir { "endo_glob" };
     auto const globDir = globDirGuard.string();
     // ** matches files recursively
     TestShell shell;
@@ -2975,12 +2998,12 @@ TEST_CASE("shell.jobs.wait_with_job_id")
 TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
 {
     // Create a temporary directory with "src" and "scripts" subdirectories
-    auto fs = endo::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     fs.addDirectory("/test/src");
     fs.addDirectory("/test/scripts");
     fs.setCurrentPath("/test");
 
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, fs);
 
     // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
@@ -3016,11 +3039,11 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     // Regression: a relative nested prefix (e.g. "sub/it") must keep its relative
     // form in the completion. On Windows, canonicalizing the parent directory would
     // resolve it to an absolute path and rewrite the user's typed relative prefix.
-    auto fs = endo::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     fs.addFile("/test/sub/item.txt", "");
     fs.setCurrentPath("/test");
 
-    endo::TestEnvironment env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, fs);
 
     endo::CompletionContext context {
@@ -3043,15 +3066,15 @@ TEST_CASE("FileCompleter.absolute_directory_corrects_case")
     // than the case the user typed.
     // Stays on the real filesystem: InMemoryFileSystem does not model case-insensitive
     // lookup, so an injected one would make this pass without testing anything.
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_case_completion" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_case_completion" };
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "Foo");
 
-    endo::TestEnvironment env;
-    endo::FileCompleter completer(env, endo::NativeFileSystem::instance());
+    core::platform::testing::TestProcessEnvironment env;
+    endo::FileCompleter completer(env, core::platform::NativeFileSystem::instance());
 
     // Type the directory in lower-case; it resolves case-insensitively to "Foo".
-    auto const typed = endo::platform::normalizePath((tempDir / "foo").string());
+    auto const typed = core::platform::normalizePath((tempDir / "foo").string());
     endo::CompletionContext context {
         .type = endo::CompletionContextType::FilePath,
         .prefix = typed,
@@ -3072,14 +3095,14 @@ TEST_CASE("FileCompleter.partial_prefix_corrects_case")
     // which would otherwise trigger smart-case) must still match and recase on a
     // case-insensitive filesystem (e.g. "Lastrada-to" -> "lastrada-tools/").
     // Real filesystem, for the same reason as the test above.
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_partial_case_completion" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_partial_case_completion" };
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "lastrada-tools");
 
-    endo::TestEnvironment env;
-    endo::FileCompleter completer(env, endo::NativeFileSystem::instance());
+    core::platform::testing::TestProcessEnvironment env;
+    endo::FileCompleter completer(env, core::platform::NativeFileSystem::instance());
 
-    auto const typed = endo::platform::normalizePath((tempDir / "Lastrada-to").string());
+    auto const typed = core::platform::normalizePath((tempDir / "Lastrada-to").string());
     endo::CompletionContext context {
         .type = endo::CompletionContextType::FilePath,
         .prefix = typed,
@@ -3808,13 +3831,13 @@ namespace
 /// @brief Reads all available data from a pipe handle until EOF.
 /// @param handle The read end of the pipe (platform-native handle).
 /// @return The collected output as a string.
-std::string readAllFromPipe(endo::NativeHandle handle)
+std::string readAllFromPipe(core::platform::NativeHandle handle)
 {
     std::string result;
     char buf[256];
     for (;;)
     {
-        auto const n = endo::platformRead(handle, buf, sizeof(buf));
+        auto const n = core::platform::platformRead(handle, buf, sizeof(buf));
         if (n <= 0)
             break;
         result.append(buf, static_cast<size_t>(n));
@@ -3888,7 +3911,7 @@ TEST_CASE("shell.fsharp.fetch.unsupported_protocol")
 TEST_CASE("shell.fsharp.fetch.http_success")
 {
     // Local server returns 200 — fetch should return Ok(filename).
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_fetch_test" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_fetch_test" };
     auto const& tempDir = tempDirGuard.path();
 
     auto listener = endo::http::LocalTcpListener {};
@@ -3901,7 +3924,7 @@ TEST_CASE("shell.fsharp.fetch.http_success")
                                "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello");
     });
 
-    auto const scopedCwd = endo::testing::ScopedWorkingDirectory { tempDir };
+    auto const scopedCwd = core::testing::ScopedWorkingDirectory { tempDir };
 
     TestShell shell;
     shell.shell.setInteractive(false);
@@ -3953,7 +3976,7 @@ TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
     // Invalid commands must not be persisted to history.
     // PersistentHistory takes FileSystem const&, so this needs no real directory -- and the
     // previous one was build-directory-relative, i.e. shared by every run from that tree.
-    auto fs = endo::InMemoryFileSystem {};
+    auto fs = core::platform::testing::InMemoryFileSystem {};
     auto const dir = std::filesystem::path { "/test/history" };
 
     auto history = endo::PersistentHistory { fs };
@@ -4026,17 +4049,17 @@ TEST_CASE("shell.env.endo_shlvl_defaults_to_zero")
 TEST_CASE("shell.env.endo_shlvl_increments_when_preset")
 {
     TestShell shell;
-    shell.env.set("ENDO_SHLVL", "0");
+    REQUIRE(shell.env.set("ENDO_SHLVL", "0"));
     // Re-create the shell so it picks up the pre-set env
-    endo::Shell nested(shell.pty, shell.env);
+    endo::Shell nested(shell.pty, shell.env, shell.workingDirectory);
     CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "1");
 }
 
 TEST_CASE("shell.env.endo_shlvl_handles_malformed")
 {
     TestShell shell;
-    shell.env.set("ENDO_SHLVL", "not_a_number");
-    endo::Shell nested(shell.pty, shell.env);
+    REQUIRE(shell.env.set("ENDO_SHLVL", "not_a_number"));
+    endo::Shell nested(shell.pty, shell.env, shell.workingDirectory);
     CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "0");
 }
 
@@ -4090,7 +4113,7 @@ TEST_CASE("shell.builtin.find_basic")
     shell(std::format("find {}", testDir.string()));
     CHECK(shell.exitCode == 0);
     auto const out = std::string(shell.output());
-    CHECK(out.find(endo::platform::normalizePath(testDir)) != std::string::npos);
+    CHECK(out.find(core::platform::normalizePath(testDir)) != std::string::npos);
     CHECK(out.find("a.txt") != std::string::npos);
     CHECK(out.find("b.txt") != std::string::npos);
     CHECK(out.find("sub") != std::string::npos);
@@ -4191,7 +4214,7 @@ TEST_CASE("shell.builtin.find_not")
 TEST_CASE("shell.builtin.find_empty")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_find_test_empty" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_find_test_empty" };
     auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "emptydir");
     {
@@ -4368,7 +4391,7 @@ TEST_CASE("shell.builtin.grep_file_no_match_exit_code")
 TEST_CASE("shell.builtin.grep_file_multiple_files")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_multi" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_multi" };
     auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
@@ -4389,7 +4412,7 @@ TEST_CASE("shell.builtin.grep_file_multiple_files")
 TEST_CASE("shell.builtin.grep_file_with_filename")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_Hflag" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_Hflag" };
     auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "test.txt";
     {
@@ -4406,7 +4429,7 @@ TEST_CASE("shell.builtin.grep_file_with_filename")
 TEST_CASE("shell.builtin.grep_file_no_filename")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_hflag" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_hflag" };
     auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
@@ -4427,7 +4450,7 @@ TEST_CASE("shell.builtin.grep_file_no_filename")
 TEST_CASE("shell.builtin.grep_files_with_matches")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_lflag" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_lflag" };
     auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
@@ -4447,7 +4470,7 @@ TEST_CASE("shell.builtin.grep_files_with_matches")
 TEST_CASE("shell.builtin.grep_files_without_match")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_Lflag" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_Lflag" };
     auto const& testDir = testDirGuard.path();
     auto const file1 = testDir / "a.txt";
     auto const file2 = testDir / "b.txt";
@@ -4467,7 +4490,7 @@ TEST_CASE("shell.builtin.grep_files_without_match")
 TEST_CASE("shell.builtin.grep_recursive")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_recursive" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_recursive" };
     auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "sub");
     {
@@ -4486,7 +4509,7 @@ TEST_CASE("shell.builtin.grep_recursive")
 TEST_CASE("shell.builtin.grep_recursive_include")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_include" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_include" };
     auto const& testDir = testDirGuard.path();
     {
         std::ofstream(testDir / "a.txt") << "hello\n";
@@ -4504,7 +4527,7 @@ TEST_CASE("shell.builtin.grep_recursive_include")
 TEST_CASE("shell.builtin.grep_recursive_exclude_dir")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_exdir" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_exdir" };
     auto const& testDir = testDirGuard.path();
     fs::create_directories(testDir / "src");
     fs::create_directories(testDir / "build");
@@ -4524,7 +4547,7 @@ TEST_CASE("shell.builtin.grep_recursive_exclude_dir")
 TEST_CASE("shell.builtin.grep_binary_skip")
 {
     namespace fs = std::filesystem;
-    auto const testDirGuard = endo::testing::ScopedTempDir { "endo_grep_test_binary" };
+    auto const testDirGuard = core::testing::ScopedTempDir { "endo_grep_test_binary" };
     auto const& testDir = testDirGuard.path();
     auto const binFile = testDir / "binary.bin";
     auto const txtFile = testDir / "text.txt";
@@ -4608,7 +4631,7 @@ TEST_CASE("shell.builtin.source_env_bat", "[source-env][windows]")
     TestShell shell;
 
     // Create a temp .bat script that sets an environment variable
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_source_env.bat";
     {
@@ -4628,7 +4651,7 @@ TEST_CASE("shell.builtin.source_env_bat_with_args", "[source-env][windows]")
 {
     TestShell shell;
 
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_source_env_args.bat";
     {
@@ -4649,7 +4672,7 @@ TEST_CASE("shell.builtin.source_env_sh", "[source-env][posix]")
 {
     TestShell shell;
 
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const shPath = tempDir / "endo_test_source_env.sh";
     {
@@ -4667,7 +4690,7 @@ TEST_CASE("shell.builtin.source_env_sh_with_args", "[source-env][posix]")
 {
     TestShell shell;
 
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const shPath = tempDir / "endo_test_source_env_args.sh";
     {
@@ -4685,7 +4708,7 @@ TEST_CASE("shell.builtin.source_env_bat_rejected_on_posix", "[source-env][posix]
 {
     TestShell shell;
 
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const batPath = tempDir / "endo_test_rejected.bat";
     {
@@ -4710,7 +4733,7 @@ TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
 {
     TestShell shell;
 
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const unknownPath = tempDir / "endo_test_source_env.xyz";
     {
@@ -4726,10 +4749,10 @@ TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
 TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
 {
     TestShell shell;
-    shell.env.set("ENDO_TEST_EXISTING", "original_value");
+    REQUIRE(shell.env.set("ENDO_TEST_EXISTING", "original_value"));
 
 #if defined(_WIN32)
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const scriptPath = tempDir / "endo_test_source_env_noop.bat";
     {
@@ -4739,7 +4762,7 @@ TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
         ofs << "set ENDO_TEST_NEW=new_value\r\n";
     }
 #else
-    auto const tempDirGuard = endo::testing::ScopedTempDir { "endo_source_env" };
+    auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
     auto const& tempDir = tempDirGuard.path();
     auto const scriptPath = tempDir / "endo_test_source_env_noop.sh";
     {
@@ -4854,8 +4877,8 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer =
-        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
+    ts.shell.completer = std::make_unique<endo::Completer>(
+        ts.env, ts.workingDirectory, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();
@@ -4900,7 +4923,7 @@ TEST_CASE("shell.completion.executeCompleterFunction_with_CompletionEntry")
 // TestPTY is a real PTY on POSIX, so isTerminal() is true and `cat` takes the
 // rendering path. WindowsTestPTY uses pipes and reports false, so the rendered
 // assertions are POSIX-only; the plain-output assertions hold everywhere.
-// Escape-level rendering semantics are covered in src/tui/MarkdownRenderer_test.cpp.
+// Escape-level rendering semantics are covered in core-cpp's src/core/tui/MarkdownRenderer_test.cpp.
 // ============================================================================
 
 namespace
@@ -5076,7 +5099,7 @@ TEST_CASE("shell.builtin.cat_markdown_redirect_writes_source_bytes")
     namespace fs = std::filesystem;
     // Real filesystem: `>` opens its target as a descriptor, which an injected filesystem
     // cannot supply -- see the redirect note on Shell::applyRedirects.
-    auto const markdownDir = endo::testing::ScopedTempDir { "endo_cat_markdown" };
+    auto const markdownDir = core::testing::ScopedTempDir { "endo_cat_markdown" };
     auto const path = writeMarkdownFixture(markdownDir.path(), "redirect.md", MarkdownFixture);
     auto const target = path.parent_path() / "redirect.out";
     fs::remove(target);
@@ -5193,7 +5216,7 @@ auto writeLsFixture(std::filesystem::path const& dir) -> std::filesystem::path
 
 TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 {
-    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_emits" };
+    auto const lsDir = core::testing::ScopedTempDir { "endo_ls_links_emits" };
     auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
@@ -5205,7 +5228,7 @@ TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
     // Assert on the resolved absolute target, not merely that some escape appeared — that is
     // what proves the FileInfo path slot is actually plumbed through.
     CHECK(
-        output.find(std::format("]8;;file://{}{}/plain.txt", endo::platform::cachedHostName(), dir.string()))
+        output.find(std::format("]8;;file://{}{}/plain.txt", core::platform::cachedHostName(), dir.string()))
         != std::string::npos);
     // A space in the name must be percent-encoded inside the URI.
     CHECK(output.find("with%20space.txt") != std::string::npos);
@@ -5216,7 +5239,7 @@ TEST_CASE("shell.builtin.ls_emits_osc8_hyperlinks_on_tty")
 
 TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 {
-    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_disabled" };
+    auto const lsDir = core::testing::ScopedTempDir { "endo_ls_links_disabled" };
     auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
@@ -5235,7 +5258,7 @@ TEST_CASE("shell.builtin.ls_hyperlinks_can_be_disabled")
 TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
 {
     // The URI comes from each record, so it stays correct after the listing is reshaped.
-    auto const lsDir = endo::testing::ScopedTempDir { "endo_ls_links_filtered" };
+    auto const lsDir = core::testing::ScopedTempDir { "endo_ls_links_filtered" };
     auto const dir = writeLsFixture(lsDir.path());
 
     TestShell shell;
@@ -5243,7 +5266,7 @@ TEST_CASE("shell.builtin.ls_hyperlinks_survive_a_filtered_pipeline")
     auto const output = std::string(shell.output());
 
 #if !defined(_WIN32)
-    CHECK(output.find(std::format("]8;;file://{}{}/subdir", endo::platform::cachedHostName(), dir.string()))
+    CHECK(output.find(std::format("]8;;file://{}{}/subdir", core::platform::cachedHostName(), dir.string()))
           != std::string::npos);
 #endif
     CHECK(output.find("subdir") != std::string::npos);
@@ -5294,4 +5317,27 @@ TEST_CASE("shell.properties.descriptors_and_registrations_agree")
         INFO("property: " << name);
         CHECK(declared.contains(name));
     }
+}
+
+// ============================================================================
+// The endo language in the shell's highlighters
+// ============================================================================
+
+TEST_CASE("shell.highlighters.endo_selected_by_extension_and_fence")
+{
+    TestShell ts;
+    auto const& highlighters = ts.shell.syntaxHighlighters();
+    auto const endo = highlighters.find("endo");
+    REQUIRE(endo != core::tui::LanguageId::None);
+
+    CHECK(highlighters.detectFromPath("main.endo") == endo);
+    CHECK(highlighters.detectFromPath("/home/user/scripts/init.endo") == endo);
+    CHECK(highlighters.detectFromFenceTag("endo") == endo);
+    // .endo-format is the formatter's YAML configuration, not an endo script.
+    CHECK(highlighters.detectFromPath(".endo-format") != endo);
+
+    // The registered highlighter is endo's own: a keyword is classified, not left as plain text.
+    auto const [highlights, state] = highlighters.highlightLine("let x = 42", endo);
+    REQUIRE(highlights.size() == 10);
+    CHECK(highlights.front() != core::tui::HighlightCategory::Default);
 }

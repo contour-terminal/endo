@@ -36,7 +36,7 @@ if(ENDO_TESTING)
         test_main.cpp
         DapServer_test.cpp
     )
-    target_link_libraries(test-endo-dap endo-dap Catch2::Catch2)
+    target_link_libraries(test-endo-dap endo-dap core::testing Catch2::Catch2)
     add_test(NAME test-endo-dap COMMAND test-endo-dap)
     enable_sanitizers(test-endo-dap)
     enable_clang_tidy(test-endo-dap)

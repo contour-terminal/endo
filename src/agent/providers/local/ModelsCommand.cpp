@@ -3,8 +3,8 @@
 
 #include <http/HttpClient.hpp>
 
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -135,20 +135,20 @@ namespace
         md += "\nUse: endo agent models download <name> [--quant Q4_K_M]\n";
 
         // Render using MarkdownRenderer with compact table style.
-        auto output = tui::TerminalOutput {};
+        auto output = core::tui::TerminalOutput {};
         (void) output.initialize(); // NOLINT(bugprone-unused-return-value)
-        auto renderer = tui::MarkdownRenderer(output);
-        renderer.setTableRenderStyle(tui::TableRenderStyle::Compact);
+        auto renderer = core::tui::MarkdownRenderer(output);
+        renderer.setTableRenderStyle(core::tui::TableRenderStyle::Compact);
         renderer.setMaxWidth(output.columns());
 
-        auto greenStyle = tui::Style {};
-        greenStyle.fg = tui::RgbColor { .r = 0, .g = 180, .b = 0 };
+        auto greenStyle = core::tui::Style {};
+        greenStyle.fg = core::tui::RgbColor { .r = 0, .g = 180, .b = 0 };
 
-        auto dimStyle = tui::Style {};
+        auto dimStyle = core::tui::Style {};
         dimStyle.dim = true;
 
         renderer.setCellStyleCallback(
-            [&](size_t /*row*/, size_t col, std::string_view text) -> std::optional<tui::Style> {
+            [&](size_t /*row*/, size_t col, std::string_view text) -> std::optional<core::tui::Style> {
                 if (col == StatusColumnIndex)
                 {
                     if (text == "downloaded")

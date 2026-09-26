@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/Environment.hpp>
+
 #include <cstddef>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <platform/EnvironmentProvider.hpp>
-
 namespace endo
 {
 
 /// Returns the user's home directory as a forward-slash–normalized string.
 ///
-/// Uses @c EnvironmentProvider::homeDirectory() (HOME → USERPROFILE fallback),
+/// Uses @c core::platform::homeDirectory() (HOME → USERPROFILE fallback),
 /// so it works on Windows when HOME is unset. The returned string uses
 /// forward slashes regardless of platform, matching the convention used by
-/// @c EnvironmentProvider::currentDirectory() and the rest of the shell.
+/// @c core::platform::normalizePath() and the rest of the shell.
 /// Returns an empty string if neither variable is set.
-[[nodiscard]] std::string normalizedHomeDirectory(EnvironmentProvider const& env);
+[[nodiscard]] std::string normalizedHomeDirectory(core::Environment const& env);
 
 /// Maximum number of required paths to record per history entry.
 ///

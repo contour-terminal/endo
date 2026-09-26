@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/Types.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -12,7 +14,6 @@
 #include <thread>
 
 #include "Error.hpp"
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
@@ -49,10 +50,10 @@ class TTY
     TTY& operator=(TTY&&) = default;
 
     /// Returns the native handle for input.
-    [[nodiscard]] virtual NativeHandle inputFd() const noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle inputFd() const noexcept = 0;
 
     /// Returns the native handle for output.
-    [[nodiscard]] virtual NativeHandle outputFd() const noexcept = 0;
+    [[nodiscard]] virtual core::platform::NativeHandle outputFd() const noexcept = 0;
 
     /// Checks if this TTY is connected to a real terminal.
     [[nodiscard]] virtual bool isTerminal() const noexcept = 0;
@@ -117,8 +118,8 @@ class WindowsTTY final: public TTY
 
     [[nodiscard]] static WindowsTTY& instance();
 
-    [[nodiscard]] NativeHandle inputFd() const noexcept override;
-    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle outputFd() const noexcept override;
     [[nodiscard]] bool isTerminal() const noexcept override;
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
@@ -132,8 +133,8 @@ class WindowsTTY final: public TTY
     void writeToStdin(std::string_view str) const override;
 
   private:
-    NativeHandle _hStdin = InvalidHandle;
-    NativeHandle _hStdout = InvalidHandle;
+    core::platform::NativeHandle _hStdin = core::platform::InvalidHandle;
+    core::platform::NativeHandle _hStdout = core::platform::InvalidHandle;
     unsigned long _originalInputMode = 0;
     unsigned long _originalOutputMode = 0;
 };
@@ -149,8 +150,8 @@ class WindowsTestPTY final: public TTY
     WindowsTestPTY();
     ~WindowsTestPTY() override;
 
-    [[nodiscard]] NativeHandle inputFd() const noexcept override;
-    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle outputFd() const noexcept override;
     [[nodiscard]] bool isTerminal() const noexcept override;
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
@@ -179,12 +180,12 @@ class WindowsTestPTY final: public TTY
     void outputCaptureLoop();
 
     // Input pipe: writeInputHandle -> readInputHandle (simulates stdin)
-    NativeHandle _readInputHandle = InvalidHandle;
-    NativeHandle _writeInputHandle = InvalidHandle;
+    core::platform::NativeHandle _readInputHandle = core::platform::InvalidHandle;
+    core::platform::NativeHandle _writeInputHandle = core::platform::InvalidHandle;
 
     // Output pipe: writeOutputHandle -> readOutputHandle (captures stdout)
-    NativeHandle _readOutputHandle = InvalidHandle;
-    NativeHandle _writeOutputHandle = InvalidHandle;
+    core::platform::NativeHandle _readOutputHandle = core::platform::InvalidHandle;
+    core::platform::NativeHandle _writeOutputHandle = core::platform::InvalidHandle;
 
     // Output capture
     std::string _output;
@@ -208,12 +209,12 @@ using TestPTY = WindowsTestPTY;
 
 #else  // POSIX
 
-void setRawMode(NativeHandle fd);
+void setRawMode(core::platform::NativeHandle fd);
 
 /// Safely closes a file descriptor and sets it to InvalidHandle.
 ///
 /// @param fd Pointer to the file descriptor to close
-void safeClose(NativeHandle* fd) noexcept;
+void safeClose(core::platform::NativeHandle* fd) noexcept;
 
 class RealTTY final: public TTY
 {
@@ -223,8 +224,8 @@ class RealTTY final: public TTY
 
     [[nodiscard]] static RealTTY& instance();
 
-    [[nodiscard]] NativeHandle inputFd() const noexcept override;
-    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle outputFd() const noexcept override;
     [[nodiscard]] bool isTerminal() const noexcept override;
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
@@ -251,8 +252,8 @@ class TestPTY final: public TTY
     TestPTY();
     ~TestPTY() override;
 
-    [[nodiscard]] NativeHandle inputFd() const noexcept override;
-    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] core::platform::NativeHandle outputFd() const noexcept override;
     [[nodiscard]] bool isTerminal() const noexcept override;
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
@@ -294,8 +295,8 @@ class TestPTY final: public TTY
     /// will never consume anything again.
     std::atomic<bool> _readerRunning = true;
 
-    NativeHandle _ptyMaster = InvalidHandle;
-    NativeHandle _ptySlave = InvalidHandle;
+    core::platform::NativeHandle _ptyMaster = core::platform::InvalidHandle;
+    core::platform::NativeHandle _ptySlave = core::platform::InvalidHandle;
     termios _baseTermios {};
     struct winsize _windowSize;
 

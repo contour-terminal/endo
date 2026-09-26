@@ -80,7 +80,7 @@ if(ENDO_TESTING)
         test_main.cpp
         LspServer_test.cpp
     )
-    target_link_libraries(test-endo-lsp endo-lsp Catch2::Catch2)
+    target_link_libraries(test-endo-lsp endo-lsp core::testing Catch2::Catch2)
     add_test(NAME test-endo-lsp COMMAND test-endo-lsp)
     enable_sanitizers(test-endo-lsp)
     enable_clang_tidy(test-endo-lsp)

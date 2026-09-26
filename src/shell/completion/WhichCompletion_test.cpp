@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <core/platform/testing/InMemoryFileSystem.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -10,8 +13,6 @@
 #include "CompletionTestSupport.hpp"
 #include "PathCommandIndex.hpp"
 #include "PathCommandQueryProvider.hpp"
-#include <platform/testing/InMemoryFileSystem.hpp>
-#include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
 {
@@ -51,9 +52,9 @@ std::string pathList(std::initializer_list<std::string_view> dirs)
 /// /usr/bin holds git, git-lfs and a non-executable README; /usr/local/bin shadows git
 /// (so $PATH precedence can be observed) and adds gio. The two home directories exercise
 /// component-aware `~` collapsing.
-endo::InMemoryFileSystem makePathFilesystem()
+core::platform::testing::InMemoryFileSystem makePathFilesystem()
 {
-    return endo::InMemoryFileSystem {
+    return core::platform::testing::InMemoryFileSystem {
         { .path = "/usr/bin", .isDirectory = true },
         { .path = exe("/usr/bin/git"), .isExecutable = true },
         { .path = exe("/usr/bin/git-lfs"), .isExecutable = true },
@@ -74,15 +75,18 @@ endo::InMemoryFileSystem makePathFilesystem()
 /// without repeating the ordering constraint in every test.
 struct PathFixture
 {
-    endo::InMemoryFileSystem fs = makePathFilesystem();
-    endo::TestEnvironment env;
+    core::platform::testing::InMemoryFileSystem fs = makePathFilesystem();
+    core::platform::testing::TestProcessEnvironment env;
     endo::PathCommandIndex index { env, fs };
 
     /// @param dirs $PATH entries; the index reads them lazily, on the first entries() call.
-    explicit PathFixture(std::initializer_list<std::string_view> dirs) { env.set("PATH", pathList(dirs)); }
+    explicit PathFixture(std::initializer_list<std::string_view> dirs)
+    {
+        REQUIRE(env.set("PATH", pathList(dirs)));
+    }
 
     /// @brief Sets $PATH to a raw value, for the malformed-input cases.
-    void setRawPath(std::string_view value) { env.set("PATH", value); }
+    void setRawPath(std::string_view value) { REQUIRE(env.set("PATH", value)); }
 
     /// @brief Returns the indexed command names, in order.
     [[nodiscard]] std::vector<std::string> names() const
@@ -138,7 +142,7 @@ TEST_CASE("PathCommandIndex.rescans_when_path_changes")
     PathFixture fx { "/usr/bin" };
     CHECK(fx.names() == std::vector<std::string> { "git", "git-lfs" });
 
-    fx.env.set("PATH", "/usr/local/bin");
+    REQUIRE(fx.env.set("PATH", "/usr/local/bin"));
     CHECK(fx.names() == std::vector<std::string> { "gio", "git" });
 }
 
@@ -147,7 +151,7 @@ TEST_CASE("PathCommandIndex.tolerates_empty_and_missing_path_entries")
     SECTION("unset PATH")
     {
         PathFixture fx { "/usr/bin" };
-        fx.env.unset("PATH");
+        REQUIRE(fx.env.unset("PATH"));
         CHECK(fx.names().empty());
     }
 
@@ -171,7 +175,7 @@ TEST_CASE("PathCommandIndex.matches_uppercase_PATHEXT")
     // extension before comparing, so the list has to be lower-cased too or nothing matches
     // and $PATH completion silently returns nothing.
     PathFixture fx { "/usr/bin" };
-    fx.env.set("PATHEXT", ".COM;.EXE;.BAT");
+    REQUIRE(fx.env.set("PATHEXT", ".COM;.EXE;.BAT"));
 
     CHECK(fx.names() == std::vector<std::string> { "git", "git-lfs" });
 }
@@ -179,7 +183,7 @@ TEST_CASE("PathCommandIndex.matches_uppercase_PATHEXT")
 TEST_CASE("PathCommandIndex.ignores_files_outside_PATHEXT")
 {
     PathFixture fx { "/usr/bin" };
-    fx.env.set("PATHEXT", ".BAT");
+    REQUIRE(fx.env.set("PATHEXT", ".BAT"));
 
     CHECK(fx.names().empty());
 }
@@ -214,7 +218,7 @@ TEST_CASE("PathCommandQueryProvider.reports_names_with_resolved_paths")
 TEST_CASE("PathCommandQueryProvider.collapses_home_prefix_in_description")
 {
     PathFixture fx { "/home/testuser/bin" };
-    fx.env.set("HOME", "/home/testuser");
+    REQUIRE(fx.env.set("HOME", "/home/testuser"));
     endo::PathCommandQueryProvider provider(fx.index, fx.env);
 
     auto const results = provider.query("path-commands");
@@ -228,7 +232,7 @@ TEST_CASE("PathCommandQueryProvider.leaves_paths_outside_home_untouched")
 {
     // Component-aware: /home/testuserx is not inside /home/testuser.
     PathFixture fx { "/home/testuserx/bin" };
-    fx.env.set("HOME", "/home/testuser");
+    REQUIRE(fx.env.set("HOME", "/home/testuser"));
     endo::PathCommandQueryProvider provider(fx.index, fx.env);
 
     auto const results = provider.query("path-commands");

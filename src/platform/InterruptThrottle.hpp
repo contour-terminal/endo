@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <cstddef>
+#include <core/platform/SignalHandler.hpp>
 
-#include <platform/SignalHandler.hpp>
+#include <cstddef>
 
 namespace endo::platform
 {
@@ -33,14 +33,14 @@ class InterruptThrottle
     /// Default number of calls between actual signal polls. Tuned for tight,
     /// cheap loops (directory scans, line matching) where draining the signalfd
     /// every iteration would add measurable overhead.
-    static constexpr std::size_t defaultInterval = 256;
+    static constexpr std::size_t DefaultInterval = 256;
 
     /// Constructs a throttle.
     /// @param interval Number of @ref pending calls between real polls. Pass 1
     ///                 for loops whose per-iteration body already performs real
     ///                 I/O (file copy/remove), where polling every time is free
     ///                 relative to the work and maximizes responsiveness.
-    explicit InterruptThrottle(std::size_t interval = defaultInterval) noexcept: _interval(interval) {}
+    explicit InterruptThrottle(std::size_t interval = DefaultInterval) noexcept: _interval(interval) {}
 
     /// Polls for a pending interrupt at the throttled cadence and consumes it.
     ///
@@ -58,7 +58,7 @@ class InterruptThrottle
     {
         if (!polledAndPending())
             return false;
-        SignalHandler::clearPendingSigint();
+        core::platform::SignalHandler::clearPendingSigint();
         return true;
     }
 
@@ -81,8 +81,8 @@ class InterruptThrottle
     {
         if (_counter++ % _interval != 0)
             return false;
-        SignalHandler::processSignalFd();
-        return SignalHandler::hasPendingSigint();
+        core::platform::SignalHandler::processSignalFd();
+        return core::platform::SignalHandler::hasPendingSigint();
     }
 
     std::size_t _interval;

@@ -5,7 +5,7 @@
 
 #include "Gradient.hpp"
 
-using tui::operator""_rgb;
+using core::tui::operator""_rgb;
 
 TEST_CASE("multiStopGradient.empty_stops_returns_black", "[gradient]")
 {
@@ -18,7 +18,7 @@ TEST_CASE("multiStopGradient.empty_stops_returns_black", "[gradient]")
 TEST_CASE("multiStopGradient.single_stop_returns_that_stop", "[gradient]")
 {
     auto const stop = 0xFF8040_rgb;
-    auto const stops = std::array<tui::RgbColor, 1> { stop };
+    auto const stops = std::array<core::tui::RgbColor, 1> { stop };
     CHECK(endo::multiStopGradient(stops, 0.0f).r == stop.r);
     CHECK(endo::multiStopGradient(stops, 0.5f).g == stop.g);
     CHECK(endo::multiStopGradient(stops, 1.0f).b == stop.b);
@@ -28,7 +28,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 {
     auto const a = 0x000000_rgb;
     auto const b = 0xFF00FF_rgb;
-    auto const stops = std::array<tui::RgbColor, 2> { a, b };
+    auto const stops = std::array<core::tui::RgbColor, 2> { a, b };
 
     // t=0 → a
     auto const r0 = endo::multiStopGradient(stops, 0.0f);
@@ -44,7 +44,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 
     // t=0.5 → midpoint
     auto const rMid = endo::multiStopGradient(stops, 0.5f);
-    auto const expected = tui::lerpColor(a, b, 0.5f);
+    auto const expected = core::tui::lerpColor(a, b, 0.5f);
     CHECK(rMid.r == expected.r);
     CHECK(rMid.g == expected.g);
     CHECK(rMid.b == expected.b);
@@ -52,7 +52,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 
 TEST_CASE("multiStopGradient.five_stops_boundaries", "[gradient]")
 {
-    auto const stops = std::array<tui::RgbColor, 5> {
+    auto const stops = std::array<core::tui::RgbColor, 5> {
         0x252545_rgb, // 0
         0x1E3840_rgb, // 1
         0x1E3828_rgb, // 2
@@ -93,13 +93,13 @@ TEST_CASE("multiStopGradient.five_stops_boundaries", "[gradient]")
 
 TEST_CASE("multiStopGradient.five_stops_midpoint", "[gradient]")
 {
-    auto const stops = std::array<tui::RgbColor, 5> {
+    auto const stops = std::array<core::tui::RgbColor, 5> {
         0x252545_rgb, 0x1E3840_rgb, 0x1E3828_rgb, 0x352040_rgb, 0x252545_rgb,
     };
 
     // t=0.125 → midpoint between stops[0] and stops[1]
     auto const r = endo::multiStopGradient(stops, 0.125f);
-    auto const expected = tui::lerpColor(stops[0], stops[1], 0.5f);
+    auto const expected = core::tui::lerpColor(stops[0], stops[1], 0.5f);
     CHECK(r.r == expected.r);
     CHECK(r.g == expected.g);
     CHECK(r.b == expected.b);
@@ -109,7 +109,7 @@ TEST_CASE("multiStopGradient.clamps_out_of_range", "[gradient]")
 {
     auto const a = 0x102030_rgb;
     auto const b = 0x405060_rgb;
-    auto const stops = std::array<tui::RgbColor, 2> { a, b };
+    auto const stops = std::array<core::tui::RgbColor, 2> { a, b };
 
     // t < 0 → clamps to first stop
     auto const rNeg = endo::multiStopGradient(stops, -1.0f);
@@ -126,17 +126,17 @@ TEST_CASE("multiStopGradient.clamps_out_of_range", "[gradient]")
 
 TEST_CASE("lerpColor.basic", "[gradient]")
 {
-    auto const black = tui::RgbColor { .r = 0, .g = 0, .b = 0 };
-    auto const white = tui::RgbColor { .r = 255, .g = 255, .b = 255 };
+    auto const black = core::tui::RgbColor { .r = 0, .g = 0, .b = 0 };
+    auto const white = core::tui::RgbColor { .r = 255, .g = 255, .b = 255 };
 
-    auto const mid = tui::lerpColor(black, white, 0.5f);
+    auto const mid = core::tui::lerpColor(black, white, 0.5f);
     // 127 or 128 depending on rounding — allow both
     CHECK(mid.r >= 127);
     CHECK(mid.r <= 128);
 
-    auto const start = tui::lerpColor(black, white, 0.0f);
+    auto const start = core::tui::lerpColor(black, white, 0.0f);
     CHECK(start.r == 0);
 
-    auto const end = tui::lerpColor(black, white, 1.0f);
+    auto const end = core::tui::lerpColor(black, white, 1.0f);
     CHECK(end.r == 255);
 }

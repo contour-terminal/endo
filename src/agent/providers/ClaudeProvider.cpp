@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ClaudeProvider.hpp"
 
-#include <crispy/Base64.hpp>
+#include <core/Base64.hpp>
 
 #include <format>
 
@@ -235,7 +235,7 @@ namespace
                 }
                 else if constexpr (std::is_same_v<T, ImageBlock>)
                 {
-                    auto const encoded = crispy::base64::encode(b.data.begin(), b.data.end());
+                    auto const encoded = core::base64::encode(b.data.begin(), b.data.end());
                     return {
                         { "type", "image" },
                         { "source",

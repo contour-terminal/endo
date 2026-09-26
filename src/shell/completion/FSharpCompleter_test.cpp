@@ -28,7 +28,7 @@ endo::CompletionContext makeContext(std::string prefix, std::string fullInput = 
 }
 
 /// @brief Helper to collect completion text values from results.
-std::vector<std::string> completionTexts(std::vector<tui::CompletionItem> const& items)
+std::vector<std::string> completionTexts(std::vector<core::tui::completer::CompletionItem> const& items)
 {
     std::vector<std::string> texts;
     texts.reserve(items.size());
@@ -38,7 +38,7 @@ std::vector<std::string> completionTexts(std::vector<tui::CompletionItem> const&
 }
 
 /// @brief Helper to check if a specific text is in the completions.
-bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string const& text)
+bool hasCompletion(std::vector<core::tui::completer::CompletionItem> const& items, std::string const& text)
 {
     for (auto const& item: items)
         if (item.text == text)

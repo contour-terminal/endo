@@ -6,14 +6,13 @@
 #include <shell/output/TableFormatter.hpp>
 #include <shell/util/CommandResolver.hpp>
 
-#include <tui/MarkdownRenderer.hpp>
-#include <tui/TerminalOutput.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/MarkdownRenderer.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <algorithm>
 #include <format>
 #include <ranges>
-
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>
@@ -62,7 +61,7 @@ void Shell::builtinBind(CoreVM::Params& context)
             return;
         }
 
-        auto const chord = tui::KeyChord::parse(args[1]);
+        auto const chord = core::tui::KeyChord::parse(args[1]);
         if (!chord)
         {
             error("bind: invalid key chord: {}", args[1]);
@@ -105,7 +104,7 @@ void Shell::builtinBind(CoreVM::Params& context)
 
     if (args[0] == "-h" || args[0] == "--help")
     {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
         (void) renderMarkdownHelp(
             outputFd,
@@ -180,7 +179,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         return;
     }
 
-    auto const chord = tui::KeyChord::parse(args[0]);
+    auto const chord = core::tui::KeyChord::parse(args[0]);
     if (!chord)
     {
         error("bind: invalid key chord: {}", args[0]);
@@ -189,7 +188,7 @@ void Shell::builtinBind(CoreVM::Params& context)
         return;
     }
 
-    auto const action = tui::parseEditAction(args[1]);
+    auto const action = core::tui::parseEditAction(args[1]);
     if (!action)
     {
         error("bind: unknown action: {}", args[1]);
@@ -245,15 +244,15 @@ void Shell::builtinWhich(CoreVM::Params& context)
 
     // Helper to write output to the effective stdout (respects redirects and test environments)
     auto writeOutput = [this](std::string const& str) {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, str.data(), str.size());
     };
 
     // Show help if requested or no arguments given
     if (parsed.helpRequested || programs.empty())
     {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
         // Title, usage and the options table come from the descriptor; generateInlineHelp()
         // has no notion of exit status, so that section is appended here.

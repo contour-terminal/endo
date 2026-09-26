@@ -2,12 +2,12 @@
 #include <shell/commands/PidofCommand.hpp>
 #include <shell/commands/ProcessMatch.hpp>
 
+#include <core/platform/PathUtils.hpp>
+
 #include <algorithm>
 #include <charconv>
 #include <format>
 #include <functional>
-
-#include <platform/PathUtils.hpp>
 
 namespace endo::pidof_cmd
 {
@@ -57,7 +57,7 @@ namespace
     /// Compares two names for equality, case-insensitively if the policy says so.
     [[nodiscard]] bool namesEqual(std::string_view a, std::string_view b, NameMatchPolicy policy)
     {
-        return policy.caseInsensitive ? platform::equalsCaseInsensitive(a, b) : a == b;
+        return policy.caseInsensitive ? core::platform::equalsCaseInsensitive(a, b) : a == b;
     }
 
     /// Returns @p name with a trailing ".exe" removed (case-insensitively), if present.
@@ -65,7 +65,7 @@ namespace
     {
         constexpr auto ExeSuffix = std::string_view(".exe");
         if (name.size() > ExeSuffix.size()
-            && platform::equalsCaseInsensitive(name.substr(name.size() - ExeSuffix.size()), ExeSuffix))
+            && core::platform::equalsCaseInsensitive(name.substr(name.size() - ExeSuffix.size()), ExeSuffix))
             return name.substr(0, name.size() - ExeSuffix.size());
         return name;
     }

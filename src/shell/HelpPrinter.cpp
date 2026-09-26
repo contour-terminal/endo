@@ -4,17 +4,16 @@
 #include <shell/output/FileTypeStyle.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 
-#include <tui/GenericSyntaxHighlighter.hpp>
-#include <tui/TerminalProtocols.hpp>
-#include <tui/Theme.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/TerminalProtocols.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <cstdlib>
 #include <format>
 #include <print>
 #include <string>
 #include <string_view>
-
-#include <platform/Types.hpp>
 
 using namespace std::string_view_literals;
 
@@ -29,7 +28,7 @@ constexpr std::string_view Reset = "\033[m";
 /// @brief Checks whether stdout is connected to a real terminal.
 [[nodiscard]] bool isStdoutTerminal()
 {
-    return endo::isTerminal(endo::standardOutput());
+    return core::platform::isTerminal(core::platform::standardOutput());
 }
 
 /// @brief Checks whether stdout supports ANSI color output.
@@ -44,7 +43,7 @@ class HelpBuilder
 {
   public:
     explicit HelpBuilder(bool useColor, bool useHyperlinks):
-        _useColor(useColor), _useHyperlinks(useHyperlinks), _theme(tui::darkTheme())
+        _useColor(useColor), _useHyperlinks(useHyperlinks), _theme(core::tui::darkTheme())
     {
     }
 
@@ -54,7 +53,7 @@ class HelpBuilder
         _out += '\n';
         if (_useColor)
         {
-            auto style = tui::Style { .fg = _theme.colors.primary, .bold = true };
+            auto style = core::tui::Style { .fg = _theme.colors.primary, .bold = true };
             _out += endo::sgrSequence(style);
             _out += text;
             _out += Reset;
@@ -72,7 +71,7 @@ class HelpBuilder
         _out += "  ";
         if (_useColor)
         {
-            auto style = tui::Style { .fg = _theme.syntaxColors.keyword, .bold = true };
+            auto style = core::tui::Style { .fg = _theme.syntaxColors.keyword, .bold = true };
             _out += endo::sgrSequence(style);
             _out += flags;
             _out += Reset;
@@ -98,7 +97,7 @@ class HelpBuilder
         _out += "  ";
         if (_useColor)
         {
-            auto style = tui::Style { .fg = _theme.colors.success, .bold = true };
+            auto style = core::tui::Style { .fg = _theme.colors.success, .bold = true };
             _out += endo::sgrSequence(style);
             _out += name;
             _out += Reset;
@@ -124,7 +123,7 @@ class HelpBuilder
         _out += "  ";
         if (_useColor)
         {
-            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.text });
+            _out += endo::sgrSequence(core::tui::Style { .fg = _theme.colors.text });
             _out += description;
             _out += Reset;
         }
@@ -138,7 +137,7 @@ class HelpBuilder
         _out += "    ";
         if (_useColor)
         {
-            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.textMuted });
+            _out += endo::sgrSequence(core::tui::Style { .fg = _theme.colors.textMuted });
             _out += "$ ";
             _out += Reset;
             _out += highlightEndoCode(command);
@@ -165,7 +164,7 @@ class HelpBuilder
         _out += "  ";
         if (_useColor)
         {
-            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.textMuted, .dim = true });
+            _out += endo::sgrSequence(core::tui::Style { .fg = _theme.colors.textMuted, .dim = true });
             _out += str;
             _out += Reset;
         }
@@ -183,11 +182,11 @@ class HelpBuilder
 
         // OSC 8 hyperlink open (terminal-only, independent of color)
         if (_useHyperlinks)
-            tui::protocols::appendHyperlinkOpen(_out, url);
+            core::tui::protocols::appendHyperlinkOpen(_out, url);
 
         if (_useColor)
         {
-            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.info, .underline = true });
+            _out += endo::sgrSequence(core::tui::Style { .fg = _theme.colors.info, .underline = true });
             _out += label;
             _out += Reset;
         }
@@ -198,17 +197,17 @@ class HelpBuilder
 
         // OSC 8 hyperlink close
         if (_useHyperlinks)
-            _out += tui::protocols::HyperlinkClose;
+            _out += core::tui::protocols::HyperlinkClose;
 
         _out += "  ";
 
         // Show the URL text as well (hyperlinked when on a terminal)
         if (_useHyperlinks)
-            tui::protocols::appendHyperlinkOpen(_out, url);
+            core::tui::protocols::appendHyperlinkOpen(_out, url);
 
         if (_useColor)
         {
-            _out += endo::sgrSequence(tui::Style { .fg = _theme.colors.textMuted });
+            _out += endo::sgrSequence(core::tui::Style { .fg = _theme.colors.textMuted });
             _out += url;
             _out += Reset;
         }
@@ -218,7 +217,7 @@ class HelpBuilder
         }
 
         if (_useHyperlinks)
-            _out += tui::protocols::HyperlinkClose;
+            _out += core::tui::protocols::HyperlinkClose;
 
         _out += '\n';
     }
@@ -239,15 +238,15 @@ class HelpBuilder
             return std::string(code);
 
         auto const endoMap = endo::computeHighlightMap(code);
-        auto tuiMap = tui::HighlightMap(endoMap.size(), tui::HighlightCategory::Default);
+        auto tuiMap = core::tui::HighlightMap(endoMap.size(), core::tui::HighlightCategory::Default);
         for (size_t i = 0; i < endoMap.size(); ++i)
-            tuiMap[i] = static_cast<tui::HighlightCategory>(endoMap[i]);
-        return tui::renderHighlightedLineToString(code, tuiMap, _theme);
+            tuiMap[i] = static_cast<core::tui::HighlightCategory>(endoMap[i]);
+        return core::tui::renderHighlightedLineToString(code, tuiMap, _theme);
     }
 
     bool _useColor;
     bool _useHyperlinks;
-    tui::Theme _theme;
+    core::tui::Theme _theme;
     std::string _out;
 };
 
@@ -268,8 +267,9 @@ void printHelp()
         if (useColor)
         {
             auto const titleStyle =
-                tui::Style { .fg = tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF }, .bold = true };
-            auto const taglineStyle = tui::Style { .fg = tui::darkTheme().colors.textMuted };
+                core::tui::Style { .fg = core::tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF },
+                                   .bold = true };
+            auto const taglineStyle = core::tui::Style { .fg = core::tui::darkTheme().colors.textMuted };
             h.raw("  ");
             h.raw(sgrSequence(titleStyle));
             h.raw("endo");
@@ -367,10 +367,10 @@ void printVersion()
     auto const useColor = shouldUseColor();
     if (useColor)
     {
-        auto const theme = tui::darkTheme();
+        auto const theme = core::tui::darkTheme();
         auto const nameStyle =
-            tui::Style { .fg = tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF }, .bold = true };
-        auto const versionStyle = tui::Style { .fg = theme.colors.success };
+            core::tui::Style { .fg = core::tui::RgbColor { .r = 0x50, .g = 0x78, .b = 0xFF }, .bold = true };
+        auto const versionStyle = core::tui::Style { .fg = theme.colors.success };
         std::print("{}endo{} {}{}{}",
                    sgrSequence(nameStyle),
                    Reset,

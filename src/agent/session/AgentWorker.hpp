@@ -6,6 +6,8 @@
 
 #include <http/HttpClient.hpp>
 
+#include <core/platform/MessageQueue.hpp>
+
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -13,7 +15,6 @@
 #include <agent/providers/LlmProvider.hpp>
 #include <agent/session/AgentMessages.hpp>
 #include <agent/session/AgentSession.hpp>
-#include <platform/MessageQueue.hpp>
 
 namespace endo::agent
 {
@@ -37,7 +38,7 @@ class AgentWorker
     /// The session must only be accessed by the main thread when the worker is stopped.
     /// @param session Reference to the agent session.
     /// @param outbound Reference to the outbound queue (owned by main thread).
-    AgentWorker(AgentSession& session, platform::MessageQueue<FromAgentMessage>& outbound);
+    AgentWorker(AgentSession& session, core::platform::MessageQueue<FromAgentMessage>& outbound);
 
     ~AgentWorker();
 
@@ -53,7 +54,7 @@ class AgentWorker
     void stop();
 
     /// @brief Returns the inbound message queue for sending messages to the worker.
-    [[nodiscard]] auto inbound() -> platform::MessageQueue<ToAgentMessage>& { return _inbound; }
+    [[nodiscard]] auto inbound() -> core::platform::MessageQueue<ToAgentMessage>& { return _inbound; }
 
     /// @brief Returns whether the worker is currently processing a prompt.
     [[nodiscard]] auto isBusy() const noexcept -> bool { return _busy.load(std::memory_order_relaxed); }
@@ -85,14 +86,14 @@ class AgentWorker
 
     AgentSession& _session;
 
-    platform::MessageQueue<ToAgentMessage> _inbound;
-    platform::MessageQueue<FromAgentMessage>& _outbound;
+    core::platform::MessageQueue<ToAgentMessage> _inbound;
+    core::platform::MessageQueue<FromAgentMessage>& _outbound;
 
     /// Queue for AskUserTool synchronization: worker blocks here waiting for user answer.
-    platform::MessageQueue<UserAnswerMessage> _askUserResponses;
+    core::platform::MessageQueue<UserAnswerMessage> _askUserResponses;
 
     /// Queue for permission prompt synchronization: worker blocks here waiting for user decision.
-    platform::MessageQueue<PermissionResponseMessage> _permissionResponses;
+    core::platform::MessageQueue<PermissionResponseMessage> _permissionResponses;
 
     std::jthread _thread;
     std::atomic<bool> _busy { false };

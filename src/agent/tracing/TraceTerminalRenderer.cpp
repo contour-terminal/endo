@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/TerminalOutput.hpp>
+#include <core/tui/TerminalOutput.hpp>
 
 #include <cstdio>
 #include <format>
@@ -14,13 +14,13 @@ namespace endo::agent
 namespace
 {
     /// Dim style for trace labels.
-    constexpr auto DimStyle = tui::Style { .dim = true };
+    constexpr auto DimStyle = core::tui::Style { .dim = true };
 
     /// Style for error trace lines.
-    constexpr auto ErrorStyle = tui::Style { .fg = uint8_t { 196 }, .bold = true }; // bright red
+    constexpr auto ErrorStyle = core::tui::Style { .fg = uint8_t { 196 }, .bold = true }; // bright red
 
     /// Style for the trace prefix label.
-    constexpr auto PrefixStyle = tui::Style { .fg = uint8_t { 243 }, .dim = true }; // gray
+    constexpr auto PrefixStyle = core::tui::Style { .fg = uint8_t { 243 }, .dim = true }; // gray
 
     /// Formats a duration in milliseconds as a human-readable string.
     auto formatDuration(std::chrono::milliseconds ms) -> std::string
@@ -91,10 +91,10 @@ namespace
         return std::format("{} bytes", content.size());
     }
 
-    /// Renders a trace event to a tui::TerminalOutput.
+    /// Renders a trace event to a core::tui::TerminalOutput.
     struct RenderVisitor
     {
-        tui::TerminalOutput& out;
+        core::tui::TerminalOutput& out;
 
         void operator()(TraceUserMessageEvent const& e) const
         {
@@ -239,7 +239,7 @@ namespace
     }
 } // namespace
 
-void renderTraceEvent(tui::TerminalOutput& out, TraceEvent const& event)
+void renderTraceEvent(core::tui::TerminalOutput& out, TraceEvent const& event)
 {
     std::visit(RenderVisitor { out }, event);
     out.flush();

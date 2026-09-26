@@ -4,7 +4,7 @@
 
 #include <endo-language/codegen/IRGenerator.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 namespace endo
 {
@@ -16,7 +16,7 @@ bool FSharpModeModule::shouldShow(PromptContext const& ctx) const
 
 PromptSegments FSharpModeModule::evaluate(PromptContext const& ctx) const
 {
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
     {
         style.fg = ctx.resolvedColors->badgeText.solid();

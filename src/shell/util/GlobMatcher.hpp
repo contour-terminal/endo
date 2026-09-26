@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/GlobMatch.hpp>
+
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <platform/FileSystem.hpp>
-#include <platform/GlobMatch.hpp>
 
 namespace endo
 {
@@ -21,14 +21,14 @@ namespace endo
 /// @param fileSystem Filesystem to enumerate.
 /// @param pattern The glob pattern.
 /// @return Matching paths, or empty when nothing matches.
-[[nodiscard]] std::vector<std::string> expandGlobPattern(platform::FileSystem const& fileSystem,
+[[nodiscard]] std::vector<std::string> expandGlobPattern(core::platform::FileSystem const& fileSystem,
                                                          std::string_view pattern);
 
 /// Expands a recursive glob pattern (containing **) to matching file paths.
 /// @param fileSystem Filesystem to enumerate.
 /// @param pattern The glob pattern.
 /// @return Matching paths, or empty when nothing matches.
-[[nodiscard]] std::vector<std::string> expandRecursiveGlob(platform::FileSystem const& fileSystem,
+[[nodiscard]] std::vector<std::string> expandRecursiveGlob(core::platform::FileSystem const& fileSystem,
                                                            std::string_view pattern);
 
 /// Matches text against a shell glob pattern (for parameter expansion).

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <core/platform/MessageQueue.hpp>
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -10,7 +12,6 @@
 #include <agent/Types.hpp>
 #include <agent/mcp/McpError.hpp>
 #include <agent/mcp/Transport.hpp>
-#include <platform/MessageQueue.hpp>
 
 namespace endo::agent::mcp
 {
@@ -81,10 +82,10 @@ class McpClient
     bool _initialized = false;
 
     /// @brief Queue for responses: I/O thread pushes, sendRequest() pops.
-    platform::MessageQueue<McpResult<nlohmann::json>> _responseQueue;
+    core::platform::MessageQueue<McpResult<nlohmann::json>> _responseQueue;
 
     /// @brief Queue for notifications: I/O thread pushes, drainNotifications() drains.
-    platform::MessageQueue<McpNotification> _notificationQueue;
+    core::platform::MessageQueue<McpNotification> _notificationQueue;
 
     /// @brief Background I/O thread — reads from transport, classifies, and routes messages.
     /// Declared after the queues so it is destroyed (joined) before them.

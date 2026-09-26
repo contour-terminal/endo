@@ -9,12 +9,13 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/Types.hpp>
+
 #include <format>
 #include <ranges>
 
-#include <platform/PathUtils.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -44,7 +45,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
     auto content = _fs.readFile(scriptPath.string());
     if (!content)
     {
-        error("{}: {}", platform::normalizePath(scriptPath), content.error());
+        error("{}: {}", core::platform::normalizePath(scriptPath), content.error());
         return EXIT_FAILURE;
     }
 
@@ -60,7 +61,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath)
 
     auto const savedSourceFile = _fsharpState.sourceFilePath;
     _fsharpState.sourceFilePath = _fs.weaklyCanonical(scriptPath);
-    auto const result = executeConfigScript(*content, platform::normalizePath(scriptPath));
+    auto const result = executeConfigScript(*content, core::platform::normalizePath(scriptPath));
     _fsharpState.sourceFilePath = savedSourceFile;
     return result;
 }
@@ -69,7 +70,7 @@ int Shell::executeEndoScript(std::filesystem::path const& scriptPath, std::span<
 {
     auto savedPositionalParams = _positionalParameters;
     _positionalParameters.clear();
-    _positionalParameters.push_back(platform::normalizePath(scriptPath));
+    _positionalParameters.push_back(core::platform::normalizePath(scriptPath));
     for (auto const& arg: args)
         _positionalParameters.push_back(arg);
 
@@ -92,8 +93,8 @@ void Shell::builtinRunScript(CoreVM::Params& context)
 
 std::optional<int> Shell::tryExecuteInlineBuiltin(std::string_view program,
                                                   CoreVM::CoreStringArray const& args,
-                                                  NativeHandle outputFd,
-                                                  NativeHandle inputFd)
+                                                  core::platform::NativeHandle outputFd,
+                                                  core::platform::NativeHandle inputFd)
 {
     auto const* desc = findInlineBuiltin(program);
     if (!desc)
@@ -107,9 +108,9 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     std::string const& program = args.at(0);
 
     // Get the effective output/input fds considering redirects
-    NativeHandle const outputFd =
+    core::platform::NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-    NativeHandle const inputFd =
+    core::platform::NativeHandle const inputFd =
         _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
     // Handle inline builtins
@@ -283,7 +284,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     config.stdoutFd = stdoutFd;
     config.processGroup = !_currentProcessGroupPids.empty()
                               ? std::make_optional(_currentProcessGroupPids.front())
-                              : std::make_optional<ProcessId>(0);
+                              : std::make_optional<core::platform::ProcessId>(0);
     config.closeExtraFds = true;
     config.keepOpenFds = _procSubstExposedFds;
 
@@ -299,7 +300,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         return;
     }
 
-    ProcessId const pid = spawnResult.value();
+    core::platform::ProcessId const pid = spawnResult.value();
     _leftPid = _rightPid;
     _rightPid = pid;
     _currentProcessGroupPids.push_back(pid);
@@ -328,7 +329,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         }
 
         // Process group leader is the first process
-        ProcessId const pgid = _currentProcessGroupPids.front();
+        core::platform::ProcessId const pgid = _currentProcessGroupPids.front();
 
         // Give terminal control to the pipeline's process group
         auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
@@ -336,7 +337,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
 
         bool anyStopped = false;
-        for (ProcessId const processPid: _currentProcessGroupPids)
+        for (core::platform::ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid, WaitFlag::Untraced);
             if (!waitResult.has_value())
@@ -379,7 +380,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
         _pipelineCommands.clear();
 #else
-        for (ProcessId const processPid: _currentProcessGroupPids)
+        for (core::platform::ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid);
             if (!waitResult.has_value())

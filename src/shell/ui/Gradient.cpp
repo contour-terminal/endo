@@ -15,7 +15,7 @@
 namespace endo
 {
 
-tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) noexcept
+core::tui::RgbColor multiStopGradient(std::span<core::tui::RgbColor const> stops, float t) noexcept
 {
     if (stops.empty())
         return { .r = 0, .g = 0, .b = 0 };
@@ -35,7 +35,7 @@ tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) n
     if (idx >= stops.size() - 1)
         return stops.back();
 
-    return tui::lerpColor(stops[idx], stops[idx + 1], frac);
+    return core::tui::lerpColor(stops[idx], stops[idx + 1], frac);
 }
 
 namespace
@@ -78,13 +78,13 @@ namespace
 
 } // namespace
 
-PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text)
+PromptSegments gradient(core::tui::RgbColor start, core::tui::RgbColor end, std::string_view text)
 {
     auto const stops = std::array { start, end };
-    return gradient(std::span<tui::RgbColor const>(stops), text);
+    return gradient(std::span<core::tui::RgbColor const>(stops), text);
 }
 
-PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view text)
+PromptSegments gradient(std::span<core::tui::RgbColor const> stops, std::string_view text)
 {
     if (stops.empty() || text.empty())
         return {};
@@ -92,7 +92,7 @@ PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view t
     // Single stop: solid color
     if (stops.size() == 1)
     {
-        auto style = tui::Style {};
+        auto style = core::tui::Style {};
         style.fg = stops[0];
         return { PromptSegment { .text = std::string(text), .style = style } };
     }
@@ -108,7 +108,7 @@ PromptSegments gradient(std::span<tui::RgbColor const> stops, std::string_view t
     for (std::size_t i = 0; i < count; ++i)
     {
         auto const t = (count == 1) ? 0.0f : static_cast<float>(i) / static_cast<float>(count - 1);
-        auto style = tui::Style {};
+        auto style = core::tui::Style {};
         style.fg = multiStopGradient(stops, t);
         segments.push_back(PromptSegment { .text = std::string(text.substr(spans[i].offset, spans[i].length)),
                                            .style = style });

@@ -5,15 +5,16 @@
 
 #include <endo-language/LogCategories.hpp>
 
-#include <crispy/Utils.hpp>
+#include <core/Utils.hpp>
+#include <core/platform/Types.hpp>
 
 #include <filesystem>
 #include <format>
 #include <print>
 
 #include <platform/Pipe.hpp>
+#include <platform/PosixCompat.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -60,9 +61,9 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
 
     // Handle inline builtins (mirrors builtinCallProcess in ProcessExecution.cpp)
     {
-        NativeHandle const outputFd =
+        core::platform::NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        NativeHandle const inputFd =
+        core::platform::NativeHandle const inputFd =
             _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
 
         if (auto const exitCode = tryExecuteInlineBuiltin(program, cmdBuilderArgs(), outputFd, inputFd))
@@ -167,7 +168,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     config.stdoutFd = stdoutFd;
     config.processGroup = !_currentProcessGroupPids.empty()
                               ? std::make_optional(_currentProcessGroupPids.front())
-                              : std::make_optional<ProcessId>(0);
+                              : std::make_optional<core::platform::ProcessId>(0);
     config.closeExtraFds = true;
     config.keepOpenFds = _procSubstExposedFds;
 
@@ -183,7 +184,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
         return;
     }
 
-    ProcessId const pid = spawnResult.value();
+    core::platform::ProcessId const pid = spawnResult.value();
     _leftPid = _rightPid;
     _rightPid = pid;
     _currentProcessGroupPids.push_back(pid);
@@ -212,7 +213,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
         }
 
         // Process group leader is the first process
-        ProcessId const pgid = _currentProcessGroupPids.front();
+        core::platform::ProcessId const pgid = _currentProcessGroupPids.front();
 
         // Give terminal control to the pipeline's process group
         auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
@@ -220,7 +221,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
 
         bool anyStopped = false;
-        for (ProcessId const processPid: _currentProcessGroupPids)
+        for (core::platform::ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid, WaitFlag::Untraced);
             if (!waitResult.has_value())
@@ -263,7 +264,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
 
         _pipelineCommands.clear();
 #else
-        for (ProcessId const processPid: _currentProcessGroupPids)
+        for (core::platform::ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid);
             if (!waitResult.has_value())
@@ -302,14 +303,14 @@ void Shell::cleanupProcSubst()
     // Close exposed fds FIRST so child processes receive EOF and can exit.
     // For write-mode process substitution (>(cmd)), the child reads from the pipe
     // until EOF, which requires all pipe writer fds to be closed before waitpid.
-    for (NativeHandle fd: _procSubstExposedFds)
+    for (core::platform::NativeHandle fd: _procSubstExposedFds)
     {
         if (fd >= 0)
             close(fd);
     }
     _procSubstExposedFds.clear();
 
-    for (ProcessId childPid: _procSubstChildPids)
+    for (core::platform::ProcessId childPid: _procSubstChildPids)
     {
         int status = 0;
         waitpid(static_cast<pid_t>(childPid), &status, 0);
@@ -319,14 +320,14 @@ void Shell::cleanupProcSubst()
     _procSubstFdPath.clear();
 #else
     // Windows: close handles first, then wait for children (same ordering rationale)
-    for (NativeHandle handle: _procSubstExposedFds)
+    for (core::platform::NativeHandle handle: _procSubstExposedFds)
     {
-        if (handle != InvalidHandle)
+        if (handle != core::platform::InvalidHandle)
             _processManager.closeHandle(handle);
     }
     _procSubstExposedFds.clear();
 
-    for (ProcessId childPid: _procSubstChildPids)
+    for (core::platform::ProcessId childPid: _procSubstChildPids)
         (void) _processManager.wait(childPid);
     _procSubstChildPids.clear();
 
@@ -345,8 +346,8 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnCon
     if (!spawnResult)
         return std::unexpected(toShellError(spawnResult.error()));
 
-    ProcessId const pid = spawnResult.value();
-    ProcessId const pgid = pid; // Child is process group leader
+    core::platform::ProcessId const pid = spawnResult.value();
+    core::platform::ProcessId const pgid = pid; // Child is process group leader
 
     // Give terminal control to child's process group
     auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
@@ -456,7 +457,8 @@ void Shell::applyRedirects(SpawnConfig& config)
                 auto pipe = std::move(pipeResult.value());
 
                 std::string const& content = entry.content;
-                auto const written = platformWrite(pipe->writer(), content.data(), content.size());
+                auto const written =
+                    core::platform::platformWrite(pipe->writer(), content.data(), content.size());
                 if (written < 0)
                 {
                     error("Failed to write to here-string pipe: {}", strerror(errno));
@@ -466,7 +468,7 @@ void Shell::applyRedirects(SpawnConfig& config)
                 if (entry.type == RedirectState::Type::HereString && !content.empty()
                     && content.back() != '\n')
                 {
-                    platformWrite(pipe->writer(), "\n", 1);
+                    core::platform::platformWrite(pipe->writer(), "\n", 1);
                 }
 
                 pipe->closeWriter();

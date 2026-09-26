@@ -26,7 +26,7 @@ enum class CompletionKind // NOLINT(performance-enum-size)
 
 /// @brief A completion candidate produced by the shared completion engine.
 ///
-/// This is a protocol-neutral representation. The shell converts to tui::CompletionItem
+/// This is a protocol-neutral representation. The shell converts to core::tui::completer::CompletionItem
 /// (adding fuzzy scoring), the LSP converts to LSP CompletionItem JSON.
 struct CompletionCandidate
 {

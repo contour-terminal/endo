@@ -21,7 +21,7 @@ if(ENDO_TESTING)
         test_main.cpp
         HttpClient_test.cpp
     )
-    target_link_libraries(test-endo-http endo-http Catch2::Catch2)
+    target_link_libraries(test-endo-http endo-http core::testing Catch2::Catch2)
     add_test(NAME test-endo-http COMMAND test-endo-http)
     enable_sanitizers(test-endo-http)
     enable_clang_tidy(test-endo-http)

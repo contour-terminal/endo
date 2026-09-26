@@ -7,7 +7,9 @@
 namespace endo
 {
 
-int JobTable::addJob(ProcessId pgid, std::vector<ProcessId> pids, std::string command)
+int JobTable::addJob(core::platform::ProcessId pgid,
+                     std::vector<core::platform::ProcessId> pids,
+                     std::string command)
 {
     Job job;
     job.id = _nextJobId++;
@@ -37,13 +39,13 @@ Job const* JobTable::getJob(int jobId) const
     return it != _jobs.end() ? &*it : nullptr;
 }
 
-Job* JobTable::getJobByPgid(ProcessId pgid)
+Job* JobTable::getJobByPgid(core::platform::ProcessId pgid)
 {
     auto const it = std::ranges::find_if(_jobs, [pgid](Job const& j) { return j.pgid == pgid; });
     return it != _jobs.end() ? &*it : nullptr;
 }
 
-Job* JobTable::getJobByPid(ProcessId pid)
+Job* JobTable::getJobByPid(core::platform::ProcessId pid)
 {
     for (auto& job: _jobs)
     {
@@ -63,7 +65,7 @@ Job* JobTable::getPreviousJob()
     return getJob(_previousJobId);
 }
 
-void JobTable::updateJobState(ProcessId pid, WaitResult const& result)
+void JobTable::updateJobState(core::platform::ProcessId pid, WaitResult const& result)
 {
     Job* job = getJobByPid(pid);
     if (!job)

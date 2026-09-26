@@ -2,13 +2,12 @@
 #include "PathCommandIndex.hpp"
 #include <shell/util/CommandResolver.hpp>
 
-#include <crispy/Utils.hpp>
+#include <core/Utils.hpp>
+#include <core/platform/PathUtils.hpp>
 
 #include <algorithm>
 #include <map>
 #include <optional>
-
-#include <platform/PathUtils.hpp>
 
 namespace endo
 {
@@ -25,8 +24,8 @@ namespace
     /// @param extensions Executable extensions from CommandResolver::executableExtensions();
     ///                   empty on POSIX, where the permission bits decide instead.
     /// @return The command name, or nullopt when @p entry cannot be run.
-    std::optional<std::string> commandNameFor(FileSystem const& fs,
-                                              FileSystem::DirectoryEntry const& entry,
+    std::optional<std::string> commandNameFor(core::platform::FileSystem const& fs,
+                                              core::platform::FileSystem::DirectoryEntry const& entry,
                                               [[maybe_unused]] std::vector<std::string> const& extensions)
     {
         // Not redundant with isExecutableFile(): a symlink to a directory passes that test.
@@ -35,7 +34,7 @@ namespace
 
 #if defined(_WIN32)
         // Windows executability is by extension, and the command is typed without it.
-        auto const extension = crispy::toLower(entry.path.extension().string());
+        auto const extension = core::toLower(entry.path.extension().string());
         if (std::ranges::find(extensions, extension) == extensions.end())
             return std::nullopt;
         auto name = entry.path.stem().string();
@@ -48,7 +47,9 @@ namespace
     }
 } // namespace
 
-PathCommandIndex::PathCommandIndex(EnvironmentProvider const& env, FileSystem const& fs): _env(env), _fs(fs)
+PathCommandIndex::PathCommandIndex(core::platform::ProcessEnvironment const& env,
+                                   core::platform::FileSystem const& fs):
+    _env(env), _fs(fs)
 {
 }
 
@@ -81,7 +82,7 @@ std::vector<std::pair<std::string, std::string>> PathCommandIndex::scan() const
 
         for (auto const& entry: *listing)
             if (auto name = commandNameFor(_fs, entry, extensions))
-                commands.try_emplace(*std::move(name), platform::normalizePath(entry.path));
+                commands.try_emplace(*std::move(name), core::platform::normalizePath(entry.path));
     }
 
     return { commands.begin(), commands.end() };

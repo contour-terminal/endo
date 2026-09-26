@@ -73,7 +73,7 @@ class MockProvider final: public LlmProvider
 
 TEST_CASE("AgentWorker.prompt_produces_tokens_and_completion", "[agent][worker]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = MockProvider {};
     provider.responseText = "Hello!";
 
@@ -118,7 +118,7 @@ TEST_CASE("AgentWorker.prompt_produces_tokens_and_completion", "[agent][worker]"
 
 TEST_CASE("AgentWorker.cancellation_stops_streaming", "[agent][worker]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = MockProvider {};
     provider.responseText = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     provider.artificialDelay = std::chrono::milliseconds(50);
@@ -158,7 +158,7 @@ TEST_CASE("AgentWorker.cancellation_stops_streaming", "[agent][worker]")
 
 TEST_CASE("AgentWorker.shutdown_during_idle", "[agent][worker]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = MockProvider {};
 
     auto session = AgentSession(provider);
@@ -177,7 +177,7 @@ TEST_CASE("AgentWorker.shutdown_during_idle", "[agent][worker]")
 
 TEST_CASE("AgentWorker.error_produces_failed_completion", "[agent][worker]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = MockProvider {};
     provider.shouldFail = true;
 
@@ -280,7 +280,7 @@ class AskUserMockProvider final: public LlmProvider
 
 TEST_CASE("AgentWorker.ask_user_tool_roundtrip", "[agent][worker][ask_user]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = AskUserMockProvider {};
     provider.finalResponseText = "User chose blue";
 
@@ -340,7 +340,7 @@ TEST_CASE("AgentWorker.ask_user_tool_roundtrip", "[agent][worker][ask_user]")
 
 TEST_CASE("AgentWorker.ask_user_cancellation_during_wait", "[agent][worker][ask_user]")
 {
-    auto outbound = endo::platform::MessageQueue<FromAgentMessage> {};
+    auto outbound = core::platform::MessageQueue<FromAgentMessage> {};
     auto provider = AskUserMockProvider {};
 
     auto session = AgentSession(provider);

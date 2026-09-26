@@ -15,9 +15,9 @@
 
 #include <shell/AgentContext.hpp>
 
-#include <tui/InputEvent.hpp>
-#include <tui/QuestionComponent.hpp>
-#include <tui/Terminal.hpp>
+#include <core/tui/InputEvent.hpp>
+#include <core/tui/QuestionComponent.hpp>
+#include <core/tui/Terminal.hpp>
 
 #include <cstdint>
 #include <filesystem>
@@ -71,19 +71,19 @@ enum class LoopControl : std::uint8_t
 /// output / terminal as parameters, so it captures no outer state.
 struct InlinePrompt
 {
-    bool active = false;                             ///< Whether this prompt is awaiting input.
-    std::optional<tui::QuestionComponent> component; ///< The question component, when active.
-    bool visible = false;                            ///< Whether it is currently drawn on screen.
-    std::uint64_t requestId = 0;                     ///< The agent request this prompt answers.
+    bool active = false;                                   ///< Whether this prompt is awaiting input.
+    std::optional<core::tui::QuestionComponent> component; ///< The question component, when active.
+    bool visible = false;                                  ///< Whether it is currently drawn on screen.
+    std::uint64_t requestId = 0;                           ///< The agent request this prompt answers.
 
     /// Clears the rendered prompt, restoring the cursor to the content position.
     /// @param output The terminal output to write the clear sequence to.
-    void clear(tui::TerminalOutput& output);
+    void clear(core::tui::TerminalOutput& output);
 
     /// Renders the prompt below the current content position.
     /// @param output The terminal output.
     /// @param terminal The terminal (for the current column width).
-    void render(tui::TerminalOutput& output, tui::Terminal const& terminal);
+    void render(core::tui::TerminalOutput& output, core::tui::Terminal const& terminal);
 
     /// Resets the prompt to the inactive state.
     void reset();
@@ -118,9 +118,9 @@ class AgentModeSession
     /// @param permissionManager The tool-permission manager.
     /// @param historyStore The on-disk conversation history store.
     AgentModeSession(Shell& shell,
-                     tui::TerminalOutput& out,
-                     tui::Terminal& terminal,
-                     tui::Screen& screen,
+                     core::tui::TerminalOutput& out,
+                     core::tui::Terminal& terminal,
+                     core::tui::Screen& screen,
                      agent::AgentInputComponent& inputComponent,
                      agent::ToolStatusComponent& toolStatusComponent,
                      agent::AgentWorker& worker,
@@ -202,7 +202,7 @@ class AgentModeSession
     /// @param needsRedraw Set to true if the caller should redraw after handling.
     /// @param slashRegistry The slash-command registry (for `/command` lookup).
     /// @return LoopControl::Exit to leave agent mode, otherwise LoopControl::Continue.
-    [[nodiscard]] LoopControl handleInputEvent(tui::InputEvent const& event,
+    [[nodiscard]] LoopControl handleInputEvent(core::tui::InputEvent const& event,
                                                bool& needsRedraw,
                                                agent::SlashCommandRegistry const& slashRegistry);
 
@@ -252,15 +252,15 @@ class AgentModeSession
     /// @param highlighted Indices of options to draw selected (▶, bold); empty for none.
     /// @param otherAnswer A custom "Other..." answer to append as a selected row, if any.
     /// @param notice A trailing dim notice (e.g. "(cancelled)") to append, if any.
-    void echoQuestionToScrollback(tui::QuestionConfig const& config,
+    void echoQuestionToScrollback(core::tui::QuestionConfig const& config,
                                   std::set<std::size_t> const& highlighted,
                                   std::optional<std::string_view> otherAnswer,
                                   std::optional<std::string_view> notice);
 
     Shell& _shell;                                        ///< Owning shell (befriended for agent members).
-    tui::TerminalOutput& _out;                            ///< Terminal output.
-    tui::Terminal& _terminal;                             ///< Terminal.
-    tui::Screen& _screen;                                 ///< TUI screen.
+    core::tui::TerminalOutput& _out;                      ///< Terminal output.
+    core::tui::Terminal& _terminal;                       ///< Terminal.
+    core::tui::Screen& _screen;                           ///< TUI screen.
     agent::AgentInputComponent& _inputComponent;          ///< Agent input line component.
     agent::ToolStatusComponent& _toolStatusComponent;     ///< Tool-status component.
     agent::AgentWorker& _worker;                          ///< Agent worker message queues.

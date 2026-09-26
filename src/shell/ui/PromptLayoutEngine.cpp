@@ -2,8 +2,8 @@
 #include "PromptLayoutEngine.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Canvas.hpp>
-#include <tui/Unicode.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/Unicode.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
@@ -17,7 +17,7 @@
 namespace endo
 {
 
-int PromptLayoutEngine::render(tui::Canvas& canvas,
+int PromptLayoutEngine::render(core::tui::Canvas& canvas,
                                PromptConfig const& config,
                                std::vector<PromptSegments> const& infoModules,
                                std::vector<PromptSegments> const& rightModules,
@@ -50,7 +50,7 @@ int PromptLayoutEngine::preferredHeight(PromptConfig const& config)
 // SingleLine layout: [modules...] indicator
 // =============================================================================
 
-int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
+int PromptLayoutEngine::renderSingleLine(core::tui::Canvas& canvas,
                                          PromptConfig const& config,
                                          std::vector<PromptSegments> const& infoModules,
                                          ResolvedPromptColors const& colors)
@@ -62,7 +62,7 @@ int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
     {
         if (i > 0)
         {
-            canvas.put(0, col, " ", tui::Style {});
+            canvas.put(0, col, " ", core::tui::Style {});
             ++col;
         }
         col += renderSegments(canvas, 0, col, infoModules[i]);
@@ -71,12 +71,12 @@ int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
     // Space before indicator
     if (!infoModules.empty())
     {
-        canvas.put(0, col, " ", tui::Style {});
+        canvas.put(0, col, " ", core::tui::Style {});
         ++col;
     }
 
     // Indicator
-    auto indicatorStyle = tui::Style {};
+    auto indicatorStyle = core::tui::Style {};
     indicatorStyle.fg = colors.indicator.solid();
     canvas.putString(0, col, config.indicator, indicatorStyle);
 
@@ -87,7 +87,7 @@ int PromptLayoutEngine::renderSingleLine(tui::Canvas& canvas,
 // TwoLine layout: separator + info on line 1, separator + indicator on line 2
 // =============================================================================
 
-int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
+int PromptLayoutEngine::renderTwoLine(core::tui::Canvas& canvas,
                                       PromptConfig const& config,
                                       std::vector<PromptSegments> const& infoModules,
                                       std::vector<PromptSegments> const& rightModules,
@@ -98,19 +98,21 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     auto const contentWidth = canvasWidth - (2 * HorizontalMargin);
 
     // Resolve background: concrete RGB or transparent (monostate)
-    auto const* concreteBg = std::get_if<tui::RgbColor>(&colors.background);
+    auto const* concreteBg = std::get_if<core::tui::RgbColor>(&colors.background);
 
-    auto bgStyle = tui::Style {};
+    auto bgStyle = core::tui::Style {};
     if (concreteBg)
         bgStyle.bg = *concreteBg;
 
     // Background fill for both lines (only when we have a concrete background)
     if (concreteBg)
     {
-        canvas.fill(
-            tui::Rect { .x = HorizontalMargin, .y = 0, .width = contentWidth, .height = 1 }, ' ', bgStyle);
-        canvas.fill(
-            tui::Rect { .x = HorizontalMargin, .y = 1, .width = contentWidth, .height = 1 }, ' ', bgStyle);
+        canvas.fill(core::tui::Rect { .x = HorizontalMargin, .y = 0, .width = contentWidth, .height = 1 },
+                    ' ',
+                    bgStyle);
+        canvas.fill(core::tui::Rect { .x = HorizontalMargin, .y = 1, .width = contentWidth, .height = 1 },
+                    ' ',
+                    bgStyle);
     }
 
     // Line 1: separator + modules
@@ -119,7 +121,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     // Draw separator
     if (config.separator == SeparatorStyle::Bar)
     {
-        auto sepStyle = tui::Style {};
+        auto sepStyle = core::tui::Style {};
         sepStyle.fg = colors.separator.solid();
         if (concreteBg)
             sepStyle.bg = *concreteBg;
@@ -129,7 +131,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     }
     else if (config.separator == SeparatorStyle::Rounded)
     {
-        auto sepStyle = tui::Style {};
+        auto sepStyle = core::tui::Style {};
         sepStyle.fg = colors.separator.solid();
         if (concreteBg)
             sepStyle.bg = *concreteBg;
@@ -146,7 +148,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
         {
             if (config.separator == SeparatorStyle::Rounded)
             {
-                tui::Style dimPipeStyle;
+                core::tui::Style dimPipeStyle;
                 dimPipeStyle.fg = colors.separator.solid();
                 if (concreteBg)
                     dimPipeStyle.bg = *concreteBg;
@@ -205,7 +207,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     col = HorizontalMargin;
     if (config.separator == SeparatorStyle::Bar)
     {
-        auto sepStyle = tui::Style {};
+        auto sepStyle = core::tui::Style {};
         sepStyle.fg = colors.separator.solid();
         if (concreteBg)
             sepStyle.bg = *concreteBg;
@@ -215,7 +217,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
     }
     else if (config.separator == SeparatorStyle::Rounded)
     {
-        auto sepStyle = tui::Style {};
+        auto sepStyle = core::tui::Style {};
         sepStyle.fg = colors.separator.solid();
         if (concreteBg)
             sepStyle.bg = *concreteBg;
@@ -232,13 +234,13 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
 // Boxed layout: box-drawn frame around modules
 // =============================================================================
 
-int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
+int PromptLayoutEngine::renderBoxed(core::tui::Canvas& canvas,
                                     PromptConfig const& config,
                                     std::vector<PromptSegments> const& infoModules,
                                     ResolvedPromptColors const& colors)
 {
     auto const canvasWidth = canvas.width();
-    auto sepStyle = tui::Style {};
+    auto sepStyle = core::tui::Style {};
     sepStyle.fg = colors.separator.solid();
 
     // Top border: ┌──────...──┐
@@ -255,7 +257,7 @@ int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
     {
         if (i > 0)
         {
-            canvas.put(1, col, " ", tui::Style {});
+            canvas.put(1, col, " ", core::tui::Style {});
             ++col;
         }
         col += renderSegments(canvas, 1, col, infoModules[i]);
@@ -270,7 +272,7 @@ int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
     canvas.putString(2, 0, botBorder, sepStyle);
 
     // Indicator line (line 3)
-    auto indicatorStyle = tui::Style {};
+    auto indicatorStyle = core::tui::Style {};
     indicatorStyle.fg = colors.indicator.solid();
     canvas.putString(3, 0, config.indicator, indicatorStyle);
 
@@ -281,7 +283,7 @@ int PromptLayoutEngine::renderBoxed(tui::Canvas& canvas,
 // Powerline layout: segments with arrow separators
 // =============================================================================
 
-int PromptLayoutEngine::renderPowerline(tui::Canvas& canvas,
+int PromptLayoutEngine::renderPowerline(core::tui::Canvas& canvas,
                                         PromptConfig const& config,
                                         std::vector<PromptSegments> const& infoModules,
                                         ResolvedPromptColors const& colors)
@@ -289,15 +291,15 @@ int PromptLayoutEngine::renderPowerline(tui::Canvas& canvas,
     auto col = 0;
 
     // Resolve background for powerline segments
-    auto const* concreteBg = std::get_if<tui::RgbColor>(&colors.background);
-    auto const moduleBg = concreteBg ? *concreteBg : tui::RgbColor { .r = 0x2D, .g = 0x32, .b = 0x37 };
+    auto const* concreteBg = std::get_if<core::tui::RgbColor>(&colors.background);
+    auto const moduleBg = concreteBg ? *concreteBg : core::tui::RgbColor { .r = 0x2D, .g = 0x32, .b = 0x37 };
 
     for (std::size_t i = 0; i < infoModules.size(); ++i)
     {
         // Leading edge
         if (i == 0)
         {
-            auto edgeStyle = tui::Style {};
+            auto edgeStyle = core::tui::Style {};
             edgeStyle.fg = moduleBg;
             col += canvas.putString(0, col, "\xe2\x96\x8c", edgeStyle); // U+258C left half block
         }
@@ -310,13 +312,13 @@ int PromptLayoutEngine::renderPowerline(tui::Canvas& canvas,
         }
 
         // Powerline arrow separator
-        auto arrowStyle = tui::Style {};
+        auto arrowStyle = core::tui::Style {};
         arrowStyle.fg = moduleBg;
         col += canvas.putString(0, col, "\xee\x82\xb0", arrowStyle); // U+E0B0
     }
 
     // Line 2: indicator
-    auto indicatorStyle = tui::Style {};
+    auto indicatorStyle = core::tui::Style {};
     indicatorStyle.fg = colors.indicator.solid();
     canvas.putString(1, 0, config.indicator, indicatorStyle);
 
@@ -327,7 +329,10 @@ int PromptLayoutEngine::renderPowerline(tui::Canvas& canvas,
 // Helpers
 // =============================================================================
 
-int PromptLayoutEngine::renderSegments(tui::Canvas& canvas, int row, int col, PromptSegments const& segments)
+int PromptLayoutEngine::renderSegments(core::tui::Canvas& canvas,
+                                       int row,
+                                       int col,
+                                       PromptSegments const& segments)
 {
     auto totalWidth = 0;
     for (auto const& seg: segments)
@@ -351,7 +356,7 @@ int PromptLayoutEngine::displayWidth(std::string_view text)
     auto width = 0;
     auto segmenter = unicode::utf8_grapheme_segmenter(text);
     for (auto const& cluster: segmenter)
-        width += tui::graphemeClusterWidth(cluster);
+        width += core::tui::graphemeClusterWidth(cluster);
     return width;
 }
 

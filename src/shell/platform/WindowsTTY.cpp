@@ -2,6 +2,8 @@
 #include <shell/Error.hpp>
 #include <shell/TTY.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <chrono>
 #include <cstring>
 #include <expected>
@@ -9,8 +11,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <platform/Types.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -47,12 +47,12 @@ WindowsTTY& WindowsTTY::instance()
     return inst;
 }
 
-NativeHandle WindowsTTY::inputFd() const noexcept
+core::platform::NativeHandle WindowsTTY::inputFd() const noexcept
 {
     return _hStdin;
 }
 
-NativeHandle WindowsTTY::outputFd() const noexcept
+core::platform::NativeHandle WindowsTTY::outputFd() const noexcept
 {
     return _hStdout;
 }

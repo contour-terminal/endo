@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/platform/FileUri.hpp>
+
 #include <agent/tools/HtmlUtils.hpp>
-#include <platform/FileUri.hpp>
 
 namespace endo::agent
 {
@@ -9,7 +10,7 @@ auto urlEncode(std::string_view input) -> std::string
 {
     // Delegated rather than reimplemented: this used to classify bytes with std::isalnum, which is
     // locale-dependent and leaves high bytes unencoded under some locales.
-    return platform::percentEncode(input);
+    return core::platform::percentEncode(input);
 }
 
 auto stripHtmlTags(std::string_view html) -> std::string

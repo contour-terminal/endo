@@ -9,13 +9,13 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <core/platform/NativeFileSystem.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-
-#include <platform/NativeFileSystem.hpp>
 
 using namespace endo;
 using namespace endo::test;
@@ -227,7 +227,7 @@ TEST_CASE("module.loader.resolution", "[module][loader]")
     SECTION("resolves simple module")
     {
         tmpDir.writeModule("Math", "let square (x: int) : int = x * x");
-        ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+        ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
         loader.addSearchPath(tmpDir.dir);
 
         auto resolved = loader.resolveModulePath("Math", std::nullopt);
@@ -238,7 +238,7 @@ TEST_CASE("module.loader.resolution", "[module][loader]")
     SECTION("resolves nested module")
     {
         tmpDir.writeNestedModule("Geometry", "Circle", "let area (r: int) : int = r * r * 3");
-        ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+        ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
         loader.addSearchPath(tmpDir.dir);
 
         auto resolved = loader.resolveModulePath("Geometry.Circle", std::nullopt);
@@ -248,7 +248,7 @@ TEST_CASE("module.loader.resolution", "[module][loader]")
 
     SECTION("returns nullopt for missing module")
     {
-        ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+        ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
         loader.addSearchPath(tmpDir.dir);
 
         auto resolved = loader.resolveModulePath("NonExistent", std::nullopt);
@@ -264,7 +264,7 @@ TEST_CASE("module.loader.caching", "[module][loader]")
     TempModuleDir tmpDir;
     tmpDir.writeModule("Math", "let square (x: int) : int = x * x");
 
-    ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+    ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
     loader.addSearchPath(tmpDir.dir);
 
     SECTION("import-once: second load returns same descriptor")
@@ -286,7 +286,7 @@ TEST_CASE("module.loader.available_modules", "[module][loader]")
     tmpDir.writeModule("Utils", "let y = 2");
     tmpDir.writeModule("lowercase", "let z = 3"); // Not PascalCase — should be excluded
 
-    ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+    ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
     loader.addSearchPath(tmpDir.dir);
 
     auto names = loader.availableModuleNames();
@@ -304,7 +304,7 @@ TEST_CASE("module.loader.available_nested_modules", "[module][loader]")
     tmpDir.writeModule("Math", "let x = 1");
     tmpDir.writeNestedModule("Geometry", "Circle", "let area (r: int) : int = r * r * 3");
 
-    ModuleLoader loader(rt.runtime, rt.report, NativeFileSystem::instance());
+    ModuleLoader loader(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
     loader.addSearchPath(tmpDir.dir);
 
     auto names = loader.availableModuleNames();
@@ -327,7 +327,8 @@ TEST_CASE("module.file.private_enforcement", "[module][codegen]")
                        "let public_fn (x: int) : int = helper x");
 
     FSharpPersistentState state;
-    state.moduleLoader = std::make_shared<ModuleLoader>(rt.runtime, rt.report, NativeFileSystem::instance());
+    state.moduleLoader =
+        std::make_shared<ModuleLoader>(rt.runtime, rt.report, core::platform::NativeFileSystem::instance());
     state.moduleLoader->addSearchPath(tmpDir.dir);
 
     SECTION("file module private names are extracted")

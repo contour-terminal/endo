@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <core/tui/completer/FuzzyMatch.hpp>
+#include <core/tui/completer/SmartCaseMatch.hpp>
 
 #include <algorithm>
 
@@ -25,7 +25,7 @@ void AgentHistoryProvider::setEntries(std::vector<std::string> entries)
 }
 
 auto AgentHistoryProvider::complete(std::string_view input, size_t cursorPosition)
-    -> std::vector<tui::CompletionItem>
+    -> std::vector<core::tui::completer::CompletionItem>
 {
     if (input.empty() || cursorPosition == 0)
         return {};
@@ -35,7 +35,7 @@ auto AgentHistoryProvider::complete(std::string_view input, size_t cursorPositio
         return {};
 
     auto const query = input.substr(0, cursorPosition);
-    auto items = std::vector<tui::CompletionItem> {};
+    auto items = std::vector<core::tui::completer::CompletionItem> {};
 
     // Score entries by recency (most recent = highest base score).
     auto const entryCount = static_cast<int>(_entries.size());
@@ -48,10 +48,10 @@ auto AgentHistoryProvider::complete(std::string_view input, size_t cursorPositio
         auto const recencyScore = i + 1; // 1..N, most recent = highest
 
         // Try prefix match first.
-        if (tui::SmartCaseMatch::matchesPrefix(entry, query))
+        if (core::tui::completer::SmartCaseMatch::matchesPrefix(entry, query))
         {
-            auto score = tui::SmartCaseMatch::adjustScore(recencyScore, entry, query);
-            items.push_back(tui::CompletionItem {
+            auto score = core::tui::completer::SmartCaseMatch::adjustScore(recencyScore, entry, query);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = entry,
                 .displayText = entry,
                 .description = "history",
@@ -61,11 +61,12 @@ auto AgentHistoryProvider::complete(std::string_view input, size_t cursorPositio
         }
 
         // Try fuzzy match.
-        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(entry, query);
+        auto const fuzzyResult = core::tui::completer::FuzzyMatch::matchSmartCase(entry, query);
         if (fuzzyResult.matches)
         {
-            auto const score = tui::FuzzyMatch::calculateScore(recencyScore, entry, query, fuzzyResult);
-            items.push_back(tui::CompletionItem {
+            auto const score =
+                core::tui::completer::FuzzyMatch::calculateScore(recencyScore, entry, query, fuzzyResult);
+            items.push_back(core::tui::completer::CompletionItem {
                 .text = entry,
                 .displayText = entry,
                 .description = "history",

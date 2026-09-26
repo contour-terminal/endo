@@ -15,12 +15,12 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <core/platform/Types.hpp>
+
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -66,8 +66,10 @@ struct InlinePositionalQuery
 /// and LSP builtin descriptors.
 struct InlineCommandDescriptor
 {
-    using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle);
-    using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, NativeHandle, NativeHandle);
+    using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, core::platform::NativeHandle);
+    using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&,
+                                       core::platform::NativeHandle,
+                                       core::platform::NativeHandle);
 
     std::string_view name;                      ///< Command name (e.g., "head")
     std::string_view briefDescription;          ///< One-line (e.g., "Output first lines of files")
@@ -82,8 +84,8 @@ struct InlineCommandDescriptor
     /// @brief Calls the appropriate function variant.
     [[nodiscard]] int execute(Shell& shell,
                               CoreVM::CoreStringArray const& args,
-                              NativeHandle outputFd,
-                              NativeHandle stdinFd) const;
+                              core::platform::NativeHandle outputFd,
+                              core::platform::NativeHandle stdinFd) const;
     // Defined out-of-line in InlineCommandDescriptors.cpp
 };
 

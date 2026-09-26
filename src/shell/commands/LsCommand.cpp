@@ -11,7 +11,7 @@
 namespace endo
 {
 
-LsCommand::LsCommand(FileInfoProvider const& provider, std::string path):
+LsCommand::LsCommand(core::platform::FileInfoProvider const& provider, std::string path):
     _provider(provider), _path(std::move(path))
 {
 }

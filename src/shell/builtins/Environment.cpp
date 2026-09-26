@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/Types.hpp>
+#include <core/platform/UserPaths.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -14,10 +18,8 @@
 #include <utility>
 #include <vector>
 
-#include <platform/PathUtils.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
-#include <platform/Types.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -60,7 +62,7 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
     // Resolve the home directory through the environment abstraction, which tries HOME
     // first (Unix) and then USERPROFILE (Windows). Falling back to "/" here would send
     // Windows users to the drive root instead of their home directory.
-    auto const home = _env.homeDirectory();
+    auto const home = core::platform::homeDirectory(_env);
     if (!home.has_value())
     {
         error("cd: HOME not set");
@@ -74,18 +76,18 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
 
 void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Params& context)
 {
-    auto const result = _env.changeDirectory(path);
+    auto const result = _workingDirectory.changeDirectory(path);
     if (!result.has_value())
     {
         error("Failed to change directory to '{}': {}",
-              platform::normalizePath(path),
+              core::platform::normalizePath(path),
               toString(result.error()));
         _exitCode = 1;
     }
     else
     {
-        _env.set("OLDPWD", _env.get("PWD").value_or(""));
-        _env.set("PWD", _env.currentDirectory());
+        reportEnvironmentError("set OLDPWD", _env.set("OLDPWD", _env.get("PWD").value_or("")));
+        reportEnvironmentError("set PWD", _env.set("PWD", currentDirectoryText()));
         _exitCode = 0;
         emitCurrentWorkingDirectory();
         onDirectoryChanged();
@@ -96,14 +98,21 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
 
 void Shell::builtinSet(CoreVM::Params& context)
 {
-    _env.set(context.getString(1), context.getString(2));
-    context.setResult(true);
+    auto const& name = context.getString(1);
+    auto const taken =
+        reportEnvironmentError(std::format("set {}", name), _env.set(name, context.getString(2)));
+    if (!taken)
+        _exitCode = 1;
+    context.setResult(taken);
 }
 
 void Shell::builtinUnset(CoreVM::Params& context)
 {
-    _env.unset(context.getString(1));
-    context.setResult(true);
+    auto const& name = context.getString(1);
+    auto const taken = reportEnvironmentError(std::format("unset {}", name), _env.unset(name));
+    if (!taken)
+        _exitCode = 1;
+    context.setResult(taken);
 }
 
 void Shell::builtinGetVar(CoreVM::Params& context)
@@ -149,13 +158,17 @@ void Shell::builtinGetPositional(CoreVM::Params& context)
 
 void Shell::builtinSetAndExport(CoreVM::Params& context)
 {
-    _env.set(context.getString(1), context.getString(2));
-    _env.exportVariable(context.getString(1));
+    auto const& name = context.getString(1);
+    if (!reportEnvironmentError(std::format("export {}", name),
+                                _env.setAndExport(name, context.getString(2))))
+        _exitCode = 1;
 }
 
 void Shell::builtinExport(CoreVM::Params& context)
 {
-    _env.exportVariable(context.getString(1));
+    auto const& name = context.getString(1);
+    if (!reportEnvironmentError(std::format("export {}", name), _env.exportVariable(name)))
+        _exitCode = 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +294,7 @@ namespace
 
 } // anonymous namespace
 
-int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
     // Usage: source-env <script-path> [extra-args...]
     if (args.size() < 2)
@@ -304,7 +317,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     // 1. Validate script exists
     if (!std::filesystem::exists(scriptPath))
     {
-        error("source-env: script not found: {}", platform::normalizePath(scriptPath));
+        error("source-env: script not found: {}", core::platform::normalizePath(scriptPath));
         return EXIT_FAILURE;
     }
 
@@ -396,7 +409,8 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         auto ofs = std::ofstream(wrapperPath, std::ios::binary);
         if (!ofs)
         {
-            error("source-env: failed to create temp wrapper: {}", platform::normalizePath(wrapperPath));
+            error("source-env: failed to create temp wrapper: {}",
+                  core::platform::normalizePath(wrapperPath));
             return EXIT_FAILURE;
         }
         ofs << wrapperContent;
@@ -429,7 +443,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     config.arguments.push_back(wrapperPath.string());
     config.stdinFd = _tty.inputFd();
     config.stdoutFd = pipe->writer();
-    config.stderrFd = standardError();
+    config.stderrFd = core::platform::standardError();
 
     auto pidResult = _processManager.spawn(config);
     pipe->closeWriter();
@@ -439,7 +453,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     char buf[4096];
     while (true)
     {
-        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+        auto const n = core::platform::platformRead(pipe->reader(), buf, sizeof(buf));
         if (n <= 0)
             break;
         output.append(buf, static_cast<size_t>(n));
@@ -454,13 +468,14 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
     }
     else
     {
-        error("source-env: failed to spawn interpreter: {}", platform::normalizePath(interpreter));
+        error("source-env: failed to spawn interpreter: {}", core::platform::normalizePath(interpreter));
         return EXIT_FAILURE;
     }
 
     // 7. Parse output and import changed/new variables
     auto const parsed = parseEnvOutput(output);
 
+    auto importFailed = false;
     for (auto const& [key, value]: parsed)
     {
         if (key.empty())
@@ -469,10 +484,11 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, NativeHan
         // Check if this variable is new or changed (O(log n) lookup via normalized key)
         auto const it = before.find(normalizeKey(key));
         if (it == before.end() || it->second != value)
-            _env.setAndExport(key, value);
+            importFailed |= !reportEnvironmentError(std::format("source-env: export {}", key),
+                                                    _env.setAndExport(key, value));
     }
 
-    return childExitCode;
+    return importFailed && childExitCode == EXIT_SUCCESS ? EXIT_FAILURE : childExitCode;
 }
 
 } // namespace endo

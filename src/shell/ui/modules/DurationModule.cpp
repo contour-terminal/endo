@@ -2,7 +2,7 @@
 #include "DurationModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <format>
 
@@ -31,7 +31,7 @@ PromptSegments DurationModule::evaluate(PromptContext const& ctx) const
         text = std::format("\xe2\x8f\xb1 {:.1f}s", seconds);
     }
 
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
         style.fg = ctx.resolvedColors->duration.solid();
     else if (ctx.theme)

@@ -2,11 +2,11 @@
 #include <shell/AgentModeSession.hpp>
 #include <shell/Shell.hpp>
 
-#include <tui/Buffer.hpp>
-#include <tui/Canvas.hpp>
-#include <tui/ImageLoader.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Theme.hpp>
+#include <core/tui/Buffer.hpp>
+#include <core/tui/Canvas.hpp>
+#include <core/tui/ImageLoader.hpp>
+#include <core/tui/Screen.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <charconv>
 
@@ -41,13 +41,13 @@ namespace
     /// @param out The terminal output to write the rendered buffer to.
     /// @param component The component to lay out and render.
     /// @param width The width, in columns, to render the component at.
-    void renderComponentInline(tui::TerminalOutput& out, tui::Component& component, int width)
+    void renderComponentInline(core::tui::TerminalOutput& out, core::tui::Component& component, int width)
     {
-        auto const& theme = tui::currentTheme();
+        auto const& theme = core::tui::currentTheme();
         auto const height = component.preferredSize().height;
-        auto const rect = tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
-        auto buffer = tui::Buffer(height, width);
-        auto canvas = tui::Canvas(buffer, rect, theme);
+        auto const rect = core::tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
+        auto buffer = core::tui::Buffer(height, width);
+        auto canvas = core::tui::Canvas(buffer, rect, theme);
         component.setArea(rect);
         component.setScreenBounds(rect);
         component.render(canvas);
@@ -70,7 +70,7 @@ namespace
     /// the cursor to the saved content position. Shared by every inline prompt and
     /// the streaming prompt so the clear protocol lives in one place.
     /// @param output The terminal output to write the clear sequence to.
-    void clearInlineRegion(tui::TerminalOutput& output)
+    void clearInlineRegion(core::tui::TerminalOutput& output)
     {
         output.hideCursor();
         output.restoreCursor();
@@ -79,7 +79,7 @@ namespace
     }
 } // namespace
 
-void InlinePrompt::clear(tui::TerminalOutput& output)
+void InlinePrompt::clear(core::tui::TerminalOutput& output)
 {
     if (!visible)
         return;
@@ -87,7 +87,7 @@ void InlinePrompt::clear(tui::TerminalOutput& output)
     visible = false;
 }
 
-void InlinePrompt::render(tui::TerminalOutput& output, tui::Terminal const& terminal)
+void InlinePrompt::render(core::tui::TerminalOutput& output, core::tui::Terminal const& terminal)
 {
     if (!active || !component)
         return;
@@ -103,7 +103,7 @@ void InlinePrompt::render(tui::TerminalOutput& output, tui::Terminal const& term
 
     renderComponentInline(output, *component, width);
 
-    if (component->cursorShape() == tui::CursorShape::SteadyBar)
+    if (component->cursorShape() == core::tui::CursorShape::SteadyBar)
         output.showCursor();
     else
         output.hideCursor();
@@ -157,7 +157,7 @@ void AgentModeSession::renderToolStatusDirect()
 void AgentModeSession::redrawInputComponent()
 {
     _screen.releaseCursor();
-    _inputComponent.setArea(tui::Rect {
+    _inputComponent.setArea(core::tui::Rect {
         .x = 0, .y = 0, .width = _terminal.columns(), .height = _inputComponent.preferredSize().height });
     _screen.draw();
 }
@@ -197,7 +197,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
     auto& screen = _screen;
     auto& inputComponent = _inputComponent;
     auto& toolStatusComponent = _toolStatusComponent;
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
 
     for (auto& agentMsg: agentMessages)
     {
@@ -211,7 +211,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         currentRenderer->end();
                     streaming = true;
                     streamCancelled = false;
-                    currentRenderer.emplace(out);
+                    currentRenderer.emplace(out, &_shell.syntaxHighlighters());
                     activeRenderer = &*currentRenderer;
                     currentRenderer->begin();
                     inputComponent.setThinkingActive(true);
@@ -248,8 +248,9 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                                            || l.type == agent::DiffLineType::Deletion;
                                 }));
                             auto const truncated = changedLines > agent::LargeEditThreshold;
-                            auto const language = tui::detectLanguageFromPath(filePath);
-                            agent::renderDiff(out, filePath, diffLines, language, truncated);
+                            auto const language = _shell.syntaxHighlighters().detectFromPath(filePath);
+                            agent::renderDiff(
+                                out, filePath, diffLines, language, truncated, &_shell.syntaxHighlighters());
                         }
 
                         if (activeRenderer && activeRenderer->isThinking())
@@ -276,13 +277,13 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                     auto const wasCancelled = streamCancelled;
                     if (wasCancelled)
                     {
-                        auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                        auto const infoStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                         out.writeText("\n(Operation cancelled by user)\n", infoStyle);
                         out.flush();
                     }
                     else if (!m.success)
                     {
-                        auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                        auto const errorStyle = core::tui::Style { .fg = theme.agentColors.errorText };
                         out.writeText(std::format("\nError: {}\n", m.errorMessage), errorStyle);
                         out.flush();
                     }
@@ -291,7 +292,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                     if (m.success && m.turnUsage.has_value())
                     {
                         auto const& tu = *m.turnUsage;
-                        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                        auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                         auto const cost =
                             agent::estimateCost(tu, modelInfo.providerName, modelInfo.modelName);
                         auto usageLine = std::format("\n  {} in / {} out",
@@ -334,7 +335,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         auto const contextSize = modelInfo.contextSize;
                         auto const usagePct =
                             contextSize > 0 ? (usedTokens * 100 / contextSize) : size_t { 0 };
-                        planApprovalPrompt.component.emplace(tui::QuestionConfig {
+                        planApprovalPrompt.component.emplace(core::tui::QuestionConfig {
                             .questionText = std::format("Execute this plan? (context: {}% used)", usagePct),
                             .options = { "Yes, execute",
                                          "Yes, compact context first",
@@ -355,7 +356,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                 else if constexpr (std::is_same_v<T, agent::AskUserRequest>)
                 {
                     clearStreamingPrompt();
-                    askUserPrompt.component.emplace(tui::QuestionConfig {
+                    askUserPrompt.component.emplace(core::tui::QuestionConfig {
                         .questionText = m.question.text,
                         .options = m.question.options,
                         .multiSelect = m.question.multiSelect,
@@ -374,7 +375,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         questionText += std::format("\n{}", m.prompt.commandPreview);
 
                     auto options = std::vector<std::string> { "Yes", "Yes, always for this tool", "No" };
-                    permissionPrompt.component.emplace(tui::QuestionConfig {
+                    permissionPrompt.component.emplace(core::tui::QuestionConfig {
                         .questionText = std::move(questionText),
                         .options = std::move(options),
                         .multiSelect = false,
@@ -398,7 +399,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         currentRenderer->end();
                     streaming = true;
                     streamCancelled = false;
-                    currentRenderer.emplace(out);
+                    currentRenderer.emplace(out, &_shell.syntaxHighlighters());
                     activeRenderer = &*currentRenderer;
                     currentRenderer->begin();
                     inputComponent.setThinkingActive(true);
@@ -412,17 +413,17 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         currentRenderer->end();
                     currentRenderer.reset();
                     activeRenderer = nullptr;
-                    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
                     if (m.status == agent::PlanStepStatus::Completed)
                     {
-                        auto const okStyle = tui::Style { .fg = theme.agentColors.statusText };
+                        auto const okStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                         out.writeText("\u2502 ", barStyle);
                         out.writeText(std::format("[\xe2\x9c\x93] Step {} completed\n", m.stepIndex + 1),
                                       okStyle);
                     }
                     else
                     {
-                        auto const errStyle = tui::Style { .fg = theme.agentColors.errorText };
+                        auto const errStyle = core::tui::Style { .fg = theme.agentColors.errorText };
                         out.writeText("\u2502 ", barStyle);
                         out.writeText(std::format("[\xe2\x9c\x97] Step {} failed", m.stepIndex + 1),
                                       errStyle);
@@ -439,7 +440,7 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
                         currentRenderer->end();
 
                     // Show final plan progress summary.
-                    currentRenderer.emplace(out);
+                    currentRenderer.emplace(out, &_shell.syntaxHighlighters());
                     auto const lastStep = m.plan.steps.empty() ? size_t { 0 } : m.plan.steps.size() - 1;
                     currentRenderer->renderPlanProgress(m.plan, lastStep);
                     currentRenderer->end();
@@ -492,16 +493,16 @@ void AgentModeSession::ensureSystemPromptReady()
     systemPromptReady = true;
 }
 
-void AgentModeSession::echoQuestionToScrollback(tui::QuestionConfig const& config,
+void AgentModeSession::echoQuestionToScrollback(core::tui::QuestionConfig const& config,
                                                 std::set<std::size_t> const& highlighted,
                                                 std::optional<std::string_view> otherAnswer,
                                                 std::optional<std::string_view> notice)
 {
-    auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const questionStyle = tui::Style { .fg = theme.colors.text };
-    auto const normalStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-    auto const selectedStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+    auto const& theme = core::tui::currentTheme();
+    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+    auto const questionStyle = core::tui::Style { .fg = theme.colors.text };
+    auto const normalStyle = core::tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+    auto const selectedStyle = core::tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
 
     // Question text.
     _out.writeText("│ ", barStyle);
@@ -536,7 +537,7 @@ void AgentModeSession::echoQuestionToScrollback(tui::QuestionConfig const& confi
     _out.flush();
 }
 
-LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
+LoopControl AgentModeSession::handleInputEvent(core::tui::InputEvent const& event,
                                                bool& needsRedraw,
                                                agent::SlashCommandRegistry const& slashRegistry)
 {
@@ -551,7 +552,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
     auto const& sessionManager = _sessionManager;
     auto& mcpServerManager = _mcpServerManager;
     auto* const historyProviderPtr = _historyProviderPtr;
-    auto const& theme = tui::currentTheme();
+    auto const& theme = core::tui::currentTheme();
 
     // During ask-user, route input to the question component.
     if (askUserPrompt.active && askUserPrompt.component)
@@ -628,8 +629,8 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
 
                 // Echo the permission decision to scrollback.
                 {
-                    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                    auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                    auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+                    auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                     out.writeText("\u2502 ", barStyle);
                     if (decision == agent::PermissionDecision::Approved)
                         out.writeText("Approved", dimStyle);
@@ -650,8 +651,8 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                 .decision = agent::PermissionDecision::Cancelled,
             });
 
-            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+            auto const barStyle = core::tui::Style { .fg = theme.agentColors.leftBar };
+            auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText };
             out.writeText("\u2502 ", barStyle);
             out.writeText("(cancelled)", dimStyle);
             out.linefeed();
@@ -704,7 +705,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                     }
                     else
                     {
-                        auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                        auto const errorStyle = core::tui::Style { .fg = theme.agentColors.errorText };
                         out.writeText(std::format("Failed to load session: {}\n", loaded.error().message),
                                       errorStyle);
                     }
@@ -759,7 +760,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                 else if (selectedIdx == 2) // "No, discard"
                 {
                     pendingPlan.reset();
-                    auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                    auto const dimStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                     out.writeText("Plan discarded.\n", dimStyle);
                     out.flush();
                     redrawInputComponent();
@@ -880,7 +881,8 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                     }
                     else if (auto const* m = std::get_if<agent::MarkdownOutput>(&commandResult))
                     {
-                        auto mdRenderer = tui::MarkdownRenderer(out);
+                        auto mdRenderer = core::tui::MarkdownRenderer(
+                            out, core::tui::MarkdownRenderer::defaultTheme(), &_shell.syntaxHighlighters());
                         mdRenderer.setMaxWidth(terminal.columns());
                         mdRenderer.render(m->markdown);
                         out.flush();
@@ -889,7 +891,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                     {
                         if (!_shell.agentConfig.planMode.enabled)
                         {
-                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                            auto const errorStyle = core::tui::Style { .fg = theme.agentColors.errorText };
                             out.writeText("Plan mode is disabled in configuration.\n", errorStyle);
                             out.flush();
                         }
@@ -900,7 +902,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                                 planModeActive = true;
                                 inputComponent.setPlanMode(true);
                             }
-                            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            auto const infoStyle = core::tui::Style { .fg = theme.agentColors.statusText };
                             out.writeText("Plan mode active. Type your task to generate a plan.\n",
                                           infoStyle);
                             out.flush();
@@ -923,7 +925,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                     {
                         // Show interactive session picker using QuestionComponent.
                         sessionPickerNames = sp->sessionNames;
-                        sessionPickerPrompt.component.emplace(tui::QuestionConfig {
+                        sessionPickerPrompt.component.emplace(core::tui::QuestionConfig {
                             .questionText = sp->questionText,
                             .options = sp->options,
                             .multiSelect = false,
@@ -935,7 +937,7 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
                 }
                 else
                 {
-                    auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                    auto const errorStyle = core::tui::Style { .fg = theme.agentColors.errorText };
                     out.writeText(std::format("Unknown command: /{}\n", cmdName), errorStyle);
                     out.flush();
                 }
@@ -966,8 +968,8 @@ LoopControl AgentModeSession::handleInputEvent(tui::InputEvent const& event,
             if (!sentToWorker)
             {
                 auto const newPrefSize = inputComponent.preferredSize();
-                inputComponent.setArea(
-                    tui::Rect { .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
+                inputComponent.setArea(core::tui::Rect {
+                    .x = 0, .y = 0, .width = terminal.columns(), .height = newPrefSize.height });
                 screen.draw();
             }
             break;
@@ -1511,7 +1513,7 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
             if (inputComponent.imageCount() >= 5)
                 return agent::DirectOutput { .text = "Maximum of 5 images already attached.\n" };
 
-            auto clipboardImage = tui::readClipboardImage();
+            auto clipboardImage = core::tui::readClipboardImage();
             if (!clipboardImage)
                 return agent::DirectOutput {
                     .text = "No image found in clipboard. Ensure an image is copied and the clipboard tool "

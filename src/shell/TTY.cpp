@@ -7,6 +7,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <tuple>
 
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
@@ -26,7 +27,7 @@ namespace endo
 
 #if !defined(_WIN32)
 
-void setRawMode(NativeHandle fd)
+void setRawMode(core::platform::NativeHandle fd)
 {
     auto tio = termios {};
     tcgetattr(fd, &tio);
@@ -43,12 +44,12 @@ void setRawMode(NativeHandle fd)
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
 }
 
-void safeClose(NativeHandle* fd) noexcept
+void safeClose(core::platform::NativeHandle* fd) noexcept
 {
-    if (fd && *fd != InvalidHandle)
+    if (fd && *fd != core::platform::InvalidHandle)
     {
         ::close(*fd);
-        *fd = InvalidHandle;
+        *fd = core::platform::InvalidHandle;
     }
 }
 
@@ -65,8 +66,11 @@ RealTTY::RealTTY()
 
 RealTTY::~RealTTY()
 {
+    // Restores the mode directly rather than through restoreMode(), which throws when tcsetattr()
+    // fails: a destructor must not throw, and a terminal that hung up has no mode left to restore
+    // -- tcsetattr() then fails with EIO, and throwing here at exit aborted the shell.
     if (_hasTTY)
-        restoreMode();
+        std::ignore = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_originalTermios);
 }
 
 RealTTY& RealTTY::instance()
@@ -75,12 +79,12 @@ RealTTY& RealTTY::instance()
     return instance;
 }
 
-NativeHandle RealTTY::inputFd() const noexcept
+core::platform::NativeHandle RealTTY::inputFd() const noexcept
 {
     return STDIN_FILENO;
 }
 
-NativeHandle RealTTY::outputFd() const noexcept
+core::platform::NativeHandle RealTTY::outputFd() const noexcept
 {
     return STDOUT_FILENO;
 }
@@ -207,12 +211,12 @@ TestPTY::~TestPTY()
     safeClose(&_ptyMaster);
 }
 
-NativeHandle TestPTY::inputFd() const noexcept
+core::platform::NativeHandle TestPTY::inputFd() const noexcept
 {
     return _ptySlave;
 }
 
-NativeHandle TestPTY::outputFd() const noexcept
+core::platform::NativeHandle TestPTY::outputFd() const noexcept
 {
     return _ptySlave;
 }
@@ -310,7 +314,7 @@ void TestPTY::setSize(uint16_t rows, uint16_t cols)
 namespace
 {
     /// @brief Reports whether @p fd has data ready to read, without consuming it.
-    [[nodiscard]] bool hasPendingInput(NativeHandle fd) noexcept
+    [[nodiscard]] bool hasPendingInput(core::platform::NativeHandle fd) noexcept
     {
         auto descriptor = pollfd { .fd = fd, .events = POLLIN, .revents = 0 };
         return poll(&descriptor, 1, 0) > 0 && (descriptor.revents & POLLIN) != 0;

@@ -5,18 +5,17 @@
 #include <shell/ui/PromptConfig.hpp>
 #include <shell/ui/PromptModule.hpp>
 
-#include <tui/KeyBindings.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Terminal.hpp>
-#include <tui/runtime/TuiRuntime.hpp>
+#include <core/async/Task.hpp>
+#include <core/platform/Types.hpp>
+#include <core/tui/KeyBindings.hpp>
+#include <core/tui/Screen.hpp>
+#include <core/tui/Terminal.hpp>
+#include <core/tui/runtime/TuiRuntime.hpp>
 
 #include <functional>
 #include <memory>
 #include <set>
 #include <string>
-
-#include <coro/Task.hpp>
-#include <platform/Types.hpp>
 
 namespace endo
 {
@@ -26,7 +25,7 @@ class Completer;
 class CommandResolver;
 class History;
 
-/// @brief TUI-based prompt using tui::Terminal and tui::InputField.
+/// @brief TUI-based prompt using core::tui::Terminal and core::tui::InputField.
 ///
 /// Provides a rich editing experience with selection, undo/redo, clipboard,
 /// and history support via the TUI library. Supports multiline editing with
@@ -53,7 +52,7 @@ class Prompt
     /// @param runtime The runtime whose input the prompt consumes (must outlive the
     ///        call; passed by pointer because reference coroutine parameters can dangle).
     /// @return The input line, or empty string on EOF/abort.
-    [[nodiscard]] coro::Task<std::string> read(tui::runtime::TuiRuntime* runtime);
+    [[nodiscard]] core::async::Task<std::string> read(core::tui::runtime::TuiRuntime* runtime);
 
     /// @brief Sets a callback invoked on every idle wake during `read()`.
     ///
@@ -118,16 +117,22 @@ class Prompt
     void setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resolver);
 
     /// @brief Returns the Terminal for color scheme access.
-    [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
+    [[nodiscard]] core::tui::Terminal& terminal() noexcept { return _terminal; }
 
     /// @brief Updates the TUI theme used for rendering.
-    void setTheme(tui::Theme theme);
+    void setTheme(core::tui::Theme theme);
 
     /// @brief Returns the GitModule for accessing cached git info.
     [[nodiscard]] GitModule const* gitModule() const noexcept;
 
     /// @brief Returns the action from the last read() call.
     [[nodiscard]] auto lastAction() const noexcept -> PromptComponent::Action { return _lastAction; }
+
+    /// @brief Whether the terminal's input has ended (it hung up, or its handle closed).
+    ///
+    /// Set by read() when the runtime reports the end of input. The prompt is then no longer
+    /// ready(), and nothing more can be written to or read from the terminal.
+    [[nodiscard]] bool terminalGone() const noexcept { return _terminalGone; }
 
     /// @brief Sets externally known F# names for diagnostics suppression.
     ///
@@ -144,15 +149,19 @@ class Prompt
 
     /// @brief Sets the environment provider used for CWD-aware history ranking.
     /// @param env Pointer (not owned) — may outlive the prompt.
-    void setEnvironmentProvider(EnvironmentProvider const* env);
+    void setEnvironmentProvider(core::platform::ProcessEnvironment const* env);
+
+    /// @brief Sets the working directory used for CWD-aware history ranking.
+    /// @param workingDirectory Pointer (not owned) — may outlive the prompt.
+    void setWorkingDirectory(core::platform::WorkingDirectory const* workingDirectory);
 
     /// @brief Sets the filesystem used for required-paths validation in history search.
     /// @param fs Pointer (not owned); nullptr disables validation.
-    void setFileSystem(FileSystem const* fs);
+    void setFileSystem(core::platform::FileSystem const* fs);
 
     /// @brief Sets the command registry used by the command palette.
     /// @param registry Pointer to the registry (caller owns, must outlive this prompt).
-    void setCommandRegistry(tui::CommandRegistry* registry);
+    void setCommandRegistry(core::tui::CommandRegistry* registry);
 
     // ========================================================================
     // Keybindings
@@ -161,20 +170,20 @@ class Prompt
     /// @brief Binds a key chord to an edit action.
     /// @param chord The key chord to bind.
     /// @param action The action to execute when the chord is pressed.
-    void bindKey(tui::KeyChord chord, tui::EditAction action);
+    void bindKey(core::tui::KeyChord chord, core::tui::EditAction action);
 
     /// @brief Removes a keybinding.
     /// @param chord The key chord to unbind.
-    void unbindKey(tui::KeyChord chord);
+    void unbindKey(core::tui::KeyChord chord);
 
     /// @brief Resets all keybindings to defaults.
     void resetKeyBindings();
 
     /// @brief Returns the current keybindings (const).
-    [[nodiscard]] tui::KeyBindings const& keyBindings() const;
+    [[nodiscard]] core::tui::KeyBindings const& keyBindings() const;
 
     /// @brief Returns the current keybindings (mutable).
-    [[nodiscard]] tui::KeyBindings& keyBindings();
+    [[nodiscard]] core::tui::KeyBindings& keyBindings();
 
     /// @brief RAII helper for suspend/resume scoping.
     ///
@@ -197,20 +206,24 @@ class Prompt
     };
 
   private:
-    tui::Terminal _terminal;
-    std::unique_ptr<tui::Screen> _screen;
+    core::tui::Terminal _terminal;
+    std::unique_ptr<core::tui::Screen> _screen;
     std::unique_ptr<PromptComponent> _promptComponent;
     std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
     History const* _history = nullptr;
-    EnvironmentProvider const* _envProvider = nullptr;
-    FileSystem const* _historyFs = nullptr;
+    core::platform::ProcessEnvironment const* _envProvider = nullptr;
+    core::platform::WorkingDirectory const* _workingDirectory = nullptr;
+    /// The native environment, made only if initialize() runs with no provider injected.
+    std::unique_ptr<core::platform::ProcessEnvironment> _nativeEnvProvider;
+    core::platform::FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
     PromptConfig _promptConfig;
     bool _initialized = false;
     bool _aborted = false;
     bool _multilineEnabled = true; ///< Enable multiline editing by default
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
+    bool _terminalGone = false;            ///< The terminal's input ended; see terminalGone().
     bool _displayDrewCurrentState = false; ///< True when display() already drew the current state.
     std::function<void()> _onIdle;         ///< Invoked on each idle wake during read() (see setOnIdle).
 
@@ -233,6 +246,6 @@ class Prompt
 /// incomplete line before the next prompt.
 /// @param handle Native handle to write to (typically standardOutput()).
 /// @param cursorColumn Current cursor column (1-based). No-op if <= 1.
-void emitPartialLineIndicator(NativeHandle handle, int cursorColumn);
+void emitPartialLineIndicator(core::platform::NativeHandle handle, int cursorColumn);
 
 } // namespace endo

@@ -2,7 +2,7 @@
 #include "BatteryModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
-#include <tui/Theme.hpp>
+#include <core/tui/Theme.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -70,7 +70,7 @@ PromptSegments BatteryModule::evaluate(PromptContext const& ctx) const
     if (info.charging)
         icon = "\xe2\x9a\xa1"; // U+26A1 lightning bolt
 
-    auto style = tui::Style {};
+    auto style = core::tui::Style {};
     if (ctx.resolvedColors)
     {
         if (info.percentage <= 20)

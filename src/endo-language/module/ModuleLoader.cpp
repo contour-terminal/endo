@@ -16,7 +16,9 @@ namespace endo
 
 namespace fs = std::filesystem;
 
-ModuleLoader::ModuleLoader(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report, FileSystem& fs):
+ModuleLoader::ModuleLoader(CoreVM::Runtime& runtime,
+                           CoreVM::diagnostics::Report& report,
+                           core::platform::FileSystem& fs):
     _fs(fs), _runtime(runtime), _report(report)
 {
 }

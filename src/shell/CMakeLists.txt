@@ -235,15 +235,15 @@ find_package(Threads REQUIRED)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(endo-shell PUBLIC endo vtparser tui psapi)
+    target_link_libraries(endo-shell PUBLIC endo core::tui psapi)
 else()
-    target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads)
+    target_link_libraries(endo-shell PUBLIC endo core::tui Threads::Threads)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_libraries(endo-shell PUBLIC util) # forkpty() on Linux
     endif()
 endif()
 
-target_link_libraries(endo-shell PUBLIC endo-platform net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+target_link_libraries(endo-shell PUBLIC endo-platform core::net yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
 if(ENDO_HAS_WASM)
     # Brings in the ENDO_HAS_WASM=1 compile definition (INTERFACE) and binaryen.
     target_link_libraries(endo-shell PUBLIC CoreVM-wasm)
@@ -341,7 +341,7 @@ if(ENDO_TESTING)
         )
     endif()
 
-    target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
+    target_link_libraries(test-endo-shell endo-shell core::testing Catch2::Catch2)
     target_compile_definitions(test-endo-shell PRIVATE
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
         ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
@@ -369,6 +369,17 @@ if(ENDO_TESTING)
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         )
         set_tests_properties(check-test-isolation PROPERTIES TIMEOUT 60)
+
+        # The interactive shell exits when its terminal hangs up, SIGHUP ignored, rather than
+        # reading the dead terminal again at full CPU. It needs a pty, so POSIX only.
+        if(NOT WIN32)
+            add_test(
+                NAME check-hangup-exit
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check-hangup-exit.py
+                    --endo-path $<TARGET_FILE:endo-bin>
+            )
+            set_tests_properties(check-hangup-exit PROPERTIES TIMEOUT 90 SKIP_RETURN_CODE 77)
+        endif()
 
         set_tests_properties(check-doc-snippets PROPERTIES
             TIMEOUT 120
