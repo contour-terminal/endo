@@ -264,6 +264,7 @@ Features included for completeness. Most have limited relevance to Endo.
 - [x] DAP/debug adapter integration: spawns `endo --dap`, zero-config F5 launching, breakpoint support
 - [x] Language configuration: brackets, comments, folding markers, indentation rules
 - [x] Pre-built VSIX package (`endo-0.1.0.vsix`) with marketplace metadata
+- [x] Marketplace icon and dark gallery banner, the 256 px render of the logo copied in from `packaging/icons/` by the `package` script
 
 ---
 
