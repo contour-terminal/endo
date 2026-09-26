@@ -3,7 +3,7 @@
 #include <shell/util/CommandResolver.hpp>
 
 #include <core/platform/testing/InMemoryFileSystem.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -44,10 +44,10 @@ TEST_CASE("CommandResolver.findInPath.bare_name_found")
     dir.createExecutable("testcmd");
 #endif
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", dir.path.string());
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", dir.path.string()));
 #if defined(_WIN32)
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 #endif
 
     auto const resolver = CommandResolver(env, dir.fs);
@@ -60,10 +60,10 @@ TEST_CASE("CommandResolver.findInPath.not_found")
 {
     PathDir dir;
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", dir.path.string());
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", dir.path.string()));
 #if defined(_WIN32)
-    env.set("PATHEXT", ".exe");
+    REQUIRE(env.set("PATHEXT", ".exe"));
 #endif
 
     auto const resolver = CommandResolver(env, dir.fs);
@@ -73,7 +73,7 @@ TEST_CASE("CommandResolver.findInPath.not_found")
 
 TEST_CASE("CommandResolver.findInPath.missing_PATH")
 {
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
     // No PATH set at all.
 
     auto const fs = core::platform::testing::InMemoryFileSystem {};
@@ -88,14 +88,14 @@ TEST_CASE("CommandResolver.findInPath.skips_nonexistent_directory")
 #if defined(_WIN32)
     dir.createExecutable("mycmd.exe");
     auto const pathValue = std::string("C:\\no_such_dir_12345") + ";" + dir.path.string();
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", pathValue);
-    env.set("PATHEXT", ".exe");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", pathValue));
+    REQUIRE(env.set("PATHEXT", ".exe"));
 #else
     dir.createExecutable("mycmd");
     auto const pathValue = std::string("/no_such_dir_12345") + ":" + dir.path.string();
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", pathValue);
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", pathValue));
 #endif
 
     auto const resolver = CommandResolver(env, dir.fs);
@@ -111,9 +111,9 @@ TEST_CASE("CommandResolver.findInPath.PATHEXT_resolution")
     // Create testapp.cmd — should be found when searching for "testapp"
     dir.createExecutable("testapp.cmd");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", dir.path.string());
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", dir.path.string()));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 
     auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("testapp");
@@ -130,9 +130,9 @@ TEST_CASE("CommandResolver.findInPath.prefers_PATHEXT_over_extensionless")
     fs.addExecutable("/bin/docker");     // extensionless shim — not a runnable Windows command
     fs.addExecutable("/bin/docker.exe"); // the real CLI
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("docker");
@@ -148,9 +148,9 @@ TEST_CASE("CommandResolver.findInPath.extensionless_only_is_not_found")
     fs.addDirectory("/bin");
     fs.addExecutable("/bin/docker");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 
     auto const resolver = CommandResolver(env, fs);
     CHECK(resolver.findInPath("docker").empty());
@@ -163,9 +163,9 @@ TEST_CASE("CommandResolver.findInPath.explicit_extension_resolves")
     fs.addDirectory("/bin");
     fs.addExecutable("/bin/docker.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("docker.exe");
@@ -181,9 +181,9 @@ TEST_CASE("CommandResolver.findInPath.honors_PATHEXT_ordering")
     fs.addExecutable("/bin/foo.cmd");
     fs.addExecutable("/bin/foo.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd"));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("foo");
@@ -200,9 +200,9 @@ TEST_CASE("CommandResolver.findInPath.typed_non_PATHEXT_extension_resolves_verba
     fs.addDirectory("/bin");
     fs.addExecutable("/bin/deploy.ps1");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd"); // note: no .ps1
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd")); // note: no .ps1
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("deploy.ps1");
@@ -218,9 +218,9 @@ TEST_CASE("CommandResolver.findInPath.empty_PATHEXT_falls_back_to_defaults")
     fs.addDirectory("/bin");
     fs.addExecutable("/bin/docker.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", "");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ""));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("docker");
@@ -237,9 +237,9 @@ TEST_CASE("CommandResolver.findInPath.empty_PATHEXT_token_does_not_reshadow")
     fs.addExecutable("/bin/docker");
     fs.addExecutable("/bin/docker.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;;.cmd");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;;.cmd"));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("docker");
@@ -257,9 +257,9 @@ TEST_CASE("CommandResolver.findInPath.extensionless_does_not_shadow_later_direct
     fs.addExecutable("/a/docker"); // extensionless shim, earlier in PATH
     fs.addExecutable("/b/docker.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/a;/b");
-    env.set("PATHEXT", ".exe;.cmd;.bat");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/a;/b"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd;.bat"));
 
     auto const resolver = CommandResolver(env, fs);
     auto const result = resolver.findInPath("docker");
@@ -275,14 +275,14 @@ TEST_CASE("CommandResolver.resolve.invalidates_cache_on_PATHEXT_change")
     fs.addDirectory("/bin");
     fs.addExecutable("/bin/docker.exe");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".cmd"); // no .exe yet → docker.exe unreachable
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".cmd")); // no .exe yet → docker.exe unreachable
 
     auto const resolver = CommandResolver(env, fs);
     CHECK(resolver.resolve("docker").type == CommandType::NotFound);
 
-    env.set("PATHEXT", ".exe;.cmd"); // now docker.exe is reachable
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd")); // now docker.exe is reachable
     CHECK(resolver.resolve("docker").type == CommandType::External);
 }
 #endif
@@ -300,8 +300,8 @@ TEST_CASE("CommandResolver.findInPath.skips_non_executable")
     // Create a file without execute permission — should not be found.
     dir.createNonExecutable("noexec");
 
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("PATH", dir.path.string());
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("PATH", dir.path.string()));
 
     auto const resolver = CommandResolver(env, dir.fs);
     auto const result = resolver.findInPath("noexec");
@@ -315,14 +315,14 @@ TEST_CASE("CommandResolver.findInPath.resolves_through_injected_filesystem")
     // proving the resolver now relies on the FileSystem abstraction rather than std::filesystem.
     core::platform::testing::InMemoryFileSystem fs;
     fs.addDirectory("/bin");
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
 #if defined(_WIN32)
     fs.addExecutable("/bin/tool.exe");
-    env.set("PATH", "/bin");
-    env.set("PATHEXT", ".exe;.cmd");
+    REQUIRE(env.set("PATH", "/bin"));
+    REQUIRE(env.set("PATHEXT", ".exe;.cmd"));
 #else
     fs.addExecutable("/bin/tool");
-    env.set("PATH", "/bin");
+    REQUIRE(env.set("PATH", "/bin"));
 #endif
 
     auto const resolver = CommandResolver(env, fs);

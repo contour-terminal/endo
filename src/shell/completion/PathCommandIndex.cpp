@@ -47,7 +47,7 @@ namespace
     }
 } // namespace
 
-PathCommandIndex::PathCommandIndex(core::platform::EnvironmentProvider const& env,
+PathCommandIndex::PathCommandIndex(core::platform::ProcessEnvironment const& env,
                                    core::platform::FileSystem const& fs):
     _env(env), _fs(fs)
 {

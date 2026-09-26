@@ -3541,7 +3541,7 @@ int Shell::executeInlinePwd(CoreVM::CoreStringArray const& args, core::platform:
                                       "| `-h`, `--help` | Display this help |\n");
     }
 
-    auto output = std::format("{}\n", _env.currentDirectory());
+    auto output = std::format("{}\n", currentDirectoryText());
     [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
     return 0;
 }
@@ -5177,7 +5177,7 @@ int Shell::executeInlineHistory(CoreVM::CoreStringArray const& args, core::platf
 
             auto const& pattern = args.at(patternIdx);
             auto options = FuzzySearchOptions {
-                .currentCwd = _env.currentDirectory(),
+                .currentCwd = currentDirectoryText(),
                 .home = normalizedHomeDirectory(_env),
                 .validateRequiredPaths = validate,
                 .fs = &_fs,

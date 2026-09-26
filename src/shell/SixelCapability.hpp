@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <optional>
 
@@ -56,7 +56,7 @@ class TerminalSixelCapability final: public SixelCapabilityProvider
   public:
     /// @param tty The terminal to probe.
     /// @param env The environment, consulted for the `ENDO_SIXEL` override.
-    TerminalSixelCapability(TTY& tty, core::platform::EnvironmentProvider& env) noexcept: _tty(tty), _env(env)
+    TerminalSixelCapability(TTY& tty, core::platform::ProcessEnvironment& env) noexcept: _tty(tty), _env(env)
     {
     }
 
@@ -64,7 +64,7 @@ class TerminalSixelCapability final: public SixelCapabilityProvider
 
   private:
     TTY& _tty;
-    core::platform::EnvironmentProvider& _env;
+    core::platform::ProcessEnvironment& _env;
     std::optional<bool> _cached; ///< Probe result, computed at most once.
 };
 

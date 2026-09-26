@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <filesystem>
 #include <set>
@@ -45,7 +45,7 @@ class CommandResolver
     /// @brief Constructs a resolver with access to the environment and filesystem.
     /// @param env Environment provider, used to read PATH and PATHEXT.
     /// @param fs  Filesystem abstraction, used to test candidate executables.
-    CommandResolver(core::platform::EnvironmentProvider const& env, core::platform::FileSystem const& fs);
+    CommandResolver(core::platform::ProcessEnvironment const& env, core::platform::FileSystem const& fs);
 
     /// @brief Resolves a command and returns its info.
     /// @param command The command name to resolve.
@@ -73,7 +73,7 @@ class CommandResolver
     /// @param env Environment provider, used to read PATHEXT on Windows.
     /// @return Lower-cased extensions including the leading dot, or empty on POSIX.
     [[nodiscard]] static std::vector<std::string> executableExtensions(
-        core::platform::EnvironmentProvider const& env);
+        core::platform::ProcessEnvironment const& env);
 
     /// @brief Splits $PATH into its directory entries, dropping empty ones.
     ///
@@ -83,7 +83,7 @@ class CommandResolver
     /// @param env Environment provider, used to read PATH.
     /// @return The $PATH directories in order; empty when PATH is unset.
     [[nodiscard]] static std::vector<std::filesystem::path> pathDirectories(
-        core::platform::EnvironmentProvider const& env);
+        core::platform::ProcessEnvironment const& env);
 
     /// @brief Returns the cache key for the environment that governs $PATH resolution.
     ///
@@ -92,7 +92,7 @@ class CommandResolver
     ///
     /// @param env Environment provider, used to read PATH and PATHEXT.
     /// @return $PATH on POSIX; "$PATH\\x1f$PATHEXT" on Windows.
-    [[nodiscard]] static std::string resolutionCacheKey(core::platform::EnvironmentProvider const& env);
+    [[nodiscard]] static std::string resolutionCacheKey(core::platform::ProcessEnvironment const& env);
 
     /// @brief Searches $PATH for the first executable matching @p command.
     ///
@@ -113,7 +113,7 @@ class CommandResolver
     [[nodiscard]] std::vector<std::string> findAllInPath(std::string_view command) const;
 
   private:
-    core::platform::EnvironmentProvider const& _env;
+    core::platform::ProcessEnvironment const& _env;
     core::platform::FileSystem const& _fs;
 
     // Cache for efficiency. The key combines $PATH and (on Windows) $PATHEXT, since both
@@ -144,7 +144,7 @@ class CommandResolver
     /// @param command Bare command name.
     /// @return Ordered list of candidate file names.
     [[nodiscard]] static std::vector<std::string> candidateNames(
-        core::platform::EnvironmentProvider const& env, std::string_view command);
+        core::platform::ProcessEnvironment const& env, std::string_view command);
 };
 
 } // namespace endo

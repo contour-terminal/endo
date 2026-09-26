@@ -11,6 +11,7 @@
 
 #include <endo-language/ide/HoverProvider.hpp>
 
+#include <core/platform/PathUtils.hpp>
 #include <core/tui/Canvas.hpp>
 #include <core/tui/GhostTextHelper.hpp>
 #include <core/tui/Screen.hpp>
@@ -1515,11 +1516,10 @@ void PromptComponent::triggerHistorySearch()
 
     auto const inputText = std::string(_inputField.text());
     auto options = FuzzySearchOptions {};
+    if (_workingDirectory)
+        options.currentCwd = core::platform::normalizePath(_workingDirectory->currentDirectory());
     if (_envProvider)
-    {
-        options.currentCwd = _envProvider->currentDirectory();
         options.home = normalizedHomeDirectory(*_envProvider);
-    }
     options.fs = _historyFs;
     options.validateRequiredPaths = _historyFs != nullptr;
     auto results = _history->searchFuzzy(inputText, 200, options);
@@ -1555,11 +1555,10 @@ void PromptComponent::updateHistorySearchPopup()
 
     auto const inputText = std::string(_inputField.text());
     auto options = FuzzySearchOptions {};
+    if (_workingDirectory)
+        options.currentCwd = core::platform::normalizePath(_workingDirectory->currentDirectory());
     if (_envProvider)
-    {
-        options.currentCwd = _envProvider->currentDirectory();
         options.home = normalizedHomeDirectory(*_envProvider);
-    }
     options.fs = _historyFs;
     options.validateRequiredPaths = _historyFs != nullptr;
     auto results = _history->searchFuzzy(inputText, 200, options);

@@ -10,6 +10,8 @@
 #include <format>
 #include <iostream>
 #include <print>
+#include <string>
+#include <string_view>
 
 #include <platform/Process.hpp>
 
@@ -207,8 +209,8 @@ void Shell::builtinReadDefault(CoreVM::Params& context)
     auto const line = readInputLine(inputFd, options);
 
     // Set REPLY variable
-    _env.set("REPLY", line);
-    _exitCode = line.empty() ? 1 : 0;
+    auto const taken = reportEnvironmentError("read: set REPLY", _env.set("REPLY", line));
+    _exitCode = line.empty() || !taken ? 1 : 0;
 
     context.setResult(line);
 }
@@ -346,11 +348,15 @@ void Shell::builtinRead(CoreVM::Params& context)
     // Split by IFS
     auto fields = splitByIFS(line);
 
-    // Assign to variables
+    // Assign to variables; a name the environment refuses is reported, and read then fails.
+    auto allTaken = true;
+    auto const assign = [&](std::string const& name, std::string_view value) {
+        allTaken &= reportEnvironmentError(std::format("read: set {}", name), _env.set(name, value));
+    };
     if (options.variableNames.empty())
     {
         // Default: set REPLY
-        _env.set("REPLY", line);
+        assign("REPLY", line);
     }
     else
     {
@@ -360,9 +366,9 @@ void Shell::builtinRead(CoreVM::Params& context)
             {
                 // Assign individual field
                 if (vi < fields.size())
-                    _env.set(options.variableNames[vi], fields[vi]);
+                    assign(options.variableNames[vi], fields[vi]);
                 else
-                    _env.set(options.variableNames[vi], "");
+                    assign(options.variableNames[vi], "");
             }
             else
             {
@@ -374,12 +380,12 @@ void Shell::builtinRead(CoreVM::Params& context)
                         rest += ' ';
                     rest += fields[fi];
                 }
-                _env.set(options.variableNames[vi], rest);
+                assign(options.variableNames[vi], rest);
             }
         }
     }
 
-    _exitCode = line.empty() ? 1 : 0;
+    _exitCode = line.empty() || !allTaken ? 1 : 0;
     context.setResult(line);
 }
 

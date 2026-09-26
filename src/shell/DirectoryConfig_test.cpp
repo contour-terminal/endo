@@ -6,7 +6,7 @@
 #include <shell/testing/InjectedShell.hpp>
 
 #include <core/platform/testing/InMemoryFileSystem.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -45,12 +45,12 @@ fs::path makeDir(core::platform::testing::InMemoryFileSystem& fileSystem,
     return dir;
 }
 
-/// Helper: set the test environment CWD and register the path as valid.
-void setCwd(core::platform::testing::TestEnvironmentProvider& env, fs::path const& dir)
+/// Helper: move the shell's working directory to @p dir, registered as valid, and set PWD to match.
+void setCwd(InMemoryShell& ts, fs::path const& dir)
 {
-    env.addValidPath(dir.string());
-    [[maybe_unused]] auto const result = env.changeDirectory(dir);
-    env.set("PWD", dir.string());
+    ts.workingDirectory.addValidPath(dir.string());
+    REQUIRE(ts.workingDirectory.changeDirectory(dir));
+    REQUIRE(ts.env.set("PWD", dir.string()));
 }
 
 } // namespace
@@ -62,8 +62,8 @@ void setCwd(core::platform::testing::TestEnvironmentProvider& env, fs::path cons
 TEST_CASE("dirconfig.trust_store.round_trip")
 {
     core::platform::testing::InMemoryFileSystem fileSystem;
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("HOME", "/test/home");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("HOME", "/test/home"));
 
     // Create, set trust, save
     {
@@ -93,8 +93,8 @@ TEST_CASE("dirconfig.trust_store.round_trip")
 TEST_CASE("dirconfig.trust_store.hash_change_invalidates")
 {
     core::platform::testing::InMemoryFileSystem fileSystem;
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("HOME", "/test/home");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("HOME", "/test/home"));
 
     auto store = endo::DirectoryConfigTrustStore(fileSystem, env, silentDiag());
     store.setTrust("/projects/foo/.local-env.endo", "original_hash", true);
@@ -112,8 +112,8 @@ TEST_CASE("dirconfig.trust_store.hash_change_invalidates")
 TEST_CASE("dirconfig.trust_store.revoke")
 {
     core::platform::testing::InMemoryFileSystem fileSystem;
-    core::platform::testing::TestEnvironmentProvider env;
-    env.set("HOME", "/test/home");
+    core::platform::testing::TestProcessEnvironment env;
+    REQUIRE(env.set("HOME", "/test/home"));
 
     auto store = endo::DirectoryConfigTrustStore(fileSystem, env, silentDiag());
     store.setTrust("/projects/foo/.local-env.endo", "hash1", true);
@@ -131,9 +131,9 @@ TEST_CASE("dirconfig.discovery.untrusted_config_not_loaded")
 {
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "discovery-untrusted", "let x = 42\n");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     // Config exists but is not trusted — should not be loaded
     mgr.onDirectoryChanged(tmpDir.string());
     CHECK(mgr.activeScopes().empty());
@@ -145,9 +145,9 @@ TEST_CASE("dirconfig.discovery.no_config_file")
 {
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "no-config");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     mgr.onDirectoryChanged(tmpDir.string());
     CHECK(mgr.activeScopes().empty());
     CHECK(mgr.diagnostics().empty());
@@ -161,9 +161,9 @@ TEST_CASE("dirconfig.load.trusted_config_introduces_function")
 {
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "load-func", "let greet name = print name\n");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     mgr.allowConfig(tmpDir);
 
     // Verify function was loaded
@@ -178,16 +178,16 @@ TEST_CASE("dirconfig.unload.removes_function_on_cd_away")
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "unload-func", "let greet name = print name\n");
     auto const otherDir = makeDir(ts.fs, "otherDir");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
 
     // Trust and load
     mgr.allowConfig(tmpDir);
     REQUIRE(ts.shell.fsharpState().functions.contains("greet"));
 
     // cd to unrelated directory — function should be removed
-    setCwd(ts.env, otherDir);
+    setCwd(ts, otherDir);
     mgr.onDirectoryChanged(otherDir.string());
     CHECK(!ts.shell.fsharpState().functions.contains("greet"));
     CHECK(mgr.activeScopes().empty());
@@ -197,9 +197,9 @@ TEST_CASE("dirconfig.load.trusted_config_introduces_binding")
 {
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "load-binding", "let project_name = \"my-project\"\n");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     mgr.allowConfig(tmpDir);
 
     // Verify binding was loaded
@@ -216,15 +216,15 @@ TEST_CASE("dirconfig.unload.removes_binding_on_cd_away")
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "unload-binding", "let project_name = \"my-project\"\n");
     auto const otherDir = makeDir(ts.fs, "otherDir");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     mgr.allowConfig(tmpDir);
 
     auto const& bindings = ts.shell.fsharpState().valueBindings;
     REQUIRE(std::ranges::any_of(bindings, [](auto const& vb) { return vb.name == "project_name"; }));
 
-    setCwd(ts.env, otherDir);
+    setCwd(ts, otherDir);
     mgr.onDirectoryChanged(otherDir.string());
     CHECK(!std::ranges::any_of(bindings, [](auto const& vb) { return vb.name == "project_name"; }));
 }
@@ -239,19 +239,19 @@ TEST_CASE("dirconfig.sibling_transition.swaps_configs")
     auto const projectA = makeDir(ts.fs, "sibling-a", "let project_a = 1\n");
     auto const projectB = makeDir(ts.fs, "sibling-b", "let project_b = 2\n");
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
 
     // Start in project A
-    setCwd(ts.env, projectA);
+    setCwd(ts, projectA);
     mgr.allowConfig(projectA);
     REQUIRE(std::ranges::any_of(ts.shell.fsharpState().valueBindings,
                                 [](auto const& vb) { return vb.name == "project_a"; }));
 
     // Pre-trust B so onDirectoryChanged picks it up
-    setCwd(ts.env, projectB);
+    setCwd(ts, projectB);
     mgr.allowConfig(projectB);
 
-    setCwd(ts.env, projectB);
+    setCwd(ts, projectB);
     mgr.onDirectoryChanged(projectB.string());
 
     // project_a should be gone, project_b should be present
@@ -287,9 +287,9 @@ TEST_CASE("dirconfig.diagnostics.untrusted_message_captured")
 {
     InMemoryShell ts;
     auto const tmpDir = makeDir(ts.fs, "diag-capture", "let x = 1\n");
-    setCwd(ts.env, tmpDir);
+    setCwd(ts, tmpDir);
 
-    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, silentDiag());
+    auto mgr = endo::DirectoryConfigManager(ts.shell, ts.fs, ts.env, ts.workingDirectory, silentDiag());
     mgr.onDirectoryChanged(tmpDir.string());
 
     // Should have captured diagnostic about untrusted config

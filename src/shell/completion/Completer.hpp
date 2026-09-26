@@ -14,7 +14,8 @@
 
 #include <endo-language/ide/CompletionContext.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 
 #include <memory>
 #include <optional>
@@ -43,11 +44,13 @@ class Completer
   public:
     /// @brief Constructs a completer with default providers.
     /// @param env The environment for variable and command completion.
+    /// @param workingDirectory The working directory history suggestions are ranked against.
     /// @param history The history for history-based suggestions.
     /// @param fsharpState The persistent F# state for let binding completion.
     /// @param fs Filesystem used to enumerate $PATH executables and to validate
     ///           required paths in history-based suggestions.
-    Completer(core::platform::EnvironmentProvider const& env,
+    Completer(core::platform::ProcessEnvironment const& env,
+              core::platform::WorkingDirectory const& workingDirectory,
               History const& history,
               FSharpPersistentState const& fsharpState,
               core::platform::FileSystem const& fs);

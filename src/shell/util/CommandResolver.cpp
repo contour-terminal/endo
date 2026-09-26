@@ -4,8 +4,8 @@
 #include <endo-language/builtins/BuiltinSignatures.hpp>
 
 #include <core/Utils.hpp>
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/PathUtils.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <array>
 #include <filesystem>
@@ -13,7 +13,7 @@
 namespace endo
 {
 
-CommandResolver::CommandResolver(core::platform::EnvironmentProvider const& env,
+CommandResolver::CommandResolver(core::platform::ProcessEnvironment const& env,
                                  core::platform::FileSystem const& fs):
     _env(env), _fs(fs)
 {
@@ -84,7 +84,7 @@ namespace
     /// callers that *compare* an extension against this list need one canonical case;
     /// callers that build file names from it are unaffected, since the filesystem is
     /// case-insensitive.
-    std::vector<std::string> pathExtList(core::platform::EnvironmentProvider const& env)
+    std::vector<std::string> pathExtList(core::platform::ProcessEnvironment const& env)
     {
         auto extensions = std::vector<std::string> {};
         if (auto const pathext = env.get("PATHEXT"))
@@ -102,7 +102,7 @@ namespace
 #endif
 
 std::vector<std::string> CommandResolver::executableExtensions(
-    [[maybe_unused]] core::platform::EnvironmentProvider const& env)
+    [[maybe_unused]] core::platform::ProcessEnvironment const& env)
 {
 #if defined(_WIN32)
     return pathExtList(env);
@@ -112,7 +112,7 @@ std::vector<std::string> CommandResolver::executableExtensions(
 }
 
 std::vector<std::string> CommandResolver::candidateNames(
-    [[maybe_unused]] core::platform::EnvironmentProvider const& env, std::string_view command)
+    [[maybe_unused]] core::platform::ProcessEnvironment const& env, std::string_view command)
 {
 #if !defined(_WIN32)
     return { std::string(command) };
@@ -184,7 +184,7 @@ void CommandResolver::refreshCacheIfNeeded() const
     }
 }
 
-std::string CommandResolver::resolutionCacheKey(core::platform::EnvironmentProvider const& env)
+std::string CommandResolver::resolutionCacheKey(core::platform::ProcessEnvironment const& env)
 {
     auto key = env.get("PATH").value_or(std::string {});
 #if defined(_WIN32)
@@ -196,7 +196,7 @@ std::string CommandResolver::resolutionCacheKey(core::platform::EnvironmentProvi
 }
 
 std::vector<std::filesystem::path> CommandResolver::pathDirectories(
-    core::platform::EnvironmentProvider const& env)
+    core::platform::ProcessEnvironment const& env)
 {
     auto const pathEnv = env.get("PATH");
     if (!pathEnv)

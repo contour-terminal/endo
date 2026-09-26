@@ -19,8 +19,8 @@
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/util/CommandResolver.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/NativeFileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include "PromptComponent.hpp"
 
@@ -72,7 +72,7 @@ void Prompt::initialize()
     // if none was set.
     auto const& fs = _historyFs ? *_historyFs : core::platform::NativeFileSystem::instance();
     if (!_envProvider && !_nativeEnvProvider)
-        _nativeEnvProvider = core::platform::nativeEnvironmentProvider();
+        _nativeEnvProvider = core::platform::nativeProcessEnvironment();
     auto const& env = _envProvider ? *_envProvider : *_nativeEnvProvider;
     _commandResolver = std::make_unique<CommandResolver>(env, fs);
 
@@ -509,11 +509,18 @@ void Prompt::setHistory(History const* history)
         _promptComponent->setHistory(history);
 }
 
-void Prompt::setEnvironmentProvider(core::platform::EnvironmentProvider const* env)
+void Prompt::setEnvironmentProvider(core::platform::ProcessEnvironment const* env)
 {
     _envProvider = env;
     if (_promptComponent)
         _promptComponent->setEnvironmentProvider(env);
+}
+
+void Prompt::setWorkingDirectory(core::platform::WorkingDirectory const* workingDirectory)
+{
+    _workingDirectory = workingDirectory;
+    if (_promptComponent)
+        _promptComponent->setWorkingDirectory(workingDirectory);
 }
 
 void Prompt::setFileSystem(core::platform::FileSystem const* fs)

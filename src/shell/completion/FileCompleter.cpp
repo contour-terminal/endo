@@ -4,6 +4,7 @@
 #include <endo-language/ide/CompletionCandidates.hpp>
 
 #include <core/platform/PathUtils.hpp>
+#include <core/platform/UserPaths.hpp>
 #include <core/tui/completer/FuzzyMatch.hpp>
 #include <core/tui/completer/SmartCaseMatch.hpp>
 
@@ -16,7 +17,7 @@
 namespace endo
 {
 
-FileCompleter::FileCompleter(core::platform::EnvironmentProvider const& env,
+FileCompleter::FileCompleter(core::platform::ProcessEnvironment const& env,
                              core::platform::FileSystem const& fs):
     _env(env), _fs(fs)
 {
@@ -174,7 +175,7 @@ std::filesystem::path FileCompleter::expandTilde(std::string_view path) const
         // ~ or ~/... - current user's home, resolved through the environment
         // abstraction (HOME, then USERPROFILE on Windows) so home resolution is
         // centralized and matches the rest of the shell.
-        auto const home = _env.homeDirectory();
+        auto const home = core::platform::homeDirectory(_env);
         if (!home.has_value())
             return std::filesystem::path(path); // No home set: leave the path unchanged.
 

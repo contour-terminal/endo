@@ -51,7 +51,7 @@ void Shell::builtinForNext(CoreVM::Params& context)
 
     if (state.index < state.items.size())
     {
-        _env.set(varName, state.items[state.index]);
+        reportEnvironmentError(std::format("for {}", varName), _env.set(varName, state.items[state.index]));
         ++state.index;
     }
 }

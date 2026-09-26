@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <string>
 #include <utility>
@@ -26,7 +26,7 @@ class PathCommandIndex
     /// @brief Constructs an index over @p env's $PATH, probing through @p fs.
     /// @param env Environment provider, used to read PATH and PATHEXT.
     /// @param fs  Filesystem abstraction, used to list directories and test executability.
-    PathCommandIndex(core::platform::EnvironmentProvider const& env, core::platform::FileSystem const& fs);
+    PathCommandIndex(core::platform::ProcessEnvironment const& env, core::platform::FileSystem const& fs);
 
     /// @brief Returns every executable on $PATH as (command name, resolved path), sorted by name.
     ///
@@ -38,7 +38,7 @@ class PathCommandIndex
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> const& entries() const;
 
   private:
-    core::platform::EnvironmentProvider const& _env;
+    core::platform::ProcessEnvironment const& _env;
     core::platform::FileSystem const& _fs;
 
     // Mutable so that entries() can stay const while refreshing on demand.

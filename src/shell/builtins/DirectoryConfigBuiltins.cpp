@@ -91,7 +91,7 @@ int Shell::executeInlineDirConfig(CoreVM::CoreStringArray const& args, core::pla
     auto const configPath = [&]() -> std::filesystem::path {
         if (args.size() >= 3)
             return std::filesystem::path(args.at(2));
-        return std::filesystem::path(_env.currentDirectory()) / ".local-env.endo";
+        return _workingDirectory.currentDirectory() / ".local-env.endo";
     }();
 
     if (subcmd == "allow")

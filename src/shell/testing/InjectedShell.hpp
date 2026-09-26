@@ -6,15 +6,31 @@
 #include <shell/TTY.hpp>
 
 #include <core/platform/testing/InMemoryFileSystem.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
 
 #include <filesystem>
+#include <format>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
 namespace endo::testing
 {
+
+/// @brief Sets a variable a fixture depends on.
+///
+/// The double refuses only a malformed name or value, which is a broken fixture, so a refusal throws
+/// rather than letting the test run on without the variable.
+inline void seedVariable(core::platform::ProcessEnvironment& env,
+                         std::string_view name,
+                         std::string_view value)
+{
+    if (auto const result = env.set(name, value); !result)
+        throw std::logic_error(
+            std::format("fixture could not set {}: {}", name, core::platform::toString(result.error())));
+}
 
 /// @brief Seeds the "/test" convention every injected-filesystem fixture shares.
 ///
@@ -28,13 +44,13 @@ namespace endo::testing
 /// @param env   The injected environment to keep in step with it.
 /// @param shell The shell owning them.
 inline void seedInjectedShell(core::platform::testing::InMemoryFileSystem& fs,
-                              core::platform::testing::TestEnvironmentProvider& env,
+                              core::platform::testing::TestProcessEnvironment& env,
                               endo::Shell& shell)
 {
     fs.addDirectory("/test");
     fs.setCurrentPath("/test");
-    env.set("HOME", "/test/home");
-    env.set("PWD", "/test");
+    seedVariable(env, "HOME", "/test/home");
+    seedVariable(env, "PWD", "/test");
     shell.addModuleSearchPath("/test");
     // Never probe the test PTY for Sixel support: the query would leak escape bytes into
     // the captured output and stall on timeout.
@@ -57,10 +73,11 @@ struct InMemoryShell
 {
     endo::TestPTY pty;
     core::platform::testing::InMemoryFileSystem fs;
-    core::platform::testing::TestEnvironmentProvider env { "/test" };
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory { "/test" };
     int exitCode = -1;
 
-    endo::Shell shell { pty, env, fs };
+    endo::Shell shell { pty, env, workingDirectory, fs };
 
     [[nodiscard]] std::string output() const { return pty.output(); }
 

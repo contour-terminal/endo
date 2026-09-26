@@ -32,7 +32,8 @@ using core::escape;
 
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/testing/InMemoryFileSystem.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
 #include <core/testing/ScopedTempDir.hpp>
 #include <core/testing/ScopedWorkingDirectory.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
@@ -49,10 +50,11 @@ using endo::testing::InMemoryShell;
 struct TestShell
 {
     endo::TestPTY pty;
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     int exitCode = -1;
 
-    endo::Shell shell { pty, env };
+    endo::Shell shell { pty, env, workingDirectory };
 
     std::string output() const { return pty.output(); }
 
@@ -61,12 +63,12 @@ struct TestShell
         // Seed essential environment variables from the real environment
         // so that external commands (echo, grep, etc.) can be resolved.
         if (auto const* path = std::getenv("PATH"))
-            env.set("PATH", path);
+            REQUIRE(env.set("PATH", path));
         if (auto const* home = std::getenv("HOME"))
-            env.set("HOME", home);
+            REQUIRE(env.set("HOME", home));
 #if defined(_WIN32)
         if (auto const* pathext = std::getenv("PATHEXT"))
-            env.set("PATHEXT", pathext);
+            REQUIRE(env.set("PATHEXT", pathext));
 #endif
         // Never probe the real terminal for Sixel support from a test.
         shell.setSixelCapability(std::make_unique<endo::StaticSixelCapability>(false));
@@ -86,11 +88,12 @@ struct MockedProcessShell
 {
     endo::TestPTY pty;
     core::platform::testing::InMemoryFileSystem fs;
-    core::platform::testing::TestEnvironmentProvider env { "/test" };
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory { "/test" };
     endo::platform::testing::MockProcessManager processManager;
     int exitCode = -1;
 
-    endo::Shell shell { pty, env, fs, processManager };
+    endo::Shell shell { pty, env, workingDirectory, fs, processManager };
 
     [[nodiscard]] std::string output() const { return pty.output(); }
 
@@ -145,7 +148,7 @@ TEST_CASE("shell.env.SHELL_is_absolute_path")
 TEST_CASE("shell.cd.basic")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/tmp");
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/tmp");
@@ -154,8 +157,8 @@ TEST_CASE("shell.cd.basic")
 TEST_CASE("shell.cd.home")
 {
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
-    shell.env.addValidPath("/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
+    shell.workingDirectory.addValidPath("/home/testuser");
     shell("cd");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
@@ -169,9 +172,9 @@ TEST_CASE("shell.cd.home_falls_back_to_USERPROFILE")
     TestShell shell;
     // TestShell seeds HOME from the real environment so external commands resolve;
     // clear it here so USERPROFILE is the only home source under test.
-    shell.env.unset("HOME");
-    shell.env.set("USERPROFILE", "/home/winuser");
-    shell.env.addValidPath("/home/winuser");
+    REQUIRE(shell.env.unset("HOME"));
+    REQUIRE(shell.env.set("USERPROFILE", "/home/winuser"));
+    shell.workingDirectory.addValidPath("/home/winuser");
     shell("cd");
     CHECK(shell.exitCode == 0);
     CHECK(shell.env.get("PWD").value_or("") == "/home/winuser");
@@ -184,8 +187,8 @@ TEST_CASE("shell.cd.home_errors_when_no_home_set")
     TestShell shell;
     // TestShell seeds HOME from the real environment; clear both home sources so
     // bare `cd` has nothing to resolve and must report an error.
-    shell.env.unset("HOME");
-    shell.env.unset("USERPROFILE");
+    REQUIRE(shell.env.unset("HOME"));
+    REQUIRE(shell.env.unset("USERPROFILE"));
     shell("cd");
     CHECK(shell.exitCode == 1);
 }
@@ -193,8 +196,8 @@ TEST_CASE("shell.cd.home_errors_when_no_home_set")
 TEST_CASE("shell.cd.minus")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/var");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/var");
 
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
@@ -214,8 +217,8 @@ TEST_CASE("shell.cd.minus")
 TEST_CASE("shell.cd.minus_swaps")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/var");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/var");
 
     shell("cd /tmp");
     shell("cd /var");
@@ -232,8 +235,8 @@ TEST_CASE("shell.cd.minus_swaps")
 TEST_CASE("shell.cd.relative_then_minus")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/tmp/subdir");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/tmp/subdir");
 
     shell("cd /tmp");
     CHECK(shell.exitCode == 0);
@@ -255,8 +258,8 @@ TEST_CASE("shell.cd.relative_then_minus")
 TEST_CASE("shell.cd.minus_returns_to_initial_cwd")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp");
-    shell.env.addValidPath("/home/testuser");
+    shell.workingDirectory.addValidPath("/tmp");
+    shell.workingDirectory.addValidPath("/home/testuser");
 
     // First cd from initial directory
     shell("cd /tmp");
@@ -278,8 +281,8 @@ TEST_CASE("shell.cd.minus_no_oldpwd")
 TEST_CASE("shell.cd.invalid_path")
 {
     TestShell shell;
-    shell.env.addValidPath("/tmp"); // only /tmp is valid
-    shell.env.set("PWD", "/home/testuser");
+    shell.workingDirectory.addValidPath("/tmp"); // only /tmp is valid
+    REQUIRE(shell.env.set("PWD", "/home/testuser"));
 
     shell("cd /nonexistent");
     CHECK(shell.exitCode == 1);
@@ -518,7 +521,7 @@ TEST_CASE("shell.builtin.set_variable_with_spaces")
 TEST_CASE("shell.builtin.unset_variable")
 {
     TestShell shell;
-    shell.env.set("MYVAR", "myvalue");
+    REQUIRE(shell.env.set("MYVAR", "myvalue"));
     CHECK(shell.env.get("MYVAR").has_value());
     shell("unset MYVAR");
     CHECK_FALSE(shell.env.get("MYVAR").has_value());
@@ -530,6 +533,25 @@ TEST_CASE("shell.builtin.unset_nonexistent_variable")
     // Unsetting a nonexistent variable should not fail
     shell("unset NONEXISTENT");
     CHECK(shell.exitCode != EXIT_FAILURE);
+}
+
+TEST_CASE("shell.builtin.set_refused_name_is_reported")
+{
+    // '=' ends a name in an environment block, so the environment refuses it; the shell reports
+    // that and fails rather than dropping the variable without a word.
+    TestShell shell;
+    shell(R"(set "A=B" value)");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().contains("set A=B: invalid argument"));
+    CHECK_FALSE(shell.env.get("A=B").has_value());
+}
+
+TEST_CASE("shell.builtin.unset_refused_name_is_reported")
+{
+    TestShell shell;
+    shell(R"(unset "A=B")");
+    CHECK(shell.exitCode == 1);
+    CHECK(shell.output().contains("unset A=B: invalid argument"));
 }
 
 // ============================================================================
@@ -2396,7 +2418,7 @@ TEST_CASE("shell.expand.tilde_home")
 {
     // ~ should expand to $HOME
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~").output()) == escape("/home/testuser\n"));
 }
 
@@ -2404,7 +2426,7 @@ TEST_CASE("shell.expand.tilde_in_path")
 {
     // ~/Documents should expand to $HOME/Documents
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~/Documents").output()) == escape("/home/testuser/Documents\n"));
 }
 
@@ -2432,7 +2454,7 @@ TEST_CASE("shell.expand.tilde_multiple")
 {
     // Multiple tildes in one command
     TestShell shell;
-    shell.env.set("HOME", "/home/testuser");
+    REQUIRE(shell.env.set("HOME", "/home/testuser"));
     CHECK(escape(shell("echo ~ ~").output()) == escape("/home/testuser /home/testuser\n"));
 }
 
@@ -2981,7 +3003,7 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     fs.addDirectory("/test/scripts");
     fs.setCurrentPath("/test");
 
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, fs);
 
     // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
@@ -3021,7 +3043,7 @@ TEST_CASE("FileCompleter.relative_prefix_stays_relative")
     fs.addFile("/test/sub/item.txt", "");
     fs.setCurrentPath("/test");
 
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, fs);
 
     endo::CompletionContext context {
@@ -3048,7 +3070,7 @@ TEST_CASE("FileCompleter.absolute_directory_corrects_case")
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "Foo");
 
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, core::platform::NativeFileSystem::instance());
 
     // Type the directory in lower-case; it resolves case-insensitively to "Foo".
@@ -3077,7 +3099,7 @@ TEST_CASE("FileCompleter.partial_prefix_corrects_case")
     auto const& tempDir = tempDirGuard.path();
     std::filesystem::create_directories(tempDir / "lastrada-tools");
 
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
     endo::FileCompleter completer(env, core::platform::NativeFileSystem::instance());
 
     auto const typed = core::platform::normalizePath((tempDir / "Lastrada-to").string());
@@ -4027,17 +4049,17 @@ TEST_CASE("shell.env.endo_shlvl_defaults_to_zero")
 TEST_CASE("shell.env.endo_shlvl_increments_when_preset")
 {
     TestShell shell;
-    shell.env.set("ENDO_SHLVL", "0");
+    REQUIRE(shell.env.set("ENDO_SHLVL", "0"));
     // Re-create the shell so it picks up the pre-set env
-    endo::Shell nested(shell.pty, shell.env);
+    endo::Shell nested(shell.pty, shell.env, shell.workingDirectory);
     CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "1");
 }
 
 TEST_CASE("shell.env.endo_shlvl_handles_malformed")
 {
     TestShell shell;
-    shell.env.set("ENDO_SHLVL", "not_a_number");
-    endo::Shell nested(shell.pty, shell.env);
+    REQUIRE(shell.env.set("ENDO_SHLVL", "not_a_number"));
+    endo::Shell nested(shell.pty, shell.env, shell.workingDirectory);
     CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "0");
 }
 
@@ -4727,7 +4749,7 @@ TEST_CASE("shell.builtin.source_env_unknown_extension", "[source-env]")
 TEST_CASE("shell.builtin.source_env_preserves_unchanged", "[source-env]")
 {
     TestShell shell;
-    shell.env.set("ENDO_TEST_EXISTING", "original_value");
+    REQUIRE(shell.env.set("ENDO_TEST_EXISTING", "original_value"));
 
 #if defined(_WIN32)
     auto const tempDirGuard = core::testing::ScopedTempDir { "endo_source_env" };
@@ -4855,8 +4877,8 @@ TEST_CASE("shell.completion.loadCompleters_populates_registry")
 {
     TestShell ts;
 
-    ts.shell.completer =
-        std::make_unique<endo::Completer>(ts.env, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
+    ts.shell.completer = std::make_unique<endo::Completer>(
+        ts.env, ts.workingDirectory, ts.shell.history, ts.shell.fsharpState(), ts.shell.fs());
     ts.shell.loadCompleters();
 
     auto const& registry = ts.shell.completerFunctions();

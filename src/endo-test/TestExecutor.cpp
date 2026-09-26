@@ -7,12 +7,15 @@
 #include <endo-language/ast/AST.hpp>
 
 #include <core/platform/testing/InMemoryFileSystem.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
 
 #include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
+#include <map>
 #include <memory>
 
 #if defined(ENDO_HAS_WASM) && !defined(_WIN32)
@@ -777,16 +780,17 @@ TestResult TestExecutor::run(TestFile const& testFile)
             // Create test shell with isolated environment
             TestPTY pty;
             auto const initialCwd = testFile.mockCwd.value_or("/test");
-            core::platform::testing::TestEnvironmentProvider env(initialCwd);
-
-            // Seed essential variables from real environment
+            // Seed essential variables from real environment. The double takes them as its initial
+            // entries, which it stores as given, so there is no refusal to handle.
+            auto seed = std::map<std::string, std::string, std::less<>> { { "PWD", initialCwd } };
             if (auto const* path = std::getenv("PATH"))
-                env.set("PATH", path);
+                seed.emplace("PATH", path);
             if (auto const* home = std::getenv("HOME"))
-                env.set("HOME", home);
-            env.set("PWD", initialCwd);
+                seed.emplace("HOME", home);
+            core::platform::testing::TestProcessEnvironment env { std::move(seed) };
+            core::platform::testing::TestWorkingDirectory workingDirectory { initialCwd };
 
-            Shell shell(pty, env, fs);
+            Shell shell(pty, env, workingDirectory, fs);
             // Never probe the test PTY for Sixel support: the DA1 query would
             // leak escape bytes into the captured output and stall on timeout.
             shell.setSixelCapability(std::make_unique<StaticSixelCapability>(false));

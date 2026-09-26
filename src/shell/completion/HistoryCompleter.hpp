@@ -4,8 +4,9 @@
 #include <shell/completion/CompletionProvider.hpp>
 #include <shell/history/History.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 
 #include <vector>
 
@@ -23,10 +24,12 @@ class HistoryCompleter: public CompletionProvider
   public:
     /// @brief Constructs a history completer.
     /// @param history The history to search.
-    /// @param env     Environment provider (for current CWD and $HOME).
+    /// @param env     Environment ($HOME).
+    /// @param workingDirectory The working directory entries recorded there rank higher in.
     /// @param fs      Filesystem used for required-paths validation.
     HistoryCompleter(History const& history,
-                     core::platform::EnvironmentProvider const& env,
+                     core::platform::ProcessEnvironment const& env,
+                     core::platform::WorkingDirectory const& workingDirectory,
                      core::platform::FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
@@ -36,7 +39,8 @@ class HistoryCompleter: public CompletionProvider
 
   private:
     History const& _history;
-    core::platform::EnvironmentProvider const& _env;
+    core::platform::ProcessEnvironment const& _env;
+    core::platform::WorkingDirectory const& _workingDirectory;
     core::platform::FileSystem const& _fs;
 };
 

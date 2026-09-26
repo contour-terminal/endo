@@ -3,6 +3,11 @@
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
 
+#include <core/platform/FileSystem.hpp>
+#include <core/platform/PathUtils.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/UserPaths.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <format>
@@ -12,8 +17,6 @@
 #include <string>
 
 #include <nlohmann/json.hpp>
-#include <core/platform/EnvironmentProvider.hpp>
-#include <core/platform/FileSystem.hpp>
 
 namespace endo
 {
@@ -32,7 +35,7 @@ DiagnosticSink stderrDiagnosticSink(TTY const& tty)
 // ============================================================================
 
 DirectoryConfigTrustStore::DirectoryConfigTrustStore(core::platform::FileSystem const& fs,
-                                                     core::platform::EnvironmentProvider& env,
+                                                     core::platform::ProcessEnvironment& env,
                                                      DiagnosticSink diag):
     _fs(fs), _env(env), _diag(std::move(diag))
 {
@@ -40,7 +43,7 @@ DirectoryConfigTrustStore::DirectoryConfigTrustStore(core::platform::FileSystem 
 
 fs::path DirectoryConfigTrustStore::trustFilePath() const
 {
-    auto const configDir = _env.configHome();
+    auto const configDir = core::platform::configHome(_env);
     if (!configDir)
         return {};
     return *configDir / "endo" / "trusted-dirs.json";
@@ -143,9 +146,15 @@ void DirectoryConfigTrustStore::revokeTrust(fs::path const& configPath)
 
 DirectoryConfigManager::DirectoryConfigManager(Shell& shell,
                                                core::platform::FileSystem const& fs,
-                                               core::platform::EnvironmentProvider& env,
+                                               core::platform::ProcessEnvironment& env,
+                                               core::platform::WorkingDirectory const& workingDirectory,
                                                DiagnosticSink diag):
-    _shell(shell), _fs(fs), _env(env), _trustStore(fs, env, diag), _diag(std::move(diag))
+    _shell(shell),
+    _fs(fs),
+    _env(env),
+    _workingDirectory(workingDirectory),
+    _trustStore(fs, env, diag),
+    _diag(std::move(diag))
 {
     _trustStore.load();
 }
@@ -172,7 +181,7 @@ fs::path DirectoryConfigManager::resolveConfigPath(fs::path const& path) const
 
 std::vector<fs::path> DirectoryConfigManager::findConfigFiles(std::string const& cwd) const
 {
-    auto const home = _env.homeDirectory();
+    auto const home = core::platform::homeDirectory(_env);
     if (!home)
         return {};
 
@@ -313,7 +322,8 @@ void DirectoryConfigManager::unloadConfig(DirectoryConfigScope const& scope)
 
     // Unset environment variables
     for (auto const& name: scope.envVars)
-        _env.unset(name);
+        if (auto const result = _env.unset(name); !result)
+            diag(std::format("endo: unset {}: {}", name, toString(result.error())));
 }
 
 void DirectoryConfigManager::onDirectoryChanged(std::string const& newCwd)
@@ -370,7 +380,7 @@ void DirectoryConfigManager::allowConfig(fs::path const& configPath)
     diag(std::format("endo: trusted {}", resolved.string()));
 
     // Trigger reload to pick up newly trusted config
-    onDirectoryChanged(_env.currentDirectory());
+    onDirectoryChanged(core::platform::normalizePath(_workingDirectory.currentDirectory()));
 }
 
 void DirectoryConfigManager::denyConfig(fs::path const& configPath)
@@ -427,7 +437,7 @@ void DirectoryConfigManager::revokeConfig(fs::path const& configPath)
 
 void DirectoryConfigManager::reloadConfigs()
 {
-    auto const cwd = _env.currentDirectory();
+    auto const cwd = core::platform::normalizePath(_workingDirectory.currentDirectory());
 
     // Unload all active configs (inner-first)
     for (auto i = _activeScopes.size(); i > 0; --i)

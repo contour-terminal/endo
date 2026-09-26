@@ -42,7 +42,8 @@ Canonical examples:
 - `src/shell/TTY.hpp` — abstract terminal interface with `PosixTTY` / `WindowsTTY` implementations
 - `core::platform::FileSystem` (`<core/platform/FileSystem.hpp>`, core-cpp) — file system abstraction (exists, read, write, list, metadata)
 - `src/platform/ProcessProvider.hpp` — process listing abstraction (Linux, Darwin, Windows)
-- `core::platform::EnvironmentProvider` (`<core/platform/EnvironmentProvider.hpp>`, core-cpp) — env var access abstraction (POSIX, Windows)
+- `core::platform::ProcessEnvironment` (`<core/platform/ProcessEnvironment.hpp>`, core-cpp) — the environment a shell reads, sets and exports (POSIX, Windows); a read-only consumer takes `core::Environment const&`
+- `core::platform::WorkingDirectory` (`<core/platform/WorkingDirectory.hpp>`, core-cpp) — the working directory `cd` changes, injected beside the environment
 - `src/http/HttpClient.hpp` — HTTP abstraction injected into `ProviderFactory`, `McpClient`
 
 When adding new functionality that touches the OS or network, define an abstract interface in `src/platform/` (or the relevant component), implement per-platform, and inject it.
@@ -125,7 +126,7 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
 
 The generic code endo shares with the other Contour Terminal projects comes from
 [core-cpp](https://github.com/contour-terminal/core-cpp), pinned by tag in
-`cmake/EndoThirdParties.cmake` (`CPMAddPackage(NAME core-cpp ... GIT_TAG v0.4.3)`):
+`cmake/EndoThirdParties.cmake` (`CPMAddPackage(NAME core-cpp ... GIT_TAG v0.5.0)`):
 
 | Module | Namespace, headers | Replaces |
 |---|---|---|

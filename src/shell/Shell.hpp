@@ -9,13 +9,15 @@
 
 #include <CoreVM/CoreVM.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 #include <core/platform/Wakeup.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/SemanticBlockClient.hpp>
 
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -25,6 +27,7 @@
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -88,18 +91,26 @@ class Shell final: public core::platform::SignalCallback
     Shell();
     ~Shell() override;
 
-    Shell(TTY& tty, core::platform::EnvironmentProvider& env);
-    Shell(TTY& tty, core::platform::EnvironmentProvider& env, core::platform::FileSystem& fs);
+    Shell(TTY& tty,
+          core::platform::ProcessEnvironment& env,
+          core::platform::WorkingDirectory& workingDirectory);
+    Shell(TTY& tty,
+          core::platform::ProcessEnvironment& env,
+          core::platform::WorkingDirectory& workingDirectory,
+          core::platform::FileSystem& fs);
 
     /// @brief Constructs a shell over fully injected collaborators.
     /// @param tty Terminal abstraction.
     /// @param env Environment abstraction.
+    /// @param workingDirectory The working directory `cd` changes and everything relative resolves
+    ///                         against.
     /// @param fs Filesystem the builtins read and write through.
     /// @param processManager Spawns processes and opens the descriptors handed to them.
     ///                       Anything a forked child must inherit goes through here, so a
     ///                       mock only suits a shell that spawns nothing.
     Shell(TTY& tty,
-          core::platform::EnvironmentProvider& env,
+          core::platform::ProcessEnvironment& env,
+          core::platform::WorkingDirectory& workingDirectory,
           core::platform::FileSystem& fs,
           ProcessManager& processManager);
 
@@ -109,8 +120,9 @@ class Shell final: public core::platform::SignalCallback
     /// @param provider The replacement provider; must not be null.
     void setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider);
 
-    [[nodiscard]] core::platform::EnvironmentProvider& environment() noexcept;
-    [[nodiscard]] core::platform::EnvironmentProvider const& environment() const noexcept;
+    [[nodiscard]] core::platform::ProcessEnvironment& environment() noexcept;
+    [[nodiscard]] core::platform::ProcessEnvironment const& environment() const noexcept;
+    [[nodiscard]] core::platform::WorkingDirectory& workingDirectory() noexcept;
 
     /// @brief The languages this shell highlights: core::tui's built-in ones and endo's own.
     [[nodiscard]] core::tui::SyntaxHighlighterRegistry const& syntaxHighlighters() const noexcept
@@ -653,6 +665,17 @@ class Shell final: public core::platform::SignalCallback
         _tty.writeToStderr(text);
     }
 
+    /// @brief The working directory as UTF-8 text, the form the environment and history hold it in.
+    [[nodiscard]] std::string currentDirectoryText() const;
+
+    /// @brief Reports a change to the environment that it refused, on stderr like any other error.
+    ///
+    /// @param what   What the shell was doing, e.g. "export PATH".
+    /// @param result What the environment answered.
+    /// @return Whether the change was made.
+    bool reportEnvironmentError(std::string_view what,
+                                std::expected<void, core::platform::PlatformError> const& result);
+
     std::unique_ptr<core::tui::SemanticBlockClient> _semanticBlockClient;
 
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
@@ -694,7 +717,8 @@ class Shell final: public core::platform::SignalCallback
 
     CoreVM::Runtime _runtime;
     CoreVM::diagnostics::BufferedReport _moduleReport; ///< Diagnostics report for module loading
-    core::platform::EnvironmentProvider& _env;
+    core::platform::ProcessEnvironment& _env;
+    core::platform::WorkingDirectory& _workingDirectory;
     TTY& _tty;
     /// core::tui's languages plus endo's own, which selects .endo files and ```endo fences.
     core::tui::SyntaxHighlighterRegistry _highlighters;

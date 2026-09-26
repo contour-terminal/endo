@@ -149,7 +149,11 @@ class Prompt
 
     /// @brief Sets the environment provider used for CWD-aware history ranking.
     /// @param env Pointer (not owned) — may outlive the prompt.
-    void setEnvironmentProvider(core::platform::EnvironmentProvider const* env);
+    void setEnvironmentProvider(core::platform::ProcessEnvironment const* env);
+
+    /// @brief Sets the working directory used for CWD-aware history ranking.
+    /// @param workingDirectory Pointer (not owned) — may outlive the prompt.
+    void setWorkingDirectory(core::platform::WorkingDirectory const* workingDirectory);
 
     /// @brief Sets the filesystem used for required-paths validation in history search.
     /// @param fs Pointer (not owned); nullptr disables validation.
@@ -208,9 +212,10 @@ class Prompt
     std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
     History const* _history = nullptr;
-    core::platform::EnvironmentProvider const* _envProvider = nullptr;
+    core::platform::ProcessEnvironment const* _envProvider = nullptr;
+    core::platform::WorkingDirectory const* _workingDirectory = nullptr;
     /// The native environment, made only if initialize() runs with no provider injected.
-    std::unique_ptr<core::platform::EnvironmentProvider> _nativeEnvProvider;
+    std::unique_ptr<core::platform::ProcessEnvironment> _nativeEnvProvider;
     core::platform::FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
     PromptConfig _promptConfig;

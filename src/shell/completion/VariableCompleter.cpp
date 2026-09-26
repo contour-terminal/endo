@@ -9,7 +9,7 @@
 namespace endo
 {
 
-VariableCompleter::VariableCompleter(core::platform::EnvironmentProvider const& env): _env(env)
+VariableCompleter::VariableCompleter(core::platform::ProcessEnvironment const& env): _env(env)
 {
 }
 

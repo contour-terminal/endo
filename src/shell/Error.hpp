@@ -38,6 +38,9 @@ enum class ShellError // NOLINT(performance-enum-size)
     PipeCreationFailed,
     HandleDuplicationFailed,
     NotImplemented,
+
+    // A name or value an interface refused
+    InvalidArgument,
 };
 
 /// Converts a ShellError to a human-readable string.
@@ -61,6 +64,7 @@ enum class ShellError // NOLINT(performance-enum-size)
         case ShellError::PipeCreationFailed: return "pipe creation failed";
         case ShellError::HandleDuplicationFailed: return "handle duplication failed";
         case ShellError::NotImplemented: return "not implemented";
+        case ShellError::InvalidArgument: return "invalid argument";
     }
     return "unknown error";
 }
@@ -88,6 +92,7 @@ enum class ShellError // NOLINT(performance-enum-size)
         case core::platform::PlatformError::ProcessGroupFailed: return ShellError::ExecutionFailed;
         case core::platform::PlatformError::TerminalControlFailed: return ShellError::ExecutionFailed;
         case core::platform::PlatformError::NotImplemented: return ShellError::NotImplemented;
+        case core::platform::PlatformError::InvalidArgument: return ShellError::InvalidArgument;
     }
     return ShellError::ExecutionFailed;
 }

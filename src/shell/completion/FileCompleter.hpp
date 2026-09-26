@@ -3,8 +3,8 @@
 
 #include <shell/completion/CompletionProvider.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <filesystem>
 #include <string>
@@ -22,7 +22,7 @@ class FileCompleter: public CompletionProvider
     ///            for tilde (`~`) expansion.
     /// @param fs  Filesystem to enumerate. Completion must offer what the shell will act
     ///            on, so it reads the same filesystem the builtins do.
-    FileCompleter(core::platform::EnvironmentProvider const& env, core::platform::FileSystem const& fs);
+    FileCompleter(core::platform::ProcessEnvironment const& env, core::platform::FileSystem const& fs);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -30,7 +30,7 @@ class FileCompleter: public CompletionProvider
     [[nodiscard]] int priority() const override { return 50; }
 
   private:
-    core::platform::EnvironmentProvider const& _env;
+    core::platform::ProcessEnvironment const& _env;
     core::platform::FileSystem const& _fs;
 
     /// @brief Expands tilde to home directory.

@@ -2,13 +2,16 @@
 #include "HistoryCompleter.hpp"
 #include <shell/history/RequiredPaths.hpp>
 
+#include <core/platform/PathUtils.hpp>
+
 namespace endo
 {
 
 HistoryCompleter::HistoryCompleter(History const& history,
-                                   core::platform::EnvironmentProvider const& env,
+                                   core::platform::ProcessEnvironment const& env,
+                                   core::platform::WorkingDirectory const& workingDirectory,
                                    core::platform::FileSystem const& fs):
-    _history(history), _env(env), _fs(fs)
+    _history(history), _env(env), _workingDirectory(workingDirectory), _fs(fs)
 {
 }
 
@@ -20,7 +23,7 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
     // This is because history entries are complete command lines
     // Use fuzzy search to find both prefix and fuzzy matches
     auto options = FuzzySearchOptions {
-        .currentCwd = _env.currentDirectory(),
+        .currentCwd = core::platform::normalizePath(_workingDirectory.currentDirectory()),
         .home = normalizedHomeDirectory(_env),
         .fs = &_fs,
     };

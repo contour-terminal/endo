@@ -2,6 +2,7 @@
 #include "RequiredPaths.hpp"
 
 #include <core/platform/PathUtils.hpp>
+#include <core/platform/UserPaths.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -208,9 +209,9 @@ std::vector<std::string> collectRequiredPathsFromCommandLine(std::string_view co
     return collectRequiredPaths(tokens, cwdAbs, home);
 }
 
-std::string normalizedHomeDirectory(core::platform::EnvironmentProvider const& env)
+std::string normalizedHomeDirectory(core::Environment const& env)
 {
-    auto const home = env.homeDirectory();
+    auto const home = core::platform::homeDirectory(env);
     if (!home)
         return {};
     return core::platform::normalizePath(*home);

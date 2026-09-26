@@ -102,14 +102,15 @@
     #include <agent/ui/AgentResponseRenderer.hpp>
     #include <agent/ui/ToolStatusComponent.hpp>
 #endif
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileUri.hpp>
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/PathUtils.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 #include <core/platform/SignalHandler.hpp>
 #include <core/platform/SystemInfo.hpp>
 #include <core/platform/Types.hpp>
 #include <core/platform/UserPaths.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 
 #include <nlohmann/json.hpp>
 #include <platform/InstallPaths.hpp>
@@ -620,26 +621,35 @@ namespace
     ///
     /// One for the life of the process: it holds the variables set but not yet exported, and the
     /// prompt's command resolver reads the same object the shell writes.
-    core::platform::EnvironmentProvider& nativeEnvironment()
+    core::platform::ProcessEnvironment& nativeEnvironment()
     {
-        static auto const provider = core::platform::nativeEnvironmentProvider();
+        static auto const provider = core::platform::nativeProcessEnvironment();
         return *provider;
+    }
+
+    /// The process's working directory, which `cd` changes: one for the process, as the directory is.
+    core::platform::WorkingDirectory& nativeWorkingDirectory()
+    {
+        static auto const workingDirectory = core::platform::nativeWorkingDirectory();
+        return *workingDirectory;
     }
 
 } // namespace
 
 #if defined(_WIN32)
-Shell::Shell(): Shell(WindowsTTY::instance(), nativeEnvironment())
+Shell::Shell(): Shell(WindowsTTY::instance(), nativeEnvironment(), nativeWorkingDirectory())
 {
 }
 #else
-Shell::Shell(): Shell(RealTTY::instance(), nativeEnvironment())
+Shell::Shell(): Shell(RealTTY::instance(), nativeEnvironment(), nativeWorkingDirectory())
 {
 }
 #endif
 
-Shell::Shell(TTY& tty, core::platform::EnvironmentProvider& env):
-    Shell(tty, env, core::platform::NativeFileSystem::instance())
+Shell::Shell(TTY& tty,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory):
+    Shell(tty, env, workingDirectory, core::platform::NativeFileSystem::instance())
 {
 }
 
@@ -648,9 +658,13 @@ void Shell::setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider
     _sixelCapability = std::move(provider);
 }
 
-Shell::Shell(TTY& tty, core::platform::EnvironmentProvider& env, core::platform::FileSystem& fs):
+Shell::Shell(TTY& tty,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory,
+             core::platform::FileSystem& fs):
     Shell(tty,
           env,
+          workingDirectory,
           fs,
 #if defined(_WIN32)
           WindowsProcessManager::instance()
@@ -662,11 +676,13 @@ Shell::Shell(TTY& tty, core::platform::EnvironmentProvider& env, core::platform:
 }
 
 Shell::Shell(TTY& tty,
-             core::platform::EnvironmentProvider& env,
+             core::platform::ProcessEnvironment& env,
+             core::platform::WorkingDirectory& workingDirectory,
              core::platform::FileSystem& fs,
              ProcessManager& processManager):
     _fs { fs },
     _env { env },
+    _workingDirectory { workingDirectory },
     _tty { tty },
     _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
     _processManager { processManager }
@@ -678,10 +694,11 @@ Shell::Shell(TTY& tty,
     // sudo-rs' `sudo -s` read SHELL and refuse to spawn it unless it resolves to
     // an absolute path. Fall back to "endo" only if the path cannot be determined.
     if (auto const exePath = endo::platform::executablePath())
-        _env.setAndExport("SHELL", core::platform::normalizePath(*exePath));
+        reportEnvironmentError("export SHELL",
+                               _env.setAndExport("SHELL", core::platform::normalizePath(*exePath)));
     else
-        _env.setAndExport("SHELL", "endo");
-    _env.set("PWD", _env.currentDirectory());
+        reportEnvironmentError("export SHELL", _env.setAndExport("SHELL", "endo"));
+    reportEnvironmentError("set PWD", _env.set("PWD", currentDirectoryText()));
 
     // Track shell nesting level (0 = outermost)
     if (auto const shlvl = _env.get("ENDO_SHLVL"); shlvl.has_value())
@@ -695,7 +712,7 @@ Shell::Shell(TTY& tty,
             _shellLevel = 0;
         }
     }
-    _env.setAndExport("ENDO_SHLVL", std::to_string(_shellLevel));
+    reportEnvironmentError("export ENDO_SHLVL", _env.setAndExport("ENDO_SHLVL", std::to_string(_shellLevel)));
 
     updateTerminalSizeEnv();
 
@@ -863,8 +880,8 @@ Shell::Shell(TTY& tty,
     prompt.setDynamicFieldResolver(
         [this](std::string const& fnName) { return invokePromptCallback(fnName); });
 
-    _dirConfigManager =
-        std::make_unique<DirectoryConfigManager>(*this, _fs, _env, stderrDiagnosticSink(_tty));
+    _dirConfigManager = std::make_unique<DirectoryConfigManager>(
+        *this, _fs, _env, _workingDirectory, stderrDiagnosticSink(_tty));
 
     // Register dark/light mode auto-switching via terminal color scheme detection
     prompt.terminal().onColorSchemeChanged([this](core::tui::ColorScheme scheme) {
@@ -893,14 +910,33 @@ Shell::~Shell()
     core::platform::SignalHandler::restore();
 }
 
-core::platform::EnvironmentProvider& Shell::environment() noexcept
+core::platform::ProcessEnvironment& Shell::environment() noexcept
 {
     return _env;
 }
 
-core::platform::EnvironmentProvider const& Shell::environment() const noexcept
+core::platform::ProcessEnvironment const& Shell::environment() const noexcept
 {
     return _env;
+}
+
+core::platform::WorkingDirectory& Shell::workingDirectory() noexcept
+{
+    return _workingDirectory;
+}
+
+std::string Shell::currentDirectoryText() const
+{
+    return core::platform::normalizePath(_workingDirectory.currentDirectory());
+}
+
+bool Shell::reportEnvironmentError(std::string_view what,
+                                   std::expected<void, core::platform::PlatformError> const& result)
+{
+    if (result.has_value())
+        return true;
+    error("endo: {}: {}", what, toString(result.error()));
+    return false;
 }
 
 void Shell::setOptimize(bool optimize)
@@ -941,8 +977,8 @@ void Shell::updateTerminalSizeEnv()
 {
     if (auto const size = _tty.getSize(); size.has_value())
     {
-        _env.set("LINES", std::to_string(size->rows));
-        _env.set("COLUMNS", std::to_string(size->cols));
+        reportEnvironmentError("set LINES", _env.set("LINES", std::to_string(size->rows)));
+        reportEnvironmentError("set COLUMNS", _env.set("COLUMNS", std::to_string(size->cols)));
     }
 }
 
@@ -979,7 +1015,7 @@ void Shell::emitCurrentWorkingDirectory()
     if (!_interactive || !_tty.isTerminal())
         return;
 
-    auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
+    auto const cwd = _env.get("PWD").value_or(currentDirectoryText());
 
     _tty.writeToStdout(std::format(
         "\033]7;{}\033\\",
@@ -1070,7 +1106,7 @@ int Shell::executeConfigScript(std::string const& content, std::string_view sour
 void Shell::onDirectoryChanged()
 {
     if (_dirConfigManager)
-        _dirConfigManager->onDirectoryChanged(_env.currentDirectory());
+        _dirConfigManager->onDirectoryChanged(currentDirectoryText());
 }
 
 void Shell::loadCompleters()
@@ -1216,10 +1252,11 @@ void Shell::ensureInteractiveReady()
     history.autoImportIfEmpty();
 
     // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history, _fsharpState, _fs);
+    completer = std::make_unique<Completer>(_env, _workingDirectory, history, _fsharpState, _fs);
     prompt.setCompleter(completer.get());
     prompt.setHistory(&history);
     prompt.setEnvironmentProvider(&_env);
+    prompt.setWorkingDirectory(&_workingDirectory);
     prompt.setFileSystem(&_fs);
 }
 
@@ -1329,7 +1366,7 @@ void Shell::updatePromptContext()
     // Resolve home via the environment abstraction (HOME, then USERPROFILE on Windows)
     // and canonicalize it the same way as cwd, so the tilde-contraction prefix match in
     // PathModule compares matching separators and case.
-    if (auto const home = _env.homeDirectory())
+    if (auto const home = core::platform::homeDirectory(_env))
         ctx.homePath = core::platform::canonicalCasePath(*home);
     ctx.lastExitCode = _exitCode;
     ctx.lastDuration = _lastCommandDuration;
@@ -1337,7 +1374,7 @@ void Shell::updatePromptContext()
     ctx.isSSH = _env.get("SSH_CONNECTION").has_value();
     // Populate identity unconditionally so the prompt can show user@host in every session.
     ctx.hostname = core::platform::cachedHostName();
-    ctx.username = _env.userName().value_or("");
+    ctx.username = core::platform::userName(_env).value_or("");
     ctx.hyperlinks = _hyperlinks;
     ctx.theme = &core::tui::currentTheme();
     ctx.fsharpState = &_fsharpState;
@@ -1481,7 +1518,7 @@ int Shell::run()
             {
                 prompt.addHistory(lineBuffer);
                 auto const homeEnv = normalizedHomeDirectory(_env);
-                auto const cwdAbs = _env.currentDirectory();
+                auto const cwdAbs = currentDirectoryText();
                 history.add(
                     lineBuffer,
                     HistoryAddContext {
@@ -1579,7 +1616,7 @@ int Shell::run()
         {
             prompt.addHistory(lineBuffer);
             auto const homeEnv = normalizedHomeDirectory(_env);
-            auto const cwdAbs = _env.currentDirectory();
+            auto const cwdAbs = currentDirectoryText();
             history.add(lineBuffer,
                         HistoryAddContext {
                             .cwd = canonicalizeForHistory(cwdAbs, homeEnv),

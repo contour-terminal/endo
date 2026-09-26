@@ -9,8 +9,9 @@
 #include <endo-language/ide/HoverInfo.hpp>
 #include <endo-language/lexer/TokenClassification.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
 #include <core/platform/FileSystem.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
+#include <core/platform/WorkingDirectory.hpp>
 #include <core/tui/CommandPalettePopup.hpp>
 #include <core/tui/CommandRegistry.hpp>
 #include <core/tui/CompletionPopup.hpp>
@@ -129,9 +130,14 @@ class PromptComponent: public core::tui::Component
     /// @brief Sets the history source for inline history cycling.
     void setHistory(History const* history) { _history = history; }
 
-    /// @brief Sets the environment provider used to read the current CWD and $HOME
-    /// when querying history with CWD-aware ranking.
-    void setEnvironmentProvider(core::platform::EnvironmentProvider const* env) { _envProvider = env; }
+    /// @brief Sets the environment used to read $HOME when querying history with CWD-aware ranking.
+    void setEnvironmentProvider(core::platform::ProcessEnvironment const* env) { _envProvider = env; }
+
+    /// @brief Sets the working directory history queries rank against.
+    void setWorkingDirectory(core::platform::WorkingDirectory const* workingDirectory)
+    {
+        _workingDirectory = workingDirectory;
+    }
 
     /// @brief Sets the filesystem used for required-paths validation in history search.
     /// Pass nullptr to disable validation.
@@ -292,7 +298,8 @@ class PromptComponent: public core::tui::Component
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
-    core::platform::EnvironmentProvider const* _envProvider = nullptr;
+    core::platform::ProcessEnvironment const* _envProvider = nullptr;
+    core::platform::WorkingDirectory const* _workingDirectory = nullptr;
     core::platform::FileSystem const* _historyFs = nullptr;
     std::string _promptStr = "> ";
 

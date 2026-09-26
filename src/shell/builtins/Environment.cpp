@@ -3,6 +3,7 @@
 
 #include <core/platform/PathUtils.hpp>
 #include <core/platform/Types.hpp>
+#include <core/platform/UserPaths.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -61,7 +62,7 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
     // Resolve the home directory through the environment abstraction, which tries HOME
     // first (Unix) and then USERPROFILE (Windows). Falling back to "/" here would send
     // Windows users to the drive root instead of their home directory.
-    auto const home = _env.homeDirectory();
+    auto const home = core::platform::homeDirectory(_env);
     if (!home.has_value())
     {
         error("cd: HOME not set");
@@ -75,7 +76,7 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
 
 void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Params& context)
 {
-    auto const result = _env.changeDirectory(path);
+    auto const result = _workingDirectory.changeDirectory(path);
     if (!result.has_value())
     {
         error("Failed to change directory to '{}': {}",
@@ -85,8 +86,8 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
     }
     else
     {
-        _env.set("OLDPWD", _env.get("PWD").value_or(""));
-        _env.set("PWD", _env.currentDirectory());
+        reportEnvironmentError("set OLDPWD", _env.set("OLDPWD", _env.get("PWD").value_or("")));
+        reportEnvironmentError("set PWD", _env.set("PWD", currentDirectoryText()));
         _exitCode = 0;
         emitCurrentWorkingDirectory();
         onDirectoryChanged();
@@ -97,14 +98,21 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
 
 void Shell::builtinSet(CoreVM::Params& context)
 {
-    _env.set(context.getString(1), context.getString(2));
-    context.setResult(true);
+    auto const& name = context.getString(1);
+    auto const taken =
+        reportEnvironmentError(std::format("set {}", name), _env.set(name, context.getString(2)));
+    if (!taken)
+        _exitCode = 1;
+    context.setResult(taken);
 }
 
 void Shell::builtinUnset(CoreVM::Params& context)
 {
-    _env.unset(context.getString(1));
-    context.setResult(true);
+    auto const& name = context.getString(1);
+    auto const taken = reportEnvironmentError(std::format("unset {}", name), _env.unset(name));
+    if (!taken)
+        _exitCode = 1;
+    context.setResult(taken);
 }
 
 void Shell::builtinGetVar(CoreVM::Params& context)
@@ -150,13 +158,17 @@ void Shell::builtinGetPositional(CoreVM::Params& context)
 
 void Shell::builtinSetAndExport(CoreVM::Params& context)
 {
-    _env.set(context.getString(1), context.getString(2));
-    _env.exportVariable(context.getString(1));
+    auto const& name = context.getString(1);
+    if (!reportEnvironmentError(std::format("export {}", name),
+                                _env.setAndExport(name, context.getString(2))))
+        _exitCode = 1;
 }
 
 void Shell::builtinExport(CoreVM::Params& context)
 {
-    _env.exportVariable(context.getString(1));
+    auto const& name = context.getString(1);
+    if (!reportEnvironmentError(std::format("export {}", name), _env.exportVariable(name)))
+        _exitCode = 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +475,7 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, core::pla
     // 7. Parse output and import changed/new variables
     auto const parsed = parseEnvOutput(output);
 
+    auto importFailed = false;
     for (auto const& [key, value]: parsed)
     {
         if (key.empty())
@@ -471,10 +484,11 @@ int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, core::pla
         // Check if this variable is new or changed (O(log n) lookup via normalized key)
         auto const it = before.find(normalizeKey(key));
         if (it == before.end() || it->second != value)
-            _env.setAndExport(key, value);
+            importFailed |= !reportEnvironmentError(std::format("source-env: export {}", key),
+                                                    _env.setAndExport(key, value));
     }
 
-    return childExitCode;
+    return importFailed && childExitCode == EXIT_SUCCESS ? EXIT_FAILURE : childExitCode;
 }
 
 } // namespace endo

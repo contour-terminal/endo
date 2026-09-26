@@ -18,7 +18,8 @@
 namespace endo
 {
 
-Completer::Completer(core::platform::EnvironmentProvider const& env,
+Completer::Completer(core::platform::ProcessEnvironment const& env,
+                     core::platform::WorkingDirectory const& workingDirectory,
                      History const& history,
                      FSharpPersistentState const& fsharpState,
                      core::platform::FileSystem const& fs):
@@ -63,7 +64,7 @@ Completer::Completer(core::platform::EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
     _providers.push_back(std::make_unique<FileCompleter>(env, fs));
-    _providers.push_back(std::make_unique<HistoryCompleter>(history, env, fs));
+    _providers.push_back(std::make_unique<HistoryCompleter>(history, env, workingDirectory, fs));
 
     // Sort by priority (highest first)
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)

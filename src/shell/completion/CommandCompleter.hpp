@@ -5,7 +5,7 @@
 #include <shell/completion/PathCommandIndex.hpp>
 #include <shell/history/History.hpp>
 
-#include <core/platform/EnvironmentProvider.hpp>
+#include <core/platform/ProcessEnvironment.hpp>
 
 #include <string>
 #include <vector>
@@ -22,7 +22,7 @@ class CommandCompleter: public CompletionProvider
     /// @param env The environment to query for HOME (to shorten displayed paths).
     /// @param history The command history for recency-based scoring.
     CommandCompleter(PathCommandIndex const& pathCommands,
-                     core::platform::EnvironmentProvider const& env,
+                     core::platform::ProcessEnvironment const& env,
                      History const& history);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
@@ -32,7 +32,7 @@ class CommandCompleter: public CompletionProvider
 
   private:
     PathCommandIndex const& _pathCommands;
-    core::platform::EnvironmentProvider const& _env;
+    core::platform::ProcessEnvironment const& _env;
     History const& _history;
 };
 

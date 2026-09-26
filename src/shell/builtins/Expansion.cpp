@@ -4,10 +4,12 @@
 
 #include <core/platform/PathUtils.hpp>
 #include <core/platform/Types.hpp>
+#include <core/platform/UserPaths.hpp>
 
 #include <charconv>
 #include <cmath>
 #include <filesystem>
+#include <format>
 
 #if !defined(_WIN32)
     #include <pwd.h>
@@ -19,7 +21,7 @@ namespace endo
 void Shell::builtinExpandTilde(CoreVM::Params& context)
 {
     auto const& suffix = context.getString(1);
-    auto const home = _env.homeDirectory()
+    auto const home = core::platform::homeDirectory(_env)
                           .transform([](auto const& p) { return core::platform::normalizePath(p); })
                           .value_or(std::string {});
     context.setResult(home + suffix);
@@ -147,7 +149,7 @@ void Shell::builtinExpandParamAssign(CoreVM::Params& context)
     }
     else
     {
-        _env.set(varName, defaultValue);
+        reportEnvironmentError(std::format("set {}", varName), _env.set(varName, defaultValue));
         context.setResult(defaultValue);
     }
 }

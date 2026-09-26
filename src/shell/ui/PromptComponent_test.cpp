@@ -4,7 +4,8 @@
 
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/PathUtils.hpp>
-#include <core/platform/testing/TestEnvironmentProvider.hpp>
+#include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
 #include <core/testing/ScopedTempDir.hpp>
 #include <core/tui/Buffer.hpp>
 #include <core/tui/Canvas.hpp>
@@ -118,12 +119,13 @@ TEST_CASE("PromptComponent.tab_inserts_common_prefix_before_popup", "[prompt]")
     fs::create_directories(base / "lastrada-config");
 
     endo::InMemoryHistory history;
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
     // Real filesystem: these complete against directories created on disk above,
     // and assert the on-disk capitalisation that only a real lookup can supply.
     auto const& fileSystem = core::platform::NativeFileSystem::instance();
-    endo::Completer completer(env, history, fsharpState, fileSystem);
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fileSystem);
 
     // Use an absolute path so only file-path completion applies (mirrors `cd D:/last`).
     // The inserted prefix carries the directory's real on-disk capitalization, so the
@@ -157,12 +159,13 @@ TEST_CASE("PromptComponent.tab_quotes_path_with_space", "[prompt]")
     fs::create_directories(base / "space dir");
 
     endo::InMemoryHistory history;
-    core::platform::testing::TestEnvironmentProvider env;
+    core::platform::testing::TestProcessEnvironment env;
+    core::platform::testing::TestWorkingDirectory workingDirectory;
     endo::FSharpPersistentState fsharpState;
     // Real filesystem: these complete against directories created on disk above,
     // and assert the on-disk capitalisation that only a real lookup can supply.
     auto const& fileSystem = core::platform::NativeFileSystem::instance();
-    endo::Completer completer(env, history, fsharpState, fileSystem);
+    endo::Completer completer(env, workingDirectory, history, fsharpState, fileSystem);
 
     auto const typed = "cd " + core::platform::normalizePath((base / "space").string());
     auto const expected = "cd \"" + core::platform::canonicalCasePath(base) + "/space dir/";
