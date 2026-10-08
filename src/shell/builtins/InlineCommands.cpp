@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -41,6 +42,7 @@
 #include <span>
 #include <sstream>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include <fcntl.h>
@@ -218,10 +220,18 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
     return std::pair { rangeStart, rangeEnd };
 }
 
+/// Whether a read loop's callback wants more input.
+enum class ReadControl : std::uint8_t
+{
+    Continue, ///< Keep reading.
+    Stop,     ///< Stop now: the caller has what it needs, or has refused the rest.
+};
+
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
-/// Calls onChunk(data, size) for each chunk of data read.
+/// Calls onChunk(data, size) for each chunk of data read. A callback that returns
+/// ReadControl::Stop ends the loop at once, as if at EOF; one that returns nothing reads to EOF.
 ///
-/// @return 0 on EOF, 1 on I/O error, 130 on SIGINT interruption.
+/// @return 0 on EOF (or a stop), 1 on I/O error, 130 on SIGINT interruption.
 int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
 {
     using namespace endo;
@@ -258,7 +268,15 @@ int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
             return 1;
         if (bytesRead == 0)
             break;
-        onChunk(buffer.data(), static_cast<size_t>(bytesRead));
+        if constexpr (std::is_same_v<decltype(onChunk(buffer.data(), std::size_t {})), ReadControl>)
+        {
+            if (onChunk(buffer.data(), static_cast<size_t>(bytesRead)) == ReadControl::Stop)
+                break;
+        }
+        else
+        {
+            onChunk(buffer.data(), static_cast<size_t>(bytesRead));
+        }
     }
     return 0;
 }
@@ -6000,10 +6018,13 @@ int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
     {
         auto tooLarge = false;
         auto const exitCode = interruptibleReadLoop(stdinFd, [&](char const* buf, size_t len) {
-            if (tooLarge || payload.size() + len > MaxClipboardPayload)
-                tooLarge = true;
-            else
-                payload.append(buf, len);
+            if (payload.size() + len > MaxClipboardPayload)
+            {
+                tooLarge = true; // stop rather than drain an input that may never end
+                return ReadControl::Stop;
+            }
+            payload.append(buf, len);
+            return ReadControl::Continue;
         });
         if (exitCode != 0)
             return exitCode;
