@@ -522,6 +522,7 @@ inline std::string_view tos(Token token)
         case Yield: return "yield";
         case Use: return "use";
         case Manual: return "manual";
+        case Passthrough: return "passthrough";
         case Ref: return "ref";
         case TypeVar: return "TypeVar";
         case Arrow: return "->";
