@@ -52,7 +52,7 @@ changed first and released; endo moves its pin.
 - `enum class ClipboardTarget { Clipboard, Primary }`.
 - `enum class ClipboardTransport { Osc5522, Osc52 }` — which protocol carried a copy.
 - `enum class ClipboardWriteError { NoTerminal, UnsupportedMimeType, PermissionDenied, TooLarge,
-  Busy, InvalidData, IoError, PrimaryUnavailable, NoConfirmation, Interrupted }`.
+  Busy, InvalidData, IoError, PrimaryUnavailable, NoConfirmation }`.
 - `encodeOsc52(std::string_view data, ClipboardTarget) -> std::string` —
   `ESC ] 52 ; c|p ; <base64> ESC \`. `TerminalOutput::copyToClipboard()` delegates to it.
 - `encodeOsc5522Write(std::string_view data, std::string_view mime, ClipboardTarget) -> std::string`
@@ -76,7 +76,6 @@ changed first and released; endo moves its pin.
 | `PrimaryUnavailable` | `ENOSYS` | terminal has no primary selection (ENOSYS) |
 | `IoError` | `EIO` | terminal reported an I/O error, or writing to it failed |
 | `NoConfirmation` | — | terminal did not confirm the copy in time |
-| `Interrupted` | — | interrupted |
 
 An unknown wire code maps to `IoError`.
 
@@ -98,7 +97,7 @@ An unknown wire code maps to `IoError`.
 class TerminalChannel {
   public:
     virtual ~TerminalChannel() = default;
-    [[nodiscard]] virtual auto canRead() const noexcept -> bool = 0;      // false: write-only
+    [[nodiscard]] virtual auto access() const noexcept -> ChannelAccess = 0; // ReadWrite or WriteOnly
     [[nodiscard]] virtual auto write(std::string_view bytes) -> std::expected<void, ClipboardWriteError> = 0;
     [[nodiscard]] virtual auto poll(int timeoutMs) -> std::expected<std::vector<InputEvent>, ClipboardWriteError> = 0;
 };
@@ -109,7 +108,8 @@ class TerminalChannel {
   process group is the terminal's foreground group, `ICANON` and `ECHO` are cleared for the
   channel's lifetime (`ISIG` kept, so Ctrl+C still raises `SIGINT`) and restored in the
   destructor without throwing; otherwise the channel is write-only (no `SIGTTIN` for a background
-  `clip`). `poll()` decodes with an OSC-enabled `VtParser`; `EINTR` → `Interrupted`.
+  `clip`). `poll()` decodes with an OSC-enabled `VtParser`; `EINTR` is retried — the writer's
+  timeouts bound every wait, and a `SIGCHLD` must not abort a copy.
 - Windows: `CONIN$`/`CONOUT$`, `ENABLE_VIRTUAL_TERMINAL_INPUT` on input and
   `ENABLE_VIRTUAL_TERMINAL_PROCESSING` on output while open, modes restored on destruction.
 - `core::tui::testing::ScriptedTerminalChannel` records writes and answers them with scripted
