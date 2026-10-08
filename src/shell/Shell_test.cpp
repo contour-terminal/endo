@@ -5351,10 +5351,10 @@ TEST_CASE("shell.highlighters.endo_selected_by_extension_and_fence")
 
 TEST_CASE("shell.clip.endless_input_stops_at_the_payload_limit")
 {
-    // /dev/zero never ends: clip must stop reading at its limit rather than wait for an EOF
-    // that never comes (`yes | clip`).
-    if (!std::filesystem::exists("/dev/zero"))
-        SKIP("no /dev/zero on this platform");
+    // `yes` never ends: clip must stop reading at its limit rather than wait for an EOF that never
+    // comes. A pipe, not /dev/zero: macOS's poll(2) refuses character devices (POLLNVAL).
+    if (!std::filesystem::exists("/usr/bin/yes") && !std::filesystem::exists("/bin/yes"))
+        SKIP("no yes(1) on this platform");
 
     TestShell shell;
     auto clock = core::platform::ManualClock {};
@@ -5362,9 +5362,10 @@ TEST_CASE("shell.clip.endless_input_stops_at_the_payload_limit")
     shell.shell.setClipboardWriter(
         std::make_unique<core::tui::ClipboardWriter>(terminal.factory(clock), clock));
 
-    shell("clip < /dev/zero");
+    shell("yes | clip");
 
-    CHECK(shell.exitCode == 1);
-    CHECK(shell.output().contains("clip: "));
+    // Non-zero: clip's 1, or the SIGPIPE `yes` gets once clip stops reading, as the pipeline reports.
+    CHECK(shell.exitCode != 0);
+    CHECK(shell.output().contains("clip: data too large"));
     CHECK(terminal.written.empty()); // nothing reached the terminal
 }
