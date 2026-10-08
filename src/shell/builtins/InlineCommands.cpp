@@ -5989,7 +5989,12 @@ int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
     auto payload = std::string {};
     if (!parsed.positionalArgs.empty())
     {
-        payload = parsed.positionalArgs | std::views::join_with(' ') | std::ranges::to<std::string>();
+        for (auto const& [index, arg]: std::views::enumerate(parsed.positionalArgs))
+        {
+            if (index != 0)
+                payload += ' ';
+            payload += arg;
+        }
     }
     else
     {
