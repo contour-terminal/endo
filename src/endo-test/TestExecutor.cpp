@@ -207,7 +207,7 @@ namespace
     [[nodiscard]] std::optional<core::tui::testing::ScriptedTerminal> mockClipboardTerminal(
         std::string_view name)
     {
-        auto const row = std::ranges::find(MockClipboardTerminals, name, &MockClipboardTerminal::name);
+        auto const* const row = std::ranges::find(MockClipboardTerminals, name, &MockClipboardTerminal::name);
         if (row == MockClipboardTerminals.end())
             return std::nullopt;
         auto terminal = core::tui::testing::ScriptedTerminal {};
@@ -237,10 +237,13 @@ namespace
                                terminal.mimeType());
         if (testFile.expectedClipboardTarget)
         {
-            auto const target = terminal.target();
-            auto const actual = !target                                          ? "nothing"
-                                : *target == core::tui::ClipboardTarget::Primary ? "primary"
-                                                                                 : "clipboard";
+            auto const actual = terminal.target()
+                                    .transform([](core::tui::ClipboardTarget target) {
+                                        return target == core::tui::ClipboardTarget::Primary
+                                                   ? std::string_view { "primary" }
+                                                   : std::string_view { "clipboard" };
+                                    })
+                                    .value_or("nothing");
             if (actual != *testFile.expectedClipboardTarget)
                 return std::format(R"(Clipboard target mismatch: expected "{}", got "{}")",
                                    *testFile.expectedClipboardTarget,
