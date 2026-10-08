@@ -6,6 +6,7 @@
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
 
+#include <core/Escape.hpp>
 #include <core/platform/Clock.hpp>
 #include <core/platform/testing/InMemoryFileSystem.hpp>
 #include <core/platform/testing/TestProcessEnvironment.hpp>
@@ -217,26 +218,6 @@ namespace
         return terminal;
     }
 
-    /// Unescapes `\n` and `\\` in an `# expect-clipboard:` value.
-    [[nodiscard]] std::string unescapeClipboardLine(std::string_view line)
-    {
-        auto result = std::string {};
-        auto escaped = false;
-        for (auto const ch: line)
-        {
-            if (escaped)
-            {
-                result += ch == 'n' ? '\n' : ch;
-                escaped = false;
-            }
-            else if (ch == '\\')
-                escaped = true;
-            else
-                result += ch;
-        }
-        return result;
-    }
-
     /// Checks the `# expect-clipboard*` directives against what the scripted terminal received.
     /// @return A failure message, or nullopt when every expectation holds.
     [[nodiscard]] std::optional<std::string> checkClipboardExpectations(
@@ -244,9 +225,7 @@ namespace
     {
         if (!testFile.expectedClipboard.empty())
         {
-            auto expected = std::string {};
-            for (auto const& [index, line]: std::views::enumerate(testFile.expectedClipboard))
-                expected += (index == 0 ? "" : "\n") + unescapeClipboardLine(line);
+            auto const expected = core::unescape(joinExpectedOutput(testFile.expectedClipboard));
             if (auto const actual = terminal.decodedPayload(); actual != expected)
                 return std::format(R"(Clipboard mismatch: expected "{}", got "{}")",
                                    escapeForDisplay(expected),

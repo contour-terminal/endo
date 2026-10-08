@@ -14,11 +14,13 @@
 #include <shell/history/RequiredPaths.hpp>
 
 #include <core/Generator.hpp>
+#include <core/Utils.hpp>
 #include <core/platform/PathUtils.hpp>
 #include <core/platform/SignalHandler.hpp>
 #include <core/platform/SystemInfo.hpp>
 #include <core/platform/Types.hpp>
 #include <core/tui/ClipboardProtocol.hpp>
+#include <core/tui/ClipboardWriter.hpp>
 #include <core/tui/FilesystemImageProvider.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/ImageLoader.hpp>
@@ -36,13 +38,13 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <random>
 #include <ranges>
 #include <span>
 #include <sstream>
 #include <thread>
-#include <type_traits>
 #include <utility>
 
 #include <fcntl.h>
@@ -228,8 +230,8 @@ enum class ReadControl : std::uint8_t
 };
 
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
-/// Calls onChunk(data, size) for each chunk of data read. A callback that returns
-/// ReadControl::Stop ends the loop at once, as if at EOF; one that returns nothing reads to EOF.
+/// Calls onChunk(data, size) for each chunk of data read; it returns ReadControl::Stop to end
+/// the loop at once, as if at EOF.
 ///
 /// @return 0 on EOF (or a stop), 1 on I/O error, 130 on SIGINT interruption.
 int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
@@ -268,27 +270,25 @@ int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
             return 1;
         if (bytesRead == 0)
             break;
-        if constexpr (std::is_same_v<decltype(onChunk(buffer.data(), std::size_t {})), ReadControl>)
-        {
-            if (onChunk(buffer.data(), static_cast<size_t>(bytesRead)) == ReadControl::Stop)
-                break;
-        }
-        else
-        {
-            onChunk(buffer.data(), static_cast<size_t>(bytesRead));
-        }
+        if (onChunk(buffer.data(), static_cast<size_t>(bytesRead)) == ReadControl::Stop)
+            break;
     }
     return 0;
 }
 
-/// Reads all data from fd interruptibly.
+/// Reads all data from fd interruptibly, or stops once more than @p limit bytes arrived.
 ///
-/// @return {data, exitCode} where exitCode is 0 on EOF or 130 on SIGINT.
-std::pair<std::string, int> interruptibleReadAll(core::platform::NativeHandle fd)
+/// @param limit The most a caller wants: past it the read stops, so an endless input ends too.
+///              The data returned is then longer than @p limit, which is how a caller tells.
+/// @return {data, exitCode} where exitCode is 0 on EOF (or past the limit) or 130 on SIGINT.
+std::pair<std::string, int> interruptibleReadAll(core::platform::NativeHandle fd,
+                                                 std::size_t limit = std::numeric_limits<std::size_t>::max())
 {
     std::string data;
-    auto const exitCode =
-        interruptibleReadLoop(fd, [&](char const* buf, size_t len) { data.append(buf, len); });
+    auto const exitCode = interruptibleReadLoop(fd, [&](char const* buf, size_t len) {
+        data.append(buf, len);
+        return data.size() > limit ? ReadControl::Stop : ReadControl::Continue;
+    });
     return { std::move(data), exitCode };
 }
 
@@ -1033,6 +1033,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args,
                 // Stream directly for plain cat (best UX for interactive stdin)
                 auto const exitCode = interruptibleReadLoop(stdinFd, [outputFd](char const* buf, size_t len) {
                     [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
+                    return ReadControl::Continue;
                 });
                 if (exitCode != 0)
                     return exitCode;
@@ -6003,36 +6004,23 @@ int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
         return renderMarkdownHelp(outputFd, generateInlineHelp(descriptor));
 
     // Arguments are text, joined like echo's but without its newline; without any, stdin is
-    // copied byte for byte.
+    // copied byte for byte, and its read stops past the limit so an endless input ends too.
     auto payload = std::string {};
     if (!parsed.positionalArgs.empty())
     {
-        for (auto const& [index, arg]: std::views::enumerate(parsed.positionalArgs))
-        {
-            if (index != 0)
-                payload += ' ';
-            payload += arg;
-        }
+        payload = core::joinHumanReadable(parsed.positionalArgs, " ");
     }
     else
     {
-        auto tooLarge = false;
-        auto const exitCode = interruptibleReadLoop(stdinFd, [&](char const* buf, size_t len) {
-            if (payload.size() + len > MaxClipboardPayload)
-            {
-                tooLarge = true; // stop rather than drain an input that may never end
-                return ReadControl::Stop;
-            }
-            payload.append(buf, len);
-            return ReadControl::Continue;
-        });
+        auto [input, exitCode] = interruptibleReadAll(stdinFd, MaxClipboardPayload);
         if (exitCode != 0)
             return exitCode;
-        if (tooLarge)
+        if (input.size() > MaxClipboardPayload)
         {
             error("clip: {}", core::tui::describe(core::tui::ClipboardWriteError::TooLarge));
             return 1;
         }
+        payload = std::move(input);
     }
 
     auto const mime = parsed.getFlagValue("-t").value_or("text/plain");
@@ -6105,6 +6093,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args,
         [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
         for (auto& ofs: outStreams)
             ofs.write(buf, static_cast<std::streamsize>(len));
+        return ReadControl::Continue;
     });
     if (exitCode != 0)
         return exitCode;

@@ -27,6 +27,7 @@
 #include <core/net/EventLoop.hpp>
 #include <core/net/IoBackend.hpp>
 #include <core/tui/Canvas.hpp>
+#include <core/tui/ClipboardWriter.hpp>
 #include <core/tui/CommandRegistry.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/ImageLoader.hpp>

@@ -13,7 +13,6 @@
 #include <core/platform/ProcessEnvironment.hpp>
 #include <core/platform/Wakeup.hpp>
 #include <core/platform/WorkingDirectory.hpp>
-#include <core/tui/ClipboardWriter.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/SemanticBlockClient.hpp>
 
@@ -64,6 +63,11 @@ struct AgentRunOptions;
 
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
+
+namespace core::tui
+{
+class ClipboardWriter;
+}
 
 namespace endo
 {
