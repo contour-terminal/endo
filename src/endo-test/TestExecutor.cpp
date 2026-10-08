@@ -207,15 +207,18 @@ namespace
     [[nodiscard]] std::optional<core::tui::testing::ScriptedTerminal> mockClipboardTerminal(
         std::string_view name)
     {
-        auto const* const row = std::ranges::find(MockClipboardTerminals, name, &MockClipboardTerminal::name);
-        if (row == MockClipboardTerminals.end())
-            return std::nullopt;
-        auto terminal = core::tui::testing::ScriptedTerminal {};
-        terminal.presence = row->presence;
-        terminal.decModeStatus = row->decModeStatus;
-        if (row->writeStatus)
-            terminal.writeStatus = std::string(*row->writeStatus);
-        return terminal;
+        for (auto const& row: MockClipboardTerminals)
+        {
+            if (row.name != name)
+                continue;
+            auto terminal = core::tui::testing::ScriptedTerminal {};
+            terminal.presence = row.presence;
+            terminal.decModeStatus = row.decModeStatus;
+            if (row.writeStatus)
+                terminal.writeStatus = std::string(*row.writeStatus);
+            return terminal;
+        }
+        return std::nullopt;
     }
 
     /// Checks the `# expect-clipboard*` directives against what the scripted terminal received.
