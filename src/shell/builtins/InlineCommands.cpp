@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 #include <shell/builtins/CatRenderMode.hpp>
+#include <shell/builtins/InlineArgParser.hpp>
+#include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
@@ -12,10 +14,13 @@
 #include <shell/history/RequiredPaths.hpp>
 
 #include <core/Generator.hpp>
+#include <core/Utils.hpp>
 #include <core/platform/PathUtils.hpp>
 #include <core/platform/SignalHandler.hpp>
 #include <core/platform/SystemInfo.hpp>
 #include <core/platform/Types.hpp>
+#include <core/tui/ClipboardProtocol.hpp>
+#include <core/tui/ClipboardWriter.hpp>
 #include <core/tui/FilesystemImageProvider.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/ImageLoader.hpp>
@@ -28,10 +33,12 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <random>
 #include <ranges>
@@ -215,10 +222,18 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
     return std::pair { rangeStart, rangeEnd };
 }
 
+/// Whether a read loop's callback wants more input.
+enum class ReadControl : std::uint8_t
+{
+    Continue, ///< Keep reading.
+    Stop,     ///< Stop now: the caller has what it needs, or has refused the rest.
+};
+
 /// Reads from fd using poll() with 100ms timeout, checking for SIGINT between polls.
-/// Calls onChunk(data, size) for each chunk of data read.
+/// Calls onChunk(data, size) for each chunk of data read; it returns ReadControl::Stop to end
+/// the loop at once, as if at EOF.
 ///
-/// @return 0 on EOF, 1 on I/O error, 130 on SIGINT interruption.
+/// @return 0 on EOF (or a stop), 1 on I/O error, 130 on SIGINT interruption.
 int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
 {
     using namespace endo;
@@ -255,19 +270,25 @@ int interruptibleReadLoop(core::platform::NativeHandle fd, auto const& onChunk)
             return 1;
         if (bytesRead == 0)
             break;
-        onChunk(buffer.data(), static_cast<size_t>(bytesRead));
+        if (onChunk(buffer.data(), static_cast<size_t>(bytesRead)) == ReadControl::Stop)
+            break;
     }
     return 0;
 }
 
-/// Reads all data from fd interruptibly.
+/// Reads all data from fd interruptibly, or stops once more than @p limit bytes arrived.
 ///
-/// @return {data, exitCode} where exitCode is 0 on EOF or 130 on SIGINT.
-std::pair<std::string, int> interruptibleReadAll(core::platform::NativeHandle fd)
+/// @param limit The most a caller wants: past it the read stops, so an endless input ends too.
+///              The data returned is then longer than @p limit, which is how a caller tells.
+/// @return {data, exitCode} where exitCode is 0 on EOF (or past the limit) or 130 on SIGINT.
+std::pair<std::string, int> interruptibleReadAll(core::platform::NativeHandle fd,
+                                                 std::size_t limit = std::numeric_limits<std::size_t>::max())
 {
     std::string data;
-    auto const exitCode =
-        interruptibleReadLoop(fd, [&](char const* buf, size_t len) { data.append(buf, len); });
+    auto const exitCode = interruptibleReadLoop(fd, [&](char const* buf, size_t len) {
+        data.append(buf, len);
+        return data.size() > limit ? ReadControl::Stop : ReadControl::Continue;
+    });
     return { std::move(data), exitCode };
 }
 
@@ -1012,6 +1033,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args,
                 // Stream directly for plain cat (best UX for interactive stdin)
                 auto const exitCode = interruptibleReadLoop(stdinFd, [outputFd](char const* buf, size_t len) {
                     [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
+                    return ReadControl::Continue;
                 });
                 if (exitCode != 0)
                     return exitCode;
@@ -5963,6 +5985,57 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args,
 }
 
 // ---------------------------------------------------------------------------
+// clip
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// The most `clip` reads from standard input: the least an OSC 5522 terminal must accept.
+    constexpr auto MaxClipboardPayload = std::size_t { 64 } * 1024 * 1024;
+} // namespace
+
+int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
+{
+    auto const& descriptor = *findInlineBuiltin("clip");
+    auto const parsed = parseInlineArgs(args, descriptor.options);
+    if (parsed.helpRequested)
+        return renderMarkdownHelp(outputFd, generateInlineHelp(descriptor));
+
+    // Arguments are text, joined like echo's but without its newline; without any, stdin is
+    // copied byte for byte, and its read stops past the limit so an endless input ends too.
+    auto payload = std::string {};
+    if (!parsed.positionalArgs.empty())
+    {
+        payload = core::joinHumanReadable(parsed.positionalArgs, " ");
+    }
+    else
+    {
+        auto [input, exitCode] = interruptibleReadAll(stdinFd, MaxClipboardPayload);
+        if (exitCode != 0)
+            return exitCode;
+        if (input.size() > MaxClipboardPayload)
+        {
+            error("clip: {}", core::tui::describe(core::tui::ClipboardWriteError::TooLarge));
+            return 1;
+        }
+        payload = std::move(input);
+    }
+
+    auto const mime = parsed.getFlagValue("-t").value_or("text/plain");
+    auto const target =
+        parsed.hasFlag("-p") ? core::tui::ClipboardTarget::Primary : core::tui::ClipboardTarget::Clipboard;
+    auto const copied = _clipboardWriter->write(payload, mime, target);
+    if (!copied)
+    {
+        error("clip: {}", core::tui::describe(copied.error()));
+        return 1;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // tee
 // ---------------------------------------------------------------------------
 
@@ -6020,6 +6093,7 @@ int Shell::executeInlineTee(CoreVM::CoreStringArray const& args,
         [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, buf, len);
         for (auto& ofs: outStreams)
             ofs.write(buf, static_cast<std::streamsize>(len));
+        return ReadControl::Continue;
     });
     if (exitCode != 0)
         return exitCode;

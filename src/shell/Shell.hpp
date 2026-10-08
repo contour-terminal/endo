@@ -64,6 +64,11 @@ struct AgentRunOptions;
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 
+namespace core::tui
+{
+class ClipboardWriter;
+}
+
 namespace endo
 {
 
@@ -119,6 +124,13 @@ class Shell final: public core::platform::SignalCallback
     /// Lets tests force Sixel on or off without a terminal probe.
     /// @param provider The replacement provider; must not be null.
     void setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider);
+
+    /// @brief Replaces the writer `clip` copies to the clipboard with.
+    ///
+    /// The default writes to the controlling terminal; a test hands in one over a scripted
+    /// terminal, so it never talks to the terminal running it.
+    /// @param writer The replacement writer; must not be null.
+    void setClipboardWriter(std::unique_ptr<core::tui::ClipboardWriter> writer);
 
     [[nodiscard]] core::platform::ProcessEnvironment& environment() noexcept;
     [[nodiscard]] core::platform::ProcessEnvironment const& environment() const noexcept;
@@ -434,6 +446,11 @@ class Shell final: public core::platform::SignalCallback
     [[nodiscard]] int executeInlineTr(CoreVM::CoreStringArray const& args,
                                       core::platform::NativeHandle outputFd,
                                       core::platform::NativeHandle stdinFd);
+    /// Executes the clip builtin: copies its arguments, or standard input, to the clipboard
+    /// through the terminal (OSC 5522 or OSC 52). Returns exit code.
+    [[nodiscard]] int executeInlineClip(CoreVM::CoreStringArray const& args,
+                                        core::platform::NativeHandle outputFd,
+                                        core::platform::NativeHandle stdinFd);
     /// Executes the tee builtin. Returns exit code.
     [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
                                        core::platform::NativeHandle outputFd,
@@ -725,6 +742,8 @@ class Shell final: public core::platform::SignalCallback
     core::tui::LanguageId _endoLanguage =
         core::tui::LanguageId::None;                           ///< What _highlighters issued for endo.
     std::unique_ptr<SixelCapabilityProvider> _sixelCapability; ///< Terminal Sixel support (lazy, cached).
+    /// Copies to the clipboard through the terminal (`clip`); caches its OSC 5522 probe.
+    std::unique_ptr<core::tui::ClipboardWriter> _clipboardWriter;
     FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
     CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry

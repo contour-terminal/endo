@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip -t carries a MIME type over OSC 5522
+# mode: shell
+# mock-clipboard: osc5522
+# expect-clipboard: <b>x</b>
+# expect-clipboard-type: text/html
+
+clip -t text/html "<b>x</b>"

@@ -2124,3 +2124,63 @@ echo "quiet" | tee /dev/null     # portable: discards output on Linux, macOS, an
 is transparently mapped to the native `NUL` device. See
 [Platform Differences → File Paths](platform-differences.md#null-device-portability-devnull-on-windows)
 for details.
+
+---
+
+## clip
+
+Copy standard input, or text, to the clipboard through the terminal.
+
+**Syntax:**
+
+```
+clip [OPTIONS] [TEXT...]
+```
+
+**Description:** Copies to the system clipboard the way `pbcopy`, `xsel` or `Set-Clipboard` do,
+but through the terminal rather than an operating system clipboard API, so it works the same
+locally, over SSH and inside containers. With arguments, the arguments are copied, joined by
+single spaces and without a trailing newline; they are text, never file names (`clip < file`
+copies a file). Without arguments, standard input is read to its end and copied byte for byte,
+so `echo hi | clip` copies `hi` followed by a newline. Typed alone, `clip` reads until Ctrl+D.
+
+The escape sequence goes to the controlling terminal, not to standard output, so `clip foo > file`
+and `x=$(clip foo)` still copy, and `clip` writes nothing to standard output.
+
+`clip` picks the protocol by asking the terminal once per session:
+
+| Terminal | Protocol | Result |
+|---|---|---|
+| Supports OSC 5522 (kitty's clipboard protocol) | OSC 5522 | Any MIME type; the terminal confirms the copy or says why it refused |
+| Anything else | OSC 52 | Plain text only; the terminal does not confirm anything |
+
+With OSC 52, `clip` cannot tell whether the copy happened. While `clip` waits for the terminal's
+answer (at most 5 seconds), it reads the terminal's input itself: keys typed during that wait are
+discarded. A terminal that confirms an OSC 5522 copy after `clip` has stopped waiting leaves its
+reply for whatever reads the terminal next. Several terminals and multiplexers
+turn OSC 52 off by default: tmux needs `set -g set-clipboard on`, and some terminals ask for
+permission or need a setting enabled.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-t`, `--type MIME` | MIME type of the data (default: `text/plain`). Anything else needs OSC 5522 |
+| `-p`, `--primary` | Copy to the primary selection instead of the clipboard |
+| `-h`, `--help` | Display help |
+
+**Exit status:** `0` when the copy was sent (OSC 52) or confirmed (OSC 5522). `1` with a message
+on standard error when there is no controlling terminal, when a non-text MIME type is requested
+from a terminal that only speaks OSC 52, when the terminal refuses or reports an error, when an
+OSC 5522 terminal does not confirm the copy within 5 seconds, or when the input exceeds 64 MiB.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+echo "hello" | clip                  # copies "hello\n"
+clip hello world                     # copies "hello world"
+clip < notes.txt                     # copies a file
+git rev-parse HEAD | clip -p         # primary selection
+clip -t image/png < screenshot.png   # needs a terminal with OSC 5522
+```

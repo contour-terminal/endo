@@ -33,6 +33,11 @@ static constexpr InlineOptionDef CatOptions[] = {
     { .shortFlag = {},   .longFlag = "--raw",             .description = "Disable all rendering (markdown, images, highlighting)" },
 };
 
+static constexpr InlineOptionDef ClipOptions[] = {
+    { .shortFlag = "-t", .longFlag = "--type", .description = "MIME type of the data (default: text/plain)", .takesValue = true },
+    { .shortFlag = "-p", .longFlag = "--primary", .description = "Copy to the primary selection instead of the clipboard" },
+};
+
 static constexpr InlineOptionDef RmOptions[] = {
     { .shortFlag = "-r", .longFlag = "--recursive", .description = "Remove directories and their contents recursively" },
     { .shortFlag = "-f", .longFlag = "--force",     .description = "Ignore nonexistent files, never prompt" },
@@ -214,6 +219,10 @@ std::span<InlineCommandDescriptor const> Shell::inlineCommandDescriptors()
           .usageLine = "cat [OPTIONS] [FILE...]",
           .options = CatOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,
           .withStdinFn = &Shell::executeInlineCat },
+        { .name = "clip",      .briefDescription = "Copy standard input or text to the clipboard via the terminal.",
+          .usageLine = "clip [OPTIONS] [TEXT...]",
+          .options = ClipOptions,
+          .withStdinFn = &Shell::executeInlineClip },
         { .name = "cp",        .briefDescription = "Copy files and directories.",
           .usageLine = "cp [OPTIONS] SOURCE... DEST",
           .options = CpOptions, .acceptsFileArgs = true, .fileArgsRepeatable = true,

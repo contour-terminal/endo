@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip -p copies to the primary selection
+# mode: shell
+# mock-clipboard: osc5522
+# expect-clipboard: sel
+# expect-clipboard-target: primary
+# expect-clipboard-type: text/plain
+
+clip -p sel

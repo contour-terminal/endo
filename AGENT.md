@@ -126,7 +126,7 @@ Compiler and LSP features that traverse the AST use `ast::Visitor` and `pattern:
 
 The generic code endo shares with the other Contour Terminal projects comes from
 [core-cpp](https://github.com/contour-terminal/core-cpp), pinned by tag in
-`cmake/EndoThirdParties.cmake` (`CPMAddPackage(NAME core-cpp ... GIT_TAG v0.5.0)`):
+`cmake/EndoThirdParties.cmake` (`CPMAddPackage(NAME core-cpp ... GIT_TAG <tag or commit>)`):
 
 | Module | Namespace, headers | Replaces |
 |---|---|---|
@@ -269,6 +269,10 @@ println x
 | `# session-separator: <sep>` | Split source into REPL prompts |
 | `# source-file: <path>` | Load external file as session prompt |
 | `# unused-detection` | Enable unused value detection |
+| `# mock-clipboard: <terminal>` | Terminal `clip` talks to in shell mode: `osc52` (default), `osc5522`, `deny`, `silent`, `none` |
+| `# expect-clipboard: <line>` | Expected clipboard content line (repeatable, joined with \n; `\n` and `\\` are escapes) |
+| `# expect-clipboard-type: <mime>` | Expected MIME type of the last copy (empty for OSC 52) |
+| `# expect-clipboard-target: <sel>` | Expected selection of the last copy: `clipboard` or `primary` |
 
 **Test modes:**
 - `execute` — full pipeline: parse, analyze, codegen, run (default)

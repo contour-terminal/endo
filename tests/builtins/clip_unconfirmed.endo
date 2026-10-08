@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip fails when an OSC 5522 terminal never confirms the copy
+# mode: shell
+# mock-clipboard: silent
+# expect-exit: 1
+# expect: clip: terminal did not confirm the copy in time
+
+clip text

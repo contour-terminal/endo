@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip without arguments copies standard input byte for byte, trailing newline included
+# mode: shell
+# expect-clipboard: hi\n
+
+echo hi | clip

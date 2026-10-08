@@ -173,7 +173,7 @@ void Shell::builtinHttpServe(CoreVM::Params& context)
         return core::net::HttpResponse::ok(invokeHandler(handler, globals, request.path));
     };
 
-    auto serveFlow = core::net::serve(listener->get(), std::move(requestHandler));
+    auto serveFlow = core::net::serve(&loop, listener->get(), std::move(requestHandler));
     try
     {
         loop.blockOn(std::move(serveFlow));

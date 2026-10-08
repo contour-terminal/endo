@@ -30,13 +30,16 @@ using core::escape;
 
 #include <http/LocalTcpListener.hpp>
 
+#include <core/platform/Clock.hpp>
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/testing/InMemoryFileSystem.hpp>
 #include <core/platform/testing/TestProcessEnvironment.hpp>
 #include <core/platform/testing/TestWorkingDirectory.hpp>
 #include <core/testing/ScopedTempDir.hpp>
 #include <core/testing/ScopedWorkingDirectory.hpp>
+#include <core/tui/ClipboardWriter.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
+#include <core/tui/testing/ScriptedTerminalChannel.hpp>
 
 #include "Shell.hpp"
 #include "TTY.hpp"
@@ -5340,4 +5343,29 @@ TEST_CASE("shell.highlighters.endo_selected_by_extension_and_fence")
     auto const [highlights, state] = highlighters.highlightLine("let x = 42", endo);
     REQUIRE(highlights.size() == 10);
     CHECK(highlights.front() != core::tui::HighlightCategory::Default);
+}
+
+// ============================================================================
+// clip
+// ============================================================================
+
+TEST_CASE("shell.clip.endless_input_stops_at_the_payload_limit")
+{
+    // `yes` never ends: clip must stop reading at its limit rather than wait for an EOF that never
+    // comes. A pipe, not /dev/zero: macOS's poll(2) refuses character devices (POLLNVAL).
+    if (!std::filesystem::exists("/usr/bin/yes") && !std::filesystem::exists("/bin/yes"))
+        SKIP("no yes(1) on this platform");
+
+    TestShell shell;
+    auto clock = core::platform::ManualClock {};
+    auto terminal = core::tui::testing::ScriptedTerminal {};
+    shell.shell.setClipboardWriter(
+        std::make_unique<core::tui::ClipboardWriter>(terminal.factory(clock), clock));
+
+    shell("yes | clip");
+
+    // Non-zero: clip's 1, or the SIGPIPE `yes` gets once clip stops reading, as the pipeline reports.
+    CHECK(shell.exitCode != 0);
+    CHECK(shell.output().contains("clip: data too large"));
+    CHECK(terminal.written.empty()); // nothing reached the terminal
 }

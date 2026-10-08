@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip copies its arguments, joined by single spaces, without a trailing newline
+# mode: shell
+# expect-clipboard: hello world
+
+clip hello world
