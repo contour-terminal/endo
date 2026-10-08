@@ -64,6 +64,10 @@ Test File Format:
     # mock-env: KEY=VALUE        Set mock environment variable
     # mock-which: PROG=/path     Set mock which path
     # expect-env: KEY=VALUE      Verify environment variable after execution
+    # mock-clipboard: <terminal> Terminal `clip` talks to (shell mode): osc52, osc5522, deny, silent, none
+    # expect-clipboard: <line>   Expected clipboard content line (repeatable; \n and \\ are escapes)
+    # expect-clipboard-type: <t> Expected MIME type of the last copy (empty for OSC 52)
+    # expect-clipboard-target: <s> Expected selection of the last copy: clipboard or primary
     # expect-nonempty            Assert output is non-empty
     # expect-expr: <endo-expr>   Endo expression that must evaluate to true against the
                                  trimmed actual output bound to `_` (repeatable — every

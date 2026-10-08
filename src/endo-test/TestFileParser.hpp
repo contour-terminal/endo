@@ -40,7 +40,12 @@ struct TestFile
     std::vector<std::pair<std::string, std::string>> mockWhichPaths; ///< Mock which paths
     std::optional<std::string> mockCwd;                              ///< Mock working directory for pwd
     std::vector<std::pair<std::string, std::string>> expectedEnv;    ///< Expected env vars after execution
-    bool expectNonEmptyOutput = false;    ///< Assert output is non-empty (no exact match)
+    /// The terminal `clip` talks to in shell mode: osc52 (default), osc5522, deny, silent or none.
+    std::string mockClipboard = "osc52";
+    std::vector<std::string> expectedClipboard;         ///< Expected clipboard lines (joined with \n)
+    std::optional<std::string> expectedClipboardType;   ///< Expected MIME type of the last copy
+    std::optional<std::string> expectedClipboardTarget; ///< Expected selection: clipboard or primary
+    bool expectNonEmptyOutput = false;                  ///< Assert output is non-empty (no exact match)
     std::vector<std::string> expectExprs; ///< Endo expressions to evaluate against output (_ = trimmed
                                           ///< output); every expression must evaluate to true
     bool unusedValueDetection = false;    ///< Enable unused value detection during IR generation

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip writes nothing to standard output, so a captured clip still copies and yields nothing
+# mode: shell
+# expect: [] done
+# expect-clipboard: foo
+
+let x = $(clip foo)
+
+echo "[$x] done"

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip refuses a non-text MIME type when the terminal only speaks OSC 52
+# mode: shell
+# mock-clipboard: osc52
+# expect-exit: 1
+# expect: clip: terminal only supports OSC 52 (plain text); cannot copy this MIME type
+
+clip -t image/png x

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip reports a terminal that refuses clipboard access
+# mode: shell
+# mock-clipboard: deny
+# expect-exit: 1
+# expect: clip: terminal refused clipboard access (EPERM)
+
+clip secret

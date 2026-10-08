@@ -199,6 +199,26 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.mockCwd = std::string(*val);
                 continue;
             }
+            if (auto val = parseDirective(line, "mock-clipboard"))
+            {
+                result.mockClipboard = std::string(*val);
+                continue;
+            }
+            if (auto val = parseDirective(line, "expect-clipboard"))
+            {
+                result.expectedClipboard.emplace_back(*val);
+                continue;
+            }
+            if (auto val = parseDirective(line, "expect-clipboard-type"))
+            {
+                result.expectedClipboardType = std::string(*val);
+                continue;
+            }
+            if (auto val = parseDirective(line, "expect-clipboard-target"))
+            {
+                result.expectedClipboardTarget = std::string(*val);
+                continue;
+            }
             if (auto val = parseDirective(line, "expect-env"))
             {
                 auto sv = *val;

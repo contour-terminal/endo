@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: clip fails without a controlling terminal
+# mode: shell
+# mock-clipboard: none
+# expect-exit: 1
+# expect: clip: no controlling terminal to send the clipboard sequence to
+
+clip text

@@ -6,10 +6,15 @@
 #include <endo-language/TestHelper.hpp>
 #include <endo-language/ast/AST.hpp>
 
+#include <core/platform/Clock.hpp>
 #include <core/platform/testing/InMemoryFileSystem.hpp>
 #include <core/platform/testing/TestProcessEnvironment.hpp>
 #include <core/platform/testing/TestWorkingDirectory.hpp>
+#include <core/tui/ClipboardWriter.hpp>
+#include <core/tui/testing/ScriptedTerminalChannel.hpp>
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -17,6 +22,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
+#include <ranges>
+#include <string_view>
 
 #if defined(ENDO_HAS_WASM) && !defined(_WIN32)
     #include <endo-language/CompileToWasm.hpp>
@@ -158,6 +166,108 @@ namespace
                 result += c;
         }
         return result;
+    }
+
+    /// One terminal a `# mock-clipboard:` directive can name.
+    struct MockClipboardTerminal
+    {
+        std::string_view name;
+        core::tui::testing::TerminalPresence presence;
+        std::optional<int> decModeStatus;            ///< Answer to the OSC 5522 probe; nullopt: none.
+        std::optional<std::string_view> writeStatus; ///< OSC 5522 write status; nullopt: none.
+    };
+
+    /// The terminals `clip` is tested against. osc52 is the default: it answers the probe with
+    /// "unknown mode", as most terminals do.
+    constexpr auto MockClipboardTerminals = std::array {
+        MockClipboardTerminal { .name = "osc52",
+                                .presence = core::tui::testing::TerminalPresence::Present,
+                                .decModeStatus = 0,
+                                .writeStatus = std::nullopt },
+        MockClipboardTerminal { .name = "osc5522",
+                                .presence = core::tui::testing::TerminalPresence::Present,
+                                .decModeStatus = 2,
+                                .writeStatus = "DONE" },
+        MockClipboardTerminal { .name = "deny",
+                                .presence = core::tui::testing::TerminalPresence::Present,
+                                .decModeStatus = 2,
+                                .writeStatus = "EPERM" },
+        MockClipboardTerminal { .name = "silent",
+                                .presence = core::tui::testing::TerminalPresence::Present,
+                                .decModeStatus = 2,
+                                .writeStatus = std::nullopt },
+        MockClipboardTerminal { .name = "none",
+                                .presence = core::tui::testing::TerminalPresence::Absent,
+                                .decModeStatus = std::nullopt,
+                                .writeStatus = std::nullopt },
+    };
+
+    /// The scripted terminal a `# mock-clipboard:` name stands for, or nullopt for an unknown name.
+    [[nodiscard]] std::optional<core::tui::testing::ScriptedTerminal> mockClipboardTerminal(
+        std::string_view name)
+    {
+        auto const row = std::ranges::find(MockClipboardTerminals, name, &MockClipboardTerminal::name);
+        if (row == MockClipboardTerminals.end())
+            return std::nullopt;
+        auto terminal = core::tui::testing::ScriptedTerminal {};
+        terminal.presence = row->presence;
+        terminal.decModeStatus = row->decModeStatus;
+        if (row->writeStatus)
+            terminal.writeStatus = std::string(*row->writeStatus);
+        return terminal;
+    }
+
+    /// Unescapes `\n` and `\\` in an `# expect-clipboard:` value.
+    [[nodiscard]] std::string unescapeClipboardLine(std::string_view line)
+    {
+        auto result = std::string {};
+        auto escaped = false;
+        for (auto const ch: line)
+        {
+            if (escaped)
+            {
+                result += ch == 'n' ? '\n' : ch;
+                escaped = false;
+            }
+            else if (ch == '\\')
+                escaped = true;
+            else
+                result += ch;
+        }
+        return result;
+    }
+
+    /// Checks the `# expect-clipboard*` directives against what the scripted terminal received.
+    /// @return A failure message, or nullopt when every expectation holds.
+    [[nodiscard]] std::optional<std::string> checkClipboardExpectations(
+        TestFile const& testFile, core::tui::testing::ScriptedTerminal const& terminal)
+    {
+        if (!testFile.expectedClipboard.empty())
+        {
+            auto expected = std::string {};
+            for (auto const& [index, line]: std::views::enumerate(testFile.expectedClipboard))
+                expected += (index == 0 ? "" : "\n") + unescapeClipboardLine(line);
+            if (auto const actual = terminal.decodedPayload(); actual != expected)
+                return std::format(R"(Clipboard mismatch: expected "{}", got "{}")",
+                                   escapeForDisplay(expected),
+                                   escapeForDisplay(actual));
+        }
+        if (testFile.expectedClipboardType && terminal.mimeType() != *testFile.expectedClipboardType)
+            return std::format(R"(Clipboard MIME type mismatch: expected "{}", got "{}")",
+                               *testFile.expectedClipboardType,
+                               terminal.mimeType());
+        if (testFile.expectedClipboardTarget)
+        {
+            auto const target = terminal.target();
+            auto const actual = !target                                          ? "nothing"
+                                : *target == core::tui::ClipboardTarget::Primary ? "primary"
+                                                                                 : "clipboard";
+            if (actual != *testFile.expectedClipboardTarget)
+                return std::format(R"(Clipboard target mismatch: expected "{}", got "{}")",
+                                   *testFile.expectedClipboardTarget,
+                                   actual);
+        }
+        return std::nullopt;
     }
 
     /// Escapes a string for safe embedding in an endo string literal.
@@ -790,10 +900,23 @@ TestResult TestExecutor::run(TestFile const& testFile)
             core::platform::testing::TestProcessEnvironment env { std::move(seed) };
             core::platform::testing::TestWorkingDirectory workingDirectory { initialCwd };
 
+            // `clip` talks to a scripted terminal, never to the one running the tests.
+            auto clipboardTerminal = mockClipboardTerminal(testFile.mockClipboard);
+            if (!clipboardTerminal)
+            {
+                result.outcome = TestOutcome::Fail;
+                result.failureMessage =
+                    std::format(R"(Unknown mock-clipboard terminal "{}")", testFile.mockClipboard);
+                return result;
+            }
+            core::platform::ManualClock clipboardClock;
+
             Shell shell(pty, env, workingDirectory, fs);
             // Never probe the test PTY for Sixel support: the DA1 query would
             // leak escape bytes into the captured output and stall on timeout.
             shell.setSixelCapability(std::make_unique<StaticSixelCapability>(false));
+            shell.setClipboardWriter(std::make_unique<core::tui::ClipboardWriter>(
+                clipboardTerminal->factory(clipboardClock), clipboardClock));
             shell.addModuleSearchPath("/test");
 
             // Execute the test source through the shell
@@ -849,6 +972,13 @@ TestResult TestExecutor::run(TestFile const& testFile)
                     result.failureMessage = std::move(*msg);
                     return result;
                 }
+            }
+
+            if (auto msg = checkClipboardExpectations(testFile, *clipboardTerminal))
+            {
+                result.outcome = TestOutcome::Fail;
+                result.failureMessage = std::move(*msg);
+                return result;
             }
 
             result.outcome = TestOutcome::Pass;
