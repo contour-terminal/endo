@@ -359,7 +359,7 @@ CPMAddPackage(
     GITHUB_REPOSITORY contour-terminal/core-cpp
     # feature/clipboard-writer (ClipboardWriter, TerminalChannel); moves to the release tag once
     # core-cpp publishes it.
-    GIT_TAG 98ed8c18a9f14ac8dcb4dd3b96a0b45e393f2b11
+    GIT_TAG 7eca6249344d0251f55fd41e22405b073b8e023a
     VERSION 0.7.0
     EXCLUDE_FROM_ALL YES
     SYSTEM YES
@@ -368,4 +368,4 @@ CPMAddPackage(
         "CORE_CPP_WITH_TLS OFF"
         "CORE_CPP_WITH_TUI ${_endo_core_cpp_native}"
 )
-set(THIRDPARTY_BUILTIN_core_cpp "CPM (98ed8c18a9)")
+set(THIRDPARTY_BUILTIN_core_cpp "CPM (7eca624934)")
