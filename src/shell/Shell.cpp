@@ -658,6 +658,11 @@ void Shell::setSixelCapability(std::unique_ptr<SixelCapabilityProvider> provider
     _sixelCapability = std::move(provider);
 }
 
+void Shell::setClipboardWriter(std::unique_ptr<core::tui::ClipboardWriter> writer)
+{
+    _clipboardWriter = std::move(writer);
+}
+
 Shell::Shell(TTY& tty,
              core::platform::ProcessEnvironment& env,
              core::platform::WorkingDirectory& workingDirectory,
@@ -685,6 +690,8 @@ Shell::Shell(TTY& tty,
     _workingDirectory { workingDirectory },
     _tty { tty },
     _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
+    _clipboardWriter { std::make_unique<core::tui::ClipboardWriter>(core::tui::openControllingTerminal,
+                                                                    core::platform::defaultSteadyClock()) },
     _processManager { processManager }
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();

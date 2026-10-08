@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 #include <shell/builtins/CatRenderMode.hpp>
+#include <shell/builtins/InlineArgParser.hpp>
+#include <shell/builtins/InlineCommandDescriptor.hpp>
 #include <shell/commands/FindExpression.hpp>
 #include <shell/commands/GrepCommand.hpp>
 #include <shell/commands/KillCommand.hpp>
@@ -16,6 +18,7 @@
 #include <core/platform/SignalHandler.hpp>
 #include <core/platform/SystemInfo.hpp>
 #include <core/platform/Types.hpp>
+#include <core/tui/ClipboardProtocol.hpp>
 #include <core/tui/FilesystemImageProvider.hpp>
 #include <core/tui/GenericSyntaxHighlighter.hpp>
 #include <core/tui/ImageLoader.hpp>
@@ -5959,6 +5962,62 @@ int Shell::executeInlineTr(CoreVM::CoreStringArray const& args,
     }
 
     [[maybe_unused]] auto written = core::platform::platformWrite(outputFd, output.data(), output.size());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// clip
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// The most `clip` reads from standard input: the least an OSC 5522 terminal must accept.
+    constexpr auto MaxClipboardPayload = std::size_t { 64 } * 1024 * 1024;
+} // namespace
+
+int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
+                             core::platform::NativeHandle outputFd,
+                             core::platform::NativeHandle stdinFd)
+{
+    auto const& descriptor = *findInlineBuiltin("clip");
+    auto const parsed = parseInlineArgs(args, descriptor.options);
+    if (parsed.helpRequested)
+        return renderMarkdownHelp(outputFd, generateInlineHelp(descriptor));
+
+    // Arguments are text, joined like echo's but without its newline; without any, stdin is
+    // copied byte for byte.
+    auto payload = std::string {};
+    if (!parsed.positionalArgs.empty())
+    {
+        payload = parsed.positionalArgs | std::views::join_with(' ') | std::ranges::to<std::string>();
+    }
+    else
+    {
+        auto tooLarge = false;
+        auto const exitCode = interruptibleReadLoop(stdinFd, [&](char const* buf, size_t len) {
+            if (tooLarge || payload.size() + len > MaxClipboardPayload)
+                tooLarge = true;
+            else
+                payload.append(buf, len);
+        });
+        if (exitCode != 0)
+            return exitCode;
+        if (tooLarge)
+        {
+            error("clip: {}", core::tui::describe(core::tui::ClipboardWriteError::TooLarge));
+            return 1;
+        }
+    }
+
+    auto const mime = parsed.getFlagValue("-t").value_or("text/plain");
+    auto const target =
+        parsed.hasFlag("-p") ? core::tui::ClipboardTarget::Primary : core::tui::ClipboardTarget::Clipboard;
+    auto const copied = _clipboardWriter->write(payload, mime, target);
+    if (!copied)
+    {
+        error("clip: {}", core::tui::describe(copied.error()));
+        return 1;
+    }
     return 0;
 }
 
