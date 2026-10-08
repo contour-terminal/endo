@@ -200,8 +200,14 @@ endo (endo-test, `mode: shell`):
 
 ## Risks
 
-- Keys typed during the probe (a few ms, once per session) are consumed by the channel, not
-  returned to the prompt.
+- Keys typed while a channel is open (the probe once per session, and every OSC 5522 copy's
+  status wait) are consumed by the channel, and opening a readable channel discards queued input
+  so a late reply to an earlier exchange cannot answer the next. Interactive endo flushes
+  typeahead when its prompt resumes anyway; `endo -c` started from another shell loses it.
+- A reply that arrives after its channel closed (an OSC 5522 status later than 5 s) is left in the
+  terminal for whatever reads it next; the interactive prompt reads `ESC ]` as Alt+].
+- Until core-cpp releases this work, endo pins core-cpp at a commit of its pull request; that pin
+  must move to the release tag before endo merges.
 - OSC 52 success is unconfirmed; terminals with OSC 52 disabled silently ignore the copy (documented).
 - Moving endo's core-cpp pin forward may pull in unrelated core-cpp API changes that endo must
   absorb.

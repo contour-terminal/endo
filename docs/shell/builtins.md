@@ -2154,7 +2154,10 @@ and `x=$(clip foo)` still copy, and `clip` writes nothing to standard output.
 | Supports OSC 5522 (kitty's clipboard protocol) | OSC 5522 | Any MIME type; the terminal confirms the copy or says why it refused |
 | Anything else | OSC 52 | Plain text only; the terminal does not confirm anything |
 
-With OSC 52, `clip` cannot tell whether the copy happened. Several terminals and multiplexers
+With OSC 52, `clip` cannot tell whether the copy happened. While `clip` waits for the terminal's
+answer (at most 5 seconds), it reads the terminal's input itself: keys typed during that wait are
+discarded. A terminal that confirms an OSC 5522 copy after `clip` has stopped waiting leaves its
+reply for whatever reads the terminal next. Several terminals and multiplexers
 turn OSC 52 off by default: tmux needs `set -g set-clipboard on`, and some terminals ask for
 permission or need a setting enabled.
 
