@@ -133,7 +133,7 @@ TEST_CASE("AgentTracer.multiple_entries_one_per_line", "[agent]")
 
     // Each line is valid JSON
     for (auto const& line: lines)
-        CHECK_NOTHROW(nlohmann::json::parse(line));
+        CHECK(nlohmann::json::accept(line));
 
     tracer->close();
     std::filesystem::remove_all(tmpDir);

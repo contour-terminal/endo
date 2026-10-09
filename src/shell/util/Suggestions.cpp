@@ -37,7 +37,7 @@ size_t SuggestionGenerator::levenshteinDistance(std::string_view a, std::string_
 
         for (size_t j = 1; j <= n; ++j)
         {
-            auto const cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+            auto const cost = (a[i - 1] == b[j - 1]) ? 0uz : 1uz;
 
             currentRow[j] = std::min({ previousRow[j] + 1,           // deletion
                                        currentRow[j - 1] + 1,        // insertion

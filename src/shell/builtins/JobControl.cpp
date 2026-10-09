@@ -17,16 +17,6 @@
     #include <sys/wait.h>
 #endif
 
-namespace
-{
-
-auto& debugLog()
-{
-    return endo::log::shellDebug();
-}
-
-} // namespace
-
 namespace endo
 {
 
@@ -181,7 +171,8 @@ void Shell::builtinFg(CoreVM::Params& context)
         {
             auto const sigResult = _processManager.sendSignal(pid, SIGCONT);
             if (!sigResult.has_value())
-                debugLog()()("fg: failed to resume process {}: {}", pid, toString(sigResult.error()));
+                endo::log::shellDebug()()(
+                    "fg: failed to resume process {}: {}", pid, toString(sigResult.error()));
         }
         job->state = JobState::Running;
     }

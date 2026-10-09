@@ -166,7 +166,7 @@ namespace
     }
 
     /// Renders a terminal progress bar.
-    void renderProgress(Colors const& c, std::string_view label, size_t totalBytes, size_t downloadedBytes)
+    void renderProgress(Colors const& c, size_t totalBytes, size_t downloadedBytes)
     {
         constexpr int BarWidth = 30;
         auto const fraction =
@@ -299,7 +299,7 @@ namespace
                     .maxResponseSize = 0,
                     .progressCallback = [&c, totalBytes, partPrior](size_t /*partTotal*/,
                                                                     size_t now) -> bool {
-                        renderProgress(c, "Downloading", totalBytes, partPrior + now);
+                        renderProgress(c, totalBytes, partPrior + now);
                         return true;
                     },
                     .followRedirects = true,
@@ -373,7 +373,7 @@ namespace
             .timeout = std::nullopt,
             .maxResponseSize = 0,
             .progressCallback = [&c](size_t total, size_t now) -> bool {
-                renderProgress(c, "Downloading", total, now);
+                renderProgress(c, total, now);
                 return true;
             },
             .followRedirects = true,

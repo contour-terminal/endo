@@ -2214,64 +2214,6 @@ namespace
         ScrollRegionGuard _scrollGuard;
     };
 
-    /// @brief Formats tool call arguments as a compact string for display.
-    /// @param arguments The JSON arguments from a tool call.
-    /// @return A compact string representation with large content fields replaced by size placeholders.
-    [[nodiscard]] auto formatToolCallArgs(nlohmann::json const& arguments) -> std::string
-    {
-        if (arguments.is_null() || (arguments.is_object() && arguments.empty()))
-            return {};
-
-        auto truncated = arguments;
-        for (const auto& [key, value]: truncated.items())
-        {
-            if (value.is_string())
-            {
-                // Replace large content fields (write_file/edit_file payloads) with size placeholder
-                if (key == "content" || key == "new_string" || key == "old_string")
-                {
-                    auto const len = value.get<std::string>().size();
-                    value = std::format("<{} chars>", len);
-                }
-            }
-        }
-
-        return truncated.dump(-1);
-    }
-
-    /// @brief Formats a tool status line for terminal display.
-    ///
-    /// For shell_execute / endo_execute, returns a shell-prompt style line with the full command.
-    /// For all other tools, returns the gear icon with truncated JSON arguments.
-    ///
-    /// @param call The tool call to format.
-    /// @return A pair of (prefix, text) strings for styled rendering. The prefix is "$ " for shell
-    ///         commands or "\xe2\x9a\x99 tool_name" for other tools.
-    [[nodiscard]] auto formatToolStatusLine(agent::ToolCall const& call)
-        -> std::pair<std::string, std::string>
-    {
-        if (call.name == "shell_execute" || call.name == "endo_execute")
-        {
-            auto command = std::string {};
-            if (call.arguments.contains("command") && call.arguments["command"].is_string())
-                command = call.arguments["command"].get<std::string>();
-            else if (call.arguments.contains("source") && call.arguments["source"].is_string())
-                command = call.arguments["source"].get<std::string>();
-
-            if (call.arguments.contains("timeout_ms") && call.arguments["timeout_ms"].is_number())
-            {
-                auto const timeoutSeconds = call.arguments["timeout_ms"].get<int64_t>() / 1000;
-                return { "$ ", std::format("timeout {} {}", timeoutSeconds, command) };
-            }
-
-            return { "$ ", command };
-        }
-
-        auto args = formatToolCallArgs(call.arguments);
-        auto prefix = "\xe2\x9a\x99 " + std::string(call.name);
-        return { std::move(prefix), args.empty() ? std::string {} : " " + args };
-    }
-
     /// @brief Runs a command and captures stdout (for git info queries).
     [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
     {
@@ -2299,13 +2241,11 @@ namespace
     }
 
     /// @brief Builds agent context (project files, git info, system prompt) — runs in background thread.
-    /// @param agentConfig The agent configuration.
     /// @param cwd The current working directory.
     /// @param cachedContext Optional cached project context to reuse (skips file scanning).
     /// @param cachedGitInfo Optional cached git info from the prompt's GitModule.
     /// @return The assembled context result.
-    [[nodiscard]] auto buildAgentContext(agent::AgentConfig const& agentConfig,
-                                         std::filesystem::path const& cwd,
+    [[nodiscard]] auto buildAgentContext(std::filesystem::path const& cwd,
                                          std::optional<agent::ProjectContext> cachedContext,
                                          std::optional<GitInfo> cachedGitInfo) -> AgentContextResult
     {
@@ -2597,7 +2537,7 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
 
     // --- System prompt ---
     auto const cwd = std::filesystem::current_path();
-    auto agentContext = buildAgentContext(agentConfig, cwd, std::nullopt, std::nullopt);
+    auto agentContext = buildAgentContext(cwd, std::nullopt, std::nullopt);
     _agentSession->setSystemPrompt(std::move(agentContext.systemPrompt));
     if (auto* explore = dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
         explore->setSystemPrompt(std::move(agentContext.exploreSystemPrompt));
@@ -3289,11 +3229,10 @@ core::async::Task<void> Shell::runAgentModeFlow(core::tui::runtime::TuiRuntime* 
     if (auto const* gitMod = prompt.gitModule())
         cachedGit = gitMod->cachedInfo();
 
-    auto contextFuture = std::async(
-        std::launch::async,
-        [&cfg = agentConfig, cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
-            return buildAgentContext(cfg, cwd, std::move(ctx), std::move(git));
-        });
+    auto contextFuture = std::async(std::launch::async,
+                                    [cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
+                                        return buildAgentContext(cwd, std::move(ctx), std::move(git));
+                                    });
 
     // The agent-mode loop's mutable state and helper behavior live in this session
     // object; the locals/lambdas below alias or delegate to it during the migration.

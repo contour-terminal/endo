@@ -32,10 +32,10 @@ void setRawMode(core::platform::NativeHandle fd)
     auto tio = termios {};
     tcgetattr(fd, &tio);
 
-    tio.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-    tio.c_oflag &= ~(OPOST);
+    tio.c_iflag &= static_cast<tcflag_t>(~(BRKINT | ICRNL | INPCK | ISTRIP | IXON));
+    tio.c_oflag &= static_cast<tcflag_t>(~(OPOST));
     tio.c_cflag |= (CS8);
-    tio.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    tio.c_lflag &= static_cast<tcflag_t>(~(ECHO | ICANON | IEXTEN | ISIG));
     tio.c_cc[VMIN] = 0;
     tio.c_cc[VTIME] = 1;
 

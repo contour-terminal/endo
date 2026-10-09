@@ -151,34 +151,32 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         {
             result.agentTracePath = ""; // Empty = auto-generate path.
         }
-        else if (auto val = consumeOptionValue(arg, "--agent-trace", i, args))
+        else if (auto tracePath = consumeOptionValue(arg, "--agent-trace", i, args))
         {
-            result.agentTracePath = std::string(*val);
+            result.agentTracePath = std::string(*tracePath);
         }
 #endif
-        else if (auto val = consumeOptionValue(arg, "--log-file", i, args))
+        else if (auto logFile = consumeOptionValue(arg, "--log-file", i, args))
         {
-            result.logFile = std::string(*val);
+            result.logFile = std::string(*logFile);
         }
-        else if (auto val = consumeOptionValue(arg, "--log", i, args))
+        else if (auto logPatterns = consumeOptionValue(arg, "--log", i, args))
         {
-            result.logPatterns = *val;
+            result.logPatterns = *logPatterns;
         }
         else if (arg == "--no-profile")
         {
             result.noProfile = true;
         }
-        else if (auto val = consumeOptionValue(arg, "--module-path", i, args))
+        else if (auto modulePath = consumeOptionValue(arg, "--module-path", i, args))
         {
-            result.modulePaths.emplace_back(*val);
+            result.modulePaths.emplace_back(*modulePath);
         }
-        else if (auto val = consumeOptionValue(arg, "-o", i, args))
+        else if (auto outputFile = consumeOptionValue(arg, "-o", i, args).or_else([&] {
+                     return consumeOptionValue(arg, "--output", i, args);
+                 }))
         {
-            result.outputFile = *val;
-        }
-        else if (auto val = consumeOptionValue(arg, "--output", i, args))
-        {
-            result.outputFile = *val;
+            result.outputFile = *outputFile;
         }
         else if (arg == "-O")
         {
@@ -224,8 +222,7 @@ ParsedArgs parseArguments(std::span<char const* const> args)
 
 int executeScript(endo::Shell& shell,
                   std::string_view scriptPath,
-                  std::span<std::string_view const> scriptArgs,
-                  std::string_view programName)
+                  std::span<std::string_view const> scriptArgs)
 {
     // 1. Read the file, stripping a leading shebang line
     auto content = endo::compile::readScriptSource(scriptPath);
@@ -445,7 +442,7 @@ int main(int argc, char const* argv[])
     // Handle script file with optional arguments
     if (!parsed.scriptFile.empty())
     {
-        return executeScript(shell, parsed.scriptFile, parsed.scriptArgs, programName);
+        return executeScript(shell, parsed.scriptFile, parsed.scriptArgs);
     }
 
     // Interactive mode

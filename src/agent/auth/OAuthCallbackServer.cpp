@@ -79,7 +79,7 @@ auto OAuthCallbackServer::waitForCallback(std::chrono::seconds timeout)
         http::closeSocket(*clientFd);
         return std::unexpected(std::string("Failed to read from client"));
     }
-    buffer[bytesRead] = '\0';
+    buffer[static_cast<size_t>(bytesRead)] = '\0';
 
     auto const requestLine = std::string_view(buffer.data(), static_cast<size_t>(bytesRead));
 

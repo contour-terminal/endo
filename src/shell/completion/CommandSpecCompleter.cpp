@@ -26,15 +26,15 @@ void CommandSpecCompleter::registerCommand(CommandSpec spec,
         stored.aliasResolver = [&cache =
                                     *stored.cache](std::string_view alias) -> std::optional<std::string> {
             auto const& aliases = cache.query("aliases");
-            for (auto const& entry: aliases)
+            for (auto const& aliasEntry: aliases)
             {
-                if (entry.text != alias)
+                if (aliasEntry.text != alias)
                     continue;
                 // Description format: "alias: <command> [args...]"
                 static constexpr std::string_view Prefix = "alias: ";
-                if (!entry.description.starts_with(Prefix))
+                if (!aliasEntry.description.starts_with(Prefix))
                     return std::nullopt;
-                auto const rest = std::string_view(entry.description).substr(Prefix.size());
+                auto const rest = std::string_view(aliasEntry.description).substr(Prefix.size());
                 // Shell aliases (starting with '!') are not subcommand mappings
                 if (rest.starts_with('!'))
                     return std::nullopt;
@@ -62,8 +62,8 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         return false;
 
     auto const& cmd = it->second;
-    auto const state = parseCommandLine(
-        cmd.spec, context.fullInput, context.cursorPosition, context.prefix, cmd.aliasResolver);
+    auto const state =
+        parseCommandLine(cmd.spec, context.fullInput, context.cursorPosition, cmd.aliasResolver);
     if (!state.has_value())
         return false;
 
@@ -120,8 +120,8 @@ std::vector<CompletionItem> CommandSpecCompleter::complete(CompletionContext con
 
     auto& cmd = it->second;
 
-    auto const state = parseCommandLine(
-        cmd.spec, context.fullInput, context.cursorPosition, context.prefix, cmd.aliasResolver);
+    auto const state =
+        parseCommandLine(cmd.spec, context.fullInput, context.cursorPosition, cmd.aliasResolver);
     if (!state.has_value())
         return {};
 

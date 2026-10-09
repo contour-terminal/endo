@@ -88,8 +88,7 @@ void Shell::builtinArithGetVar(CoreVM::Params& context)
         return;
     }
     int64_t result = 0;
-    // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
-    auto [ptr, ec] = std::from_chars(value->data(), value->data() + value->size(), result);
+    std::from_chars(value->data(), value->data() + value->size(), result);
     context.setResult(static_cast<CoreVM::CoreNumber>(result));
 }
 

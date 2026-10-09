@@ -195,7 +195,7 @@ auto GrepTool::execute(nlohmann::json const& arguments) -> std::expected<ToolRes
 
         for (auto i = 0; std::cmp_less(i, lines.size()); ++i)
         {
-            if (std::regex_search(lines[i], regex))
+            if (std::regex_search(lines[static_cast<size_t>(i)], regex))
                 matchedLineNumbers.insert(i);
         }
 
@@ -220,7 +220,12 @@ auto GrepTool::execute(nlohmann::json const& arguments) -> std::expected<ToolRes
                 printedLines.insert(i);
 
                 auto const marker = (i == matchLine) ? ':' : '-';
-                output += std::format("{}{}{}{}  {}\n", filePath.string(), marker, i + 1, marker, lines[i]);
+                output += std::format("{}{}{}{}  {}\n",
+                                      filePath.string(),
+                                      marker,
+                                      i + 1,
+                                      marker,
+                                      lines[static_cast<size_t>(i)]);
             }
 
             ++totalMatches;

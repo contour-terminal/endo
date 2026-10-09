@@ -294,7 +294,6 @@ TEST_CASE("AgentSession.tool_loop_max_iterations", "[agent]")
 
     // Provider always returns tool calls (never a text response)
     // We need to replenish pendingToolCalls after each generate call
-    auto callCount = 0;
     // Override: mock always returns tool calls
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "mock_tool", .arguments = {} } };
 

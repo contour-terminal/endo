@@ -242,8 +242,8 @@ void pruneOldTraceFiles(std::filesystem::path const& dir, size_t maxFiles)
 
     // Sort by last-write-time, oldest first.
     std::ranges::sort(files, [](auto const& a, auto const& b) {
-        auto ec = std::error_code {};
-        return a.last_write_time(ec) < b.last_write_time(ec);
+        auto timeError = std::error_code {};
+        return a.last_write_time(timeError) < b.last_write_time(timeError);
     });
 
     auto const toRemove = files.size() - maxFiles;

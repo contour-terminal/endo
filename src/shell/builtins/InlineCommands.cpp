@@ -1511,14 +1511,14 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, core::platform::
         // Interactive prompt
         if (interactive && !force)
         {
-            std::string prompt;
+            std::string question;
             if (pathIsDirectory)
-                prompt = std::format("rm: remove directory '{}'? ", path);
+                question = std::format("rm: remove directory '{}'? ", path);
             else
-                prompt = std::format("rm: remove file '{}'? ", path);
+                question = std::format("rm: remove file '{}'? ", path);
             // Write prompt to stderr, read response from stdin
-            [[maybe_unused]] auto w =
-                core::platform::platformWrite(core::platform::standardError(), prompt.data(), prompt.size());
+            [[maybe_unused]] auto w = core::platform::platformWrite(
+                core::platform::standardError(), question.data(), question.size());
             // In non-interactive/test contexts, skip (treat as 'no')
             if (!_tty.isTerminal())
                 continue;
@@ -1761,7 +1761,6 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, core::platform::
     };
 
     bool recursive = false;
-    bool force = false;
     bool noClobber = false;
     bool verbose = false;
     bool endOfOptions = false;
@@ -1806,14 +1805,12 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, core::platform::
         }
         if (!endOfOptions && arg == "--force")
         {
-            force = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
             noClobber = false;
             continue;
         }
         if (!endOfOptions && arg == "--no-clobber")
         {
             noClobber = true;
-            force = false; // NOLINT(clang-analyzer-deadcode.DeadStores)
             continue;
         }
         if (!endOfOptions && arg == "--verbose")
@@ -1832,14 +1829,8 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, core::platform::
                 {
                     case 'r':
                     case 'R': recursive = true; break;
-                    case 'f':
-                        force = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
-                        noClobber = false;
-                        break;
-                    case 'n':
-                        noClobber = true;
-                        force = false; // NOLINT(clang-analyzer-deadcode.DeadStores)
-                        break;
+                    case 'f': noClobber = false; break;
+                    case 'n': noClobber = true; break;
                     case 'v': verbose = true; break;
                     default: validFlags = false; break;
                 }
@@ -2163,10 +2154,10 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, core::platform::
 
             if (interactive && !force)
             {
-                auto const prompt =
+                auto const question =
                     std::format("mv: overwrite '{}'? ", core::platform::normalizePath(target));
                 [[maybe_unused]] auto w = core::platform::platformWrite(
-                    core::platform::standardError(), prompt.data(), prompt.size());
+                    core::platform::standardError(), question.data(), question.size());
                 if (!_tty.isTerminal())
                     continue;
                 std::string response;

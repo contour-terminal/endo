@@ -22,6 +22,7 @@
 #include <core/tui/completer/Completer.hpp>
 
 #include <algorithm>
+#include <ranges>
 #include <utility>
 
 #include "Gradient.hpp"
@@ -1714,25 +1715,27 @@ std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
     // Generate RGBA pixels with alpha pre-multiplied against terminal background.
     // Sixel has no per-pixel alpha; without pre-multiplication the binary alpha threshold
     // (< 128 = transparent, >= 128 = opaque) creates a hard edge instead of a smooth fade.
-    auto pixels = std::vector<std::uint8_t>(static_cast<std::size_t>(imgWidth) * imgHeight * 4, 0);
+    auto const width = static_cast<std::size_t>(imgWidth);
+    auto const height = static_cast<std::size_t>(imgHeight);
+    auto pixels = std::vector<std::uint8_t>(width * height * 4, 0);
 
-    for (int y = 0; y < imgHeight; ++y)
+    for (auto const y: std::views::iota(0uz, height))
     {
         // Vertical fade: 0 at top → 1 at bottom, with cubic ease-in for a perceptually
         // smooth transition. Linear ramps look abrupt because brightness perception is
         // non-linear; t³ keeps the top ~70% close to background and concentrates the
         // color ramp near the bottom where it meets the info line.
-        auto const t = (imgHeight > 1) ? static_cast<float>(y) / static_cast<float>(imgHeight - 1) : 1.0f;
+        auto const t = (height > 1) ? static_cast<float>(y) / static_cast<float>(height - 1) : 1.0f;
         auto const alpha = t * t * t;
         auto const a = static_cast<unsigned>(static_cast<std::uint8_t>(alpha * 255.0f));
 
-        for (int x = 0; x < imgWidth; ++x)
+        for (auto const x: std::views::iota(0uz, width))
         {
-            auto const idx = ((static_cast<std::size_t>(y) * imgWidth) + x) * 4;
+            auto const idx = ((y * width) + x) * 4;
 
             // Horizontal gradient position
-            auto const t = (imgWidth > 1) ? static_cast<float>(x) / static_cast<float>(imgWidth - 1) : 0.0f;
-            auto const color = multiStopGradient(_config.auroraBackground, t);
+            auto const position = (width > 1) ? static_cast<float>(x) / static_cast<float>(width - 1) : 0.0f;
+            auto const color = multiStopGradient(_config.auroraBackground, position);
 
             // Pre-multiply alpha: blend aurora color with terminal background
             pixels[idx + 0] = static_cast<std::uint8_t>(((color.r * a) + (bgColor.r * (255 - a))) / 255);

@@ -194,7 +194,6 @@ void AgentModeSession::drainAgentMessages(std::vector<agent::FromAgentMessage>& 
     // borrowed references, so the body below is otherwise verbatim.
     auto& out = _out;
     auto& terminal = _terminal;
-    auto& screen = _screen;
     auto& inputComponent = _inputComponent;
     auto& toolStatusComponent = _toolStatusComponent;
     auto const& theme = core::tui::currentTheme();
@@ -1128,7 +1127,6 @@ void AgentModeSession::registerSlashCommands(agent::SlashCommandRegistry& regist
     // borrowed references / methods, so the bodies below are otherwise verbatim.
     auto*& provider = _provider;
     auto& inputComponent = _inputComponent;
-    auto& worker = _worker;
     auto const& sessionManager = _sessionManager;
     auto const& historyStore = _historyStore;
     auto& permissionManager = _permissionManager;

@@ -36,43 +36,11 @@ namespace
         return false;
     }
 
-    /// @brief Finds the OptionDef that matches a given token.
-    [[nodiscard]] auto findOption(std::span<OptionDef const> options, std::string_view token)
-        -> OptionDef const*
-    {
-        for (auto const& opt: options)
-        {
-            if ((!opt.longName.empty() && token == opt.longName)
-                || (!opt.shortName.empty() && token == opt.shortName))
-                return &opt;
-        }
-        return nullptr;
-    }
-
-    /// @brief Resolves the active SubcommandDef by walking a subcommand chain.
-    [[nodiscard]] auto resolveSubcommand(CommandSpec const& spec, std::span<std::string const> chain)
-        -> SubcommandDef const*
-    {
-        auto const* subs = &spec.subcommands;
-        SubcommandDef const* current = nullptr;
-
-        for (auto const& name: chain)
-        {
-            auto it = std::ranges::find_if(*subs, [&](SubcommandDef const& sub) { return sub.name == name; });
-            if (it == subs->end())
-                return nullptr;
-            current = &*it;
-            subs = &current->subcommands;
-        }
-        return current;
-    }
-
 } // namespace
 
 std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
                                                  std::string_view fullInput,
                                                  size_t cursorPosition,
-                                                 std::string_view prefix,
                                                  AliasResolver const& aliasResolver)
 {
     auto const input = fullInput.substr(0, std::min(cursorPosition, fullInput.size()));

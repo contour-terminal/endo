@@ -18,7 +18,7 @@ namespace endo
 {
 
 struct ResolvedPromptColors;
-class FSharpPersistentState;
+struct FSharpPersistentState;
 class OutputDefinitionRegistry;
 
 /// @brief Bit flags for events that trigger module re-evaluation.

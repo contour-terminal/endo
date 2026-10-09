@@ -124,7 +124,7 @@ auto McpClient::callTool(std::string_view name, nlohmann::json const& arguments)
     };
 
     return sendRequest("tools/call", std::move(params))
-        .and_then([&name](nlohmann::json const& result) -> McpResult<ToolResult> {
+        .and_then([](nlohmann::json const& result) -> McpResult<ToolResult> {
             auto toolResult = ToolResult {};
             toolResult.isError = result.value("isError", false);
 
