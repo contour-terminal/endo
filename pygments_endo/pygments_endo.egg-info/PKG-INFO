@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: pygments-endo
+Version: 0.1.0
+Summary: Pygments lexer for the Endo language
+Requires-Dist: pygments>=2.18
+Dynamic: requires-dist
+Dynamic: summary
