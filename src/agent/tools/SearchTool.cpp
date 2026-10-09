@@ -6,6 +6,7 @@
 #include <fstream>
 #include <regex>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -68,7 +69,7 @@ namespace
         file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
         auto const bytesRead = static_cast<size_t>(file.gcount());
 
-        return std::any_of(buffer.begin(), buffer.begin() + bytesRead, [](char c) { return c == '\0'; });
+        return std::ranges::any_of(std::span(buffer).first(bytesRead), [](char c) { return c == '\0'; });
     }
 
     /// Converts a glob pattern to a regex pattern.
