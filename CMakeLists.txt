@@ -97,6 +97,9 @@ if(WIN32)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     # Use Unicode APIs
     add_definitions(-DUNICODE -D_UNICODE)
+    # The MSVC CRT deprecates ISO C functions (getenv, strerror, localtime, ...) in favor of its
+    # Annex K `_s` variants, which no other standard library provides.
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 

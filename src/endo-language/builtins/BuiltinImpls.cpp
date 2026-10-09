@@ -1700,7 +1700,8 @@ namespace
 {
 
     /// Sends a signal to a process, returning an error string on failure or empty on success.
-    std::string platformSendSignal(int pid, int sig)
+    /// Windows has no signals: the process is terminated whatever @p sig is.
+    std::string platformSendSignal(int pid, [[maybe_unused]] int sig)
     {
 #if defined(_WIN32)
         HANDLE const hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
