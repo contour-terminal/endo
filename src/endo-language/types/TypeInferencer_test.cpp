@@ -6,6 +6,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+#include <string_view>
+
 using namespace endo;
 using namespace endo::test;
 
@@ -27,9 +30,9 @@ InferenceResult inferTypes(std::string const& source)
 }
 
 /// Helper: checks that a function was inferred and returns its type.
-InferredFunctionType const& getInferredFunction(InferenceResult const& result, std::string const& name)
+InferredFunctionType const& getInferredFunction(InferenceResult const& result, std::string_view name)
 {
-    auto it = result.functions.find(name);
+    auto it = result.functions.find(std::string(name));
     REQUIRE(it != result.functions.end());
     return it->second;
 }
@@ -279,7 +282,7 @@ TEST_CASE("TypeInferencer.generic_union_different_instantiations", "[TypeInferen
 
 TEST_CASE("TypeInferencer.generic_union_recursive", "[TypeInferencer][generic]")
 {
-    auto result =
-        inferTypes("type Tree<'a> = | Leaf of 'a | Node of Tree<'a> * Tree<'a>\nlet t = Node (Leaf 1, Leaf 2)");
+    auto result = inferTypes(
+        "type Tree<'a> = | Leaf of 'a | Node of Tree<'a> * Tree<'a>\nlet t = Node (Leaf 1, Leaf 2)");
     REQUIRE_FALSE(result.hasErrors());
 }

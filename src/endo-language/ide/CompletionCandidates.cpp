@@ -433,9 +433,9 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         if (!isStdlibFunction)
         {
             // Generic value: offer module functions for Option (most common wrapper type) and record fields
-            if (auto it = moduleFunctions.find("Option"); it != moduleFunctions.end())
+            if (auto const optionIt = moduleFunctions.find("Option"); optionIt != moduleFunctions.end())
             {
-                for (auto const& fn: it->second)
+                for (auto const& fn: optionIt->second)
                     addCandidate(objectPart + "." + fn.name, fn.name, fn.signature, CompletionKind::Function);
             }
 
