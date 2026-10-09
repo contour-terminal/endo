@@ -37,17 +37,26 @@ if(ENDO_HAS_WFORMAT_NONLITERAL)
     list(APPEND _endo_disabled_warning_flags -Wno-format-nonliteral)
 endif()
 
-# A constructor parameter named after the member it initializes is the convention here. Clang's
-# -Wshadow leaves that alone; GCC's reports it, and -Wshadow=local is the part both agree on.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(_endo_shadow_warning -Wshadow=local)
+# Clang's -Wshadow leaves out a constructor parameter shadowing the member it initializes, which
+# GCC's -Wshadow reports; -Wshadow-all is the clang set that covers it.
+check_cxx_compiler_flag(-Wshadow-all ENDO_HAS_WSHADOW_ALL)
+if(ENDO_HAS_WSHADOW_ALL)
+    set(_endo_shadow_warning -Wshadow-all)
 else()
     set(_endo_shadow_warning -Wshadow)
 endif()
 
 function(set_pedantic_compiler_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(_warnings
+        # The base warning level goes first: a later group flag switches back on whatever an
+        # earlier -Wno-* turned off. clang-cl interprets -Wall as MSVC's /Wall, which maps to
+        # Clang's -Weverything; its /W4 is what maps to Clang's -Wall -Wextra.
+        if(MSVC)
+            set(_warnings /W4)
+        else()
+            set(_warnings -Wall)
+        endif()
+        list(APPEND _warnings
             -Wextra
             -Wpedantic
             -Wconversion
@@ -64,13 +73,7 @@ function(set_pedantic_compiler_warnings target)
             -Wimplicit-fallthrough
             ${_endo_disabled_warning_flags}
         )
-        if(ENDO_WARNINGS_AS_ERRORS)
-            list(APPEND _warnings -Werror)
-        endif()
         if(MSVC)
-            # clang-cl interprets -Wall as MSVC's /Wall, which maps to Clang's -Weverything.
-            # Use /W4 instead, which correctly maps to Clang's -Wall -Wextra.
-            list(APPEND _warnings /W4)
             # Suppress backward-compatibility warnings irrelevant for a C++23 codebase.
             list(APPEND _warnings
                 -Wno-c++98-compat-pedantic
@@ -78,8 +81,9 @@ function(set_pedantic_compiler_warnings target)
                 -Wno-pre-c++17-compat
                 -Wno-pre-c++20-compat-pedantic
             )
-        else()
-            list(APPEND _warnings -Wall)
+        endif()
+        if(ENDO_WARNINGS_AS_ERRORS)
+            list(APPEND _warnings -Werror)
         endif()
         target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${_warnings}>)
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
