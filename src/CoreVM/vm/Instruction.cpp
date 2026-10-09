@@ -277,7 +277,7 @@ std::string disassemble(const Instruction* program,
         result << indent;
         result << disassemble(*pc, i++, sp, cp);
         result << '\n';
-        sp += getStackChange(*pc);
+        sp = static_cast<size_t>(static_cast<ptrdiff_t>(sp) + getStackChange(*pc));
     }
     return result.str();
 }

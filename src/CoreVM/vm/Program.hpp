@@ -67,14 +67,14 @@ struct RuntimeError
 
 struct MatchCaseDef
 {
-    uint64_t label {};
+    size_t label {}; ///< Constant-pool index of the case's string or regular expression.
     uint64_t pc {};
 
     MatchCaseDef() = default;
 
-    explicit MatchCaseDef(uint64_t l): label(l) {}
+    explicit MatchCaseDef(size_t l): label(l) {}
 
-    MatchCaseDef(uint64_t l, uint64_t p): label(l), pc(p) {}
+    MatchCaseDef(size_t l, uint64_t p): label(l), pc(p) {}
 };
 
 class MatchDef

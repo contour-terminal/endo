@@ -111,9 +111,6 @@ Value* IRBuilder::createLoad(Value* value, const std::string& name)
 
     // if (dynamic_cast<Variable*>(value))
     return insert<LoadInstr>(value, makeName(name));
-
-    assert(!"Value must be of type Constant or Variable.");
-    return nullptr;
 }
 
 /**
@@ -188,7 +185,7 @@ Value* IRBuilder::createBOr(Value* lhs, Value* rhs, const std::string& name)
 
 /// Returns true if the type is Number or a dynamically-typed value (Void/Object)
 /// that represents a number at runtime.
-static bool isNumberCompatible(LiteralType t)
+[[maybe_unused]] static bool isNumberCompatible(LiteralType t)
 {
     return t == LiteralType::Number || t == LiteralType::Void || t == LiteralType::Object;
 }
@@ -296,7 +293,8 @@ Value* IRBuilder::createPow(Value* lhs, Value* rhs, const std::string& name)
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
-            return get(static_cast<CoreNumber>(powl(static_cast<long double>(a->get()), static_cast<long double>(b->get()))));
+            return get(static_cast<CoreNumber>(
+                powl(static_cast<long double>(a->get()), static_cast<long double>(b->get()))));
 
     return insert<IPowInstr>(lhs, rhs, makeName(name));
 }
@@ -403,7 +401,7 @@ Value* IRBuilder::createNCmpGT(Value* lhs, Value* rhs, const std::string& name)
 // }}}
 // {{{ float ops
 
-static bool isFloatCompatible(LiteralType t)
+[[maybe_unused]] static bool isFloatCompatible(LiteralType t)
 {
     return t == LiteralType::Float || t == LiteralType::Void || t == LiteralType::Object;
 }
@@ -583,7 +581,7 @@ Value* IRBuilder::createSAdd(Value* lhs, Value* rhs, const std::string& name)
 // String comparison assertions: at least one operand must be String.
 // Void/Object types are allowed because ObjGetSlot returns Void for string-typed record fields
 // at the IR level, even though the runtime value is a CoreString* pointer.
-static bool isStringCompatible(LiteralType t)
+[[maybe_unused]] static bool isStringCompatible(LiteralType t)
 {
     return t == LiteralType::String || t == LiteralType::Void || t == LiteralType::Object;
 }

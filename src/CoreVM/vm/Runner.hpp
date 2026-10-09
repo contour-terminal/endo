@@ -100,7 +100,7 @@ class Runner
             }
             else
             {
-                return _stack[relativeIndex];
+                return _stack[static_cast<size_t>(relativeIndex)];
             }
         }
 
@@ -114,7 +114,7 @@ class Runner
             }
             else
             {
-                return _stack[relativeIndex];
+                return _stack[static_cast<size_t>(relativeIndex)];
             }
         }
 
@@ -246,6 +246,9 @@ class Runner
 
     CoreNumber getNumber(int si) const { return static_cast<CoreNumber>(_stack[si]); }
 
+    /// Stores @p value at stack slot @p si, in the two's complement bits the VM keeps numbers in.
+    void setNumber(int si, CoreNumber value) { _stack[si] = static_cast<Value>(value); }
+
     const CoreString& getString(int si) const { return *reinterpret_cast<CoreString*>(_stack[si]); }
 
     const util::IPAddress& getIPAddress(int si) const
@@ -273,6 +276,8 @@ class Runner
     Value pop() { return _stack.pop(); }
 
     void discard(size_t n) { _stack.discard(n); }
+
+    void pushNumber(CoreNumber value) { push(static_cast<Value>(value)); }
 
     void pushString(const CoreString* value) { push(reinterpret_cast<Value>(value)); }
 

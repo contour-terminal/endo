@@ -15,7 +15,7 @@ std::string tos(MatchClass mc)
         case MatchClass::Head: return "Head";
         case MatchClass::Tail: return "Tail";
         case MatchClass::RegExp: return "RegExp";
-        default: assert(!"FIXME: NOT IMPLEMENTED"); return "<FIXME>";
+        default: assert(false && "FIXME: NOT IMPLEMENTED"); return "<FIXME>";
     }
 }
 

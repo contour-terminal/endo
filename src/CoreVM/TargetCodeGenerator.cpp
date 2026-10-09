@@ -176,7 +176,7 @@ void TargetCodeGenerator::generate(IRFunction* function)
         size_t targetPC = basicBlockEntryPoints[target.first];
         for (const auto& source: target.second)
         {
-            _code[source.pc] = makeInstruction(source.opcode, targetPC);
+            _code[source.pc] = makeInstruction(source.opcode, toOperand(targetPC));
         }
     }
     _conditionalJumps.clear();
@@ -187,7 +187,7 @@ void TargetCodeGenerator::generate(IRFunction* function)
         size_t targetPC = basicBlockEntryPoints[target.first];
         for (const auto& source: target.second)
         {
-            _code[source.pc] = makeInstruction(source.opcode, targetPC);
+            _code[source.pc] = makeInstruction(source.opcode, toOperand(targetPC));
         }
     }
     _unconditionalJumps.clear();
@@ -415,16 +415,13 @@ void TargetCodeGenerator::visit(LoadInstr& loadInstr)
 
 void TargetCodeGenerator::visit(CallInstr& callInstr)
 {
-    const int argc = static_cast<int>(callInstr.operands().size()) - 1;
-    for (auto const i: std::views::iota(1, argc + 1))
+    auto const argc = callInstr.operands().size() - 1;
+    for (auto const i: std::views::iota(1uz, argc + 1))
         emitLoad(callInstr.operand(i));
 
     const bool returnsValue = callInstr.callee()->signature().returnType() != LiteralType::Void;
 
-    emitInstr(Opcode::CALL,
-              _cp.makeNativeFunction(callInstr.callee()),
-              callInstr.operands().size() - 1,
-              returnsValue ? 1 : 0);
+    emitInstr(Opcode::CALL, _cp.makeNativeFunction(callInstr.callee()), argc, returnsValue ? 1 : 0);
 
     if (argc)
         pop(argc);
@@ -544,12 +541,6 @@ void TargetCodeGenerator::visit(LazyForceInstr& instr)
     changeStack(1, &instr);
 }
 
-Operand TargetCodeGenerator::getConstantInt(Value* value)
-{
-    COREVM_ASSERT(dynamic_cast<ConstantInt*>(value) != nullptr, "Must be ConstantInt");
-    return static_cast<ConstantInt*>(value)->get();
-}
-
 void TargetCodeGenerator::emitLoad(Value* value)
 {
     assert(value != nullptr);
@@ -576,7 +567,7 @@ void TargetCodeGenerator::emitLoad(Value* value)
     // const boolean
     if (auto* boolean = dynamic_cast<ConstantBoolean*>(value))
     {
-        emitInstr(Opcode::ILOAD, boolean->get());
+        emitInstr(Opcode::ILOAD, boolean->get() ? 1 : 0);
         changeStack(0, value);
         return;
     }
@@ -776,8 +767,9 @@ void TargetCodeGenerator::visit(RetInstr& retInstr)
     Value* operand = retInstr.operands()[0];
     if (auto* constInt = dynamic_cast<ConstantInt*>(operand))
     {
-        // Constant exit code - use EXIT with immediate value
-        emitInstr(Opcode::EXIT, constInt->get());
+        // Constant exit code - use EXIT with immediate value. The OS keeps only the low 8 bits
+        // of an exit status, so wrapping a negative or large code into the operand loses nothing.
+        emitInstr(Opcode::EXIT, static_cast<Operand>(constInt->get()));
     }
     else
     {

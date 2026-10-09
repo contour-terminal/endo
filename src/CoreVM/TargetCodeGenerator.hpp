@@ -4,14 +4,17 @@
 #include <CoreVM/SourceLocation.hpp>
 #include <CoreVM/enums.hpp>
 #include <CoreVM/ir/Instructions.hpp>
+#include <CoreVM/util/assert.hpp>
 #include <CoreVM/vm/Program.hpp>
 
+#include <concepts>
 #include <deque>
 #include <list>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace CoreVM
@@ -37,15 +40,22 @@ class TargetCodeGenerator: public InstructionVisitor
 
     void emitLoad(Value* value);
 
-    void emitInstr(Opcode opc) { emitInstr(makeInstruction(opc)); }
-
-    void emitInstr(Opcode opc, Operand op1) { emitInstr(makeInstruction(opc, op1)); }
-
-    void emitInstr(Opcode opc, Operand op1, Operand op2) { emitInstr(makeInstruction(opc, op1, op2)); }
-
-    void emitInstr(Opcode opc, Operand op1, Operand op2, Operand op3)
+    /// Narrows @p value to an instruction operand.
+    /// @param value A stack slot, constant-pool index, jump target or count.
+    /// @return @p value as an Operand; a value the encoding cannot hold is a code generator bug.
+    template <std::integral T>
+    [[nodiscard]] static Operand toOperand(T value)
     {
-        emitInstr(makeInstruction(opc, op1, op2, op3));
+        COREVM_ASSERT(std::in_range<Operand>(value), "BUG: instruction operand out of range");
+        return static_cast<Operand>(value);
+    }
+
+    /// Emits @p opc with up to three operands, each narrowed by toOperand().
+    template <std::integral... Operands>
+        requires(sizeof...(Operands) <= 3)
+    void emitInstr(Opcode opc, Operands... operands)
+    {
+        emitInstr(makeInstruction(opc, toOperand(operands)...));
     }
 
     void emitInstr(Instruction instr);
@@ -56,8 +66,6 @@ class TargetCodeGenerator: public InstructionVisitor
     void emitBinaryAssoc(Instr& instr, Opcode opcode);
     void emitBinary(Instr& instr, Opcode opcode);
     void emitUnary(Instr& instr, Opcode opcode);
-
-    static Operand getConstantInt(Value* value);
 
     [[nodiscard]] size_t getInstructionPointer() const { return _code.size(); }
 

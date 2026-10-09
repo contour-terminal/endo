@@ -32,9 +32,9 @@ class Params
   public:
     using Value = uint64_t;
 
-    Params(Runner* caller, int argc): _caller(caller), _argc(argc), _argv(argc + 1) {}
+    Params(Runner* caller, int argc): _caller(caller), _argc(argc), _argv(static_cast<size_t>(argc) + 1) {}
 
-    void setArg(int argi, Value value) { _argv[argi] = value; }
+    void setArg(int argi, Value value) { _argv[static_cast<size_t>(argi)] = value; }
 
     [[nodiscard]] Runner* caller() const { return _caller; }
 
@@ -144,9 +144,9 @@ class Params
         [[nodiscard]] bool operator!=(const iterator& other) const { return _current != other._current; }
     };
 
-    [[nodiscard]] iterator begin() { return iterator(this, std::min(1, _argc)); }
+    [[nodiscard]] iterator begin() { return iterator(this, static_cast<size_t>(std::min(1, _argc))); }
 
-    [[nodiscard]] iterator end() { return iterator(this, _argc); }
+    [[nodiscard]] iterator end() { return iterator(this, static_cast<size_t>(_argc)); }
 
   private:
     Runner* _caller;

@@ -37,11 +37,8 @@ std::string SourceLocation::text() const
     std::ifstream fs(filename);
     fs.seekg(end.offset, std::istream::beg);
 
-    std::string result;
-    result.reserve(size + 1);
-
-    fs.read(const_cast<char*>(result.data()), size);
-    result.resize(static_cast<size_t>(size));
+    std::string result(static_cast<size_t>(size), '\0');
+    fs.read(result.data(), size);
 
     return result;
 }
