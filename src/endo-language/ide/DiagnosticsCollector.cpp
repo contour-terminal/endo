@@ -219,12 +219,12 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
     for (auto const& msg: report.messages())
     {
         auto severity = DiagnosticSeverity::Error;
-        using Type = CoreVM::diagnostics::Type;
+        using DiagnosticType = CoreVM::diagnostics::Type;
         switch (msg.type)
         {
-            case Type::Warning: severity = DiagnosticSeverity::Warning; break;
-            case Type::LinkError: [[fallthrough]];
-            case Type::TypeError: severity = DiagnosticSeverity::Error; break;
+            case DiagnosticType::Warning: severity = DiagnosticSeverity::Warning; break;
+            case DiagnosticType::LinkError: [[fallthrough]];
+            case DiagnosticType::TypeError: severity = DiagnosticSeverity::Error; break;
             default: break;
         }
 
@@ -255,12 +255,12 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
                 continue;
 
             auto severity = DiagnosticSeverity::Error;
-            using Type = CoreVM::diagnostics::Type;
+            using DiagnosticType = CoreVM::diagnostics::Type;
             switch (msg.type)
             {
-                case Type::Warning: severity = DiagnosticSeverity::Warning; break;
-                case Type::TypeError: [[fallthrough]];
-                case Type::LinkError: severity = DiagnosticSeverity::Error; break;
+                case DiagnosticType::Warning: severity = DiagnosticSeverity::Warning; break;
+                case DiagnosticType::TypeError: [[fallthrough]];
+                case DiagnosticType::LinkError: severity = DiagnosticSeverity::Error; break;
                 default: break;
             }
 

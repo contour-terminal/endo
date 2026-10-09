@@ -68,8 +68,8 @@ struct SourceLocation
 
     SourceLocation(std::string fileName): filename(std::move(fileName)) {}
 
-    SourceLocation(std::string fileName, FilePos beg, FilePos end):
-        filename(std::move(fileName)), begin(beg), end(end)
+    SourceLocation(std::string fileName, FilePos beg, FilePos fin):
+        filename(std::move(fileName)), begin(beg), end(fin)
     {
     }
 

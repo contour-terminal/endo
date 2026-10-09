@@ -71,14 +71,14 @@ core::tui::InputEvent ctrlW()
                                  .codepoint = 'w' };
 }
 
-/// @brief Builds a prefix-consistent suggest function: completes any prefix of @p word to @p word.
+/// @brief Builds a prefix-consistent suggest function: completes any prefix of @p completion to it.
 ///
 /// Mirrors a real prefix completer just enough to exercise the ghost-text lifecycle, and lets a
 /// test count how often the (notionally expensive) completer is consulted.
-PromptComponent::SuggestFn prefixSuggest(std::string word, int* calls = nullptr)
+PromptComponent::SuggestFn prefixSuggest(std::string completion, int* calls = nullptr)
 {
-    return [word = std::move(word), calls](std::string_view text,
-                                           std::size_t /*cursor*/) -> std::optional<std::string> {
+    return [word = std::move(completion), calls](std::string_view text,
+                                                 std::size_t /*cursor*/) -> std::optional<std::string> {
         if (calls)
             ++*calls;
         if (!text.empty() && word.starts_with(text) && text.size() < word.size())

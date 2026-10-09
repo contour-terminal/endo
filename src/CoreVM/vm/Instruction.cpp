@@ -32,8 +32,8 @@ struct InstructionInfo
     ~InstructionInfo() = default;
 
     constexpr InstructionInfo(
-        Opcode opc, const char* const m, OperandSig opsig, int stackChange, LiteralType stackOutput):
-        mnemonic(m), opcode(opc), operandSig(opsig), stackOutput(stackOutput), stackChange(stackChange)
+        Opcode opc, const char* const m, OperandSig opsig, int change, LiteralType output):
+        mnemonic(m), opcode(opc), operandSig(opsig), stackOutput(output), stackChange(change)
     {
     }
 };
