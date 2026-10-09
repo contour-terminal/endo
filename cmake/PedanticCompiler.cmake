@@ -5,15 +5,54 @@
 ## VERSIONINFO resource also compiles RC -- where rc.exe treats an unknown switch
 ## as a fatal RC1106. Nothing here means anything to a resource compiler.
 
+include(CheckCXXCompilerFlag)
+
+option(ENDO_WARNINGS_AS_ERRORS "Treat compiler warnings in endo's own targets as errors [default: ON]" ON)
+
+# Warnings that are switched off, each for a reason that holds for the whole tree. A warning a
+# compiler does not know is never passed: an unknown -Wno-* is itself a warning, and so an error
+# under -Werror.
+set(_endo_disabled_warning_flags "")
+
+# Catch2's TEST_CASE and SECTION expand to __COUNTER__, which -Wpedantic reports as a C2y extension
+# in every test that uses them, and every compiler endo builds with implements it.
+check_cxx_compiler_flag(-Wc2y-extensions ENDO_HAS_WC2Y_EXTENSIONS)
+if(ENDO_HAS_WC2Y_EXTENSIONS)
+    list(APPEND _endo_disabled_warning_flags -Wno-c2y-extensions)
+endif()
+
+# Descriptor tables and option structs name only the fields that differ from the defaults their
+# members declare; that is what designated initializers are for here. GCC, and Clang before 19
+# (Emscripten 3.1.51 ships clang 18), report those under -Wmissing-field-initializers alone.
+check_cxx_compiler_flag(-Wmissing-designated-field-initializers ENDO_HAS_WMISSING_DESIGNATED_FIELD_INITIALIZERS)
+if(ENDO_HAS_WMISSING_DESIGNATED_FIELD_INITIALIZERS)
+    list(APPEND _endo_disabled_warning_flags -Wno-missing-designated-field-initializers)
+else()
+    list(APPEND _endo_disabled_warning_flags -Wno-missing-field-initializers)
+endif()
+
+# `date +FORMAT` hands the user's format string to strftime(), which is the point of it.
+check_cxx_compiler_flag(-Wformat-nonliteral ENDO_HAS_WFORMAT_NONLITERAL)
+if(ENDO_HAS_WFORMAT_NONLITERAL)
+    list(APPEND _endo_disabled_warning_flags -Wno-format-nonliteral)
+endif()
+
+# A constructor parameter named after the member it initializes is the convention here. Clang's
+# -Wshadow leaves that alone; GCC's reports it, and -Wshadow=local is the part both agree on.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(_endo_shadow_warning -Wshadow=local)
+else()
+    set(_endo_shadow_warning -Wshadow)
+endif()
+
 function(set_pedantic_compiler_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(_warnings
-            -Werror
             -Wextra
             -Wpedantic
             -Wconversion
             -Wsign-conversion
-            -Wshadow
+            ${_endo_shadow_warning}
             -Wnon-virtual-dtor
             -Wold-style-cast
             -Wcast-align
@@ -23,7 +62,11 @@ function(set_pedantic_compiler_warnings target)
             -Wdouble-promotion
             -Wformat=2
             -Wimplicit-fallthrough
+            ${_endo_disabled_warning_flags}
         )
+        if(ENDO_WARNINGS_AS_ERRORS)
+            list(APPEND _warnings -Werror)
+        endif()
         if(MSVC)
             # clang-cl interprets -Wall as MSVC's /Wall, which maps to Clang's -Weverything.
             # Use /W4 instead, which correctly maps to Clang's -Wall -Wextra.
@@ -40,6 +83,28 @@ function(set_pedantic_compiler_warnings target)
         endif()
         target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${_warnings}>)
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4;/WX;/utf-8>)
+        set(_warnings /W4 /utf-8)
+        if(ENDO_WARNINGS_AS_ERRORS)
+            list(APPEND _warnings /WX)
+        endif()
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${_warnings}>)
     endif()
+endfunction()
+
+## @brief Applies set_pedantic_compiler_warnings() to every target built from source at or below @p dir.
+##
+## A walk rather than a call per target, so a target added later cannot be left out. Third-party
+## code is never below @p dir, so it keeps whatever warnings its own build chooses.
+function(set_pedantic_compiler_warnings_below dir)
+    get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_target IN LISTS _targets)
+        get_target_property(_type ${_target} TYPE)
+        if(_type MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
+            set_pedantic_compiler_warnings(${_target})
+        endif()
+    endforeach()
+    get_property(_children DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_child IN LISTS _children)
+        set_pedantic_compiler_warnings_below("${_child}")
+    endforeach()
 endfunction()
