@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <shell/util/GlobMatcher.hpp>
+
 #include <core/testing/SuppressWindowsDialogs.hpp>
 
 #include <algorithm>
@@ -244,7 +245,6 @@ int main(int argc, char* argv[])
 
     // Run tests
     endo::test::TestReporter reporter(opts->format, opts->verbose);
-    endo::test::TestExecutor executor;
 
     reporter.reportHeader(parsedTests.size());
 

@@ -199,7 +199,7 @@ void ServerManager::rebuildToolIndex()
 #endif
     {
         for (auto const& tool: server.tools)
-            _toolToServer[tool.name] = idx;
+            _toolToServer[tool.name] = static_cast<size_t>(idx);
 #if !defined(__cpp_lib_ranges_enumerate) || __cpp_lib_ranges_enumerate < 202302L
         ++idx;
 #endif

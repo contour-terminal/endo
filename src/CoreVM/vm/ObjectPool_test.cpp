@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <initializer_list>
 #include <ranges>
 #include <vector>
 
@@ -202,7 +203,7 @@ TEST_CASE("ObjectPool.size_class_various_slots")
 {
     ObjectPool pool;
 
-    for (uint16_t slots: { 1, 2, 3, 4, 5, 7, 16 })
+    for (auto const slots: std::initializer_list<uint16_t> { 1, 2, 3, 4, 5, 7, 16 })
     {
         auto desc = makeProductType(slots);
         auto* obj = pool.allocate(&desc);

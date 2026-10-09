@@ -474,7 +474,7 @@ TEST_CASE("CommandSpecCompleter.options_before_subcommand")
 TEST_CASE("CommandLineParser.basic_subcommand_detection")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git checkout ", 13, "");
+    auto const state = endo::parseCommandLine(spec, "git checkout ", 13);
 
     REQUIRE(state.has_value());
     CHECK(state->command == "git");
@@ -486,7 +486,7 @@ TEST_CASE("CommandLineParser.basic_subcommand_detection")
 TEST_CASE("CommandLineParser.subcommand_completion_phase")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git ", 4, "");
+    auto const state = endo::parseCommandLine(spec, "git ", 4);
 
     REQUIRE(state.has_value());
     CHECK(state->subcommandChain.empty());
@@ -496,7 +496,7 @@ TEST_CASE("CommandLineParser.subcommand_completion_phase")
 TEST_CASE("CommandLineParser.option_phase")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git commit --am", 15, "--am");
+    auto const state = endo::parseCommandLine(spec, "git commit --am", 15);
 
     REQUIRE(state.has_value());
     CHECK(state->phase == endo::CompletionPhase::Option);
@@ -505,7 +505,7 @@ TEST_CASE("CommandLineParser.option_phase")
 TEST_CASE("CommandLineParser.nested_subcommand")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git stash pop ", 14, "");
+    auto const state = endo::parseCommandLine(spec, "git stash pop ", 14);
 
     REQUIRE(state.has_value());
     CHECK(state->subcommandChain.size() == 2);
@@ -517,7 +517,7 @@ TEST_CASE("CommandLineParser.nested_subcommand")
 TEST_CASE("CommandLineParser.global_option_with_value")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git -C /path checkout ", 21, "");
+    auto const state = endo::parseCommandLine(spec, "git -C /path checkout ", 21);
 
     REQUIRE(state.has_value());
     CHECK(state->subcommandChain.size() == 1);
@@ -527,7 +527,7 @@ TEST_CASE("CommandLineParser.global_option_with_value")
 TEST_CASE("CommandLineParser.positional_args_tracking")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "git push origin ", 16, "");
+    auto const state = endo::parseCommandLine(spec, "git push origin ", 16);
 
     REQUIRE(state.has_value());
     CHECK(state->subcommandChain.size() == 1);
@@ -540,7 +540,7 @@ TEST_CASE("CommandLineParser.positional_args_tracking")
 TEST_CASE("CommandLineParser.non_git_command_returns_nullopt")
 {
     auto const spec = endo::createGitSpec();
-    auto const state = endo::parseCommandLine(spec, "ls -la ", 7, "");
+    auto const state = endo::parseCommandLine(spec, "ls -la ", 7);
     CHECK_FALSE(state.has_value());
 }
 
@@ -775,7 +775,7 @@ TEST_CASE("CommandLineParser.alias_resolver_resolves_subcommand")
             return "branch";
         return std::nullopt;
     };
-    auto const state = endo::parseCommandLine(spec, "git br ", 7, "", resolver);
+    auto const state = endo::parseCommandLine(spec, "git br ", 7, resolver);
 
     REQUIRE(state.has_value());
     CHECK(state->subcommandChain.size() == 1);

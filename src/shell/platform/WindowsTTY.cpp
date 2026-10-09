@@ -100,7 +100,7 @@ void WindowsTTY::setEchoEnabled(bool enabled)
         if (enabled)
             mode |= ENABLE_ECHO_INPUT;
         else
-            mode &= ~ENABLE_ECHO_INPUT;
+            mode &= static_cast<DWORD>(~ENABLE_ECHO_INPUT);
         SetConsoleMode(_hStdin, mode);
     }
 }

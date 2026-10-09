@@ -31,13 +31,13 @@ namespace CoreVM
 {
 
 // {{{ VM helper preprocessor definitions
-#define OP opcode((Instruction) * pc)
-#define A  operandA((Instruction) * pc)
-#define B  operandB((Instruction) * pc)
-#define C  operandC((Instruction) * pc)
+#define OP opcode(static_cast<Instruction>(*pc))
+#define A  operandA(static_cast<Instruction>(*pc))
+#define B  operandB(static_cast<Instruction>(*pc))
+#define C  operandC(static_cast<Instruction>(*pc))
 
 #define SP(i)          _stack[(i)]
-#define popStringPtr() ((CoreString*) _stack.pop())
+#define popStringPtr() (reinterpret_cast<CoreString*>(_stack.pop()))
 #define incr_pc() \
     do            \
     {             \
@@ -49,17 +49,19 @@ namespace CoreVM
         set_pc(offset); \
         jump;           \
     } while (0)
-#define tracelog()                                                 \
-    do                                                             \
-    {                                                              \
-        _traceLogger((Instruction) * pc, get_pc(), _stack.size()); \
-        if (_state == State::Suspended)                            \
-        {                                                          \
-            _ip = get_pc();                                        \
-            return false;                                          \
-        }                                                          \
+#define tracelog()                                                            \
+    do                                                                        \
+    {                                                                         \
+        _traceLogger(static_cast<Instruction>(*pc), get_pc(), _stack.size()); \
+        if (_state == State::Suspended)                                       \
+        {                                                                     \
+            _ip = get_pc();                                                   \
+            return false;                                                     \
+        }                                                                     \
     } while (0)
 
+// The threaded loops below dispatch through computed gotos, a GNU extension. `__extension__` marks
+// each label address and indirect goto as intended, so -Wpedantic still reports any other extension.
 #if defined(COREVM_VM_LOOP_SWITCH)
     #define LOOP_BEGIN() \
         for (;;)         \
@@ -72,7 +74,7 @@ namespace CoreVM
             }
     #define instr(NAME) \
         case NAME: tracelog();
-    #define get_pc() (pc - codeBase)
+    #define get_pc() static_cast<size_t>(pc - codeBase)
     #define set_pc(offset)            \
         do                            \
         {                             \
@@ -106,7 +108,7 @@ namespace CoreVM
     #define instr(name) \
         l_##name: ++pc; \
         tracelog();
-    #define get_pc() ((pc - codeBase) / 2)
+    #define get_pc() static_cast<size_t>((pc - codeBase) / 2)
     #define set_pc(offset)                \
         do                                \
         {                                 \
@@ -118,17 +120,17 @@ namespace CoreVM
             ++pc; \
             jump; \
         } while (0)
-    #define jump              \
-        do                    \
-        {                     \
-            consume(OP);      \
-            goto*(void*) *pc; \
+    #define jump                                                    \
+        do                                                          \
+        {                                                           \
+            consume(OP);                                            \
+            __extension__({ goto* reinterpret_cast<void*>(*pc); }); \
         } while (0)
 #else
     #define LOOP_BEGIN() jump;
     #define LOOP_END()
     #define instr(name) l_##name: tracelog();
-    #define get_pc()    (pc - codeBase)
+    #define get_pc()    static_cast<size_t>(pc - codeBase)
     #define set_pc(offset)            \
         do                            \
         {                             \
@@ -140,11 +142,11 @@ namespace CoreVM
             ++pc; \
             jump; \
         } while (0)
-    #define jump           \
-        do                 \
-        {                  \
-            consume(OP);   \
-            goto* ops[OP]; \
+    #define jump                               \
+        do                                     \
+        {                                      \
+            consume(OP);                       \
+            __extension__({ goto* ops[OP]; }); \
         } while (0)
 #endif
 // }}}
@@ -398,7 +400,7 @@ void Runner::releaseAndFree(TypedObject* obj)
         visitChildObjects(
             *current,
             [this](void const* ptr) { return _objectPool.owns(ptr); },
-            [this, &worklist](TypedObject* child) {
+            [&worklist](TypedObject* child) {
                 if (releaseObject(child))
                     worklist.push_back(child);
             });
@@ -540,7 +542,7 @@ Runner::RunResult Runner::loopWithResult()
 {
 // {{{ jump table
 #if !defined(COREVM_VM_LOOP_SWITCH)
-    #define label(opcode) &&l_##opcode
+    #define label(opcode) __extension__&& l_##opcode
     static const void* const ops[] = {
         // misc
         label(NOP),
@@ -709,7 +711,7 @@ Runner::RunResult Runner::loopWithResult()
         {
             Instruction instr = source[i];
 
-            *pc++ = (uint64_t) ops[opcode(instr)];
+            *pc++ = reinterpret_cast<uint64_t>(ops[opcode(instr)]);
             *pc++ = instr;
         }
     }
@@ -857,39 +859,39 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(NLOAD)
     {
-        push(program()->constants().getInteger(A));
+        pushNumber(program()->constants().getInteger(A));
         next;
     }
 
     instr(NNEG)
     {
-        SP(-1) = -getNumber(-1);
+        setNumber(-1, -getNumber(-1));
         next;
     }
 
     instr(NNOT)
     {
-        SP(-1) = ~getNumber(-1);
+        setNumber(-1, ~getNumber(-1));
         next;
     }
 
     instr(NADD)
     {
-        SP(-2) = getNumber(-2) + getNumber(-1);
+        setNumber(-2, getNumber(-2) + getNumber(-1));
         pop();
         next;
     }
 
     instr(NSUB)
     {
-        SP(-2) = getNumber(-2) - getNumber(-1);
+        setNumber(-2, getNumber(-2) - getNumber(-1));
         pop();
         next;
     }
 
     instr(NMUL)
     {
-        SP(-2) = getNumber(-2) * getNumber(-1);
+        setNumber(-2, getNumber(-2) * getNumber(-1));
         pop();
         next;
     }
@@ -902,7 +904,7 @@ Runner::RunResult Runner::loopWithResult()
             _ip = get_pc();
             return handleRuntimeError(makeError("division by zero"));
         }
-        SP(-2) = getNumber(-2) / divisor;
+        setNumber(-2, getNumber(-2) / divisor);
         pop();
         next;
     }
@@ -915,21 +917,21 @@ Runner::RunResult Runner::loopWithResult()
             _ip = get_pc();
             return handleRuntimeError(makeError("division by zero"));
         }
-        SP(-2) = getNumber(-2) % divisor;
+        setNumber(-2, getNumber(-2) % divisor);
         pop();
         next;
     }
 
     instr(NSHL)
     {
-        SP(-2) = getNumber(-2) << getNumber(-1);
+        setNumber(-2, getNumber(-2) << getNumber(-1));
         pop();
         next;
     }
 
     instr(NSHR)
     {
-        SP(-2) = getNumber(-2) >> getNumber(-1);
+        setNumber(-2, getNumber(-2) >> getNumber(-1));
         pop();
         next;
     }
@@ -944,21 +946,21 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(NAND)
     {
-        SP(-2) = getNumber(-2) & getNumber(-1);
+        setNumber(-2, getNumber(-2) & getNumber(-1));
         pop();
         next;
     }
 
     instr(NOR)
     {
-        SP(-2) = getNumber(-2) | getNumber(-1);
+        setNumber(-2, getNumber(-2) | getNumber(-1));
         pop();
         next;
     }
 
     instr(NXOR)
     {
-        SP(-2) = getNumber(-2) ^ getNumber(-1);
+        setNumber(-2, getNumber(-2) ^ getNumber(-1));
         pop();
         next;
     }
@@ -1034,7 +1036,7 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(BXOR)
     {
-        SP(-2) = getNumber(-2) ^ getNumber(-1);
+        setNumber(-2, getNumber(-2) ^ getNumber(-1));
         pop();
         next;
     }
@@ -1055,7 +1057,8 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(SSUBSTR)
     {
-        SP(-2) = reinterpret_cast<Value>(newString(getString(-3).substr(getNumber(-2), getNumber(-1))));
+        SP(-2) = reinterpret_cast<Value>(newString(
+            getString(-3).substr(static_cast<size_t>(getNumber(-2)), static_cast<size_t>(getNumber(-1)))));
         _stack.discard(2);
         next;
     }
@@ -1209,7 +1212,7 @@ Runner::RunResult Runner::loopWithResult()
     instr(SREGGROUP)
     {
         {
-            CoreNumber position = A;
+            size_t const position = A;
             util::RegExp::Result& rr = *_regexpContext.regexMatch();
             std::string match = rr[position];
 
@@ -1221,7 +1224,7 @@ Runner::RunResult Runner::loopWithResult()
     // {{{ conversion
     instr(S2N)
     { // A = atoi(B)
-        SP(-1) = std::stoi(getString(-1));
+        setNumber(-1, std::stoi(getString(-1)));
         next;
     }
 
@@ -1279,7 +1282,7 @@ Runner::RunResult Runner::loopWithResult()
 
             _function->program()->nativeFunction(id)->invoke(args);
 
-            discard(argc);
+            discard(static_cast<size_t>(argc));
             if (signature.returnType() != LiteralType::Void)
                 push(args[0]);
 
@@ -2004,7 +2007,7 @@ Runner::RunResult Runner::loopWithResult()
             incr_pc();
             _ip = get_pc();
 
-            auto argsBase = _stack.size() - argc;
+            auto argsBase = _stack.size() - static_cast<size_t>(argc);
 
             _callStack.push_back(CallFrame {
                 .ip = _ip,

@@ -327,12 +327,12 @@ void listGroupPairs(CoreVM::Params& args)
     }
     // Build outer list right-to-left: List<Tuple2<key, List<elem>>>
     auto* outerAcc = args.caller()->makeNilList(CoreVM::LiteralType::Object);
-    for (long key: std::ranges::reverse_view(groupOrder))
+    for (auto const key: std::ranges::reverse_view(groupOrder))
     {
         auto const& elems = groups[key];
         // Build inner list right-to-left
         auto* innerAcc = args.caller()->makeNilList(CoreVM::LiteralType::Void);
-        for (unsigned long elem: std::ranges::reverse_view(elems))
+        for (auto const elem: std::ranges::reverse_view(elems))
             innerAcc = args.caller()->makeConsCell(elem, innerAcc, CoreVM::LiteralType::Void);
         // Build Tuple2(key, innerList)
         auto* tuple = args.caller()->allocObject(CoreVM::BuiltinTypeId::Tuple2);
@@ -1700,7 +1700,8 @@ namespace
 {
 
     /// Sends a signal to a process, returning an error string on failure or empty on success.
-    std::string platformSendSignal(int pid, int sig)
+    /// Windows has no signals: the process is terminated whatever @p sig is.
+    std::string platformSendSignal(int pid, [[maybe_unused]] int sig)
     {
 #if defined(_WIN32)
         HANDLE const hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));

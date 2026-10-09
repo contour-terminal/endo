@@ -434,7 +434,7 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
     if (event.event == "content_block_start")
     {
-        auto const index = data.value("index", 0);
+        auto const index = data.value("index", 0uz);
         auto const& contentBlock = data["content_block"];
         auto const type = contentBlock.value("type", std::string {});
 
@@ -456,7 +456,7 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
     if (event.event == "content_block_delta")
     {
-        auto const index = data.value("index", 0);
+        auto const index = data.value("index", 0uz);
         auto const& delta = data["delta"];
         auto const deltaType = delta.value("type", std::string {});
 
@@ -492,7 +492,7 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
     if (event.event == "content_block_stop")
     {
-        auto const index = data.value("index", 0);
+        auto const index = data.value("index", 0uz);
 
         if (index >= accumulators.size())
             return std::unexpected(

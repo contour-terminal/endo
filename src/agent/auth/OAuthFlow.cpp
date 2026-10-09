@@ -32,7 +32,6 @@ namespace
 
     constexpr auto OAuthClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
     constexpr auto OAuthTokenUrl = "https://platform.claude.com/v1/oauth/token";
-    constexpr auto ManualRedirectUri = "https://platform.claude.com/oauth/code/callback";
     constexpr auto ClaudeAiAuthorizeUrl = "https://claude.ai/oauth/authorize";
     constexpr auto ConsoleAuthorizeUrl = "https://console.anthropic.com/oauth/authorize";
     constexpr auto ClaudeAiScopes =
@@ -137,9 +136,9 @@ namespace
             std::array<uint32_t, 64> w {};
 
             // Copy block into first 16 words (big-endian).
-            for (auto const i: std::views::iota(0, 16))
+            for (auto const i: std::views::iota(0uz, 16uz))
             {
-                auto const base = offset + (static_cast<size_t>(i) * 4);
+                auto const base = offset + (i * 4);
                 w[i] = (static_cast<uint32_t>(padded[base]) << 24)
                        | (static_cast<uint32_t>(padded[base + 1]) << 16)
                        | (static_cast<uint32_t>(padded[base + 2]) << 8)
@@ -147,7 +146,7 @@ namespace
             }
 
             // Extend to 64 words.
-            for (auto const i: std::views::iota(16, 64))
+            for (auto const i: std::views::iota(16uz, 64uz))
             {
                 auto const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
                 auto const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
@@ -165,7 +164,7 @@ namespace
             auto h = h7;
 
             // Compression.
-            for (auto const i: std::views::iota(0, 64))
+            for (auto const i: std::views::iota(0uz, 64uz))
             {
                 auto const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
                 auto const ch = (e & f) ^ (~e & g);
@@ -196,7 +195,7 @@ namespace
 
         // Produce the final 32-byte hash (big-endian).
         auto result = std::array<uint8_t, 32> {};
-        auto store = [&](int offset, uint32_t val) {
+        auto store = [&](size_t offset, uint32_t val) {
             result[offset] = static_cast<uint8_t>(val >> 24);
             result[offset + 1] = static_cast<uint8_t>(val >> 16);
             result[offset + 2] = static_cast<uint8_t>(val >> 8);
@@ -243,12 +242,6 @@ namespace
         }
 
         return result;
-    }
-
-    /// Encodes a string to base64url (no padding).
-    auto base64urlEncode(std::string_view input) -> std::string
-    {
-        return base64urlEncode(reinterpret_cast<uint8_t const*>(input.data()), input.size());
     }
 
     // ── URL Encoding ─────────────────────────────────────────────────────────

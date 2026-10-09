@@ -108,7 +108,7 @@ TEST_CASE("JsonRpc.writeMessage produces correct Content-Length header and body"
     // Verify the body is valid JSON
     auto const headerEnd = result.find("\r\n\r\n");
     auto const body = result.substr(headerEnd + 4);
-    CHECK_NOTHROW(json::parse(body));
+    CHECK(json::accept(body));
 }
 
 TEST_CASE("JsonRpc.round-trip writeMessage then readMessage", "[lsp][jsonrpc]")

@@ -8,10 +8,10 @@ using namespace endo::agent;
 namespace
 {
 
-auto makeMockCallback(EndoExecResult result) -> EndoExecuteCallback
+auto makeMockCallback(EndoExecResult canned) -> EndoExecuteCallback
 {
     return
-        [result = std::move(result)](std::string const& /*source*/, std::chrono::milliseconds /*timeout*/) {
+        [result = std::move(canned)](std::string const& /*source*/, std::chrono::milliseconds /*timeout*/) {
             return result;
         };
 }

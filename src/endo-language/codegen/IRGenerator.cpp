@@ -6246,7 +6246,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         registerFSharpFunction(funcName, createFunctionFromPlaceholder(*placeholder));
         func = lookupFSharpFunction(funcName);
     }
-    else if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(funcExpr))
+    else if (dynamic_cast<ast::ApplicationExpr const*>(funcExpr))
     {
         // Partial application in pipeline: value |> func arg
         // Flatten the application to get base function + explicit args
@@ -7559,13 +7559,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         CoreVM::Value* list = emitNilList(CoreVM::LiteralType::Void, "varargs.nil");
 
         // Build Cons cells in reverse order so first extra arg is at the head
-        for (auto i = static_cast<int>(args.size()) - 1; std::cmp_greater_equal(i, fixedCount); --i)
-        {
-            list = emitListCons(args[i], list, args[i]->type(), "varargs.cons");
-        }
+        auto const variadicArgs = std::span<CoreVM::Value* const>(args).subspan(fixedCount);
+        for (auto* arg: variadicArgs | std::views::reverse)
+            list = emitListCons(arg, list, arg->type(), "varargs.cons");
 
         // Annotate list element literal type if all variadic args share the same type
-        auto const variadicArgs = std::span<CoreVM::Value* const>(args).subspan(fixedCount);
         if (auto commonType = determineCommonLiteralType(variadicArgs))
             annotateListElementLiteralType(list, *commonType);
 
@@ -7755,7 +7753,8 @@ void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
     _builder.createStore(
         dispatchTag, _builder.get(static_cast<CoreVM::CoreNumber>(calledIndex)), "mutual.tag.init");
     for (size_t i = 0; i < args.size(); ++i)
-        _builder.createStore(ctx.functions[calledIndex].paramAllocas[i], args[i], "mutual.arg.init");
+        _builder.createStore(
+            ctx.functions[static_cast<size_t>(calledIndex)].paramAllocas[i], args[i], "mutual.arg.init");
 
     _activeMutualRecursion = std::move(ctx);
 
@@ -9008,7 +9007,7 @@ void IRGenerator::visit(ast::ListExpr const& node)
     auto commonElemType = determineCommonLiteralType(elemValues);
     CoreVM::Value* acc = emitNilList(commonElemType.value_or(CoreVM::LiteralType::Void), "list.nil");
 
-    for (int i = static_cast<int>(elemValues.size()) - 1; i >= 0; --i)
+    for (auto const i: std::views::iota(size_t { 0 }, elemValues.size()) | std::views::reverse)
     {
         // Store accumulator so it's available after ObjAlloc
         auto* accStorage =
@@ -10189,12 +10188,12 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             // Check if pattern matches
             bool patternAlwaysMatches = false;
 
-            if (const auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
+            if (dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
             {
                 // Variable pattern always matches
                 patternAlwaysMatches = true;
             }
-            else if (const auto* wildPat = dynamic_cast<pattern::WildcardPattern const*>(arm.pattern.get()))
+            else if (dynamic_cast<pattern::WildcardPattern const*>(arm.pattern.get()))
             {
                 // Wildcard always matches
                 patternAlwaysMatches = true;

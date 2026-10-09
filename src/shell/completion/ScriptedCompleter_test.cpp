@@ -54,12 +54,19 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
                 return { .completions = { cc("--user"), cc("--system"), cc("--verbose"), cc("-v") },
                          .errors = {} };
             if (args.empty())
-                return { .completions = { cc("run"), cc("install"), cc("uninstall"), cc("update"),
-                                          cc("list"), cc("info"), cc("search") },
+                return { .completions = { cc("run"),
+                                          cc("install"),
+                                          cc("uninstall"),
+                                          cc("update"),
+                                          cc("list"),
+                                          cc("info"),
+                                          cc("search") },
                          .errors = {} };
             if (args.size() == 1 && args[0] == "run")
-                return { .completions = { cc("com.visualstudio.code"), cc("org.mozilla.firefox"),
-                                          cc("org.gnome.Calculator"), cc("io.github.sxyazi.yazi") },
+                return { .completions = { cc("com.visualstudio.code"),
+                                          cc("org.mozilla.firefox"),
+                                          cc("org.gnome.Calculator"),
+                                          cc("io.github.sxyazi.yazi") },
                          .errors = {} };
         }
         return {};
@@ -237,7 +244,7 @@ TEST_CASE("ScriptedCompleter.cache_invalidation_on_option_prefix_change")
 {
     int callCount = 0;
     auto callback = [&callCount](std::string_view /*funcName*/,
-                                 std::vector<std::string> const& args,
+                                 std::vector<std::string> const& /*args*/,
                                  std::string_view prefix) -> endo::CompleterExecutionResult {
         ++callCount;
         if (!prefix.empty() && prefix[0] == '-')

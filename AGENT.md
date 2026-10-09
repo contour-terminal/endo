@@ -167,6 +167,11 @@ is skipped, and `Shell::registerAgentConfigBuiltins()` registers no-op stubs dri
 `agentPropertyDescriptors()` so `init.endo` scripts still load. CI covers both
 configurations; changes to shell builtins or `Shell.cpp` should be checked in both.
 
+Every target under `src/` compiles with the pedantic warning set in `cmake/PedanticCompiler.cmake`,
+and warnings are errors (`ENDO_WARNINGS_AS_ERRORS`, default `ON`; pass `OFF` to see every warning at
+once instead of stopping at the first). New targets get this automatically. Fix a warning in source —
+the handful the module switches off are listed there, each with its reason.
+
 ```bash
 # Configure (debug with ASAN, UBSAN, clang-tidy)
 cmake --preset clang-debug

@@ -56,12 +56,12 @@ namespace
     /// Collects all top-level ApplicationExpr chains from an expression tree.
     void collectCalls(ast::Expr const& expr, std::vector<CallInfo>& calls)
     {
-        if (auto const* e = dynamic_cast<ast::ApplicationExpr const*>(&expr))
+        if (auto const* applicationExpr = dynamic_cast<ast::ApplicationExpr const*>(&expr))
         {
-            if (auto info = unwrapApplication(*e))
+            if (auto info = unwrapApplication(*applicationExpr))
                 calls.push_back(*info);
             // Recurse into arguments for nested calls (walk the chain)
-            auto const* cur = e;
+            auto const* cur = applicationExpr;
             while (auto const* inner = dynamic_cast<ast::ApplicationExpr const*>(cur->function.get()))
             {
                 collectCalls(*cur->argument, calls);
@@ -70,53 +70,53 @@ namespace
             collectCalls(*cur->argument, calls);
             return;
         }
-        if (auto const* e = dynamic_cast<ast::ParenExpr const*>(&expr))
+        if (auto const* parenExpr = dynamic_cast<ast::ParenExpr const*>(&expr))
         {
-            collectCalls(*e->inner, calls);
+            collectCalls(*parenExpr->inner, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::BinaryExpr const*>(&expr))
+        else if (auto const* binaryExpr = dynamic_cast<ast::BinaryExpr const*>(&expr))
         {
-            collectCalls(*e->left, calls);
-            collectCalls(*e->right, calls);
+            collectCalls(*binaryExpr->left, calls);
+            collectCalls(*binaryExpr->right, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::IfExpr const*>(&expr))
+        else if (auto const* ifExpr = dynamic_cast<ast::IfExpr const*>(&expr))
         {
-            collectCalls(*e->condition, calls);
-            collectCalls(*e->thenExpr, calls);
-            if (e->elseExpr)
-                collectCalls(*e->elseExpr, calls);
+            collectCalls(*ifExpr->condition, calls);
+            collectCalls(*ifExpr->thenExpr, calls);
+            if (ifExpr->elseExpr)
+                collectCalls(*ifExpr->elseExpr, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::LetInExpr const*>(&expr))
+        else if (auto const* letInExpr = dynamic_cast<ast::LetInExpr const*>(&expr))
         {
-            if (e->value)
-                collectCalls(*e->value, calls);
-            if (e->body)
-                collectCalls(*e->body, calls);
+            if (letInExpr->value)
+                collectCalls(*letInExpr->value, calls);
+            if (letInExpr->body)
+                collectCalls(*letInExpr->body, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::LambdaExpr const*>(&expr))
+        else if (auto const* lambdaExpr = dynamic_cast<ast::LambdaExpr const*>(&expr))
         {
-            collectCalls(*e->body, calls);
+            collectCalls(*lambdaExpr->body, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::MatchExpr const*>(&expr))
+        else if (auto const* matchExpr = dynamic_cast<ast::MatchExpr const*>(&expr))
         {
-            collectCalls(*e->scrutinee, calls);
-            for (auto const& arm: e->arms)
+            collectCalls(*matchExpr->scrutinee, calls);
+            for (auto const& arm: matchExpr->arms)
                 if (arm.body)
                     collectCalls(*arm.body, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::PipelineExpr const*>(&expr))
+        else if (auto const* pipelineExpr = dynamic_cast<ast::PipelineExpr const*>(&expr))
         {
-            collectCalls(*e->value, calls);
-            collectCalls(*e->function, calls);
+            collectCalls(*pipelineExpr->value, calls);
+            collectCalls(*pipelineExpr->function, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::TupleExpr const*>(&expr))
+        else if (auto const* tupleExpr = dynamic_cast<ast::TupleExpr const*>(&expr))
         {
-            for (auto const& elem: e->elements)
+            for (auto const& elem: tupleExpr->elements)
                 collectCalls(*elem, calls);
         }
-        else if (auto const* e = dynamic_cast<ast::ListExpr const*>(&expr))
+        else if (auto const* listExpr = dynamic_cast<ast::ListExpr const*>(&expr))
         {
-            for (auto const& elem: e->elements)
+            for (auto const& elem: listExpr->elements)
                 collectCalls(*elem, calls);
         }
     }

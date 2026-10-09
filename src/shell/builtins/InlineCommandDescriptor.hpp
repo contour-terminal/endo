@@ -25,17 +25,7 @@
 namespace endo
 {
 
-// On MSVC/clang-cl, member-function-pointer size depends on the class's inheritance
-// model. A bare forward declaration defaults to "unknown inheritance" (24 bytes),
-// whereas a fully-defined single-inheritance class yields 8 bytes. If Shell.hpp
-// happens to be included before this header, the struct layout changes and causes
-// an ODR violation. The __single_inheritance annotation pins the pointer size to
-// the correct (single-inheritance) representation regardless of include order.
-#if defined(_MSC_VER)
-class __single_inheritance Shell;
-#else
 class Shell;
-#endif
 
 /// @brief Describes a flag/option for an inline builtin command.
 struct InlineOptionDef
@@ -66,10 +56,14 @@ struct InlinePositionalQuery
 /// and LSP builtin descriptors.
 struct InlineCommandDescriptor
 {
-    using NoStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&, core::platform::NativeHandle);
-    using WithStdinFn = int (Shell::*)(CoreVM::CoreStringArray const&,
-                                       core::platform::NativeHandle,
-                                       core::platform::NativeHandle);
+    // Plain function pointers taking the Shell, not pointers to Shell members: under the
+    // Microsoft ABI a member function pointer's size depends on whether Shell is complete where
+    // it is first used, so this struct's layout would differ between translation units.
+    using NoStdinFn = int (*)(Shell&, CoreVM::CoreStringArray const&, core::platform::NativeHandle);
+    using WithStdinFn = int (*)(Shell&,
+                                CoreVM::CoreStringArray const&,
+                                core::platform::NativeHandle,
+                                core::platform::NativeHandle);
 
     std::string_view name;                      ///< Command name (e.g., "head")
     std::string_view briefDescription;          ///< One-line (e.g., "Output first lines of files")

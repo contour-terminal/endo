@@ -253,31 +253,23 @@ TEST_CASE("McpClient.notification_buffering", "[mcp][client]")
     SECTION("notification buffered by I/O thread")
     {
         auto transport = std::make_unique<MockTransport>();
-        transport->queueResponse(makeInitializeResponse());
-
-        auto client = McpClient(std::move(transport));
-        auto* transportPtr = static_cast<MockTransport*>(nullptr);
-
-        // We need the raw pointer before moving.
-        // Re-do: create transport, get pointer, then move.
-        auto transport2 = std::make_unique<MockTransport>();
-        auto* tp = transport2.get();
+        auto* tp = transport.get();
         tp->queueResponse(makeInitializeResponse());
 
-        auto client2 = McpClient(std::move(transport2));
-        REQUIRE(client2.initialize().has_value());
+        auto client = McpClient(std::move(transport));
+        REQUIRE(client.initialize().has_value());
 
         // Queue a notification followed by a response.
         tp->queueResponse(makeNotification("notifications/tools/list_changed"));
         tp->queueResponse(makeToolListResponse(2, {}));
 
-        auto result = client2.listTools();
+        auto result = client.listTools();
         REQUIRE(result.has_value());
 
         // Give I/O thread time to process notification.
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-        auto notifications = client2.drainNotifications();
+        auto notifications = client.drainNotifications();
         REQUIRE(notifications.size() == 1);
         CHECK(notifications[0].method == "notifications/tools/list_changed");
     }

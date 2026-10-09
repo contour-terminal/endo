@@ -497,8 +497,8 @@ class IRGenerator final: public ast::Visitor
         /// Type annotations from the compiled function's return value (valid when compiledFunction !=
         /// nullptr). These are propagated to the call result so that convertToString can dispatch correctly.
         std::optional<CoreVM::LiteralType> compiledReturnInnerType;
-        std::optional<uint32_t> compiledReturnObjectTypeId;
-        std::optional<uint32_t> compiledReturnListElementTypeId;
+        std::optional<uint16_t> compiledReturnObjectTypeId;
+        std::optional<uint16_t> compiledReturnListElementTypeId;
         std::optional<CoreVM::LiteralType> compiledReturnListElementLiteralType;
         /// Builtin higher-order function marker. Empty = normal function,
         /// otherwise "map"/"filter"/"fold"/"reduce"/"reverse".

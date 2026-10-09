@@ -48,11 +48,6 @@ target_compile_definitions(CoreVM PUBLIC
     $<$<BOOL:${COREVM_DIRECT_THREADED_VM}>:COREVM_DIRECT_THREADED_VM>
 )
 
-target_compile_options(CoreVM PRIVATE
-    $<$<CXX_COMPILER_ID:Clang>:-Wno-gnu-label-as-value>
-    $<$<CXX_COMPILER_ID:GCC>:-Wno-gnu-label-as-value>
-)
-
 target_include_directories(CoreVM PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/src>

@@ -47,7 +47,7 @@ struct FileDescriptor final: public Node
 {
     int value;
 
-    explicit FileDescriptor(int value): value(value) {}
+    explicit FileDescriptor(int fd): value(fd) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -64,8 +64,8 @@ struct InputRedirect final: public Node
     std::unique_ptr<FileDescriptor> targetFd; ///< Target fd (default: 0 = stdin)
     std::unique_ptr<Expr> source;             ///< Source file path expression
 
-    InputRedirect(std::unique_ptr<FileDescriptor> targetFd, std::unique_ptr<Expr> source):
-        targetFd(std::move(targetFd)), source(std::move(source))
+    InputRedirect(std::unique_ptr<FileDescriptor> fd, std::unique_ptr<Expr> sourceExpr):
+        targetFd(std::move(fd)), source(std::move(sourceExpr))
     {
     }
 
@@ -92,8 +92,8 @@ struct LiteralExpr final: Expr
     std::string value;
     LiteralQuoting quoting = LiteralQuoting::Unquoted;
 
-    explicit LiteralExpr(std::string value, LiteralQuoting quoting = LiteralQuoting::Unquoted):
-        value(std::move(value)), quoting(quoting)
+    explicit LiteralExpr(std::string text, LiteralQuoting quote = LiteralQuoting::Unquoted):
+        value(std::move(text)), quoting(quote)
     {
     }
 
@@ -121,8 +121,8 @@ struct VariableExpr final: Expr
     VariableType type;   ///< Type of variable
     bool braced = false; ///< Whether this was ${VAR} syntax
 
-    VariableExpr(std::string name, VariableType type, bool braced = false):
-        name(std::move(name)), type(type), braced(braced)
+    VariableExpr(std::string n, VariableType t, bool isBraced = false):
+        name(std::move(n)), type(t), braced(isBraced)
     {
     }
 
@@ -141,8 +141,8 @@ struct TildeExpr final: Expr
     std::string user;   ///< Empty for ~ (current user), username for ~user
     std::string suffix; ///< Path suffix after tilde (e.g., "/Documents" for ~/Documents)
 
-    explicit TildeExpr(std::string user = "", std::string suffix = ""):
-        user(std::move(user)), suffix(std::move(suffix))
+    explicit TildeExpr(std::string userName = "", std::string rest = ""):
+        user(std::move(userName)), suffix(std::move(rest))
     {
     }
 
@@ -335,14 +335,17 @@ struct OutputRedirect final: public Expr
     bool append = false; ///< True for >> (append mode)
 
     /// Constructor for fd duplication: `N>&M`
-    OutputRedirect(std::unique_ptr<FileDescriptor> source, std::unique_ptr<FileDescriptor> target):
-        source(std::move(source)), target(std::move(target))
+    OutputRedirect(std::unique_ptr<FileDescriptor> sourceFd,
+                   std::unique_ptr<FileDescriptor> targetDescriptor):
+        source(std::move(sourceFd)), target(std::move(targetDescriptor))
     {
     }
 
     /// Constructor for file redirect: `> FILE` or `>> FILE`
-    OutputRedirect(std::unique_ptr<FileDescriptor> source, std::unique_ptr<Expr> target, bool append = false):
-        source(std::move(source)), target(std::move(target)), append(append)
+    OutputRedirect(std::unique_ptr<FileDescriptor> sourceFd,
+                   std::unique_ptr<Expr> targetExpr,
+                   bool appending = false):
+        source(std::move(sourceFd)), target(std::move(targetExpr)), append(appending)
     {
     }
 
@@ -368,14 +371,8 @@ struct HereDocument final: public Node
     std::string content;                      ///< Here-document content
     bool stripTabs = false;                   ///< True for <<- (strip leading tabs)
 
-    HereDocument(std::unique_ptr<FileDescriptor> targetFd,
-                 std::string delimiter,
-                 std::string content,
-                 bool stripTabs = false):
-        targetFd(std::move(targetFd)),
-        delimiter(std::move(delimiter)),
-        content(std::move(content)),
-        stripTabs(stripTabs)
+    HereDocument(std::unique_ptr<FileDescriptor> fd, std::string delim, std::string text, bool strip = false):
+        targetFd(std::move(fd)), delimiter(std::move(delim)), content(std::move(text)), stripTabs(strip)
     {
     }
 
@@ -390,8 +387,8 @@ struct HereString final: public Node
     std::unique_ptr<FileDescriptor> targetFd; ///< Target fd (default: 0 = stdin)
     std::unique_ptr<Expr> content;            ///< Content expression (may contain variables)
 
-    HereString(std::unique_ptr<FileDescriptor> targetFd, std::unique_ptr<Expr> content):
-        targetFd(std::move(targetFd)), content(std::move(content))
+    HereString(std::unique_ptr<FileDescriptor> fd, std::unique_ptr<Expr> text):
+        targetFd(std::move(fd)), content(std::move(text))
     {
     }
 
@@ -407,9 +404,8 @@ struct BuiltinExitStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> code;
 
-    BuiltinExitStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                    std::unique_ptr<Expr> code):
-        callback { callback }, code { std::move(code) }
+    BuiltinExitStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb, std::unique_ptr<Expr> exitCode):
+        callback { cb }, code { std::move(exitCode) }
     {
     }
 
@@ -421,8 +417,8 @@ struct BuiltinExportStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::string name;
 
-    BuiltinExportStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback, std::string name):
-        callback { callback }, name { std::move(name) }
+    BuiltinExportStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb, std::string n):
+        callback { cb }, name { std::move(n) }
     {
     }
 
@@ -434,9 +430,9 @@ struct BuiltinReadStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::vector<std::unique_ptr<Expr>> parameters;
 
-    BuiltinReadStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                    std::vector<std::unique_ptr<Expr>> parameters = {}):
-        callback { callback }, parameters { std::move(parameters) }
+    BuiltinReadStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                    std::vector<std::unique_ptr<Expr>> params = {}):
+        callback { cb }, parameters { std::move(params) }
     {
     }
 
@@ -449,10 +445,10 @@ struct BuiltinSetStmt final: public Statement
     std::unique_ptr<Expr> name;
     std::unique_ptr<Expr> value;
 
-    BuiltinSetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                   std::unique_ptr<Expr> name,
-                   std::unique_ptr<Expr> value):
-        callback { callback }, name { std::move(name) }, value { std::move(value) }
+    BuiltinSetStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                   std::unique_ptr<Expr> nameExpr,
+                   std::unique_ptr<Expr> valueExpr):
+        callback { cb }, name { std::move(nameExpr) }, value { std::move(valueExpr) }
     {
     }
 
@@ -464,9 +460,8 @@ struct BuiltinChDirStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> path;
 
-    BuiltinChDirStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                     std::unique_ptr<Expr> path):
-        callback { callback }, path { std::move(path) }
+    BuiltinChDirStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb, std::unique_ptr<Expr> pathExpr):
+        callback { cb }, path { std::move(pathExpr) }
     {
     }
 
@@ -479,8 +474,8 @@ struct BuiltinUnsetStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::string name;
 
-    BuiltinUnsetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback, std::string name):
-        callback { callback }, name { std::move(name) }
+    BuiltinUnsetStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb, std::string n):
+        callback { cb }, name { std::move(n) }
     {
     }
 
@@ -492,10 +487,7 @@ struct BuiltinJobsStmt final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
 
-    explicit BuiltinJobsStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
-        callback { callback }
-    {
-    }
+    explicit BuiltinJobsStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb): callback { cb } {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -506,9 +498,9 @@ struct BuiltinFgStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> jobId; ///< Optional job ID (null for current job)
 
-    BuiltinFgStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                  std::unique_ptr<Expr> jobId = nullptr):
-        callback { callback }, jobId { std::move(jobId) }
+    BuiltinFgStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                  std::unique_ptr<Expr> job = nullptr):
+        callback { cb }, jobId { std::move(job) }
     {
     }
 
@@ -521,9 +513,9 @@ struct BuiltinBgStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> jobId; ///< Optional job ID (null for current job)
 
-    BuiltinBgStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                  std::unique_ptr<Expr> jobId = nullptr):
-        callback { callback }, jobId { std::move(jobId) }
+    BuiltinBgStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                  std::unique_ptr<Expr> job = nullptr):
+        callback { cb }, jobId { std::move(job) }
     {
     }
 
@@ -536,9 +528,9 @@ struct BuiltinWaitStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> jobId; ///< Optional job ID (null for all jobs)
 
-    BuiltinWaitStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                    std::unique_ptr<Expr> jobId = nullptr):
-        callback { callback }, jobId { std::move(jobId) }
+    BuiltinWaitStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                    std::unique_ptr<Expr> job = nullptr):
+        callback { cb }, jobId { std::move(job) }
     {
     }
 
@@ -551,9 +543,9 @@ struct BuiltinBindStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::vector<std::unique_ptr<Expr>> args; ///< Arguments (key, action, flags)
 
-    BuiltinBindStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                    std::vector<std::unique_ptr<Expr>> args = {}):
-        callback { callback }, args { std::move(args) }
+    BuiltinBindStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                    std::vector<std::unique_ptr<Expr>> arguments = {}):
+        callback { cb }, args { std::move(arguments) }
     {
     }
 
@@ -566,9 +558,9 @@ struct BuiltinWhichStmt final: public Statement
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::vector<std::unique_ptr<Expr>> args; ///< Program names and flags
 
-    BuiltinWhichStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
-                     std::vector<std::unique_ptr<Expr>> args = {}):
-        callback { callback }, args { std::move(args) }
+    BuiltinWhichStmt(std::reference_wrapper<CoreVM::NativeCallback const> cb,
+                     std::vector<std::unique_ptr<Expr>> arguments = {}):
+        callback { cb }, args { std::move(arguments) }
     {
     }
 
@@ -594,20 +586,20 @@ struct ProgramCall final: public Statement
     std::vector<std::unique_ptr<HereString>> hereStrings;         ///< Here-strings (<<<)
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
 
-    ProgramCall(CoreVM::NativeCallback const& callback,
-                std::string program,
-                std::vector<std::unique_ptr<Expr>> parameters,
-                std::vector<std::unique_ptr<InputRedirect>> inputRedirects,
-                std::vector<std::unique_ptr<OutputRedirect>> outputRedirects,
-                std::vector<std::unique_ptr<HereDocument>> hereDocuments,
-                std::vector<std::unique_ptr<HereString>> hereStrings):
-        program(std::move(program)),
-        parameters(std::move(parameters)),
-        inputRedirects(std::move(inputRedirects)),
-        outputRedirects(std::move(outputRedirects)),
-        hereDocuments(std::move(hereDocuments)),
-        hereStrings(std::move(hereStrings)),
-        callback(callback)
+    ProgramCall(CoreVM::NativeCallback const& cb,
+                std::string programName,
+                std::vector<std::unique_ptr<Expr>> params,
+                std::vector<std::unique_ptr<InputRedirect>> inputs,
+                std::vector<std::unique_ptr<OutputRedirect>> outputs,
+                std::vector<std::unique_ptr<HereDocument>> heredocs,
+                std::vector<std::unique_ptr<HereString>> herestrings):
+        program(std::move(programName)),
+        parameters(std::move(params)),
+        inputRedirects(std::move(inputs)),
+        outputRedirects(std::move(outputs)),
+        hereDocuments(std::move(heredocs)),
+        hereStrings(std::move(herestrings)),
+        callback(cb)
     {
     }
 
@@ -706,8 +698,8 @@ struct CallPipeline final: public Statement
     std::vector<std::unique_ptr<ProgramCall>> calls;
     bool background = false; ///< True if command ends with & (run in background)
 
-    CallPipeline(std::vector<std::unique_ptr<ProgramCall>> calls, bool bg = false):
-        calls(std::move(calls)), background(bg)
+    CallPipeline(std::vector<std::unique_ptr<ProgramCall>> programCalls, bool bg = false):
+        calls(std::move(programCalls)), background(bg)
     {
     }
 
@@ -733,8 +725,8 @@ struct WhileStmt final: public Statement
     std::unique_ptr<Expr> condition;
     std::unique_ptr<Statement> body;
 
-    WhileStmt(std::unique_ptr<Expr> condition, std::unique_ptr<Statement> body):
-        condition(std::move(condition)), body(std::move(body))
+    WhileStmt(std::unique_ptr<Expr> cond, std::unique_ptr<Statement> loopBody):
+        condition(std::move(cond)), body(std::move(loopBody))
     {
     }
 
@@ -750,8 +742,8 @@ struct LogicalAndStmt final: public Statement
     std::unique_ptr<Statement> left;
     std::unique_ptr<Statement> right;
 
-    LogicalAndStmt(std::unique_ptr<Statement> left, std::unique_ptr<Statement> right):
-        left(std::move(left)), right(std::move(right))
+    LogicalAndStmt(std::unique_ptr<Statement> l, std::unique_ptr<Statement> r):
+        left(std::move(l)), right(std::move(r))
     {
     }
 
@@ -767,8 +759,8 @@ struct LogicalOrStmt final: public Statement
     std::unique_ptr<Statement> left;
     std::unique_ptr<Statement> right;
 
-    LogicalOrStmt(std::unique_ptr<Statement> left, std::unique_ptr<Statement> right):
-        left(std::move(left)), right(std::move(right))
+    LogicalOrStmt(std::unique_ptr<Statement> l, std::unique_ptr<Statement> r):
+        left(std::move(l)), right(std::move(r))
     {
     }
 
@@ -805,7 +797,7 @@ struct BreakStmt final: public Statement
 {
     int levels = 1; ///< Number of loop levels to break out of
 
-    explicit BreakStmt(int levels = 1): levels(levels) {}
+    explicit BreakStmt(int n = 1): levels(n) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -817,7 +809,7 @@ struct ContinueStmt final: public Statement
 {
     int levels = 1; ///< Number of loop levels to skip
 
-    explicit ContinueStmt(int levels = 1): levels(levels) {}
+    explicit ContinueStmt(int n = 1): levels(n) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1188,8 +1180,8 @@ struct CompositionExpr final: public Expr
     std::unique_ptr<Expr> left;
     std::unique_ptr<Expr> right;
 
-    CompositionExpr(CompositionOp op, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r):
-        op(op), left(std::move(l)), right(std::move(r))
+    CompositionExpr(CompositionOp operation, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r):
+        op(operation), left(std::move(l)), right(std::move(r))
     {
         setSpanFromChildren(*left, *right);
     }
@@ -1209,8 +1201,8 @@ struct PlaceholderLambdaExpr final: public Expr
     std::unique_ptr<Expr> body; ///< Body uses IdentifierExpr(PlaceholderParamName) for placeholder
     bool parenthesized = false; ///< Was it written as `(_ > 2)` vs `_ > 2`
 
-    PlaceholderLambdaExpr(std::unique_ptr<Expr> body, bool parens = false):
-        body(std::move(body)), parenthesized(parens)
+    PlaceholderLambdaExpr(std::unique_ptr<Expr> lambdaBody, bool parens = false):
+        body(std::move(lambdaBody)), parenthesized(parens)
     {
     }
 

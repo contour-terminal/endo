@@ -46,7 +46,7 @@ Signature::Signature(const std::string& signature)
                 ++i;
                 break;
             case State::ArgsBegin:
-                _name = std::string(signature.data(), i - signature.data() - 1);
+                _name = std::string(signature.data(), static_cast<size_t>(i - signature.data() - 1));
                 state = State::Args;
                 break;
             case State::Args:

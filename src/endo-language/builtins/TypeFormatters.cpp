@@ -260,7 +260,7 @@ void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
     // Runtime assertion: all builtins 1..LastBuiltin must have a formatter
     for (uint16_t id = 1; id <= CoreVM::BuiltinTypeId::LastBuiltin; ++id)
     {
-        auto const* type = registry.get(id);
+        [[maybe_unused]] auto const* type = registry.get(id);
         assert(!type || type->formatFn != nullptr);
     }
 }

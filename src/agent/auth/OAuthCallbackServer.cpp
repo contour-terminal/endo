@@ -3,13 +3,8 @@
 
 #include <http/LocalTcpListener.hpp>
 
-#if !defined(_WIN32)
-    #include <sys/socket.h>
-#else
-    #include <winsock2.h>
-#endif
-
 #include <array>
+#include <span>
 #include <string>
 
 namespace endo::agent
@@ -73,13 +68,13 @@ auto OAuthCallbackServer::waitForCallback(std::chrono::seconds timeout)
 
     // Read the HTTP request (we only need the first line: GET /?code=...&state=... HTTP/1.1).
     auto buffer = std::array<char, 4096> {};
-    auto const bytesRead = recv(*clientFd, buffer.data(), buffer.size() - 1, 0);
+    auto const bytesRead = http::receiveFromSocket(*clientFd, std::span(buffer.data(), buffer.size() - 1));
     if (bytesRead <= 0)
     {
         http::closeSocket(*clientFd);
         return std::unexpected(std::string("Failed to read from client"));
     }
-    buffer[bytesRead] = '\0';
+    buffer[static_cast<size_t>(bytesRead)] = '\0';
 
     auto const requestLine = std::string_view(buffer.data(), static_cast<size_t>(bytesRead));
 
@@ -102,7 +97,7 @@ auto OAuthCallbackServer::waitForCallback(std::chrono::seconds timeout)
                                           "Connection: close\r\n"
                                           "\r\n")
                               + SuccessHtml;
-    send(*clientFd, httpResponse.data(), httpResponse.size(), 0);
+    http::sendToSocket(*clientFd, httpResponse);
     http::closeSocket(*clientFd);
 
     if (code.empty())

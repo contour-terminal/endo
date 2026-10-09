@@ -274,7 +274,6 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
         // Check for error response embedded in stream.
         if (json.contains("error"))
         {
-            auto const& err = json["error"];
             result = GenerateResult {};
             return false;
         }

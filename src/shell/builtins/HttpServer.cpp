@@ -81,7 +81,6 @@ namespace
         std::ignore = ::write(fd, &one, 1);
         errno = savedErrno;
     }
-#endif
 
     /// Parks on the self-pipe's read end and stops @p loop once a byte arrives.
     /// @param loop The loop to stop (a pointer, since coroutine reference
@@ -92,6 +91,7 @@ namespace
         co_await loop->waitReadable(readFd);
         loop->requestStop();
     }
+#endif
 
     /// Routes SIGINT to @p loop for as long as it is alive, restoring the previous
     /// disposition on destruction so the shell's own Ctrl+C handling is unaffected
@@ -132,9 +132,11 @@ namespace
         ScopedInterruptRedirect(ScopedInterruptRedirect&&) = delete;
         ScopedInterruptRedirect& operator=(ScopedInterruptRedirect&&) = delete;
 
+#if !defined(_WIN32)
       private:
         std::unique_ptr<core::platform::SystemPipe> _pipe; ///< Wakes the loop from the handler.
         void (*_previous)(int) = SIG_ERR;                  ///< Disposition to restore.
+#endif
     };
 } // namespace
 

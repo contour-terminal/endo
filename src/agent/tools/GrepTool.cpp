@@ -5,6 +5,7 @@
 #include <fstream>
 #include <regex>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,7 +31,7 @@ namespace
         file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
         auto const bytesRead = static_cast<size_t>(file.gcount());
 
-        return std::any_of(buffer.begin(), buffer.begin() + bytesRead, [](char c) { return c == '\0'; });
+        return std::ranges::any_of(std::span(buffer).first(bytesRead), [](char c) { return c == '\0'; });
     }
 
     /// Simple glob matching for file filtering (single level only, no **).
@@ -195,7 +196,7 @@ auto GrepTool::execute(nlohmann::json const& arguments) -> std::expected<ToolRes
 
         for (auto i = 0; std::cmp_less(i, lines.size()); ++i)
         {
-            if (std::regex_search(lines[i], regex))
+            if (std::regex_search(lines[static_cast<size_t>(i)], regex))
                 matchedLineNumbers.insert(i);
         }
 
@@ -220,7 +221,12 @@ auto GrepTool::execute(nlohmann::json const& arguments) -> std::expected<ToolRes
                 printedLines.insert(i);
 
                 auto const marker = (i == matchLine) ? ':' : '-';
-                output += std::format("{}{}{}{}  {}\n", filePath.string(), marker, i + 1, marker, lines[i]);
+                output += std::format("{}{}{}{}  {}\n",
+                                      filePath.string(),
+                                      marker,
+                                      i + 1,
+                                      marker,
+                                      lines[static_cast<size_t>(i)]);
             }
 
             ++totalMatches;

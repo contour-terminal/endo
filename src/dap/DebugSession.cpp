@@ -662,7 +662,7 @@ std::vector<StackFrame> DebugSession::getStackTrace(int startFrame, int levels) 
 
     for (auto i = start; i < end; ++i)
     {
-        auto const& fi = allFrames[i];
+        auto const& fi = allFrames[static_cast<size_t>(i)];
         StackFrame sf;
         sf.id = i;
         sf.name = fi.name;
@@ -826,8 +826,8 @@ std::vector<Variable> DebugSession::getVariables(int variablesReference) const
         auto const stackIndex = static_cast<int>(callStack.size()) - frameId;
         if (stackIndex >= 0 && std::cmp_less(stackIndex, callStack.size()))
         {
-            fn = callStack[stackIndex].function;
-            fp = callStack[stackIndex].fp;
+            fn = callStack[static_cast<size_t>(stackIndex)].function;
+            fp = callStack[static_cast<size_t>(stackIndex)].fp;
         }
     }
 
@@ -917,8 +917,8 @@ std::optional<EvaluateResult> DebugSession::evaluate(std::string const& expressi
         auto const stackIndex = static_cast<int>(callStack.size()) - frameId;
         if (stackIndex >= 0 && std::cmp_less(stackIndex, callStack.size()))
         {
-            fn = callStack[stackIndex].function;
-            fp = callStack[stackIndex].fp;
+            fn = callStack[static_cast<size_t>(stackIndex)].function;
+            fp = callStack[static_cast<size_t>(stackIndex)].fp;
         }
     }
 
@@ -1168,8 +1168,8 @@ std::optional<Variable> DebugSession::setVariable(int variablesReference,
         auto const stackIndex = static_cast<int>(callStack.size()) - frameId;
         if (stackIndex >= 0 && std::cmp_less(stackIndex, callStack.size()))
         {
-            fn = callStack[stackIndex].function;
-            fp = callStack[stackIndex].fp;
+            fn = callStack[static_cast<size_t>(stackIndex)].function;
+            fp = callStack[static_cast<size_t>(stackIndex)].fp;
         }
     }
 

@@ -2,7 +2,6 @@
 #pragma once
 
 #include <shell/ui/PromptConfig.hpp>
-#include <shell/ui/PromptLayoutEngine.hpp>
 #include <shell/ui/PromptModule.hpp>
 
 #include <endo-language/ide/DiagnosticsCollector.hpp>
@@ -306,7 +305,6 @@ class PromptComponent: public core::tui::Component
     // Prompt theming
     PromptConfig _config;                       ///< Layout and module configuration.
     PromptContext _context;                     ///< Current shell context for module evaluation.
-    PromptLayoutEngine _layoutEngine;           ///< Layout rendering engine.
     DynamicFieldResolver _dynamicFieldResolver; ///< Resolver for user-defined prompt callbacks.
 
     /// Cached results from user-defined prompt callbacks, keyed by F# function name.

@@ -97,6 +97,9 @@ if(WIN32)
     add_definitions(-D_WIN32_WINNT=0x0A00)
     # Use Unicode APIs
     add_definitions(-DUNICODE -D_UNICODE)
+    # The MSVC CRT deprecates ISO C functions (getenv, strerror, localtime, ...) in favor of its
+    # Annex K `_s` variants, which no other standard library provides.
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 
@@ -224,6 +227,7 @@ include(WindowsDialogs)
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL endo_install_windows_dialog_suppression)
 
 add_subdirectory(src)
+set_pedantic_compiler_warnings_below("${CMAKE_SOURCE_DIR}/src")
 
 # The proof that the suppression reaches an executable whose main() never asks for it: a canary that
 # asserts, aborts, passes an invalid parameter and faults must EXIT each time, and a product-linked copy
@@ -252,6 +256,7 @@ message(STATUS "endo trace vm       ${ENDO_TRACE_VM}")
 message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
 message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
 message(STATUS "Testing             ${ENDO_TESTING}")
+message(STATUS "Warnings as errors  ${ENDO_WARNINGS_AS_ERRORS}")
 message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
 message(STATUS "WASM backend        ${ENDO_HAS_WASM}")
 message(STATUS "Agent support       ${ENDO_ENABLE_AGENT}")

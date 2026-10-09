@@ -67,7 +67,7 @@ void NativeCallback::invoke(Params& args) const
 
 void Params::setResult(const Function* fn)
 {
-    _argv[0] = _caller->program()->indexOf(fn);
+    _argv[0] = static_cast<Value>(_caller->program()->indexOf(fn));
 }
 
 void Params::setResult(const char* str)

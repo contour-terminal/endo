@@ -157,13 +157,13 @@ std::string Instr::formatOne(std::string mnemonic) const
         Value* arg = _operands[i];
         if (dynamic_cast<Constant*>(arg))
         {
-            if (auto* i = dynamic_cast<ConstantInt*>(arg))
+            if (auto* integer = dynamic_cast<ConstantInt*>(arg))
             {
-                sstr << i->get();
+                sstr << integer->get();
             }
-            else if (auto* i = dynamic_cast<ConstantBoolean*>(arg))
+            else if (auto* boolean = dynamic_cast<ConstantBoolean*>(arg))
             {
-                sstr << (i->get() ? "true" : "false");
+                sstr << (boolean->get() ? "true" : "false");
             }
             else if (auto* s = dynamic_cast<ConstantString*>(arg))
             {
@@ -188,43 +188,43 @@ std::string Instr::formatOne(std::string mnemonic) const
             else if (auto* ar = dynamic_cast<ConstantArray*>(arg))
             {
                 sstr << '[';
-                size_t i = 0;
+                size_t elementCount = 0;
                 switch (ar->type())
                 {
                     case LiteralType::IntArray:
                         for (const auto& v: ar->get())
                         {
-                            if (i)
+                            if (elementCount)
                                 sstr << ", ";
                             sstr << static_cast<ConstantInt*>(v)->get();
-                            ++i;
+                            ++elementCount;
                         }
                         break;
                     case LiteralType::StringArray:
                         for (const auto& v: ar->get())
                         {
-                            if (i)
+                            if (elementCount)
                                 sstr << ", ";
                             sstr << '"' << static_cast<ConstantString*>(v)->get() << '"';
-                            ++i;
+                            ++elementCount;
                         }
                         break;
                     case LiteralType::IPAddrArray:
                         for (const auto& v: ar->get())
                         {
-                            if (i)
+                            if (elementCount)
                                 sstr << ", ";
                             sstr << static_cast<ConstantIP*>(v)->get().str();
-                            ++i;
+                            ++elementCount;
                         }
                         break;
                     case LiteralType::CidrArray:
                         for (const auto& v: ar->get())
                         {
-                            if (i)
+                            if (elementCount)
                                 sstr << ", ";
                             sstr << static_cast<ConstantCidr*>(v)->get().str();
-                            ++i;
+                            ++elementCount;
                         }
                         break;
                     default: abort();
@@ -236,11 +236,7 @@ std::string Instr::formatOne(std::string mnemonic) const
                 sstr << std::format("?UnknownConstant({})", typeid(*arg).name());
             }
         }
-        else if (auto* bb = dynamic_cast<Instr*>(arg))
-        {
-            sstr << '%' << arg->name();
-        }
-        else if (auto* bb = dynamic_cast<BasicBlock*>(arg))
+        else if (dynamic_cast<Instr*>(arg) || dynamic_cast<BasicBlock*>(arg))
         {
             sstr << '%' << arg->name();
         }

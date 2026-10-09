@@ -44,13 +44,11 @@ using AliasResolver = std::function<std::optional<std::string>(std::string_view)
 /// @param spec The command specification to parse against.
 /// @param fullInput The complete input line.
 /// @param cursorPosition Cursor byte offset.
-/// @param prefix The current prefix being typed.
 /// @param aliasResolver Optional function to resolve aliases to canonical subcommand names.
 /// @return Parsed command line state, or nullopt if not parseable for this spec.
 [[nodiscard]] std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
                                                                std::string_view fullInput,
                                                                size_t cursorPosition,
-                                                               std::string_view prefix,
                                                                AliasResolver const& aliasResolver = {});
 
 } // namespace endo

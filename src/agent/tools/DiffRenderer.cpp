@@ -199,7 +199,6 @@ auto generateUnifiedDiff(std::string_view oldText, std::string_view newText, int
     {
         // Compute hunk header line ranges.
         auto const& first = annotated[static_cast<std::size_t>(start)];
-        auto const& last = annotated[static_cast<std::size_t>(end - 1)];
 
         auto oldStart = first.oldLine > 0 ? first.oldLine : first.newLine;
         auto newStart = first.newLine > 0 ? first.newLine : first.oldLine;

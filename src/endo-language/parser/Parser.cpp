@@ -360,8 +360,9 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                             return nullptr;
                         return std::make_unique<ast::ExprStmt>(std::move(expr));
                     }
-                    default: break;
+                    case endo::StmtParseStrategy::None: break; // Excluded by the condition above.
                 }
+                return parseLogicalExpr();
             }
             else if ((_lexer.currentLiteral() == "ls" || _lexer.currentLiteral() == "ps"
                       || _lexer.currentLiteral() == "jobs")
@@ -8846,7 +8847,7 @@ std::unique_ptr<ast::ModuleDeclStmt> Parser::parseModuleDecl()
     consumeNewlines();
 
     // Parse module body using offside rule (indentation-based scoping, F# style)
-    auto const moduleColumn = loc.begin.column > 0 ? loc.begin.column : size_t { 1 };
+    auto const moduleColumn = loc.begin.column > 0 ? static_cast<size_t>(loc.begin.column) : size_t { 1 };
     auto body = std::vector<std::unique_ptr<ast::Statement>> {};
     while (_lexer.currentToken() != Token::EndOfInput)
     {

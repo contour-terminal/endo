@@ -294,7 +294,8 @@ namespace
 
 } // anonymous namespace
 
-int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
+int Shell::executeInlineSourceEnv(CoreVM::CoreStringArray const& args,
+                                  core::platform::NativeHandle /*outputFd*/)
 {
     // Usage: source-env <script-path> [extra-args...]
     if (args.size() < 2)

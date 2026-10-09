@@ -46,6 +46,23 @@ namespace
         return tokens;
     }
 
+    /// Drops the KV cache entries of sequence 0 from position @p from onwards.
+    ///
+    /// llama.cpp replaced llama_kv_self_seq_rm() by llama_memory_seq_rm(); current releases
+    /// deprecate the former, while the b5460 the CPM fallback pins predates the latter. The
+    /// requires-expression picks whichever the llama.h being compiled against provides, which
+    /// needs the dependent context of a template.
+    /// @param ctx The llama context whose cache to trim.
+    /// @param from The first position to remove.
+    template <typename Context>
+    void removeCachedTokensFrom(Context* ctx, llama_pos from)
+    {
+        if constexpr (requires { llama_memory_seq_rm(llama_get_memory(ctx), 0, from, -1); })
+            llama_memory_seq_rm(llama_get_memory(ctx), 0, from, -1);
+        else
+            llama_kv_self_seq_rm(ctx, 0, from, -1);
+    }
+
     /// Detokenizes a single token to a string.
     [[nodiscard]] auto detokenize(llama_model const* model, int32_t token) -> std::string
     {
@@ -179,8 +196,7 @@ auto LlamaCppProvider::generate(std::span<ChatMessage const> messages,
 
     // Remove divergent suffix from KV cache.
     if (commonPrefix < _cachedTokens.size())
-        // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
-        llama_kv_self_seq_rm(_ctx, 0, static_cast<int32_t>(commonPrefix), -1);
+        removeCachedTokensFrom(_ctx, static_cast<llama_pos>(commonPrefix));
 
     // Decode only the new tokens (after the common prefix).
     auto const newTokensStart = commonPrefix;

@@ -257,14 +257,15 @@ namespace
 
         void walkExpr(ast::Expr const& expr)
         {
-            if (auto const* e = dynamic_cast<ast::IdentifierExpr const*>(&expr))
+            if (auto const* identifierExpr = dynamic_cast<ast::IdentifierExpr const*>(&expr))
             {
-                addReference(e->name);
+                addReference(identifierExpr->name);
             }
-            else if (auto const* e = dynamic_cast<ast::ApplicationExpr const*>(&expr))
+            else if (auto const* applicationExpr = dynamic_cast<ast::ApplicationExpr const*>(&expr))
             {
                 // Track call relations for call hierarchy
-                if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(e->function.get()))
+                if (auto const* ident =
+                        dynamic_cast<ast::IdentifierExpr const*>(applicationExpr->function.get()))
                 {
                     auto const calleeDefIndex = resolveSymbol(ident->name);
                     auto const callerDefIndex = currentEnclosingFunction();
@@ -277,73 +278,73 @@ namespace
                         });
                     }
                 }
-                walkExpr(*e->function);
-                walkExpr(*e->argument);
+                walkExpr(*applicationExpr->function);
+                walkExpr(*applicationExpr->argument);
             }
-            else if (auto const* e = dynamic_cast<ast::BinaryExpr const*>(&expr))
+            else if (auto const* binaryExpr = dynamic_cast<ast::BinaryExpr const*>(&expr))
             {
-                walkExpr(*e->left);
-                walkExpr(*e->right);
+                walkExpr(*binaryExpr->left);
+                walkExpr(*binaryExpr->right);
             }
-            else if (auto const* e = dynamic_cast<ast::UnaryExpr const*>(&expr))
+            else if (auto const* unaryExpr = dynamic_cast<ast::UnaryExpr const*>(&expr))
             {
-                walkExpr(*e->operand);
+                walkExpr(*unaryExpr->operand);
             }
-            else if (auto const* e = dynamic_cast<ast::IfExpr const*>(&expr))
+            else if (auto const* ifExpr = dynamic_cast<ast::IfExpr const*>(&expr))
             {
-                walkExpr(*e->condition);
-                walkExpr(*e->thenExpr);
-                if (e->elseExpr)
-                    walkExpr(*e->elseExpr);
+                walkExpr(*ifExpr->condition);
+                walkExpr(*ifExpr->thenExpr);
+                if (ifExpr->elseExpr)
+                    walkExpr(*ifExpr->elseExpr);
             }
-            else if (auto const* e = dynamic_cast<ast::LetInExpr const*>(&expr))
+            else if (auto const* letInExpr = dynamic_cast<ast::LetInExpr const*>(&expr))
             {
                 pushScope();
-                auto const isFunc = e->isFunction();
+                auto const isFunc = letInExpr->isFunction();
                 auto def = SymbolDefinition {
-                    .name = e->name,
+                    .name = letInExpr->name,
                     .category = isFunc ? SymbolCategory::Function : SymbolCategory::Variable,
                     .enclosingSymbol =
                         currentEnclosingFunction() >= 0
                             ? table.definitions[static_cast<size_t>(currentEnclosingFunction())].name
                             : std::optional<std::string> {},
                 };
-                for (auto const& param: e->parameters)
+                for (auto const& param: letInExpr->parameters)
                 {
                     def.parameterNames.push_back(param.name);
                     def.parameterTypes.push_back(param.typeAnnotation ? toString(*param.typeAnnotation)
                                                                       : std::string {});
                 }
-                if (e->returnType)
-                    def.returnType = toString(*e->returnType);
-                auto const defIndex = defineSymbol(e->name, std::move(def));
+                if (letInExpr->returnType)
+                    def.returnType = toString(*letInExpr->returnType);
+                auto const defIndex = defineSymbol(letInExpr->name, std::move(def));
 
                 pushScope();
                 if (isFunc)
                     pushEnclosingFunction(defIndex);
-                for (auto const& param: e->parameters)
+                for (auto const& param: letInExpr->parameters)
                 {
                     defineSymbol(param.name,
                                  SymbolDefinition {
                                      .name = param.name,
                                      .category = SymbolCategory::Parameter,
-                                     .enclosingSymbol = e->name,
+                                     .enclosingSymbol = letInExpr->name,
                                  });
                 }
-                if (e->value)
-                    walkExpr(*e->value);
+                if (letInExpr->value)
+                    walkExpr(*letInExpr->value);
                 if (isFunc)
                     popEnclosingFunction();
                 popScope();
 
-                if (e->body)
-                    walkExpr(*e->body);
+                if (letInExpr->body)
+                    walkExpr(*letInExpr->body);
                 popScope();
             }
-            else if (auto const* e = dynamic_cast<ast::LambdaExpr const*>(&expr))
+            else if (auto const* lambdaExpr = dynamic_cast<ast::LambdaExpr const*>(&expr))
             {
                 pushScope();
-                for (auto const& param: e->parameters)
+                for (auto const& param: lambdaExpr->parameters)
                 {
                     defineSymbol(param.name,
                                  SymbolDefinition {
@@ -351,13 +352,13 @@ namespace
                                      .category = SymbolCategory::Parameter,
                                  });
                 }
-                walkExpr(*e->body);
+                walkExpr(*lambdaExpr->body);
                 popScope();
             }
-            else if (auto const* e = dynamic_cast<ast::MatchExpr const*>(&expr))
+            else if (auto const* matchExpr = dynamic_cast<ast::MatchExpr const*>(&expr))
             {
-                walkExpr(*e->scrutinee);
-                for (auto const& arm: e->arms)
+                walkExpr(*matchExpr->scrutinee);
+                for (auto const& arm: matchExpr->arms)
                 {
                     pushScope();
                     if (arm.pattern)
@@ -378,57 +379,58 @@ namespace
                     popScope();
                 }
             }
-            else if (auto const* e = dynamic_cast<ast::PipelineExpr const*>(&expr))
+            else if (auto const* pipelineExpr = dynamic_cast<ast::PipelineExpr const*>(&expr))
             {
-                walkExpr(*e->value);
-                walkExpr(*e->function);
+                walkExpr(*pipelineExpr->value);
+                walkExpr(*pipelineExpr->function);
             }
-            else if (auto const* e = dynamic_cast<ast::ParenExpr const*>(&expr))
+            else if (auto const* parenExpr = dynamic_cast<ast::ParenExpr const*>(&expr))
             {
-                walkExpr(*e->inner);
+                walkExpr(*parenExpr->inner);
             }
-            else if (auto const* e = dynamic_cast<ast::TupleExpr const*>(&expr))
+            else if (auto const* tupleExpr = dynamic_cast<ast::TupleExpr const*>(&expr))
             {
-                for (auto const& elem: e->elements)
+                for (auto const& elem: tupleExpr->elements)
                     walkExpr(*elem);
             }
-            else if (auto const* e = dynamic_cast<ast::ListExpr const*>(&expr))
+            else if (auto const* listExpr = dynamic_cast<ast::ListExpr const*>(&expr))
             {
-                for (auto const& elem: e->elements)
+                for (auto const& elem: listExpr->elements)
                     walkExpr(*elem);
             }
-            else if (auto const* e = dynamic_cast<ast::ListComprehensionExpr const*>(&expr))
+            else if (auto const* listComprehensionExpr =
+                         dynamic_cast<ast::ListComprehensionExpr const*>(&expr))
             {
-                walkExpr(*e->source);
+                walkExpr(*listComprehensionExpr->source);
                 pushScope();
-                defineSymbol(e->variable,
+                defineSymbol(listComprehensionExpr->variable,
                              SymbolDefinition {
-                                 .name = e->variable,
+                                 .name = listComprehensionExpr->variable,
                                  .category = SymbolCategory::Parameter,
                              });
-                if (e->filter)
-                    walkExpr(*e->filter);
-                walkExpr(*e->body);
+                if (listComprehensionExpr->filter)
+                    walkExpr(*listComprehensionExpr->filter);
+                walkExpr(*listComprehensionExpr->body);
                 popScope();
             }
-            else if (auto const* e = dynamic_cast<ast::OptionExpr const*>(&expr))
+            else if (auto const* optionExpr = dynamic_cast<ast::OptionExpr const*>(&expr))
             {
-                if (e->value)
-                    walkExpr(*e->value);
+                if (optionExpr->value)
+                    walkExpr(*optionExpr->value);
             }
-            else if (auto const* e = dynamic_cast<ast::ResultExpr const*>(&expr))
+            else if (auto const* resultExpr = dynamic_cast<ast::ResultExpr const*>(&expr))
             {
-                if (e->payload)
-                    walkExpr(*e->payload);
+                if (resultExpr->payload)
+                    walkExpr(*resultExpr->payload);
             }
-            else if (auto const* e = dynamic_cast<ast::TryExpr const*>(&expr))
+            else if (auto const* tryExpr = dynamic_cast<ast::TryExpr const*>(&expr))
             {
-                walkExpr(*e->operand);
+                walkExpr(*tryExpr->operand);
             }
-            else if (auto const* e = dynamic_cast<ast::TryWithExpr const*>(&expr))
+            else if (auto const* tryWithExpr = dynamic_cast<ast::TryWithExpr const*>(&expr))
             {
-                walkExpr(*e->body);
-                for (auto const& handler: e->handlers)
+                walkExpr(*tryWithExpr->body);
+                for (auto const& handler: tryWithExpr->handlers)
                 {
                     pushScope();
                     if (handler.pattern)
@@ -449,109 +451,110 @@ namespace
                     popScope();
                 }
             }
-            else if (auto const* e = dynamic_cast<ast::TryFinallyExpr const*>(&expr))
+            else if (auto const* tryFinallyExpr = dynamic_cast<ast::TryFinallyExpr const*>(&expr))
             {
-                walkExpr(*e->body);
-                walkExpr(*e->finallyExpr);
+                walkExpr(*tryFinallyExpr->body);
+                walkExpr(*tryFinallyExpr->finallyExpr);
             }
-            else if (auto const* e = dynamic_cast<ast::BlockExpr const*>(&expr))
+            else if (auto const* blockExpr = dynamic_cast<ast::BlockExpr const*>(&expr))
             {
                 pushScope();
-                for (auto const& stmt: e->statements)
+                for (auto const& stmt: blockExpr->statements)
                     walkStatement(*stmt);
-                if (e->result)
-                    walkExpr(*e->result);
+                if (blockExpr->result)
+                    walkExpr(*blockExpr->result);
                 popScope();
             }
-            else if (auto const* e = dynamic_cast<ast::FieldAccessExpr const*>(&expr))
+            else if (auto const* fieldAccessExpr = dynamic_cast<ast::FieldAccessExpr const*>(&expr))
             {
-                walkExpr(*e->object);
-                addReference(e->fieldName);
+                walkExpr(*fieldAccessExpr->object);
+                addReference(fieldAccessExpr->fieldName);
             }
-            else if (auto const* e = dynamic_cast<ast::FStringExpr const*>(&expr))
+            else if (auto const* fStringExpr = dynamic_cast<ast::FStringExpr const*>(&expr))
             {
-                for (auto const& part: e->parts)
+                for (auto const& part: fStringExpr->parts)
                     walkExpr(*part);
             }
-            else if (auto const* e = dynamic_cast<ast::ConsExpr const*>(&expr))
+            else if (auto const* consExpr = dynamic_cast<ast::ConsExpr const*>(&expr))
             {
-                walkExpr(*e->head);
-                walkExpr(*e->tail);
+                walkExpr(*consExpr->head);
+                walkExpr(*consExpr->tail);
             }
-            else if (auto const* e = dynamic_cast<ast::UnionConstructorExpr const*>(&expr))
+            else if (auto const* unionConstructorExpr = dynamic_cast<ast::UnionConstructorExpr const*>(&expr))
             {
-                for (auto const& arg: e->arguments)
+                for (auto const& arg: unionConstructorExpr->arguments)
                     walkExpr(*arg);
             }
-            else if (auto const* e = dynamic_cast<ast::MutAssignExpr const*>(&expr))
+            else if (auto const* mutAssignExpr = dynamic_cast<ast::MutAssignExpr const*>(&expr))
             {
-                addReference(e->name, /*isWrite=*/true);
-                walkExpr(*e->value);
+                addReference(mutAssignExpr->name, /*isWrite=*/true);
+                walkExpr(*mutAssignExpr->value);
             }
-            else if (auto const* e = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
+            else if (auto const* optionDefaultExpr = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
             {
-                walkExpr(*e->option);
-                walkExpr(*e->defaultValue);
+                walkExpr(*optionDefaultExpr->option);
+                walkExpr(*optionDefaultExpr->defaultValue);
             }
-            else if (auto const* e = dynamic_cast<ast::CompositionExpr const*>(&expr))
+            else if (auto const* compositionExpr = dynamic_cast<ast::CompositionExpr const*>(&expr))
             {
-                walkExpr(*e->left);
-                walkExpr(*e->right);
+                walkExpr(*compositionExpr->left);
+                walkExpr(*compositionExpr->right);
             }
-            else if (auto const* e = dynamic_cast<ast::RecordExpr const*>(&expr))
+            else if (auto const* recordExpr = dynamic_cast<ast::RecordExpr const*>(&expr))
             {
-                for (auto const& field: e->fields)
+                for (auto const& field: recordExpr->fields)
                 {
                     addReference(field.name);
                     walkExpr(*field.value);
                 }
             }
-            else if (auto const* e = dynamic_cast<ast::RecordUpdateExpr const*>(&expr))
+            else if (auto const* recordUpdateExpr = dynamic_cast<ast::RecordUpdateExpr const*>(&expr))
             {
-                walkExpr(*e->base);
-                for (auto const& update: e->updates)
+                walkExpr(*recordUpdateExpr->base);
+                for (auto const& update: recordUpdateExpr->updates)
                 {
                     addReference(update.name);
                     walkExpr(*update.value);
                 }
             }
-            else if (auto const* e = dynamic_cast<ast::ConcatListExpr const*>(&expr))
+            else if (auto const* concatListExpr = dynamic_cast<ast::ConcatListExpr const*>(&expr))
             {
-                walkExpr(*e->left);
-                walkExpr(*e->right);
+                walkExpr(*concatListExpr->left);
+                walkExpr(*concatListExpr->right);
             }
-            else if (auto const* e = dynamic_cast<ast::ListRangeExpr const*>(&expr))
+            else if (auto const* listRangeExpr = dynamic_cast<ast::ListRangeExpr const*>(&expr))
             {
-                walkExpr(*e->start);
-                if (e->step)
-                    walkExpr(*e->step);
-                walkExpr(*e->end);
+                walkExpr(*listRangeExpr->start);
+                if (listRangeExpr->step)
+                    walkExpr(*listRangeExpr->step);
+                walkExpr(*listRangeExpr->end);
             }
-            else if (auto const* e = dynamic_cast<ast::LazyExpr const*>(&expr))
+            else if (auto const* lazyExpr = dynamic_cast<ast::LazyExpr const*>(&expr))
             {
-                walkExpr(*e->body);
+                walkExpr(*lazyExpr->body);
             }
-            else if (auto const* e = dynamic_cast<ast::SeqExpr const*>(&expr))
+            else if (auto const* seqExpr = dynamic_cast<ast::SeqExpr const*>(&expr))
             {
-                for (auto const& yield: e->yields)
+                for (auto const& yield: seqExpr->yields)
                     walkExpr(*yield.value);
             }
-            else if (auto const* e = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
+            else if (auto const* optionalChainExpr = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
             {
-                walkExpr(*e->object);
-                addReference(e->fieldName);
+                walkExpr(*optionalChainExpr->object);
+                addReference(optionalChainExpr->fieldName);
             }
-            else if (auto const* e = dynamic_cast<ast::PlaceholderLambdaExpr const*>(&expr))
+            else if (auto const* placeholderLambdaExpr =
+                         dynamic_cast<ast::PlaceholderLambdaExpr const*>(&expr))
             {
-                walkExpr(*e->body);
+                walkExpr(*placeholderLambdaExpr->body);
             }
-            else if (auto const* e = dynamic_cast<ast::SplatExpr const*>(&expr))
+            else if (auto const* splatExpr = dynamic_cast<ast::SplatExpr const*>(&expr))
             {
-                addReference(e->name);
+                addReference(splatExpr->name);
             }
-            else if (auto const* e = dynamic_cast<ast::ExecPipelineExpr const*>(&expr))
+            else if (auto const* execPipelineExpr = dynamic_cast<ast::ExecPipelineExpr const*>(&expr))
             {
-                for (auto const& cmd: e->commands)
+                for (auto const& cmd: execPipelineExpr->commands)
                 {
                     walkExpr(*cmd.program);
                     for (auto const& arg: cmd.arguments)

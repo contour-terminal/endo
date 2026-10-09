@@ -114,9 +114,6 @@ class LspServer
 
     std::unordered_map<std::string, SemanticTokensCacheEntry> _semanticTokenCache;
     int _nextResultId = 1;
-
-    // Progress token counter
-    int _nextProgressToken = 1;
 };
 
 } // namespace endo::lsp
