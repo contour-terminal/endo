@@ -3029,7 +3029,8 @@ int Shell::executeInlineKill(CoreVM::CoreStringArray const& args, core::platform
                 continue;
             }
 
-            auto const result = _processManager.sendSignal(-static_cast<int>(job->pgid), opts.signal);
+            auto const result = _processManager.sendSignal(
+                static_cast<core::platform::ProcessId>(-static_cast<int>(job->pgid)), opts.signal);
             if (!result.has_value())
             {
                 error("kill: {}: {}", target, toString(result.error()));

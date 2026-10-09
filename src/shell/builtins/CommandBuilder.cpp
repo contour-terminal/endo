@@ -335,8 +335,8 @@ void Shell::cleanupProcSubst()
 #endif
 }
 
-std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnConfig& config,
-                                                                        std::string const& command)
+std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(
+    SpawnConfig& config, [[maybe_unused]] std::string const& command)
 {
 #if !defined(_WIN32)
     // Create new process group with child as leader

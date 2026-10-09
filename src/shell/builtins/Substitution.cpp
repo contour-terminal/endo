@@ -65,7 +65,7 @@ void Shell::builtinSubstEnd(CoreVM::Params& context)
 
 void Shell::builtinProcSubstFork(CoreVM::Params& context)
 {
-    bool const isWrite = context.getBool(1);
+    [[maybe_unused]] bool const isWrite = context.getBool(1);
 
     auto pipeResult = createPipe();
     if (!pipeResult.has_value())

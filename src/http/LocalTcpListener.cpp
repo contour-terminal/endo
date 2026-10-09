@@ -18,18 +18,44 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 namespace endo::http
 {
 
-void closeSocket(int fd)
+#if defined(_WIN32)
+static_assert(std::is_same_v<SocketHandle, SOCKET>, "SocketHandle must be Winsock's SOCKET");
+static_assert(InvalidSocket == INVALID_SOCKET);
+#endif
+
+void closeSocket(SocketHandle handle)
 {
-    if (fd < 0)
+    if (handle == InvalidSocket)
         return;
 #if defined(_WIN32)
-    closesocket(fd);
+    closesocket(handle);
 #else
-    ::close(fd);
+    ::close(handle);
+#endif
+}
+
+auto receiveFromSocket(SocketHandle handle, std::span<char> buffer) -> std::ptrdiff_t
+{
+#if defined(_WIN32)
+    // Winsock takes the length as an int.
+    return recv(handle, buffer.data(), static_cast<int>(buffer.size()), 0);
+#else
+    return recv(handle, buffer.data(), buffer.size(), 0);
+#endif
+}
+
+auto sendToSocket(SocketHandle handle, std::string_view data) -> std::ptrdiff_t
+{
+#if defined(_WIN32)
+    // Winsock takes the length as an int.
+    return send(handle, data.data(), static_cast<int>(data.size()), 0);
+#else
+    return send(handle, data.data(), data.size(), 0);
 #endif
 }
 
@@ -38,9 +64,9 @@ LocalTcpListener::~LocalTcpListener()
     close();
 }
 
-LocalTcpListener::LocalTcpListener(LocalTcpListener&& other) noexcept: _listenFd(other._listenFd)
+LocalTcpListener::LocalTcpListener(LocalTcpListener&& other) noexcept: _listenSocket(other._listenSocket)
 {
-    other._listenFd = -1;
+    other._listenSocket = InvalidSocket;
 }
 
 LocalTcpListener& LocalTcpListener::operator=(LocalTcpListener&& other) noexcept
@@ -48,8 +74,8 @@ LocalTcpListener& LocalTcpListener::operator=(LocalTcpListener&& other) noexcept
     if (this != &other)
     {
         close();
-        _listenFd = other._listenFd;
-        other._listenFd = -1;
+        _listenSocket = other._listenSocket;
+        other._listenSocket = InvalidSocket;
     }
     return *this;
 }
@@ -65,16 +91,17 @@ auto LocalTcpListener::start() -> std::expected<uint16_t, std::string>
         return std::unexpected(std::string("WSAStartup failed"));
 #endif
 
-    _listenFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (_listenFd < 0)
+    _listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (_listenSocket == InvalidSocket)
         return std::unexpected(std::string("Failed to create socket: ") + strerror(errno));
 
     // Allow address reuse.
     int optval = 1;
 #if defined(_WIN32)
-    setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char const*>(&optval), sizeof(optval));
+    setsockopt(
+        _listenSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char const*>(&optval), sizeof(optval));
 #else
-    setsockopt(_listenFd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+    setsockopt(_listenSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 #endif
 
     // Bind to 127.0.0.1:0 (OS picks an ephemeral port).
@@ -83,14 +110,14 @@ auto LocalTcpListener::start() -> std::expected<uint16_t, std::string>
     addr.sin_port = 0;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    if (bind(_listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
+    if (bind(_listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
     {
         auto const msg = std::string("Failed to bind: ") + strerror(errno);
         close();
         return std::unexpected(msg);
     }
 
-    if (listen(_listenFd, 1) < 0)
+    if (listen(_listenSocket, 1) < 0)
     {
         auto const msg = std::string("Failed to listen: ") + strerror(errno);
         close();
@@ -100,7 +127,7 @@ auto LocalTcpListener::start() -> std::expected<uint16_t, std::string>
     // Retrieve the assigned port.
     auto boundAddr = sockaddr_in {};
     auto addrLen = static_cast<socklen_t>(sizeof(boundAddr));
-    if (getsockname(_listenFd, reinterpret_cast<sockaddr*>(&boundAddr), &addrLen) < 0)
+    if (getsockname(_listenSocket, reinterpret_cast<sockaddr*>(&boundAddr), &addrLen) < 0)
     {
         auto const msg = std::string("Failed to get port: ") + strerror(errno);
         close();
@@ -110,13 +137,14 @@ auto LocalTcpListener::start() -> std::expected<uint16_t, std::string>
     return ntohs(boundAddr.sin_port);
 }
 
-auto LocalTcpListener::acceptConnection(std::chrono::seconds timeout) -> std::expected<int, std::string>
+auto LocalTcpListener::acceptConnection(std::chrono::seconds timeout)
+    -> std::expected<SocketHandle, std::string>
 {
-    if (_listenFd < 0)
+    if (_listenSocket == InvalidSocket)
         return std::unexpected(std::string("Listener not started"));
 
 #if !defined(_WIN32)
-    auto pfd = pollfd { .fd = _listenFd, .events = POLLIN, .revents = 0 };
+    auto pfd = pollfd { .fd = _listenSocket, .events = POLLIN, .revents = 0 };
     auto const timeoutMs = static_cast<int>(timeout.count() * 1000);
     auto const pollResult = poll(&pfd, 1, timeoutMs);
 
@@ -127,7 +155,7 @@ auto LocalTcpListener::acceptConnection(std::chrono::seconds timeout) -> std::ex
 #else
     fd_set readSet;
     FD_ZERO(&readSet);
-    FD_SET(static_cast<SOCKET>(_listenFd), &readSet);
+    FD_SET(_listenSocket, &readSet);
     auto tv = timeval {};
     tv.tv_sec = static_cast<long>(timeout.count());
     tv.tv_usec = 0;
@@ -136,32 +164,32 @@ auto LocalTcpListener::acceptConnection(std::chrono::seconds timeout) -> std::ex
         return std::unexpected(std::string("Timed out waiting for connection"));
 #endif
 
-    auto const clientFd = accept(_listenFd, nullptr, nullptr);
-    if (clientFd < 0)
+    auto const clientSocket = accept(_listenSocket, nullptr, nullptr);
+    if (clientSocket == InvalidSocket)
         return std::unexpected(std::string("Failed to accept connection: ") + strerror(errno));
 
-    return clientFd;
+    return clientSocket;
 }
 
 auto LocalTcpListener::serveOnce(std::chrono::seconds timeout, std::string_view response)
     -> std::expected<void, std::string>
 {
-    auto clientFd = acceptConnection(timeout);
-    if (!clientFd)
-        return std::unexpected(clientFd.error());
+    auto clientSocket = acceptConnection(timeout);
+    if (!clientSocket)
+        return std::unexpected(clientSocket.error());
 
     // Drain the incoming HTTP request.
     auto buffer = std::array<char, 4096> {};
-    auto const bytesRead = recv(*clientFd, buffer.data(), buffer.size() - 1, 0);
+    auto const bytesRead = receiveFromSocket(*clientSocket, std::span(buffer.data(), buffer.size() - 1));
     if (bytesRead <= 0)
     {
-        closeSocket(*clientFd);
+        closeSocket(*clientSocket);
         return std::unexpected(std::string("Failed to read from client"));
     }
 
     // Send the canned response.
-    auto const bytesSent = send(*clientFd, response.data(), response.size(), 0);
-    closeSocket(*clientFd);
+    auto const bytesSent = sendToSocket(*clientSocket, response);
+    closeSocket(*clientSocket);
     if (bytesSent < 0)
         return std::unexpected(std::string("Failed to send response"));
 
@@ -170,10 +198,10 @@ auto LocalTcpListener::serveOnce(std::chrono::seconds timeout, std::string_view 
 
 void LocalTcpListener::close()
 {
-    if (_listenFd >= 0)
+    if (_listenSocket != InvalidSocket)
     {
-        closeSocket(_listenFd);
-        _listenFd = -1;
+        closeSocket(_listenSocket);
+        _listenSocket = InvalidSocket;
     }
 }
 
