@@ -143,7 +143,8 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
         // record additionally carries the absolute form. It reports no symlink information, and
         // the builder writes valid values into those slots regardless, so f.isSymlink / f.target
         // never read back as a null string.
-        auto const resolved = core::platform::absolutePath(match.path, workingDirectory);
+        // A name core-cpp cannot resolve (not UTF-8 on Windows) keeps the form it was walked as.
+        auto const resolved = core::platform::absolutePath(match.path, workingDirectory).value_or(match.path);
         auto* record = endo::builtins::makeFileInfoRecord(&runner,
                                                           { .name = match.path,
                                                             .path = resolved,
