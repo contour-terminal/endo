@@ -54,6 +54,7 @@ class ShellIntegration
     ///
     /// Turning it off ends the open shell context (and an open command context); turning it on
     /// starts a new shell context, with a new id, at the next prompt.
+    /// Toggling while a command runs can leave its `133;C` without a `D`, or a `D` without a `C`.
     /// @param enabled Whether the integration is enabled.
     void setEnabled(bool enabled);
 

@@ -725,6 +725,9 @@ Shell::Shell(TTY& tty,
                                                                     core::platform::defaultSteadyClock()) },
     _processManager { processManager }
 {
+    // Shell::_interactive is the single source of truth; setInteractive() keeps the emitter in step.
+    _shellIntegration.setInteractive(_interactive);
+
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 

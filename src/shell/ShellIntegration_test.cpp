@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <shell/testing/InjectedShell.hpp>
+
+#include <core/platform/SystemInfo.hpp>
+#include <core/platform/testing/InMemoryFileSystem.hpp>
 #include <core/platform/testing/TestProcessEnvironment.hpp>
+#include <core/platform/testing/TestWorkingDirectory.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -303,4 +308,23 @@ TEST_CASE("ShellIntegration.no_machine_id_omits_field")
     integration.afterPromptDrawn("/");
     CHECK(tty.output().find("machineid=") == std::string::npos);
     CHECK(tty.output().find(";pid=7;comm=endo;cwd=/") != std::string::npos);
+}
+
+TEST_CASE("ShellIntegration.real_shell_is_interactive_by_default")
+{
+    // The shell's own interactive flag (true by default) must reach the emitter without anyone
+    // calling setInteractive(true): otherwise the integration is silent in the real shell.
+    auto tty = RecordingTTY { true };
+    auto fs = core::platform::testing::InMemoryFileSystem {};
+    auto env = core::platform::testing::TestProcessEnvironment {};
+    auto workingDirectory = core::platform::testing::TestWorkingDirectory { "/test" };
+    auto shell = Shell { tty, env, workingDirectory, fs };
+    endo::testing::seedInjectedShell(fs, env, shell);
+    fs.addDirectory("/test/sub");
+    tty.clear();
+
+    shell.execute("cd /test/sub");
+
+    CHECK(tty.output().find(currentDirectorySequence("/test/sub", core::platform::cachedHostName()))
+          != std::string::npos);
 }
