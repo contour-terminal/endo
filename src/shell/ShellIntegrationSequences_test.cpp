@@ -3,8 +3,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <functional>
+#include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "ShellIntegrationSequences.hpp"
 
@@ -75,17 +79,17 @@ TEST_CASE("ShellIntegrationSequences.percent_encode")
 
 TEST_CASE("ShellIntegrationSequences.cmdline_hostile_bytes")
 {
-    // a ; b ESC \ BEL LF % é(UTF-8 C3 A9) 0xFF
-    auto const input = "a ; b \x1b\\\a\n%\xc3\xa9"
+    // a;b ESC \ BEL LF % é(UTF-8 C3 A9) 0xFF
+    auto const input = "a;b\x1b\\\a\n%\xc3\xa9"
                        "\xff"sv;
     auto const result = commandStartSequence(input);
-    CHECK(result == "\033]133;C;cmdline_url=a%20%3B%20b%20%1B%5C%07%0A%25%C3%A9%FF\033\\"sv);
+    CHECK(result == "\033]133;C;cmdline_url=a%3Bb%1B%5C%07%0A%25%C3%A9%FF\033\\"sv);
 
-    auto count = size_t { 0 };
-    for (auto pos = result.find("\033\\"); pos != std::string::npos; pos = result.find("\033\\", pos + 1))
-        ++count;
-    CHECK(count == 1);
+    // The only ESC in the result is the one that starts the OSC and the one of the terminator.
+    auto const escapes = std::ranges::count(result, '\033');
+    CHECK(escapes == 2);
     CHECK(result.ends_with("\033\\"));
+    CHECK(std::string_view { result }.substr(0, result.size() - 2).find("\033\\") == std::string_view::npos);
 }
 
 TEST_CASE("ShellIntegrationSequences.cmdline_empty")

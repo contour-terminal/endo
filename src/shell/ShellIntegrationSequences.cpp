@@ -71,12 +71,15 @@ TerminalQuirks detectTerminalQuirks(core::Environment const& environment)
 
 std::string promptZoneSequence(PromptZone zone, TerminalQuirks const& quirks)
 {
-    auto const* const row = std::ranges::find(ZoneTable, zone, &ZoneRow::zone);
-    if (row == ZoneTable.end())
-        return {};
-    auto const suppressed =
-        std::ranges::any_of(row->suppressedBy, [&](QuirkFlag flag) { return flag && quirks.*flag; });
-    return suppressed ? std::string {} : std::string { row->sequence };
+    for (auto const& row: ZoneTable)
+    {
+        if (row.zone != zone)
+            continue;
+        auto const suppressed =
+            std::ranges::any_of(row.suppressedBy, [&](QuirkFlag flag) { return flag && quirks.*flag; });
+        return suppressed ? std::string {} : std::string { row.sequence };
+    }
+    return {};
 }
 
 std::string percentEncode(std::string_view bytes)
