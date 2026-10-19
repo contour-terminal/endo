@@ -1679,9 +1679,9 @@ int Shell::run()
     return _quit ? _exitCode : EXIT_SUCCESS;
 }
 
-void Shell::recordForegroundWait(WaitResult const& result) noexcept
+void Shell::recordForegroundWait(WaitResult const& result, int const reportedStatus) noexcept
 {
-    _lastForegroundWait = result;
+    _lastForegroundWait.emplace(result, reportedStatus);
 }
 
 void Shell::resetForegroundWait() noexcept
@@ -1691,15 +1691,11 @@ void Shell::resetForegroundWait() noexcept
 
 shellintegration::CommandOutcome Shell::lastCommandOutcome(int const status) const noexcept
 {
-    if (!_lastForegroundWait)
+    if (!_lastForegroundWait || _lastForegroundWait->second != status)
         return { .status = status };
 
-    auto const& wait = *_lastForegroundWait;
+    auto const& wait = _lastForegroundWait->first;
     auto const hasSignal = wait.signaled || wait.stopped;
-    auto const waitStatus = hasSignal ? 128 + wait.signal : wait.exitCode;
-    if (waitStatus != status)
-        return { .status = status };
-
     return {
         .status = status,
         .signal = hasSignal ? std::optional<int> { wait.signal } : std::nullopt,

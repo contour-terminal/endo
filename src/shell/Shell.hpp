@@ -202,16 +202,19 @@ class Shell final: public core::platform::SignalCallback
     /// line's result. The latest call wins; see lastCommandOutcome() for how a stale record is
     /// told apart from the status that finally got reported.
     /// @param result The wait result of the reaped foreground process.
-    void recordForegroundWait(WaitResult const& result) noexcept;
+    /// @param reportedStatus The exact status the call site propagates for that process. A stopped
+    ///        process has no exit code, so this is what the line will report (usually 0), not a
+    ///        value derived from the signal.
+    void recordForegroundWait(WaitResult const& result, int reportedStatus) noexcept;
 
     /// @brief Forgets the recorded foreground wait. Called before each interactive line.
     void resetForegroundWait() noexcept;
 
     /// @brief The outcome of the last line, with the terminating signal when one is known.
     ///
-    /// The recorded wait is used only when its own status (`128 + signal` for a signalled or
-    /// stopped process, else the exit code) equals @p status. A differing status came from
-    /// something later on the line (`segv; true`), so the signal no longer describes it.
+    /// The recorded wait is used only when the status it was recorded with equals @p status. A
+    /// differing status came from something later on the line (`segv; true`), so the signal no
+    /// longer describes it.
     /// @param status The status the line reported.
     /// @return `{status, signal, stopped}` from the recorded wait, or `{status, nullopt, false}`.
     [[nodiscard]] shellintegration::CommandOutcome lastCommandOutcome(int status) const noexcept;
@@ -810,7 +813,8 @@ class Shell final: public core::platform::SignalCallback
     std::optional<core::platform::ProcessId> _rightPid;
 
     int _exitCode = -1;
-    std::optional<WaitResult> _lastForegroundWait; ///< Latest reaped foreground process, if any.
+    std::optional<std::pair<WaitResult, int>>
+        _lastForegroundWait; ///< Latest reaped foreground process and the status reported for it.
     /// Scratch buffer populated by the `__prompt_capture_string` builtin when
     /// `invokePromptCallback` runs a user-defined prompt function. Read once and
     /// cleared by `invokePromptCallback`; not thread-safe.

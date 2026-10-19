@@ -231,7 +231,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             }
 
             _exitCode = waitResult->exitCode;
-            recordForegroundWait(*waitResult);
+            recordForegroundWait(*waitResult, waitResult->exitCode);
             if (waitResult->stopped)
             {
                 anyStopped = true;
@@ -275,7 +275,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             }
 
             _exitCode = waitResult->exitCode;
-            recordForegroundWait(*waitResult);
+            recordForegroundWait(*waitResult, waitResult->exitCode);
             if (waitResult->signaled)
                 debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
             else
@@ -371,7 +371,7 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(
     if (!waitResult)
         return std::unexpected(toShellError(waitResult.error()));
 
-    recordForegroundWait(*waitResult);
+    recordForegroundWait(*waitResult, waitResult->exitCode);
 
     ForegroundResult result {
         .exitCode = waitResult->exitCode,
@@ -400,7 +400,7 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(
     if (!waitResult)
         return std::unexpected(toShellError(waitResult.error()));
 
-    recordForegroundWait(*waitResult);
+    recordForegroundWait(*waitResult, waitResult->exitCode);
 
     return ForegroundResult {
         .exitCode = waitResult->exitCode,

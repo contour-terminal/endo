@@ -157,11 +157,33 @@ TEST_CASE("shell.outcome.exit_139_is_not_a_crash")
 TEST_CASE("shell.outcome.later_status_wins")
 {
     TestShell shell;
-    auto const rc = shell("sh -c 'kill -SEGV $$'; true").exitCode;
+    auto const rc = shell("sh -c 'kill -SEGV $$'; cd .").exitCode;
     CHECK(rc == 0);
     auto const outcome = shell.shell.lastCommandOutcome(rc);
     CHECK(outcome.status == 0);
     CHECK_FALSE(outcome.signal.has_value());
+}
+
+TEST_CASE("shell.outcome.stopped_carries_signal_and_reported_status")
+{
+    TestShell shell;
+    shell.shell.recordForegroundWait({ .exitCode = 0, .stopped = true, .signal = SIGTSTP }, 0);
+    auto const outcome = shell.shell.lastCommandOutcome(0);
+    CHECK(outcome.status == 0);
+    REQUIRE(outcome.signal.has_value());
+    CHECK(*outcome.signal == SIGTSTP);
+    CHECK(outcome.stopped);
+}
+
+TEST_CASE("shell.outcome.signaled_wait_ignored_for_other_status")
+{
+    TestShell shell;
+    shell.shell.recordForegroundWait({ .exitCode = 139, .signaled = true, .signal = SIGSEGV }, 139);
+    CHECK(shell.shell.lastCommandOutcome(139).signal == SIGSEGV);
+    auto const outcome = shell.shell.lastCommandOutcome(1);
+    CHECK(outcome.status == 1);
+    CHECK_FALSE(outcome.signal.has_value());
+    CHECK_FALSE(outcome.stopped);
 }
 
 TEST_CASE("shell.outcome.reset_forgets_the_wait")

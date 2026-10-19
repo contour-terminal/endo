@@ -2319,7 +2319,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
             if (waitResult.has_value())
             {
                 _exitCode = waitResult->exitCode;
-                recordForegroundWait(*waitResult);
+                recordForegroundWait(*waitResult, waitResult->exitCode);
             }
         }
         _currentProcessGroupPids.clear();
@@ -2750,6 +2750,11 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args,
 
 int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
+    // The status `timeout` reports for a child it reaped.
+    auto const timeoutStatus = [](WaitResult const& result) noexcept {
+        return result.signaled ? 128 + result.signal : result.exitCode;
+    };
+
     // Parse arguments (skip args[0] which is "timeout")
     auto timeoutArgs = std::vector<std::string>();
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -2838,7 +2843,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         auto waitResult = _processManager.wait(pid);
         if (!waitResult.has_value())
             return 125;
-        recordForegroundWait(*waitResult);
+        recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
         if (waitResult->signaled)
             return 128 + waitResult->signal;
         return waitResult->exitCode;
@@ -2858,7 +2863,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
         {
             // Child has exited
-            recordForegroundWait(*waitResult);
+            recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
             if (waitResult->signaled)
                 return 128 + waitResult->signal;
             return waitResult->exitCode;
@@ -2896,7 +2901,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
             {
                 if (opts.preserveStatus)
                 {
-                    recordForegroundWait(*waitResult);
+                    recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
                     if (waitResult->signaled)
                         return 128 + waitResult->signal;
                     return waitResult->exitCode;
@@ -2927,7 +2932,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
 
     if (opts.preserveStatus)
     {
-        recordForegroundWait(*finalResult);
+        recordForegroundWait(*finalResult, timeoutStatus(*finalResult));
         if (finalResult->signaled)
             return 128 + finalResult->signal;
         return finalResult->exitCode;

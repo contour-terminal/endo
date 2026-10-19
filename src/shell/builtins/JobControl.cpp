@@ -122,7 +122,7 @@ void Shell::builtinFg(CoreVM::Params& context)
                 result.stopped = true;
                 result.signal = WSTOPSIG(status);
             }
-            recordForegroundWait(result);
+            recordForegroundWait(result, _exitCode);
             jobTable.updateJobState(pid, result);
         }
     }
@@ -185,6 +185,7 @@ void Shell::builtinFg(CoreVM::Params& context)
         if (waitResult.has_value())
         {
             _exitCode = waitResult->exitCode;
+            recordForegroundWait(*waitResult, _exitCode);
             jobTable.updateJobState(pid, *waitResult);
         }
     }
