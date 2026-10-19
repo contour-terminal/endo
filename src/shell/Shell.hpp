@@ -476,6 +476,10 @@ class Shell final: public core::platform::SignalCallback
     [[nodiscard]] int executeInlineClip(CoreVM::CoreStringArray const& args,
                                         core::platform::NativeHandle outputFd,
                                         core::platform::NativeHandle stdinFd);
+    /// Executes the set-user-var builtin: publishes NAME=VALUE to the terminal as OSC 1337
+    /// SetUserVar. A silent no-op unless stdout is a terminal. Returns 2 on a usage error.
+    [[nodiscard]] int executeInlineSetUserVar(CoreVM::CoreStringArray const& args,
+                                              core::platform::NativeHandle outputFd);
     /// Executes the tee builtin. Returns exit code.
     [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
                                        core::platform::NativeHandle outputFd,

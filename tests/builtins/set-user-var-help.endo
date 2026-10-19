@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: set-user-var --help shows usage
+# mode: shell
+# expect-nonempty
+
+set-user-var --help

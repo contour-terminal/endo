@@ -6040,6 +6040,35 @@ int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
 }
 
 // ---------------------------------------------------------------------------
+// set-user-var
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineSetUserVar(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
+{
+    auto const& descriptor = *findInlineBuiltin("set-user-var");
+    auto const parsed = parseInlineArgs(args, descriptor.options);
+    if (parsed.helpRequested)
+        return renderMarkdownHelp(outputFd, generateInlineHelp(descriptor));
+
+    auto const usage = [&](std::string_view reason) {
+        error("set-user-var: {}\nusage: {}", reason, descriptor.usageLine);
+        return 2;
+    };
+
+    if (parsed.positionalArgs.size() != 2)
+        return usage("expected a NAME and a VALUE");
+    auto const& name = parsed.positionalArgs[0];
+    auto const& value = parsed.positionalArgs[1];
+    if (name.empty())
+        return usage("NAME must not be empty");
+    if (name.contains('='))
+        return usage("NAME must not contain '='");
+
+    _shellIntegration.setUserVar(name, value);
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
 // tee
 // ---------------------------------------------------------------------------
 
