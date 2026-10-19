@@ -642,35 +642,56 @@ static void writeSyntaxHighlighted(core::tui::TerminalOutput& out, std::string_v
         out.writeText(text.substr(segStartByte), core::tui::Style { .fg = categoryColor(currentCat) });
 }
 
+namespace detail
+{
+
+    void collapseForTransient(core::tui::TerminalOutput& out, TransientGeometry const& geometry)
+    {
+        auto const currentRow = geometry.topPad + geometry.aurora + geometry.chrome + geometry.cursorLine;
+
+        // Move cursor up to the top of the prompt region
+        if (currentRow > 0)
+            out.moveUp(currentRow);
+
+        // Clear top padding rows to preserve vertical spacing
+        for (auto i = 0; i < geometry.topPad; ++i)
+        {
+            out.carriageReturn();
+            out.clearLine();
+            out.moveDown(1);
+        }
+
+        out.carriageReturn();
+
+        // Delete the aurora row so the A-marked line below it moves up into row topPad.
+        if (geometry.aurora > 0)
+            out.deleteLines(geometry.aurora);
+    }
+
+} // namespace detail
+
 void Prompt::emitTransientPrompt(std::string_view inputText)
 {
     if (_promptConfig.transient == TransientMode::Off)
         return;
 
     auto& out = _terminal.output();
-    auto const topPad = _promptComponent->topPadding();
-    auto const auroraH = _promptComponent->auroraFadeHeight();
-    auto const chrome = _promptComponent->chromeHeight();
-    auto const totalInputLines = _promptComponent->inputField().lineCount();
-    auto const cursorLine = _promptComponent->inputField().cursorLine();
-    auto const botPad = _promptComponent->bottomPadding();
-    auto const totalHeight = topPad + auroraH + chrome + totalInputLines + botPad;
-    auto const currentRow = topPad + auroraH + chrome + cursorLine;
+    auto const geometry = detail::TransientGeometry {
+        .topPad = _promptComponent->topPadding(),
+        .aurora = _promptComponent->auroraFadeHeight(),
+        .chrome = _promptComponent->chromeHeight(),
+        .inputLines = _promptComponent->inputField().lineCount(),
+        .cursorLine = _promptComponent->inputField().cursorLine(),
+        .botPad = _promptComponent->bottomPadding(),
+    };
+    auto const topPad = geometry.topPad;
+    auto const botPad = geometry.botPad;
+    // The aurora row is deleted by the collapse, so the region is that much shorter afterwards.
+    auto const totalHeight = topPad + geometry.chrome + geometry.inputLines + botPad;
 
-    // Move cursor up to the top of the prompt region
-    if (currentRow > 0)
-        out.moveUp(currentRow);
-
-    // Clear top padding rows to preserve vertical spacing
-    for (auto i = 0; i < topPad; ++i)
-    {
-        out.carriageReturn();
-        out.clearLine();
-        out.moveDown(1);
-    }
+    detail::collapseForTransient(out, geometry);
 
     // Write transient content at row topPad (after the padding)
-    out.carriageReturn();
     out.clearLine();
 
     if (_promptConfig.transient == TransientMode::Arrow)

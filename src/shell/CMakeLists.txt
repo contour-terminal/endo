@@ -318,6 +318,7 @@ if(ENDO_TESTING)
         commands/PkillCommand_test.cpp
         commands/PgrepCommand_test.cpp
         commands/PidofCommand_test.cpp
+        ui/Prompt_test.cpp
         ui/PromptComponent_test.cpp
         ui/PromptPresets_test.cpp
         ui/modules/GitModule_test.cpp

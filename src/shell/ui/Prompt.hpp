@@ -20,6 +20,33 @@
 namespace endo
 {
 
+namespace detail
+{
+
+    /// @brief Row counts of a drawn prompt region, as `emitTransientPrompt` sees it.
+    struct TransientGeometry
+    {
+        int topPad;     ///< Blank padding rows above the aurora/chrome (not part of the marked line).
+        int aurora;     ///< Aurora sixel rows between the top padding and the first chrome row (0 when off).
+        int chrome;     ///< Chrome rows above the input.
+        int inputLines; ///< Number of input lines.
+        int cursorLine; ///< Input line the cursor is on.
+        int botPad;     ///< Blank padding rows below the input.
+    };
+
+    /// @brief Collapses the top of a prompt region for the transient prompt.
+    ///
+    /// Moves from the cursor's row to the top of the region, clears the top padding rows and, when
+    /// the aurora is drawn, deletes its row(s) with a line deletion. The terminal keeps a line's
+    /// semantic marks across a deletion, so the OSC 133;A-marked first chrome row moves up into row
+    /// `topPad`, where the transient line is then written. Leaves the cursor at column 1 of row
+    /// `topPad` (relative to the top of the region).
+    /// @param out The terminal output to write to.
+    /// @param geometry The row counts of the prompt region being replaced.
+    void collapseForTransient(core::tui::TerminalOutput& out, TransientGeometry const& geometry);
+
+} // namespace detail
+
 // Forward declarations
 class Completer;
 class CommandResolver;
