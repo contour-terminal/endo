@@ -354,8 +354,7 @@ characters are stripped.
 
 A new property, `shell_integration`, registered beside the other `shell_*` properties
 (`Registration.cpp`) and documented in `docs/shell/configuration.md`. *My call on name and
-shape:* a boolean-like number (1 = on, default; 0 = off), matching `shell_prompt_spacing`'s
-style. Off suppresses OSC 133, OSC 7, OSC 3008, and SetUserVar. OSC 2 (title), OSC 8 hyperlinks, and the Contour
+shape:* a Boolean (default `true`), matching `shell_hyperlinks`. Off suppresses OSC 133, OSC 7, OSC 3008, and SetUserVar. OSC 2 (title), OSC 8 hyperlinks, and the Contour
 semantic-block extension (`CSI ? 2034`) keep their existing controls.
 
 Toggling at runtime (*my call*): switching off sends `end=<shellId>` (if a context is open) and then
