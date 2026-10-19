@@ -920,6 +920,11 @@ Shell::Shell(TTY& tty,
     prompt.setDynamicFieldResolver(
         [this](std::string const& fnName) { return invokePromptCallback(fnName); });
 
+    // The prompt draws its own semantic zones (OSC 133) as row marks, so they stay on the
+    // rows they describe across repaints.
+    prompt.setZoneSequences(
+        [this](shellintegration::PromptZone zone) { return _shellIntegration.promptZoneSequence(zone); });
+
     _dirConfigManager = std::make_unique<DirectoryConfigManager>(
         *this, _fs, _env, _workingDirectory, stderrDiagnosticSink(_tty));
 
@@ -1485,7 +1490,6 @@ int Shell::run()
 
         // Shell integration: notify terminal of CWD and prompt lifecycle
         _shellIntegration.beforePrompt(terminalWorkingDirectory());
-        _tty.writeToStdout(_shellIntegration.promptZoneSequence(shellintegration::PromptZone::Start));
 
         // Populate prompt context for module evaluation
         updatePromptContext();
@@ -1493,7 +1497,6 @@ int Shell::run()
         // Display the prompt before waiting for input
         prompt.display();
 
-        _tty.writeToStdout(_shellIntegration.promptZoneSequence(shellintegration::PromptZone::Input));
         _shellIntegration.afterPromptDrawn(terminalWorkingDirectory());
 
         // Wait for input. The runtime's event source multiplexes the signal fd,
@@ -1592,7 +1595,6 @@ int Shell::run()
 
         // Shell integration: notify terminal of CWD and prompt lifecycle
         _shellIntegration.beforePrompt(terminalWorkingDirectory());
-        _tty.writeToStdout(_shellIntegration.promptZoneSequence(shellintegration::PromptZone::Start));
 
         // Populate prompt context for module evaluation
         updatePromptContext();
@@ -1600,7 +1602,6 @@ int Shell::run()
         // Display the prompt before waiting for input
         prompt.display();
 
-        _tty.writeToStdout(_shellIntegration.promptZoneSequence(shellintegration::PromptZone::Input));
         _shellIntegration.afterPromptDrawn(terminalWorkingDirectory());
 
         auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));

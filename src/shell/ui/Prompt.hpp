@@ -116,6 +116,13 @@ class Prompt
     /// PromptComponent::setDynamicFieldResolver for semantics.
     void setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resolver);
 
+    /// @brief Installs the source of the semantic prompt zone sequences (OSC 133).
+    ///
+    /// Forwards to the underlying PromptComponent. See PromptComponent::setZoneSequences
+    /// for semantics.
+    /// @param fn The zone sequence source; an empty function disables all marks.
+    void setZoneSequences(PromptZoneSequenceFn fn);
+
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] core::tui::Terminal& terminal() noexcept { return _terminal; }
 
@@ -232,6 +239,7 @@ class Prompt
     /// forwarded to the component in `initialize()` so that the first render picks up
     /// user-assigned function values on properties like `shell_prompt_indicator`.
     PromptComponent::DynamicFieldResolver _pendingDynamicFieldResolver;
+    PromptZoneSequenceFn _pendingZoneSequences; ///< Held until initialize() creates the component.
 
     void initialize();
 

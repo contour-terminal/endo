@@ -83,6 +83,8 @@ void Prompt::initialize()
     _promptComponent->setMultiline(_multilineEnabled);
     if (_pendingDynamicFieldResolver)
         _promptComponent->setDynamicFieldResolver(std::move(_pendingDynamicFieldResolver));
+    if (_pendingZoneSequences)
+        _promptComponent->setZoneSequences(std::move(_pendingZoneSequences));
     _promptComponent->setCompleter(_completer);
     _promptComponent->setHistory(_history);
     _promptComponent->setCommandResolver(_commandResolver.get());
@@ -328,6 +330,8 @@ core::async::Task<std::string> Prompt::read(core::tui::runtime::TuiRuntime* runt
                     out.flush();
                     // Reset cursor tracking since screen was cleared and cursor moved to top
                     _screen->releaseCursor();
+                    // The redrawn prompt is a new prompt for the terminal's semantic zones.
+                    _promptComponent->beginNewPrompt();
                     needsRedraw = true;
                     break;
                 }
@@ -411,7 +415,8 @@ void Prompt::display()
     _promptComponent->setArea(
         core::tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
 
-    // Render
+    // Render; this is a new prompt, so its first row opens with the prompt-start zone.
+    _promptComponent->beginNewPrompt();
     _screen->draw();
     _displayDrewCurrentState = true;
 }
@@ -482,6 +487,15 @@ void Prompt::setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resol
         _promptComponent->setDynamicFieldResolver(std::move(resolver));
     else
         _pendingDynamicFieldResolver = std::move(resolver);
+}
+
+void Prompt::setZoneSequences(PromptZoneSequenceFn fn)
+{
+    // Installed from the Shell constructor, before initialize() creates _promptComponent.
+    if (_promptComponent)
+        _promptComponent->setZoneSequences(std::move(fn));
+    else
+        _pendingZoneSequences = std::move(fn);
 }
 
 GitModule const* Prompt::gitModule() const noexcept
