@@ -260,7 +260,7 @@ class PromptComponent: public core::tui::Component
     /// @brief Returns the number of rows reserved for the aurora sixel fade (0 or 1).
     [[nodiscard]] int auroraFadeHeight() const noexcept;
 
-    /// @brief Returns the number of top padding rows (0 on first display).
+    /// @brief Returns the number of blank rows above the prompt (`shell_prompt_spacing`).
     [[nodiscard]] int topPadding() const noexcept;
 
     /// @brief Returns the number of bottom padding rows.

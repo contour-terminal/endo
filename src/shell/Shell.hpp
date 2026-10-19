@@ -477,7 +477,8 @@ class Shell final: public core::platform::SignalCallback
                                         core::platform::NativeHandle outputFd,
                                         core::platform::NativeHandle stdinFd);
     /// Executes the set-user-var builtin: publishes NAME=VALUE to the terminal as OSC 1337
-    /// SetUserVar. A silent no-op unless stdout is a terminal. Returns 2 on a usage error.
+    /// SetUserVar. Writes to the shell's terminal whenever the shell is attached to one, even if
+    /// stdout is redirected; a silent no-op otherwise. Returns 2 on a usage error.
     [[nodiscard]] int executeInlineSetUserVar(CoreVM::CoreStringArray const& args,
                                               core::platform::NativeHandle outputFd);
     /// Executes the tee builtin. Returns exit code.

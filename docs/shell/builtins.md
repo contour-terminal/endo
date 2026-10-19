@@ -2202,9 +2202,10 @@ terminals such as WezTerm, iTerm2 and Ghostty expose to their configuration and 
 (for example, to change a tab title or colour scheme from a script). Inside tmux the sequence is
 wrapped in a tmux passthrough (`DCS tmux ; ... ST`), which needs `set -g allow-passthrough on`.
 
-`set-user-var` writes only when the terminal is a terminal; otherwise it does nothing and
-succeeds. It is not affected by the `shell_integration` setting, and it works in scripts as well
-as at the prompt.
+`set-user-var` writes to the shell's terminal whenever the shell is attached to one, even when
+its own standard output is redirected (like `clip`); otherwise it does nothing and succeeds. It
+is not affected by the `shell_integration` setting, and it works in scripts as well as at the
+prompt.
 
 **Options:**
 
@@ -2212,7 +2213,7 @@ as at the prompt.
 |---|---|
 | `-h`, `--help` | Display help |
 
-**Exit status:** `0` on success, and when there is no terminal to write to. `2` with a usage
+**Exit status:** `0` on success, and when the shell is not attached to a terminal. `2` with a usage
 message on standard error when the number of arguments is not two, when `NAME` is empty, or when
 `NAME` contains `=`.
 
