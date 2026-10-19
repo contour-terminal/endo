@@ -882,3 +882,61 @@ TEST_CASE("PromptComponent.marks_dynamic_indicator", "[prompt]")
           });
     CHECK(comp.inputTextStartColumn() == InputColumn);
 }
+
+// ============================================================================
+// Click-to-move from a lone press (kitty and Ghostty report it with click_events=1, even with
+// mouse tracking off; kitty never sends the matching release)
+// ============================================================================
+
+namespace
+{
+
+/// @brief A left-button press at the 0-based component cell (@p column, @p row); no release follows.
+core::tui::InputEvent loneLeftPress(int column, int row)
+{
+    return core::tui::MouseEvent { .type = core::tui::MouseEvent::Type::Press,
+                                   .button = 0,
+                                   .x = column + 1,
+                                   .y = row + 1,
+                                   .modifiers = core::tui::Modifier::None };
+}
+
+} // namespace
+
+TEST_CASE("PromptComponent.click_press_without_release_moves_cursor", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    for (auto const ch: std::string_view("hello world"))
+        (void) comp.processInput(charEvent(ch));
+    REQUIRE(comp.inputField().text() == "hello world");
+
+    // Two-line layout with spacing 1: top padding (1) + info row (1) puts the input line on row 2.
+    auto const inputRow = 2;
+    auto const result = comp.onEvent(loneLeftPress(comp.inputTextStartColumn() + 3, inputRow));
+    CHECK(result == core::tui::EventResult::Handled);
+    CHECK(comp.inputField().cursor() == 3);
+
+    (void) comp.processInput(charEvent('X'));
+    CHECK(comp.inputField().text() == "helXlo world");
+    CHECK_FALSE(comp.inputField().hasSelection());
+}
+
+TEST_CASE("PromptComponent.click_on_chrome_snaps_to_input", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    comp.inputField().setMultiline(true);
+    comp.inputField().setText("first\nsecond");
+    comp.inputField().setCursor(comp.inputField().text().size());
+    REQUIRE(comp.inputField().cursorLine() == 1);
+
+    // Row 1 is the info row, above the first input line.
+    auto const infoRow = 1;
+    auto const result = comp.onEvent(loneLeftPress(comp.inputTextStartColumn() + 2, infoRow));
+    CHECK(result == core::tui::EventResult::Handled);
+    CHECK(comp.inputField().cursorLine() == 0);
+    CHECK(comp.inputField().cursor() == 2);
+}
