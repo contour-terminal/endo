@@ -55,6 +55,7 @@ struct AgentRunOptions;
 #include <shell/ui/Prompt.hpp>
 
 #include "Job.hpp"
+#include "ShellIntegration.hpp"
 #include "TTY.hpp"
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     #include <agent/mcp/ServerManager.hpp>
@@ -679,12 +680,8 @@ class Shell final: public core::platform::SignalCallback
     // --- Core shell methods ---
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);
 
-    // Shell integration (OSC 133) and CWD propagation (OSC 7)
-    void emitPromptStart();
-    void emitPromptEnd();
-    void emitCommandStart();
-    void emitCommandFinished(int exitCode);
-    void emitCurrentWorkingDirectory();
+    /// @brief Returns the working directory reported to the terminal: `$PWD`, or the actual one.
+    [[nodiscard]] std::string terminalWorkingDirectory() const;
 
     /// @brief Sets the terminal window title via OSC 2.
     /// Control characters (C0, DEL, C1) are stripped to prevent escape injection.
@@ -761,6 +758,8 @@ class Shell final: public core::platform::SignalCallback
     core::platform::ProcessEnvironment& _env;
     core::platform::WorkingDirectory& _workingDirectory;
     TTY& _tty;
+    /// Tells the terminal about prompts, commands, the working directory and the session.
+    ShellIntegration _shellIntegration;
     /// core::tui's languages plus endo's own, which selects .endo files and ```endo fences.
     core::tui::SyntaxHighlighterRegistry _highlighters;
     core::tui::LanguageId _endoLanguage =

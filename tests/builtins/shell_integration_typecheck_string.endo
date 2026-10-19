@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_integration rejects a non-boolean assignment at compile time
+# expect-error: shell_integration
+# mode: ir-only
+
+shell_integration <- "yes"

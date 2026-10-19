@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: shell_integration defaults to true and can be switched off and on again
+# expect: true
+# expect: false
+# expect: true
+# mode: shell
+
+println shell_integration
+shell_integration <- false
+println shell_integration
+shell_integration <- true
+println shell_integration

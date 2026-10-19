@@ -23,6 +23,8 @@ add_library(endo-shell STATIC
     ShellIntegrationSequences.cpp
     ContextSignalling.hpp
     ContextSignalling.cpp
+    ShellIntegration.hpp
+    ShellIntegration.cpp
 
     # UI (Prompt, Syntax Highlighting, Grapheme Handling)
     ui/Prompt.hpp
@@ -305,6 +307,7 @@ if(ENDO_TESTING)
         Shell_test.cpp
         ShellIntegrationSequences_test.cpp
         ContextSignalling_test.cpp
+        ShellIntegration_test.cpp
         output/TableFormatter_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp

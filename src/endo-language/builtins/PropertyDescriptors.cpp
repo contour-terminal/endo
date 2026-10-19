@@ -231,6 +231,16 @@ static constexpr std::array PromptProperties = {
         .enumValues = BoolValues,
     },
     PropertyDescriptor {
+        .name = "shell_integration",
+        .type = CoreVM::LiteralType::Boolean,
+        .description = "Emit terminal shell-integration sequences (default: true)",
+        .detail = "**shell_integration** -- property\n\nWhether to tell the terminal about prompts, commands "
+                  "and the working directory: OSC 133 prompt marks, OSC 7, OSC 3008 context signalling and "
+                  "the automatic SetUserVar updates. Only ever emitted by an interactive shell to a "
+                  "terminal. Turning it off ends the open shell context.",
+        .enumValues = BoolValues,
+    },
+    PropertyDescriptor {
         .name = "shell_is_interactive",
         .type = CoreVM::LiteralType::Boolean,
         .description = "Whether running interactively (read-only)",
