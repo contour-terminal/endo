@@ -1542,6 +1542,7 @@ int Shell::run()
                 emitWindowTitle(lineBuffer);
                 emitCommandStart();
                 auto const cmdStart = std::chrono::steady_clock::now();
+                resetForegroundWait();
                 _exitCode = execute(lineBuffer);
                 _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - cmdStart);
@@ -1639,6 +1640,7 @@ int Shell::run()
             emitWindowTitle(lineBuffer);
             emitCommandStart();
             auto const cmdStart = std::chrono::steady_clock::now();
+            resetForegroundWait();
             _exitCode = execute(lineBuffer);
             _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - cmdStart);
@@ -1675,6 +1677,34 @@ int Shell::run()
         _semanticBlockClient->disable();
 
     return _quit ? _exitCode : EXIT_SUCCESS;
+}
+
+void Shell::recordForegroundWait(WaitResult const& result) noexcept
+{
+    _lastForegroundWait = result;
+}
+
+void Shell::resetForegroundWait() noexcept
+{
+    _lastForegroundWait.reset();
+}
+
+shellintegration::CommandOutcome Shell::lastCommandOutcome(int const status) const noexcept
+{
+    if (!_lastForegroundWait)
+        return { .status = status };
+
+    auto const& wait = *_lastForegroundWait;
+    auto const hasSignal = wait.signaled || wait.stopped;
+    auto const waitStatus = hasSignal ? 128 + wait.signal : wait.exitCode;
+    if (waitStatus != status)
+        return { .status = status };
+
+    return {
+        .status = status,
+        .signal = hasSignal ? std::optional<int> { wait.signal } : std::nullopt,
+        .stopped = wait.stopped,
+    };
 }
 
 int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)

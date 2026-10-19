@@ -43,6 +43,7 @@ struct AgentRunOptions;
 } // namespace endo::agent
 #endif
 
+#include <shell/ContextSignalling.hpp>
 #include <shell/DirectoryConfig.hpp>
 #include <shell/SixelCapability.hpp>
 #include <shell/completion/Completer.hpp>
@@ -194,6 +195,26 @@ class Shell final: public core::platform::SignalCallback
     int execute(std::string const& lineBuffer,
                 CoreVM::diagnostics::Report& report,
                 std::string_view sourceName = "stdin");
+
+    /// @brief Remembers how the foreground process the shell just reaped ended.
+    ///
+    /// Called from every site that waits for a foreground process whose status can become the
+    /// line's result. The latest call wins; see lastCommandOutcome() for how a stale record is
+    /// told apart from the status that finally got reported.
+    /// @param result The wait result of the reaped foreground process.
+    void recordForegroundWait(WaitResult const& result) noexcept;
+
+    /// @brief Forgets the recorded foreground wait. Called before each interactive line.
+    void resetForegroundWait() noexcept;
+
+    /// @brief The outcome of the last line, with the terminating signal when one is known.
+    ///
+    /// The recorded wait is used only when its own status (`128 + signal` for a signalled or
+    /// stopped process, else the exit code) equals @p status. A differing status came from
+    /// something later on the line (`segv; true`), so the signal no longer describes it.
+    /// @param status The status the line reported.
+    /// @return `{status, signal, stopped}` from the recorded wait, or `{status, nullopt, false}`.
+    [[nodiscard]] shellintegration::CommandOutcome lastCommandOutcome(int status) const noexcept;
 
     /// @brief Loads ~/.config/endo/init.endo and agent config if they exist.
     /// Call after construction for non-interactive modes that need shell config.
@@ -789,6 +810,7 @@ class Shell final: public core::platform::SignalCallback
     std::optional<core::platform::ProcessId> _rightPid;
 
     int _exitCode = -1;
+    std::optional<WaitResult> _lastForegroundWait; ///< Latest reaped foreground process, if any.
     /// Scratch buffer populated by the `__prompt_capture_string` builtin when
     /// `invokePromptCallback` runs a user-defined prompt function. Read once and
     /// cleared by `invokePromptCallback`; not thread-safe.

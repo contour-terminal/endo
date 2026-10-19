@@ -2317,7 +2317,10 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
         {
             auto const waitResult = _processManager.wait(processPid);
             if (waitResult.has_value())
+            {
                 _exitCode = waitResult->exitCode;
+                recordForegroundWait(*waitResult);
+            }
         }
         _currentProcessGroupPids.clear();
         _pipelineCommands.clear();
@@ -2835,6 +2838,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         auto waitResult = _processManager.wait(pid);
         if (!waitResult.has_value())
             return 125;
+        recordForegroundWait(*waitResult);
         if (waitResult->signaled)
             return 128 + waitResult->signal;
         return waitResult->exitCode;
@@ -2854,6 +2858,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
         {
             // Child has exited
+            recordForegroundWait(*waitResult);
             if (waitResult->signaled)
                 return 128 + waitResult->signal;
             return waitResult->exitCode;
@@ -2891,6 +2896,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
             {
                 if (opts.preserveStatus)
                 {
+                    recordForegroundWait(*waitResult);
                     if (waitResult->signaled)
                         return 128 + waitResult->signal;
                     return waitResult->exitCode;
@@ -2921,6 +2927,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
 
     if (opts.preserveStatus)
     {
+        recordForegroundWait(*finalResult);
         if (finalResult->signaled)
             return 128 + finalResult->signal;
         return finalResult->exitCode;

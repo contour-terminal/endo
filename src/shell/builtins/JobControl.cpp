@@ -122,6 +122,7 @@ void Shell::builtinFg(CoreVM::Params& context)
                 result.stopped = true;
                 result.signal = WSTOPSIG(status);
             }
+            recordForegroundWait(result);
             jobTable.updateJobState(pid, result);
         }
     }
