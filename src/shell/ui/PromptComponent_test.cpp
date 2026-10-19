@@ -854,3 +854,31 @@ TEST_CASE("PromptComponent.marks_suppressed_zone", "[prompt]")
               { 2, col, "<B>" },
           });
 }
+
+TEST_CASE("PromptComponent.marks_dynamic_indicator", "[prompt]")
+{
+    // A dynamic indicator replaces the static prompt string for the frame; the input zone must
+    // start where the input field actually draws the text, after the indicator's own width.
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.setPrompt("> ");
+    auto config = comp.promptConfig();
+    config.indicatorFn = "myIndicator";
+    comp.setPromptConfig(std::move(config));
+    comp.setDynamicFieldResolver([](std::string const& fnName) -> std::optional<std::string> {
+        if (fnName == "myIndicator")
+            return "endo>>> ";
+        return std::nullopt;
+    });
+
+    comp.beginNewPrompt();
+    // margin 1 + bar 1 + padding 1 + "endo>>> " (8), not the 2 columns of "> ".
+    auto constexpr InputColumn = 11;
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 2, 0, "<S>" },
+              { 2, InputColumn, "<B>" },
+          });
+    CHECK(comp.inputTextStartColumn() == InputColumn);
+}

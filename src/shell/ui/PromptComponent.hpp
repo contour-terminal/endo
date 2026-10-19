@@ -379,6 +379,14 @@ class PromptComponent: public core::tui::Component
     /// @param rightPromptColumn Column of the drawn right prompt, or nullopt when none was drawn.
     void markPromptZones(core::tui::Canvas& canvas, std::optional<int> rightPromptColumn);
 
+    /// @brief Returns the prompt text the input field draws: the dynamic indicator's value from
+    /// the last render when one is configured, the static prompt string otherwise.
+    [[nodiscard]] std::string_view drawnPromptText() const noexcept
+    {
+        return _context.indicatorOverride ? std::string_view { *_context.indicatorOverride }
+                                          : std::string_view { _promptStr };
+    }
+
     /// @brief Calculates the width of the prompt prefix (bar + padding + prompt text).
     [[nodiscard]] int promptWidth() const;
 

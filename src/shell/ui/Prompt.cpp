@@ -356,7 +356,9 @@ core::async::Task<std::string> Prompt::read(core::tui::runtime::TuiRuntime* runt
             out.flush();
             // Update saved cursor to AFTER errors so flushInline()'s restoreCursor() lands here
             out.saveCursor();
-            // Re-render prompt below the errors
+            // Re-render prompt below the errors. Like Ctrl+L, this draws the prompt anew at a
+            // new location, so it opens with the prompt-start zone again.
+            _promptComponent->beginNewPrompt();
             _promptComponent->flushDeferredUpdates();
             resizeToContent();
             _screen->draw();

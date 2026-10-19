@@ -321,7 +321,7 @@ void PromptComponent::render(core::tui::Canvas& canvas)
     auto const& theme = core::tui::currentTheme();
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
-    auto const promptTextWidth = displayWidth(_promptStr);
+    auto const promptTextWidth = displayWidth(drawnPromptText());
     auto const totalPromptWidth = HorizontalMargin + leftBarWidth() + PaddingAfterBar + promptTextWidth;
 
     // Effective content width (excluding margins)
@@ -763,7 +763,7 @@ void PromptComponent::render(core::tui::Canvas& canvas)
     // Set up InputField with prompt, continuation, ghost text style, and decorator.
     // When a dynamic indicator function is configured, the override computed above
     // (via evaluateDynamicCallback) replaces the static `_promptStr` for this frame.
-    _inputField.setPrompt(_context.indicatorOverride.value_or(_promptStr));
+    _inputField.setPrompt(drawnPromptText());
     _inputField.setContinuationPrompt(continuationStr);
     _inputField.setStyles(core::tui::InputFieldStyles {
         .text = promptStyle,
@@ -967,14 +967,14 @@ void PromptComponent::setPrompt(std::string_view prompt)
 
 int PromptComponent::promptWidth() const
 {
-    return leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    return leftBarWidth() + PaddingAfterBar + displayWidth(drawnPromptText());
 }
 
 int PromptComponent::inputTextStartColumn() const noexcept
 {
     // The continuation prompt matches the prompt text width by construction, so every input
     // row's text starts at the same column.
-    return HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    return HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(drawnPromptText());
 }
 
 int PromptComponent::chromeHeight() const noexcept
@@ -1903,8 +1903,7 @@ std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, i
 
 std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int x, int y) const
 {
-    auto const totalPromptWidth =
-        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    auto const totalPromptWidth = inputTextStartColumn();
 
     // Screen x must be within the text area
     if (x < totalPromptWidth)
@@ -1940,8 +1939,7 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
 
 std::pair<int, int> PromptComponent::getCommandBounds() const
 {
-    auto const totalPromptWidth =
-        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    auto const totalPromptWidth = inputTextStartColumn();
 
     auto const text = _inputField.text();
     if (text.empty())
