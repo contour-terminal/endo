@@ -19,6 +19,8 @@ add_library(endo-shell STATIC
     ProcessGroup.hpp
     TTY.hpp
     TTY.cpp
+    ShellIntegrationSequences.hpp
+    ShellIntegrationSequences.cpp
 
     # UI (Prompt, Syntax Highlighting, Grapheme Handling)
     ui/Prompt.hpp
@@ -299,6 +301,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-shell
         test_main.cpp
         Shell_test.cpp
+        ShellIntegrationSequences_test.cpp
         output/TableFormatter_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
