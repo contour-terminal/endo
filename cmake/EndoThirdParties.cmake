@@ -286,14 +286,15 @@ if(NOT EMSCRIPTEN)
     CPMAddPackage(
         NAME stb
         GITHUB_REPOSITORY nothings/stb
-        GIT_TAG master
+        # The commit core-cpp pins (cmake/CoreCppDependencies.cmake); master moved stb_image_resize2.h away.
+        GIT_TAG f1c79c02822848a9bed4315b12c8c8f3761e1296
         DOWNLOAD_ONLY YES
     )
     if(stb_ADDED)
         add_library(stb_image INTERFACE)
         target_include_directories(stb_image SYSTEM INTERFACE "${stb_SOURCE_DIR}")
     endif()
-    set(THIRDPARTY_BUILTIN_stb "CPM (master)")
+    set(THIRDPARTY_BUILTIN_stb "CPM (f1c79c0)")
 endif()
 
 # ==============================================================================
