@@ -25,7 +25,7 @@ and attached to a terminal, and `shell_integration` is on (see [below](#turning-
 
 | Sequence | When | Notes |
 |---|---|---|
-| `OSC 133 ; A ; click_events=1 ST` | Once per drawn prompt, at column 1 of the prompt's first visible row. | A new draw is: the prompt after a command, after an abandoned prompt (Ctrl+C), and after the screen was cleared (Ctrl+L). Redraws while editing, resizing, or a completion popup do not send it again. |
+| `OSC 133 ; A ; click_events=1 ST` | Once per drawn prompt, at column 1 of the prompt's first visible row. | A new draw is, for example: the prompt after a command, after an abandoned prompt (Ctrl+C), after the screen was cleared (Ctrl+L), and the prompt redrawn below a completion error. Redraws while editing, resizing, or a completion popup do not send it again. |
 | `OSC 133 ; P ; k=i ST` | When the first prompt row is repainted. | Re-establishes the row's zone (see [Repaints](#repaints)). |
 | `OSC 133 ; P ; k=s ST` | At column 1 of every prompt row after the first. | Chrome rows below the first one (two-line, powerline and boxed layouts), and every row of a multi-line command. |
 | `OSC 133 ; P ; k=r ST` | At the column where the right-aligned prompt begins, on the row it is drawn on. | Only when a right prompt is drawn. |
@@ -50,8 +50,7 @@ hierarchical contexts: the shell session, and one context per command inside it.
 
 | When | Sequence |
 |---|---|
-| After the first prompt is drawn | `OSC 3008 ; start=<shellId> ; type=shell ; user=… ; hostname=… ; machineid=… ; pid=… ; comm=endo ; cwd=… ST` |
-| After every prompt is drawn | The same `start=<shellId>` with the full field set again and the current `cwd`. A repeated `start=` resets every omitted field, so none are left out. |
+| After every prompt is drawn | `OSC 3008 ; start=<shellId> ; type=shell ; user=… ; hostname=… ; machineid=… ; pid=… ; comm=endo ; cwd=… ST`. The same id is re-announced with the full field set and the current `cwd` each time, since a repeated `start=` resets every omitted field. The first one follows the first `133;A`. |
 | After `133;C` | `OSC 3008 ; start=<cmdId> ; type=command ; cmdline=… ; cwd=… ST` |
 | Before `133;D` | `OSC 3008 ; end=<cmdId> ; exit=<success\|failure\|crash\|interrupt> ; status=<n> [; signal=<NAME>] ST` |
 | When the shell exits | `OSC 3008 ; end=<shellId> ; exit=success ; status=<n> ST` |
@@ -98,8 +97,10 @@ A prompt is drawn as a block of rows, top to bottom:
 ```text
 blank spacer row          (shell_prompt_spacing)         not marked
 aurora row, if enabled                                   not marked
-first visible prompt row                                 133;A
-  further chrome rows                                    133;P;k=s
+first visible prompt row                                 133;A (and, for the
+                                                         single-line layout, also
+                                                         133;B at the input text)
+  second row onwards: further chrome rows                133;P;k=s
   input row(s)                                           133;P;k=s, then 133;B at the input text
 blank spacer row          (shell_prompt_spacing)         part of the prompt
 ```
@@ -209,7 +210,9 @@ each. Terminals not listed were not examined, and unknown sequences are normally
   their `P;k=s` flag in Contour and tmux. In Contour this has no visible effect, as it ignores
   `k=s`. In tmux, a `k=s` flag on an output line does not make it a prompt-navigation target.
 - A transient line that is exactly as wide as the terminal may lose its last glyph on
-  xterm-style terminals. The cause has not been investigated further.
+  xterm-style terminals. When the content exactly fills the row, the cursor is left in the
+  deferred-wrap (pending-wrap) state, and the erase-to-end-of-line (`EL 0`) that follows the
+  content is issued from there; xterm-style terminals then erase the last cell.
 - An abandoned prompt (Ctrl+C) may leave an empty command block in the terminal, as bash and zsh
   do. The new prompt gets its own `A`.
 - `OSC 3008` is not sent inside tmux, so there are no command contexts there.

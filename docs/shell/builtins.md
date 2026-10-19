@@ -2198,7 +2198,7 @@ set-user-var NAME VALUE
 ```
 
 **Description:** Sends `OSC 1337 ; SetUserVar=NAME=<base64 of VALUE> ST` to the terminal, which
-terminals such as WezTerm, iTerm2 and Ghostty expose to their configuration and status bars
+terminals such as WezTerm and iTerm2 expose to their configuration and status bars
 (for example, to change a tab title or colour scheme from a script). Inside tmux the sequence is
 wrapped in a tmux passthrough (`DCS tmux ; ... ST`), which needs `set -g allow-passthrough on`.
 
