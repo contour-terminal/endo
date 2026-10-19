@@ -45,6 +45,21 @@ namespace detail
     /// @param geometry The row counts of the prompt region being replaced.
     void collapseForTransient(core::tui::TerminalOutput& out, TransientGeometry const& geometry);
 
+    /// @brief Writes the transient prompt's content, one terminal row per command line.
+    ///
+    /// The first row is the line carrying the OSC 133;A mark. It is never erased across its full width
+    /// (tmux drops a line's marks when the whole line is erased): the content is written from
+    /// column 1 first, then the rest of the row is cleared with a clear-to-end-of-line. An empty first
+    /// row gets a single space so that the clear starts past column 1. Continuation rows carry no
+    /// mark and are cleared before they are written.
+    /// @param out The terminal output to write to; the cursor must be at column 1 of the first row.
+    /// @param mode The transient mode (`Arrow` prefixes the first row with an arrow).
+    /// @param inputText The submitted command text.
+    /// @return The number of command lines written (0 for empty input).
+    [[nodiscard]] int writeTransientLines(core::tui::TerminalOutput& out,
+                                          TransientMode mode,
+                                          std::string_view inputText);
+
 } // namespace detail
 
 // Forward declarations

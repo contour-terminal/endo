@@ -668,6 +668,41 @@ namespace detail
             out.deleteLines(geometry.aurora);
     }
 
+    int writeTransientLines(core::tui::TerminalOutput& out, TransientMode mode, std::string_view inputText)
+    {
+        // The first row holds the prompt mark: write onto it, never erase it whole (see the header).
+        if (mode == TransientMode::Arrow)
+            out.writeText("\u276F ", core::tui::Style { .dim = true });
+        else if (inputText.empty() || inputText.front() == '\n')
+            out.writeText(" ", core::tui::Style {});
+
+        // Show full command input, each line on its own terminal row
+        auto linesWritten = 0;
+        auto remaining = inputText;
+        while (!remaining.empty())
+        {
+            auto const newlinePos = remaining.find('\n');
+            auto const line = remaining.substr(0, newlinePos);
+            if (linesWritten > 0)
+            {
+                out.moveDown(1);
+                out.carriageReturn();
+                out.clearLine();
+            }
+            writeSyntaxHighlighted(out, line);
+            if (linesWritten == 0)
+                out.clearToEndOfLine();
+            ++linesWritten;
+            if (newlinePos == std::string_view::npos)
+                break;
+            remaining = remaining.substr(newlinePos + 1);
+        }
+
+        if (linesWritten == 0)
+            out.clearToEndOfLine();
+        return linesWritten;
+    }
+
 } // namespace detail
 
 void Prompt::emitTransientPrompt(std::string_view inputText)
@@ -692,30 +727,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     detail::collapseForTransient(out, geometry);
 
     // Write transient content at row topPad (after the padding)
-    out.clearLine();
-
-    if (_promptConfig.transient == TransientMode::Arrow)
-        out.writeText("\u276F ", core::tui::Style { .dim = true });
-
-    // Show full command input, each line on its own terminal row
-    auto linesWritten = 0;
-    auto remaining = inputText;
-    while (!remaining.empty())
-    {
-        auto const newlinePos = remaining.find('\n');
-        auto const line = remaining.substr(0, newlinePos);
-        if (linesWritten > 0)
-        {
-            out.moveDown(1);
-            out.carriageReturn();
-            out.clearLine();
-        }
-        writeSyntaxHighlighted(out, line);
-        ++linesWritten;
-        if (newlinePos == std::string_view::npos)
-            break;
-        remaining = remaining.substr(newlinePos + 1);
-    }
+    auto const linesWritten = detail::writeTransientLines(out, _promptConfig.transient, inputText);
 
     // Clear remaining rows (including padding rows with NBSP markers)
     for (auto i = topPad + linesWritten; i < totalHeight; ++i)
