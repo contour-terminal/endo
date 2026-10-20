@@ -121,6 +121,16 @@ class ShellIntegration
         UserVar,    ///< OSC 1337 SetUserVar.
     };
 
+    /// How a channel's sequences travel when the shell runs inside tmux.
+    enum class TmuxTreatment : std::uint8_t
+    {
+        Plain,       ///< tmux understands the sequence itself.
+        Passthrough, ///< Wrapped in tmux's DCS passthrough for the outer terminal.
+        Drop,        ///< Not sent at all.
+    };
+
+    /// Looks up how @p channel's sequences travel inside tmux.
+    [[nodiscard]] static TmuxTreatment tmuxTreatment(Channel channel) noexcept;
     [[nodiscard]] bool active() const noexcept;
     void write(Channel channel, std::string_view sequence) const;
     [[nodiscard]] bool sends(Channel channel) const noexcept;

@@ -15,22 +15,6 @@ using namespace shellintegration;
 namespace
 {
 
-    /// How a protocol's sequences travel when the shell runs inside tmux.
-    enum class TmuxTreatment : std::uint8_t
-    {
-        Plain,       ///< tmux understands the sequence itself.
-        Passthrough, ///< Wrapped in tmux's DCS passthrough for the outer terminal.
-        Drop,        ///< Not sent at all.
-    };
-
-    /// tmux treatment per channel, indexed by the channel's value.
-    constexpr auto TmuxTreatments = std::array {
-        TmuxTreatment::Plain,       // PromptMark: tmux interprets OSC 133 itself.
-        TmuxTreatment::Plain,       // Directory: tmux interprets OSC 7 itself.
-        TmuxTreatment::Drop,        // Context: OSC 3008 alone would derive marks at tmux's cursor.
-        TmuxTreatment::Passthrough, // UserVar: only the outer terminal knows SetUserVar.
-    };
-
     /// Longest command line, in bytes, sent whole in `133;C` (`cmdline_url=`) and `WEZTERM_PROG`.
     constexpr std::size_t MaxRepeatedCommandLineSize = 16 * 1024;
 
@@ -178,9 +162,34 @@ bool ShellIntegration::active() const noexcept
     return _interactive && _enabled && _tty.isTerminal();
 }
 
+auto ShellIntegration::tmuxTreatment(Channel channel) noexcept -> TmuxTreatment
+{
+    struct Row
+    {
+        Channel channel;
+        TmuxTreatment treatment;
+    };
+
+    // Keyed by channel, so the rows' order does not matter. A channel without a row is dropped.
+    constexpr auto Rows = std::array {
+        // tmux interprets OSC 133 itself.
+        Row { .channel = Channel::PromptMark, .treatment = TmuxTreatment::Plain },
+        // tmux interprets OSC 7 itself.
+        Row { .channel = Channel::Directory, .treatment = TmuxTreatment::Plain },
+        // OSC 3008 alone would derive marks at tmux's cursor.
+        Row { .channel = Channel::Context, .treatment = TmuxTreatment::Drop },
+        // Only the outer terminal knows SetUserVar.
+        Row { .channel = Channel::UserVar, .treatment = TmuxTreatment::Passthrough },
+    };
+    for (auto const& row: Rows)
+        if (row.channel == channel)
+            return row.treatment;
+    return TmuxTreatment::Drop;
+}
+
 bool ShellIntegration::sends(Channel channel) const noexcept
 {
-    return !_quirks.insideTmux || TmuxTreatments[std::to_underlying(channel)] != TmuxTreatment::Drop;
+    return !_quirks.insideTmux || tmuxTreatment(channel) != TmuxTreatment::Drop;
 }
 
 void ShellIntegration::write(Channel channel, std::string_view sequence) const
@@ -188,8 +197,7 @@ void ShellIntegration::write(Channel channel, std::string_view sequence) const
     if (!_tty.isTerminal())
         return;
 
-    auto const treatment =
-        _quirks.insideTmux ? TmuxTreatments[std::to_underlying(channel)] : TmuxTreatment::Plain;
+    auto const treatment = _quirks.insideTmux ? tmuxTreatment(channel) : TmuxTreatment::Plain;
     switch (treatment)
     {
         case TmuxTreatment::Plain: _tty.writeToStdout(sequence); break;
