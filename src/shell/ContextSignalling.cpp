@@ -83,10 +83,10 @@ namespace
 
     std::optional<std::string_view> signalName(int signal)
     {
-        auto const* const it = std::ranges::find(SignalNameTable, signal, &SignalName::signal);
-        if (it == SignalNameTable.end())
-            return std::nullopt;
-        return it->name;
+        for (auto const& row: SignalNameTable)
+            if (row.signal == signal)
+                return row.name;
+        return std::nullopt;
     }
 #endif
 
@@ -198,8 +198,10 @@ namespace
             return "interrupt";
         if (!outcome.signal)
             return outcome.status == 0 ? "success" : "failure";
-        auto const* const it = std::ranges::find(ExitTable, *outcome.signal, &ExitRow::signal);
-        return it == ExitTable.end() ? "failure" : it->exitValue;
+        for (auto const& row: ExitTable)
+            if (row.signal == *outcome.signal)
+                return row.exitValue;
+        return "failure";
     }
 
 } // namespace

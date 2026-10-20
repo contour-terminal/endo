@@ -132,8 +132,9 @@ TEST_CASE("ContextSignalling.cwd_escaping_and_limit")
 
 TEST_CASE("ContextSignalling.cmdline_truncated_utf8")
 {
-    auto const value =
-        std::views::repeat("\xC3\xA9"sv, 300) | std::views::join | std::ranges::to<std::string>(); // U+00E9
+    auto value = std::string {};
+    for ([[maybe_unused]] auto const copy: std::views::iota(0, 300))
+        value += "\xC3\xA9"sv; // U+00E9
     auto const fields = std::array { ContextField { .key = "cmdline", .value = value } };
     auto const sequence = contextStartSequence(TestId, fields);
 
