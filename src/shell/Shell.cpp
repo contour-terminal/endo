@@ -1681,10 +1681,12 @@ int Shell::run()
     if (_semanticBlockClient && !prompt.terminalGone())
         _semanticBlockClient->disable();
 
+    // The shell context ends with the status the shell actually exits with.
+    auto const exitStatus = _quit ? _exitCode : EXIT_SUCCESS;
     if (!prompt.terminalGone())
-        _shellIntegration.sessionEnded(_exitCode);
+        _shellIntegration.sessionEnded(exitStatus);
 
-    return _quit ? _exitCode : EXIT_SUCCESS;
+    return exitStatus;
 }
 
 void Shell::recordForegroundWait(WaitResult const& result, int const reportedStatus) noexcept
