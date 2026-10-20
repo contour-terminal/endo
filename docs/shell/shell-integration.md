@@ -210,10 +210,6 @@ each. Terminals not listed were not examined, and unknown sequences are normally
   deleted from a multi-line command) or a transient prompt collapses, the cleared rows can keep
   their `P;k=s` flag in Contour and tmux. In Contour this has no visible effect, as it ignores
   `k=s`. In tmux, a `k=s` flag on an output line does not make it a prompt-navigation target.
-- A transient line that is exactly as wide as the terminal may lose its last glyph on
-  xterm-style terminals. When the content exactly fills the row, the cursor is left in the
-  deferred-wrap (pending-wrap) state, and the erase-to-end-of-line (`EL 0`) that follows the
-  content is issued from there; xterm-style terminals then erase the last cell.
 - An abandoned prompt (Ctrl+C) may leave an empty command block in the terminal, as bash and zsh
   do. The new prompt gets its own `A`.
 - `OSC 3008` is not sent inside tmux, so there are no command contexts there.

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 using namespace endo;
@@ -101,7 +102,7 @@ TEST_CASE("Prompt.transient_marked_row_is_never_erased_whole")
 {
     auto out = RecordingOutput(80, 40);
 
-    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "echo hi");
+    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "echo hi", 80);
 
     REQUIRE(lines == 1);
     // The marked row is written, then cleared from where the content ends; no full-line clear.
@@ -116,7 +117,7 @@ TEST_CASE("Prompt.transient_marked_row_with_arrow")
 {
     auto out = RecordingOutput(80, 40);
 
-    auto const lines = detail::writeTransientLines(out, TransientMode::Arrow, "ls");
+    auto const lines = detail::writeTransientLines(out, TransientMode::Arrow, "ls", 80);
 
     REQUIRE(lines == 1);
     CHECK(indexOf(out.events, "clearLine") == out.events.size());
@@ -127,7 +128,7 @@ TEST_CASE("Prompt.transient_marked_row_with_empty_input")
 {
     auto out = RecordingOutput(80, 40);
 
-    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "");
+    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "", 80);
 
     CHECK(lines == 0);
     // A space is written first so the clear-to-end-of-line starts past column 1.
@@ -137,11 +138,42 @@ TEST_CASE("Prompt.transient_marked_row_with_empty_input")
     CHECK(out.cursorCol() == 1);
 }
 
+TEST_CASE("Prompt.transient_full_width_row_keeps_its_last_glyph")
+{
+    // A row filled to the last column leaves the cursor pending a wrap; a clear-to-end-of-line
+    // there erases the last glyph on xterm-style terminals.
+    auto out = RecordingOutput(10, 40);
+    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "0123456789", 10);
+    REQUIRE(lines == 1);
+    CHECK(indexOf(out.events, "clearToEndOfLine") == out.events.size());
+
+    auto arrow = RecordingOutput(10, 40);
+    std::ignore = detail::writeTransientLines(arrow, TransientMode::Arrow, "01234567", 10);
+    CHECK(indexOf(arrow.events, "clearToEndOfLine") == arrow.events.size());
+
+    // Wide characters count by their display width: five of them fill ten columns.
+    auto wide = RecordingOutput(10, 40);
+    std::ignore =
+        detail::writeTransientLines(wide, TransientMode::Minimal, "\u4E00\u4E00\u4E00\u4E00\u4E00", 10);
+    CHECK(indexOf(wide.events, "clearToEndOfLine") == wide.events.size());
+}
+
+TEST_CASE("Prompt.transient_shorter_row_is_cleared_to_end_of_line")
+{
+    auto out = RecordingOutput(10, 40);
+    std::ignore = detail::writeTransientLines(out, TransientMode::Minimal, "012345678", 10);
+    CHECK(indexOf(out.events, "clearToEndOfLine") < out.events.size());
+
+    auto arrow = RecordingOutput(10, 40);
+    std::ignore = detail::writeTransientLines(arrow, TransientMode::Arrow, "0123456", 10);
+    CHECK(indexOf(arrow.events, "clearToEndOfLine") < arrow.events.size());
+}
+
 TEST_CASE("Prompt.transient_continuation_rows_are_cleared_before_writing")
 {
     auto out = RecordingOutput(80, 40);
 
-    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "a\nb");
+    auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, "a\nb", 80);
 
     REQUIRE(lines == 2);
     // The mark-less continuation row may be erased whole, but only after the first row is done.

@@ -50,15 +50,19 @@ namespace detail
     /// The first row is the line carrying the OSC 133;A mark. It is never erased across its full width
     /// (tmux drops a line's marks when the whole line is erased): the content is written from
     /// column 1 first, then the rest of the row is cleared with a clear-to-end-of-line. An empty first
-    /// row gets a single space so that the clear starts past column 1. Continuation rows carry no
-    /// mark and are cleared before they are written.
+    /// row gets a single space so that the clear starts past column 1. A first row whose content
+    /// fills the terminal width is not cleared at all: the cursor then waits to wrap on the last
+    /// cell, which the clear would erase. Continuation rows carry no mark and are cleared before
+    /// they are written.
     /// @param out The terminal output to write to; the cursor must be at column 1 of the first row.
     /// @param mode The transient mode (`Arrow` prefixes the first row with an arrow).
     /// @param inputText The submitted command text.
+    /// @param columns The terminal width in columns.
     /// @return The number of command lines written (0 for empty input).
     [[nodiscard]] int writeTransientLines(core::tui::TerminalOutput& out,
                                           TransientMode mode,
-                                          std::string_view inputText);
+                                          std::string_view inputText,
+                                          int columns);
 
 } // namespace detail
 
