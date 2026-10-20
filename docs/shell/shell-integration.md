@@ -50,7 +50,7 @@ hierarchical contexts: the shell session, and one context per command inside it.
 
 | When | Sequence |
 |---|---|
-| After every prompt is drawn | `OSC 3008 ; start=<shellId> ; type=shell ; user=… ; hostname=… ; machineid=… ; pid=… ; comm=endo ; cwd=… ST`. The same id is re-announced with the full field set and the current `cwd` each time, since a repeated `start=` resets every omitted field. The first one follows the first `133;A`. |
+| After every prompt is drawn | `OSC 3008 ; start=<shellId> ; type=shell ; user=… ; hostname=… ; machineid=… ; pid=… ; comm=endo ; cwd=… ST`. The same id is re-announced with the full field set and the current `cwd` each time, since a repeated `start=` resets every omitted field. `user=` and `machineid=` are left out when unknown. The first one follows the first `133;A`. |
 | After `133;C` | `OSC 3008 ; start=<cmdId> ; type=command ; cmdline=… ; cwd=… ST` |
 | Before `133;D` | `OSC 3008 ; end=<cmdId> ; exit=<success\|failure\|crash\|interrupt> ; status=<n> [; signal=<NAME>] ST` |
 | When the shell exits | `OSC 3008 ; end=<shellId> ; exit=success ; status=<n> ST` |

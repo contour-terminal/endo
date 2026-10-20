@@ -84,11 +84,10 @@ void ShellIntegration::afterPromptDrawn(std::string_view cwd)
             _shellContextId = newContextId(_random);
 
         // A repeated start= resets every omitted field, so each re-announce carries them all.
-        auto fields = std::vector<ContextField> {
-            { .key = "type", .value = "shell" },
-            { .key = "user", .value = _identity.user },
-            { .key = "hostname", .value = _identity.hostName },
-        };
+        auto fields = std::vector<ContextField> { { .key = "type", .value = "shell" } };
+        if (!_identity.user.empty())
+            fields.push_back({ .key = "user", .value = _identity.user });
+        fields.push_back({ .key = "hostname", .value = _identity.hostName });
         if (_identity.machineId)
             fields.push_back({ .key = "machineid", .value = *_identity.machineId });
         fields.push_back({ .key = "pid", .value = std::to_string(_identity.pid) });

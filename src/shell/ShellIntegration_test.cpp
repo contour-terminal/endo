@@ -376,6 +376,23 @@ TEST_CASE("ShellIntegration.oversized_command_line_is_not_repeated")
     CHECK(f.tty.output().find(userVarSequence("WEZTERM_PROG", limit)) != std::string::npos);
 }
 
+TEST_CASE("ShellIntegration.empty_user_omits_field")
+{
+    auto tty = RecordingTTY { true };
+    auto const environment = core::platform::testing::TestProcessEnvironment {};
+    auto counter = std::uint64_t { 0 };
+    auto integration = ShellIntegration {
+        tty,
+        environment,
+        ShellIntegration::Identity { .user = "", .hostName = "h", .machineId = std::nullopt, .pid = 7 },
+        [&counter] { return ++counter; }
+    };
+    integration.setInteractive(true);
+    integration.afterPromptDrawn("/");
+    CHECK(tty.output().find("user=") == std::string::npos);
+    CHECK(tty.output().find(";type=shell;hostname=h;pid=7;") != std::string::npos);
+}
+
 TEST_CASE("ShellIntegration.real_shell_is_interactive_by_default")
 {
     // The shell's own interactive flag (true by default) must reach the emitter without anyone
