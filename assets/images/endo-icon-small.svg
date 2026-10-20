@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Endo</title>
+  <defs>
+    <linearGradient id="lam" x1="120" y1="110" x2="330" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a6cff"/><stop offset="1" stop-color="#12e6cc"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#000000"/>
+  <rect x="30" y="30" width="452" height="452" fill="none" stroke="#f2d81c" stroke-width="28"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 112 120 Q 152 94 174 138 L 318 404 M 244 268 L 126 404" stroke="url(#lam)" stroke-width="62"/>
+    <path d="M 364 404 L 416 404" stroke="#b000e0" stroke-width="56"/>
+    <path d="M 364 404 L 416 404" stroke="#f7e02a" stroke-width="18"/>
+  </g>
+</svg>
