@@ -7,9 +7,11 @@
 #include <core/platform/testing/TestWorkingDirectory.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <array>
 #include <cstdint>
+#include <format>
 #include <functional>
 #include <map>
 #include <optional>
@@ -410,4 +412,22 @@ TEST_CASE("ShellIntegration.real_shell_is_interactive_by_default")
 
     CHECK(tty.output().find(currentDirectorySequence("/test/sub", core::platform::cachedHostName()))
           != std::string::npos);
+}
+
+TEST_CASE("ShellIntegration.set_user_var_builtin_writes_to_the_terminal")
+{
+    // Checked over an injected terminal: the endo-test PTY is not a terminal on every platform,
+    // and set-user-var is silent without one.
+    auto const name = GENERATE("FOO"sv, "my_app.tab-1"sv);
+    auto tty = RecordingTTY { true };
+    auto fs = core::platform::testing::InMemoryFileSystem {};
+    auto env = core::platform::testing::TestProcessEnvironment {};
+    auto workingDirectory = core::platform::testing::TestWorkingDirectory { "/test" };
+    auto shell = Shell { tty, env, workingDirectory, fs };
+    endo::testing::seedInjectedShell(fs, env, shell);
+    tty.clear();
+
+    CHECK(shell.execute(std::format("set-user-var {} bar", name)) == 0);
+
+    CHECK(tty.output() == std::format("\033]1337;SetUserVar={}=YmFy\033\\", name));
 }

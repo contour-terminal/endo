@@ -1,9 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-#
-# description: set-user-var writes OSC 1337 SetUserVar with a base64 value to the terminal
-# mode: shell
-# expect: ]1337;SetUserVar=FOO=YmFy\done
-# expect-exit: 0
-
-set-user-var FOO bar
-println "done"
