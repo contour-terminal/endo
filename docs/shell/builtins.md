@@ -2215,7 +2215,7 @@ prompt.
 
 **Exit status:** `0` on success, and when the shell is not attached to a terminal. `2` with a usage
 message on standard error when the number of arguments is not two, when `NAME` is empty, or when
-`NAME` contains `=`.
+`NAME` contains anything but ASCII letters, digits, `_`, `.` and `-`.
 
 **Examples:**
 

@@ -6061,8 +6061,13 @@ int Shell::executeInlineSetUserVar(CoreVM::CoreStringArray const& args, core::pl
     auto const& value = parsed.positionalArgs[1];
     if (name.empty())
         return usage("NAME must not be empty");
-    if (name.contains('='))
-        return usage("NAME must not contain '='");
+    // `=` ends the name in the sequence, and control bytes would end or corrupt the sequence.
+    auto const isNameChar = [](char ch) {
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'
+               || ch == '.' || ch == '-';
+    };
+    if (!std::ranges::all_of(name, isNameChar))
+        return usage("NAME may only contain letters, digits, '_', '.' and '-'");
 
     _shellIntegration.setUserVar(name, value);
     return 0;

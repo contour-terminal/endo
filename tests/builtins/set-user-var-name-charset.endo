@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: set-user-var accepts letters, digits, '_', '.' and '-' in a name
+# mode: shell
+# expect: ]1337;SetUserVar=my_app.tab-1=YmFy\done
+# expect-exit: 0
+
+set-user-var my_app.tab-1 bar
+println "done"
