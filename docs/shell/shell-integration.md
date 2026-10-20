@@ -30,7 +30,7 @@ and attached to a terminal, and `shell_integration` is on (see [below](#turning-
 | `OSC 133 ; P ; k=s ST` | At column 1 of every prompt row after the first. | Chrome rows below the first one (two-line, powerline and boxed layouts), and every row of a multi-line command. |
 | `OSC 133 ; P ; k=r ST` | At the column where the right-aligned prompt begins, on the row it is drawn on. | Only when a right prompt is drawn. |
 | `OSC 133 ; B ST` | On every input row, where the editable text begins (after the indicator). | |
-| `OSC 133 ; C ; cmdline_url=<percent-encoded> ST` | When a command starts running. | The command line is exactly what was submitted. A bare Enter sends `C` without the parameter. |
+| `OSC 133 ; C ; cmdline_url=<percent-encoded> ST` | When a command starts running. | The command line is exactly what was submitted. A bare Enter, or a command line over 16 KiB, sends `C` without the parameter. |
 | `OSC 133 ; D ; <status> ST` | When the command has finished. | `<status>` is the exit status of the command line. |
 
 `C` and `D` carry exactly one parameter each. The percent-encoding leaves `A-Z a-z 0-9 - . _ ~ /`
@@ -59,7 +59,8 @@ hierarchical contexts: the shell session, and one context per command inside it.
 - `machineid=` is read from `/etc/machine-id` and omitted when the platform has none.
 - Inside values, `;` is written `\x3b`, `\` is written `\x5c`, and control characters are
   removed. A `cmdline=` longer than 255 bytes is truncated on a UTF-8 boundary (the full line
-  travels in `cmdline_url`); a `cwd=` that long is left out rather than cut into a wrong path.
+  travels in `cmdline_url`, up to 16 KiB); a `cwd=` that long is left out rather than cut into a
+  wrong path.
 - One command context covers one submitted line, like `133;C`/`D`; it is not one per pipeline
   stage.
 - The exit class comes from how the process actually ended, not from its status: a status of 139
@@ -80,7 +81,7 @@ own shell integration uses:
 
 | Variable | Value | When |
 |---|---|---|
-| `WEZTERM_PROG` | The command line while a command runs; empty at the prompt. | When a command starts (only if it differs from the last value), and cleared at the next prompt. |
+| `WEZTERM_PROG` | The command line while a command runs; empty at the prompt. | When a command starts (only if it differs from the last value and is at most 16 KiB), and cleared at the next prompt. |
 | `WEZTERM_USER` | The login name. | After every prompt is drawn. |
 | `WEZTERM_HOST` | The host name. | After every prompt is drawn. |
 | `WEZTERM_IN_TMUX` | `1` inside tmux, `0` otherwise. | After every prompt is drawn. |

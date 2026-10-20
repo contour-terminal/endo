@@ -353,6 +353,29 @@ TEST_CASE("ShellIntegration.no_machine_id_omits_field")
     CHECK(tty.output().find(";pid=7;comm=endo;cwd=/") != std::string::npos);
 }
 
+TEST_CASE("ShellIntegration.oversized_command_line_is_not_repeated")
+{
+    // A command line over 16 KiB is not percent-encoded into 133;C nor base64-encoded into
+    // WEZTERM_PROG; OSC 3008's cmdline= carries it truncated.
+    auto f = Fixture {};
+    auto const huge = std::string(16385, 'x');
+    f.integration.commandStarted(huge, "/");
+    auto const& out = f.tty.output();
+    CHECK(out.starts_with(commandStartSequence("")));
+    CHECK(out.find("cmdline_url=") == std::string::npos);
+    CHECK(out.find("WEZTERM_PROG") == std::string::npos);
+    CHECK(out.find(";cmdline=xxx") != std::string::npos);
+    f.integration.commandFinished(CommandOutcome { .status = 0 });
+    CHECK(out.ends_with(commandFinishedSequence(0)));
+
+    // Exactly 16 KiB is still sent whole.
+    f.tty.clear();
+    auto const limit = std::string(16384, 'x');
+    f.integration.commandStarted(limit, "/");
+    CHECK(f.tty.output().starts_with(commandStartSequence(limit)));
+    CHECK(f.tty.output().find(userVarSequence("WEZTERM_PROG", limit)) != std::string::npos);
+}
+
 TEST_CASE("ShellIntegration.real_shell_is_interactive_by_default")
 {
     // The shell's own interactive flag (true by default) must reach the emitter without anyone

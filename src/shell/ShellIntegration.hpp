@@ -81,6 +81,9 @@ class ShellIntegration
 
     /// @brief Marks the start of command output (`133;C`), opens the command context and
     ///        updates `WEZTERM_PROG`.
+    ///
+    /// A command line over 16 KiB is left out of `133;C` and does not update `WEZTERM_PROG`;
+    /// the command context's `cmdline=` carries it truncated.
     /// @param commandLine The command line being run.
     /// @param cwd The working directory it runs in.
     void commandStarted(std::string_view commandLine, std::string_view cwd);

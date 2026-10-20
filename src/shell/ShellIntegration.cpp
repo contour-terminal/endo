@@ -31,6 +31,9 @@ namespace
         TmuxTreatment::Passthrough, // UserVar: only the outer terminal knows SetUserVar.
     };
 
+    /// Longest command line, in bytes, sent whole in `133;C` (`cmdline_url=`) and `WEZTERM_PROG`.
+    constexpr std::size_t MaxRepeatedCommandLineSize = 16 * 1024;
+
 } // namespace
 
 ShellIntegration::ShellIntegration(TTY& tty,
@@ -110,7 +113,11 @@ void ShellIntegration::commandStarted(std::string_view commandLine, std::string_
     if (!_commandOpen)
         return;
 
-    write(Channel::PromptMark, commandStartSequence(commandLine));
+    // An oversized command line is not repeated in full into 133;C and WEZTERM_PROG; OSC 3008's
+    // cmdline= still carries it, truncated.
+    auto const fitsInSequences = commandLine.size() <= MaxRepeatedCommandLineSize;
+
+    write(Channel::PromptMark, commandStartSequence(fitsInSequences ? commandLine : std::string_view {}));
 
     if (sends(Channel::Context))
     {
@@ -123,7 +130,7 @@ void ShellIntegration::commandStarted(std::string_view commandLine, std::string_
         write(Channel::Context, contextStartSequence(*_commandContextId, fields));
     }
 
-    if (commandLine != _lastProg)
+    if (fitsInSequences && commandLine != _lastProg)
     {
         _lastProg = commandLine;
         setUserVar("WEZTERM_PROG", commandLine);
