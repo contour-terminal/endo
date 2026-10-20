@@ -52,9 +52,10 @@ class ShellIntegration
 
     /// @brief Turns the integration on or off.
     ///
-    /// Turning it off ends the open shell context (and an open command context); turning it on
-    /// starts a new shell context, with a new id, at the next prompt.
-    /// Toggling while a command runs can leave its `133;C` without a `D`, or a `D` without a `C`.
+    /// Turning it off ends the open shell context; turning it on starts a new shell context, with
+    /// a new id, at the next prompt. A command running while the integration is toggled is
+    /// finished as it was started: with its command context's end and `133;D` if its `133;C`
+    /// was sent, with neither otherwise.
     /// @param enabled Whether the integration is enabled.
     void setEnabled(bool enabled);
 
@@ -85,6 +86,9 @@ class ShellIntegration
     void commandStarted(std::string_view commandLine, std::string_view cwd);
 
     /// @brief Closes the command context and marks the end of the command (`133;D`).
+    ///
+    /// Writes only when commandStarted() sent `133;C` for the command, whether or not the
+    /// integration is still enabled.
     /// @param outcome The outcome of the command.
     void commandFinished(shellintegration::CommandOutcome const& outcome);
 
@@ -117,7 +121,7 @@ class ShellIntegration
     [[nodiscard]] bool active() const noexcept;
     void write(Channel channel, std::string_view sequence) const;
     [[nodiscard]] bool sends(Channel channel) const noexcept;
-    void endContexts();
+    void endShellContext();
 
     TTY& _tty;
     shellintegration::TerminalQuirks _quirks;
@@ -127,6 +131,7 @@ class ShellIntegration
     bool _enabled = true;
     std::optional<std::string> _shellContextId;
     std::optional<std::string> _commandContextId;
+    bool _commandOpen = false; ///< Whether `133;C` was sent for the running command.
     std::string _lastProg;
 };
 

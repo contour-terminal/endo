@@ -54,7 +54,7 @@ void ShellIntegration::setEnabled(bool enabled)
     if (enabled == _enabled)
         return;
     if (!enabled)
-        endContexts();
+        endShellContext();
     _enabled = enabled;
 }
 
@@ -106,7 +106,8 @@ void ShellIntegration::afterPromptDrawn(std::string_view cwd)
 
 void ShellIntegration::commandStarted(std::string_view commandLine, std::string_view cwd)
 {
-    if (!active())
+    _commandOpen = active();
+    if (!_commandOpen)
         return;
 
     write(Channel::PromptMark, commandStartSequence(commandLine));
@@ -131,7 +132,9 @@ void ShellIntegration::commandStarted(std::string_view commandLine, std::string_
 
 void ShellIntegration::commandFinished(CommandOutcome const& outcome)
 {
-    if (!active())
+    // Pairs with the 133;C of commandStarted, not with the current state: the command may have
+    // toggled the integration itself (`shell_integration <- false`).
+    if (!std::exchange(_commandOpen, false))
         return;
 
     if (auto const id = std::exchange(_commandContextId, std::nullopt); id)
@@ -189,15 +192,11 @@ void ShellIntegration::write(Channel channel, std::string_view sequence) const
     }
 }
 
-void ShellIntegration::endContexts()
+void ShellIntegration::endShellContext()
 {
-    auto const commandId = std::exchange(_commandContextId, std::nullopt);
+    // An open command context is left to commandFinished, which ends it with the outcome.
     auto const shellId = std::exchange(_shellContextId, std::nullopt);
-    if (!active())
-        return;
-    if (commandId)
-        write(Channel::Context, contextEndSequence(*commandId, {}));
-    if (shellId)
+    if (active() && shellId)
         write(Channel::Context, contextEndSequence(*shellId, {}));
 }
 

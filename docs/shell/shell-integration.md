@@ -158,9 +158,10 @@ affect OSC 2 (window title), OSC 8 hyperlinks (`shell_hyperlinks`), or the
 
 Setting it in `init.endo` takes effect before the first prompt, and the session's first OSC 3008
 `start=` is only sent after the first prompt is drawn. Switching it off later ends the open
-shell context (and a running command's, if any) and then sends nothing; switching it on starts a
-new shell context with a new id at the next prompt. Toggling while a command runs can leave its
-`133;C` without a `D`, or a `D` without a `C`.
+shell context and then sends nothing; switching it on starts a new shell context with a new id at
+the next prompt. A command that runs while the setting changes (such as
+`shell_integration <- false` typed at the prompt) is finished the way it was started: if its
+`133;C` was sent, its command context's `end=` and its `133;D` follow; if not, neither does.
 
 ## Terminal-specific behaviour
 

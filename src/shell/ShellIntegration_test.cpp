@@ -262,6 +262,49 @@ TEST_CASE("ShellIntegration.toggle_off_ends_context")
     CHECK(f.tty.output().starts_with(shellStart(SecondId, "/")));
 }
 
+TEST_CASE("ShellIntegration.toggle_off_mid_command_still_finishes_it")
+{
+    // `shell_integration <- false` typed at the prompt is itself a command: its 133;C was sent,
+    // so its 133;D (and the command context's end=) must follow although the integration is off.
+    auto f = Fixture {};
+    f.integration.afterPromptDrawn("/");
+    f.integration.commandStarted("shell_integration <- false", "/");
+    f.tty.clear();
+
+    f.integration.setEnabled(false);
+    CHECK(f.tty.output() == contextEndSequence(FirstId, {}));
+    f.tty.clear();
+
+    f.integration.commandFinished(CommandOutcome { .status = 0 });
+    CHECK(f.tty.output()
+          == contextEndSequence(SecondId, commandEndFields(CommandOutcome { .status = 0 }))
+                 + commandFinishedSequence(0));
+
+    // The next command runs with the integration off: neither C nor D.
+    f.tty.clear();
+    f.integration.commandStarted("ls", "/");
+    f.integration.commandFinished(CommandOutcome { .status = 0 });
+    CHECK(f.tty.output().empty());
+}
+
+TEST_CASE("ShellIntegration.toggle_on_mid_command_sends_no_finish")
+{
+    // `shell_integration <- true` runs while the integration is off: no 133;C was sent for it,
+    // so no 133;D may follow.
+    auto f = Fixture {};
+    f.integration.setEnabled(false);
+    f.integration.commandStarted("shell_integration <- true", "/");
+    f.integration.setEnabled(true);
+    f.integration.commandFinished(CommandOutcome { .status = 0 });
+    CHECK(f.tty.output().empty());
+
+    // The next command is complete again.
+    f.integration.commandStarted("ls", "/");
+    f.integration.commandFinished(CommandOutcome { .status = 0 });
+    CHECK(f.tty.output().starts_with(commandStartSequence("ls")));
+    CHECK(f.tty.output().ends_with(commandFinishedSequence(0)));
+}
+
 TEST_CASE("ShellIntegration.session_end")
 {
     auto f = Fixture {};
