@@ -34,11 +34,11 @@ namespace endo
 
 class Completer;
 class CommandResolver;
+class GitModule;
+class History;
 
 /// @brief Returns the escape sequence that opens a semantic prompt zone, or "" to mark none.
 using PromptZoneSequenceFn = std::function<std::string(shellintegration::PromptZone)>;
-class GitModule;
-class History;
 
 /// @brief A styled prompt component for the shell.
 ///
