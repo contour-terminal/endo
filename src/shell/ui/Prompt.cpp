@@ -23,6 +23,9 @@
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/ProcessEnvironment.hpp>
 
+#include <algorithm>
+#include <ranges>
+
 #include "PromptComponent.hpp"
 
 namespace endo
@@ -722,6 +725,30 @@ namespace detail
         return linesWritten;
     }
 
+    void clearBelowTransient(core::tui::TerminalOutput& out,
+                             TransientGeometry const& geometry,
+                             int linesWritten)
+    {
+        // The aurora row is deleted by the collapse, so the region is that much shorter afterwards.
+        auto const totalHeight = geometry.topPad + geometry.chrome + geometry.inputLines + geometry.botPad;
+        // Empty input still occupies the first row, which holds the written space.
+        auto const contentRows = std::max(linesWritten, 1);
+
+        // Clear remaining rows (including padding rows with NBSP markers)
+        for ([[maybe_unused]] auto const row: std::views::iota(geometry.topPad + contentRows, totalHeight))
+        {
+            out.moveDown(1);
+            out.carriageReturn();
+            out.clearLine();
+        }
+
+        // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
+        // \r\n in the submit handler preserves exactly the configured spacing.
+        if (auto const excessRows = totalHeight - geometry.topPad - contentRows - geometry.botPad;
+            excessRows > 0)
+            out.moveUp(excessRows);
+    }
+
 } // namespace detail
 
 void Prompt::emitTransientPrompt(std::string_view inputText)
@@ -738,10 +765,6 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         .cursorLine = _promptComponent->inputField().cursorLine(),
         .botPad = _promptComponent->bottomPadding(),
     };
-    auto const topPad = geometry.topPad;
-    auto const botPad = geometry.botPad;
-    // The aurora row is deleted by the collapse, so the region is that much shorter afterwards.
-    auto const totalHeight = topPad + geometry.chrome + geometry.inputLines + botPad;
 
     detail::collapseForTransient(out, geometry);
 
@@ -749,18 +772,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     auto const linesWritten =
         detail::writeTransientLines(out, _promptConfig.transient, inputText, _terminal.columns());
 
-    // Clear remaining rows (including padding rows with NBSP markers)
-    for (auto i = topPad + linesWritten; i < totalHeight; ++i)
-    {
-        out.moveDown(1);
-        out.carriageReturn();
-        out.clearLine();
-    }
-
-    // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
-    // \r\n in the submit handler preserves exactly the configured spacing.
-    if (auto const excessRows = totalHeight - topPad - linesWritten - botPad; excessRows > 0)
-        out.moveUp(excessRows);
+    detail::clearBelowTransient(out, geometry, linesWritten);
 }
 
 void emitPartialLineIndicator(core::platform::NativeHandle handle, int cursorColumn)

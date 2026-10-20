@@ -64,6 +64,18 @@ namespace detail
                                           std::string_view inputText,
                                           int columns);
 
+    /// @brief Clears the rows of the prompt region below the transient content.
+    ///
+    /// Leaves the cursor on the row from which the submit handler's line feed keeps the
+    /// configured bottom padding below the transient content.
+    /// @param out The terminal output to write to; the cursor must be on the first content row.
+    /// @param geometry The row counts of the prompt region being replaced.
+    /// @param linesWritten The value returned by writeTransientLines(); empty input (0) still
+    ///                     occupies the first row.
+    void clearBelowTransient(core::tui::TerminalOutput& out,
+                             TransientGeometry const& geometry,
+                             int linesWritten);
+
 } // namespace detail
 
 // Forward declarations

@@ -193,3 +193,28 @@ TEST_CASE("Prompt.transient_collapse_never_erases_the_marked_row")
 
     CHECK(indexOf(out.events, "clearLine") == out.events.size());
 }
+
+TEST_CASE("Prompt.transient_empty_input_ends_where_one_line_input_does")
+{
+    // Bare Enter (or Ctrl+C) writes no command line, yet its first row holds the written space:
+    // the cursor must end on the same row as for a one-line command, also when the region sits at
+    // the bottom of the screen, where an extra move down is clamped.
+    auto const geometry = detail::TransientGeometry {
+        .topPad = 1, .aurora = 0, .chrome = 1, .inputLines = 1, .cursorLine = 0, .botPad = 0
+    };
+    constexpr auto ScreenRows = 10;
+    auto const regionHeight = geometry.topPad + geometry.chrome + geometry.inputLines + geometry.botPad;
+    auto const finalRow = [&](std::string_view input) {
+        auto out = core::tui::MockTerminalOutput(80, ScreenRows);
+        // moveTo is 1-based: put the cursor on the input row, the region's last row.
+        out.moveTo(ScreenRows - regionHeight + geometry.topPad + geometry.chrome + geometry.cursorLine + 1,
+                   8);
+        detail::collapseForTransient(out, geometry);
+        auto const lines = detail::writeTransientLines(out, TransientMode::Minimal, input, 80);
+        detail::clearBelowTransient(out, geometry, lines);
+        return out.cursorRow();
+    };
+
+    CHECK(finalRow("") == finalRow("ls"));
+    CHECK(finalRow("ls") == ScreenRows - regionHeight + geometry.topPad);
+}
