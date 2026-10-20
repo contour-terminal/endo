@@ -658,7 +658,7 @@ namespace detail
             out.moveUp(currentRow);
 
         // Clear top padding rows to preserve vertical spacing
-        for (auto i = 0; i < geometry.topPad; ++i)
+        for ([[maybe_unused]] auto const row: std::views::iota(0, geometry.topPad))
         {
             out.carriageReturn();
             out.clearLine();
