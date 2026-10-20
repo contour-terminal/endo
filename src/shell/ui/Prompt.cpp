@@ -2,6 +2,7 @@
 #include "Prompt.hpp"
 
 #include <core/tui/Screen.hpp>
+#include <core/tui/Unicode.hpp>
 
 #include "PromptPresets.hpp"
 #include "modules/GitModule.hpp"
@@ -21,6 +22,9 @@
 
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/ProcessEnvironment.hpp>
+
+#include <algorithm>
+#include <ranges>
 
 #include "PromptComponent.hpp"
 
@@ -83,6 +87,8 @@ void Prompt::initialize()
     _promptComponent->setMultiline(_multilineEnabled);
     if (_pendingDynamicFieldResolver)
         _promptComponent->setDynamicFieldResolver(std::move(_pendingDynamicFieldResolver));
+    if (_pendingZoneSequences)
+        _promptComponent->setZoneSequences(std::move(_pendingZoneSequences));
     _promptComponent->setCompleter(_completer);
     _promptComponent->setHistory(_history);
     _promptComponent->setCommandResolver(_commandResolver.get());
@@ -328,6 +334,8 @@ core::async::Task<std::string> Prompt::read(core::tui::runtime::TuiRuntime* runt
                     out.flush();
                     // Reset cursor tracking since screen was cleared and cursor moved to top
                     _screen->releaseCursor();
+                    // The redrawn prompt is a new prompt for the terminal's semantic zones.
+                    _promptComponent->beginNewPrompt();
                     needsRedraw = true;
                     break;
                 }
@@ -352,7 +360,9 @@ core::async::Task<std::string> Prompt::read(core::tui::runtime::TuiRuntime* runt
             out.flush();
             // Update saved cursor to AFTER errors so flushInline()'s restoreCursor() lands here
             out.saveCursor();
-            // Re-render prompt below the errors
+            // Re-render prompt below the errors. Like Ctrl+L, this draws the prompt anew at a
+            // new location, so it opens with the prompt-start zone again.
+            _promptComponent->beginNewPrompt();
             _promptComponent->flushDeferredUpdates();
             resizeToContent();
             _screen->draw();
@@ -411,7 +421,8 @@ void Prompt::display()
     _promptComponent->setArea(
         core::tui::Rect { .x = 0, .y = 0, .width = _terminal.columns(), .height = prefSize.height });
 
-    // Render
+    // Render; this is a new prompt, so its first row opens with the prompt-start zone.
+    _promptComponent->beginNewPrompt();
     _screen->draw();
     _displayDrewCurrentState = true;
 }
@@ -482,6 +493,15 @@ void Prompt::setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resol
         _promptComponent->setDynamicFieldResolver(std::move(resolver));
     else
         _pendingDynamicFieldResolver = std::move(resolver);
+}
+
+void Prompt::setZoneSequences(PromptZoneSequenceFn fn)
+{
+    // Installed from the Shell constructor, before initialize() creates _promptComponent.
+    if (_promptComponent)
+        _promptComponent->setZoneSequences(std::move(fn));
+    else
+        _pendingZoneSequences = std::move(fn);
 }
 
 GitModule const* Prompt::gitModule() const noexcept
@@ -626,72 +646,133 @@ static void writeSyntaxHighlighted(core::tui::TerminalOutput& out, std::string_v
         out.writeText(text.substr(segStartByte), core::tui::Style { .fg = categoryColor(currentCat) });
 }
 
+namespace detail
+{
+
+    void collapseForTransient(core::tui::TerminalOutput& out, TransientGeometry const& geometry)
+    {
+        auto const currentRow = geometry.topPad + geometry.aurora + geometry.chrome + geometry.cursorLine;
+
+        // Move cursor up to the top of the prompt region
+        if (currentRow > 0)
+            out.moveUp(currentRow);
+
+        // Clear top padding rows to preserve vertical spacing
+        for ([[maybe_unused]] auto const row: std::views::iota(0, geometry.topPad))
+        {
+            out.carriageReturn();
+            out.clearLine();
+            out.moveDown(1);
+        }
+
+        out.carriageReturn();
+
+        // Delete the aurora row so the A-marked line below it moves up into row topPad.
+        if (geometry.aurora > 0)
+            out.deleteLines(geometry.aurora);
+    }
+
+    int writeTransientLines(core::tui::TerminalOutput& out,
+                            TransientMode mode,
+                            std::string_view inputText,
+                            int columns)
+    {
+        // The first row holds the prompt mark: write onto it, never erase it whole (see the header).
+        constexpr auto Arrow = std::string_view { "\u276F " };
+        auto prefixWidth = 0;
+        if (mode == TransientMode::Arrow)
+        {
+            out.writeText(Arrow, core::tui::Style { .dim = true });
+            prefixWidth = core::tui::stringWidth(Arrow);
+        }
+        else if (inputText.empty() || inputText.front() == '\n')
+        {
+            out.writeText(" ", core::tui::Style {});
+            prefixWidth = 1;
+        }
+
+        // A first row that fills the terminal leaves the cursor pending a wrap on its last cell,
+        // where a clear-to-end-of-line would erase that cell; there is nothing left to clear.
+        auto const clearRestOfFirstRow = [&](std::string_view firstLine) {
+            if (prefixWidth + core::tui::stringWidth(firstLine) < columns)
+                out.clearToEndOfLine();
+        };
+
+        // Show full command input, each line on its own terminal row
+        auto linesWritten = 0;
+        auto remaining = inputText;
+        while (!remaining.empty())
+        {
+            auto const newlinePos = remaining.find('\n');
+            auto const line = remaining.substr(0, newlinePos);
+            if (linesWritten > 0)
+            {
+                out.moveDown(1);
+                out.carriageReturn();
+                out.clearLine();
+            }
+            writeSyntaxHighlighted(out, line);
+            if (linesWritten == 0)
+                clearRestOfFirstRow(line);
+            ++linesWritten;
+            if (newlinePos == std::string_view::npos)
+                break;
+            remaining = remaining.substr(newlinePos + 1);
+        }
+
+        if (linesWritten == 0)
+            clearRestOfFirstRow({});
+        return linesWritten;
+    }
+
+    void clearBelowTransient(core::tui::TerminalOutput& out,
+                             TransientGeometry const& geometry,
+                             int linesWritten)
+    {
+        // The aurora row is deleted by the collapse, so the region is that much shorter afterwards.
+        auto const totalHeight = geometry.topPad + geometry.chrome + geometry.inputLines + geometry.botPad;
+        // Empty input still occupies the first row, which holds the written space.
+        auto const contentRows = std::max(linesWritten, 1);
+
+        // Clear remaining rows (including padding rows with NBSP markers)
+        for ([[maybe_unused]] auto const row: std::views::iota(geometry.topPad + contentRows, totalHeight))
+        {
+            out.moveDown(1);
+            out.carriageReturn();
+            out.clearLine();
+        }
+
+        // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
+        // \r\n in the submit handler preserves exactly the configured spacing.
+        if (auto const excessRows = totalHeight - geometry.topPad - contentRows - geometry.botPad;
+            excessRows > 0)
+            out.moveUp(excessRows);
+    }
+
+} // namespace detail
+
 void Prompt::emitTransientPrompt(std::string_view inputText)
 {
     if (_promptConfig.transient == TransientMode::Off)
         return;
 
     auto& out = _terminal.output();
-    auto const topPad = _promptComponent->topPadding();
-    auto const auroraH = _promptComponent->auroraFadeHeight();
-    auto const chrome = _promptComponent->chromeHeight();
-    auto const totalInputLines = _promptComponent->inputField().lineCount();
-    auto const cursorLine = _promptComponent->inputField().cursorLine();
-    auto const botPad = _promptComponent->bottomPadding();
-    auto const totalHeight = topPad + auroraH + chrome + totalInputLines + botPad;
-    auto const currentRow = topPad + auroraH + chrome + cursorLine;
+    auto const geometry = detail::TransientGeometry {
+        .topPad = _promptComponent->topPadding(),
+        .aurora = _promptComponent->auroraFadeHeight(),
+        .chrome = _promptComponent->chromeHeight(),
+        .inputLines = _promptComponent->inputField().lineCount(),
+        .cursorLine = _promptComponent->inputField().cursorLine(),
+        .botPad = _promptComponent->bottomPadding(),
+    };
 
-    // Move cursor up to the top of the prompt region
-    if (currentRow > 0)
-        out.moveUp(currentRow);
-
-    // Clear top padding rows to preserve vertical spacing
-    for (auto i = 0; i < topPad; ++i)
-    {
-        out.carriageReturn();
-        out.clearLine();
-        out.moveDown(1);
-    }
+    detail::collapseForTransient(out, geometry);
 
     // Write transient content at row topPad (after the padding)
-    out.carriageReturn();
-    out.clearLine();
+    auto const linesWritten =
+        detail::writeTransientLines(out, _promptConfig.transient, inputText, _terminal.columns());
 
-    if (_promptConfig.transient == TransientMode::Arrow)
-        out.writeText("\u276F ", core::tui::Style { .dim = true });
-
-    // Show full command input, each line on its own terminal row
-    auto linesWritten = 0;
-    auto remaining = inputText;
-    while (!remaining.empty())
-    {
-        auto const newlinePos = remaining.find('\n');
-        auto const line = remaining.substr(0, newlinePos);
-        if (linesWritten > 0)
-        {
-            out.moveDown(1);
-            out.carriageReturn();
-            out.clearLine();
-        }
-        writeSyntaxHighlighted(out, line);
-        ++linesWritten;
-        if (newlinePos == std::string_view::npos)
-            break;
-        remaining = remaining.substr(newlinePos + 1);
-    }
-
-    // Clear remaining rows (including padding rows with NBSP markers)
-    for (auto i = topPad + linesWritten; i < totalHeight; ++i)
-    {
-        out.moveDown(1);
-        out.carriageReturn();
-        out.clearLine();
-    }
-
-    // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
-    // \r\n in the submit handler preserves exactly the configured spacing.
-    if (auto const excessRows = totalHeight - topPad - linesWritten - botPad; excessRows > 0)
-        out.moveUp(excessRows);
+    detail::clearBelowTransient(out, geometry, linesWritten);
 }
 
 void emitPartialLineIndicator(core::platform::NativeHandle handle, int cursorColumn)

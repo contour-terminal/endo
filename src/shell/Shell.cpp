@@ -49,6 +49,7 @@
 #include <future>
 #include <iostream>
 #include <print>
+#include <random>
 #include <set>
 #include <unordered_set>
 
@@ -103,7 +104,7 @@
     #include <agent/ui/AgentResponseRenderer.hpp>
     #include <agent/ui/ToolStatusComponent.hpp>
 #endif
-#include <core/platform/FileUri.hpp>
+#include <core/platform/MachineId.hpp>
 #include <core/platform/NativeFileSystem.hpp>
 #include <core/platform/PathUtils.hpp>
 #include <core/platform/ProcessEnvironment.hpp>
@@ -131,6 +132,26 @@
 
 namespace
 {
+
+/// Returns the process id of the running shell.
+core::platform::ProcessId currentProcessId() noexcept
+{
+#if !defined(_WIN32)
+    return static_cast<core::platform::ProcessId>(getpid());
+#else
+    return static_cast<core::platform::ProcessId>(GetCurrentProcessId());
+#endif
+}
+
+/// Builds the random source for OSC 3008 context ids: a `std::random_device`-seeded 64-bit engine.
+std::function<std::uint64_t()> makeContextIdRandomSource()
+{
+    auto device = std::random_device {};
+    auto seed = std::seed_seq { device(), device(), device(), device() };
+    return [engine = std::mt19937_64 { seed }]() mutable {
+        return engine();
+    };
+}
 
 auto& debugLog()
 {
@@ -690,11 +711,23 @@ Shell::Shell(TTY& tty,
     _env { env },
     _workingDirectory { workingDirectory },
     _tty { tty },
+    _shellIntegration { tty,
+                        env,
+                        ShellIntegration::Identity {
+                            .user = core::platform::userName(env).value_or(""),
+                            .hostName = core::platform::cachedHostName(),
+                            .machineId = core::platform::readMachineId(fs),
+                            .pid = static_cast<int>(currentProcessId()),
+                        },
+                        makeContextIdRandomSource() },
     _sixelCapability { std::make_unique<TerminalSixelCapability>(tty, env) },
     _clipboardWriter { std::make_unique<core::tui::ClipboardWriter>(core::tui::openControllingTerminal,
                                                                     core::platform::defaultSteadyClock()) },
     _processManager { processManager }
 {
+    // Shell::_interactive is the single source of truth; setInteractive() keeps the emitter in step.
+    _shellIntegration.setInteractive(_interactive);
+
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
@@ -725,11 +758,10 @@ Shell::Shell(TTY& tty,
     updateTerminalSizeEnv();
 
     // Capture the shell's process ID at startup
+    _shellPid = currentProcessId();
 #if !defined(_WIN32)
-    _shellPid = static_cast<core::platform::ProcessId>(getpid());
     _shellPgid = static_cast<core::platform::ProcessId>(getpgrp());
 #else
-    _shellPid = static_cast<core::platform::ProcessId>(GetCurrentProcessId());
     _shellPgid = 0;
 #endif
 
@@ -888,6 +920,11 @@ Shell::Shell(TTY& tty,
     prompt.setDynamicFieldResolver(
         [this](std::string const& fnName) { return invokePromptCallback(fnName); });
 
+    // The prompt draws its own semantic zones (OSC 133) as row marks, so they stay on the
+    // rows they describe across repaints.
+    prompt.setZoneSequences(
+        [this](shellintegration::PromptZone zone) { return _shellIntegration.promptZoneSequence(zone); });
+
     _dirConfigManager = std::make_unique<DirectoryConfigManager>(
         *this, _fs, _env, _workingDirectory, stderrDiagnosticSink(_tty));
 
@@ -974,6 +1011,7 @@ void Shell::setSourceFile(std::filesystem::path path)
 void Shell::setInteractive(bool interactive)
 {
     _interactive = interactive;
+    _shellIntegration.setInteractive(interactive);
 }
 
 void Shell::setPositionalParameters(std::vector<std::string> params)
@@ -991,43 +1029,12 @@ void Shell::updateTerminalSizeEnv()
 }
 
 // ========================================================================
-// Shell integration (OSC 133) and CWD propagation (OSC 7)
+// Shell integration helpers and window title (OSC 2)
 // ========================================================================
 
-void Shell::emitPromptStart()
+std::string Shell::terminalWorkingDirectory() const
 {
-    if (_interactive && _tty.isTerminal())
-        _tty.writeToStdout("\033]133;A\033\\");
-}
-
-void Shell::emitPromptEnd()
-{
-    if (_interactive && _tty.isTerminal())
-        _tty.writeToStdout("\033]133;B\033\\");
-}
-
-void Shell::emitCommandStart()
-{
-    if (_interactive && _tty.isTerminal())
-        _tty.writeToStdout("\033]133;C\033\\");
-}
-
-void Shell::emitCommandFinished(int exitCode)
-{
-    if (_interactive && _tty.isTerminal())
-        _tty.writeToStdout(std::format("\033]133;D;{}\033\\", exitCode));
-}
-
-void Shell::emitCurrentWorkingDirectory()
-{
-    if (!_interactive || !_tty.isTerminal())
-        return;
-
-    auto const cwd = _env.get("PWD").value_or(currentDirectoryText());
-
-    _tty.writeToStdout(std::format(
-        "\033]7;{}\033\\",
-        core::platform::fileUri(core::platform::normalizePath(cwd), core::platform::cachedHostName())));
+    return _env.get("PWD").value_or(currentDirectoryText());
 }
 
 void Shell::emitWindowTitle(std::string_view title)
@@ -1482,8 +1489,7 @@ int Shell::run()
         reportJobStatus();
 
         // Shell integration: notify terminal of CWD and prompt lifecycle
-        emitCurrentWorkingDirectory();
-        emitPromptStart();
+        _shellIntegration.beforePrompt(terminalWorkingDirectory());
 
         // Populate prompt context for module evaluation
         updatePromptContext();
@@ -1491,7 +1497,7 @@ int Shell::run()
         // Display the prompt before waiting for input
         prompt.display();
 
-        emitPromptEnd();
+        _shellIntegration.afterPromptDrawn(terminalWorkingDirectory());
 
         // Wait for input. The runtime's event source multiplexes the signal fd,
         // so job-control signals are handled during the wait; report them after.
@@ -1540,12 +1546,13 @@ int Shell::run()
 
                 auto const _ = Prompt::ScopedSuspend(prompt);
                 emitWindowTitle(lineBuffer);
-                emitCommandStart();
                 auto const cmdStart = std::chrono::steady_clock::now();
+                resetForegroundWait();
+                _shellIntegration.commandStarted(lineBuffer, terminalWorkingDirectory());
                 _exitCode = execute(lineBuffer);
                 _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - cmdStart);
-                emitCommandFinished(_exitCode);
+                _shellIntegration.commandFinished(lastCommandOutcome(_exitCode));
             }
 
             if (!lineBuffer.empty())
@@ -1587,8 +1594,7 @@ int Shell::run()
         reportJobStatus();
 
         // Shell integration: notify terminal of CWD and prompt lifecycle
-        emitCurrentWorkingDirectory();
-        emitPromptStart();
+        _shellIntegration.beforePrompt(terminalWorkingDirectory());
 
         // Populate prompt context for module evaluation
         updatePromptContext();
@@ -1596,7 +1602,7 @@ int Shell::run()
         // Display the prompt before waiting for input
         prompt.display();
 
-        emitPromptEnd();
+        _shellIntegration.afterPromptDrawn(terminalWorkingDirectory());
 
         auto const lineBuffer = promptRuntime.blockOn(prompt.read(&promptRuntime));
         // The terminal hung up: there is no one to prompt, and every write to it fails, so the
@@ -1637,12 +1643,13 @@ int Shell::run()
 
             auto const _ = Prompt::ScopedSuspend(prompt);
             emitWindowTitle(lineBuffer);
-            emitCommandStart();
             auto const cmdStart = std::chrono::steady_clock::now();
+            resetForegroundWait();
+            _shellIntegration.commandStarted(lineBuffer, terminalWorkingDirectory());
             _exitCode = execute(lineBuffer);
             _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - cmdStart);
-            emitCommandFinished(_exitCode);
+            _shellIntegration.commandFinished(lastCommandOutcome(_exitCode));
         }
 
         if (!lineBuffer.empty())
@@ -1674,7 +1681,36 @@ int Shell::run()
     if (_semanticBlockClient && !prompt.terminalGone())
         _semanticBlockClient->disable();
 
-    return _quit ? _exitCode : EXIT_SUCCESS;
+    // The shell context ends with the status the shell actually exits with.
+    auto const exitStatus = _quit ? _exitCode : EXIT_SUCCESS;
+    if (!prompt.terminalGone())
+        _shellIntegration.sessionEnded(exitStatus);
+
+    return exitStatus;
+}
+
+void Shell::recordForegroundWait(WaitResult const& result, int const reportedStatus) noexcept
+{
+    _lastForegroundWait.emplace(result, reportedStatus);
+}
+
+void Shell::resetForegroundWait() noexcept
+{
+    _lastForegroundWait.reset();
+}
+
+shellintegration::CommandOutcome Shell::lastCommandOutcome(int const status) const noexcept
+{
+    if (!_lastForegroundWait || _lastForegroundWait->second != status)
+        return { .status = status };
+
+    auto const& wait = _lastForegroundWait->first;
+    auto const hasSignal = wait.signaled || wait.stopped;
+    return {
+        .status = status,
+        .signal = hasSignal ? std::optional<int> { wait.signal } : std::nullopt,
+        .stopped = wait.stopped,
+    };
 }
 
 int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)

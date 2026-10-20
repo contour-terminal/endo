@@ -19,6 +19,12 @@ add_library(endo-shell STATIC
     ProcessGroup.hpp
     TTY.hpp
     TTY.cpp
+    ShellIntegrationSequences.hpp
+    ShellIntegrationSequences.cpp
+    ContextSignalling.hpp
+    ContextSignalling.cpp
+    ShellIntegration.hpp
+    ShellIntegration.cpp
 
     # UI (Prompt, Syntax Highlighting, Grapheme Handling)
     ui/Prompt.hpp
@@ -299,6 +305,9 @@ if(ENDO_TESTING)
     add_executable(test-endo-shell
         test_main.cpp
         Shell_test.cpp
+        ShellIntegrationSequences_test.cpp
+        ContextSignalling_test.cpp
+        ShellIntegration_test.cpp
         output/TableFormatter_test.cpp
         DirectoryConfig_test.cpp
         builtins/InlineArgParser_test.cpp
@@ -309,6 +318,7 @@ if(ENDO_TESTING)
         commands/PkillCommand_test.cpp
         commands/PgrepCommand_test.cpp
         commands/PidofCommand_test.cpp
+        ui/Prompt_test.cpp
         ui/PromptComponent_test.cpp
         ui/PromptPresets_test.cpp
         ui/modules/GitModule_test.cpp

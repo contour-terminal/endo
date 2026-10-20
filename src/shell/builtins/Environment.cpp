@@ -89,7 +89,7 @@ void Shell::applyDirectoryChange(std::filesystem::path const& path, CoreVM::Para
         reportEnvironmentError("set OLDPWD", _env.set("OLDPWD", _env.get("PWD").value_or("")));
         reportEnvironmentError("set PWD", _env.set("PWD", currentDirectoryText()));
         _exitCode = 0;
-        emitCurrentWorkingDirectory();
+        _shellIntegration.workingDirectoryChanged(terminalWorkingDirectory());
         onDirectoryChanged();
     }
 

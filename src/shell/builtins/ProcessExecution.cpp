@@ -347,6 +347,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             }
 
             _exitCode = waitResult->exitCode;
+            recordForegroundWait(*waitResult, waitResult->exitCode);
             if (waitResult->stopped)
             {
                 anyStopped = true;
@@ -390,6 +391,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             }
 
             _exitCode = waitResult->exitCode;
+            recordForegroundWait(*waitResult, waitResult->exitCode);
             if (waitResult->signaled)
                 debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
             else

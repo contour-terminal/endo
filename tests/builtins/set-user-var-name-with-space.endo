@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: set-user-var rejects a name containing a space
+# mode: shell
+# expect-exit: 2
+
+set-user-var "A B" value

@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -125,6 +126,75 @@ TEST_CASE("shell.syntax.exit")
     CHECK(shell("exit 1").exitCode == 1);
     CHECK(shell("exit 123").exitCode == 123);
 }
+
+// ============================================================================
+// Foreground outcome (signal vs. plain exit status)
+// ============================================================================
+
+#if !defined(_WIN32)
+
+TEST_CASE("shell.outcome.signal_recorded")
+{
+    TestShell shell;
+    auto const rc = shell("sh -c 'kill -SEGV $$'").exitCode;
+    auto const outcome = shell.shell.lastCommandOutcome(rc);
+    CHECK(outcome.status == 128 + SIGSEGV);
+    REQUIRE(outcome.signal.has_value());
+    CHECK(*outcome.signal == SIGSEGV);
+    CHECK_FALSE(outcome.stopped);
+}
+
+TEST_CASE("shell.outcome.exit_139_is_not_a_crash")
+{
+    TestShell shell;
+    auto const rc = shell("sh -c 'exit 139'").exitCode;
+    CHECK(rc == 139);
+    auto const outcome = shell.shell.lastCommandOutcome(rc);
+    CHECK(outcome.status == 139);
+    CHECK_FALSE(outcome.signal.has_value());
+}
+
+TEST_CASE("shell.outcome.later_status_wins")
+{
+    TestShell shell;
+    auto const rc = shell("sh -c 'kill -SEGV $$'; cd .").exitCode;
+    CHECK(rc == 0);
+    auto const outcome = shell.shell.lastCommandOutcome(rc);
+    CHECK(outcome.status == 0);
+    CHECK_FALSE(outcome.signal.has_value());
+}
+
+TEST_CASE("shell.outcome.stopped_carries_signal_and_reported_status")
+{
+    TestShell shell;
+    shell.shell.recordForegroundWait({ .exitCode = 0, .stopped = true, .signal = SIGTSTP }, 0);
+    auto const outcome = shell.shell.lastCommandOutcome(0);
+    CHECK(outcome.status == 0);
+    REQUIRE(outcome.signal.has_value());
+    CHECK(*outcome.signal == SIGTSTP);
+    CHECK(outcome.stopped);
+}
+
+TEST_CASE("shell.outcome.signaled_wait_ignored_for_other_status")
+{
+    TestShell shell;
+    shell.shell.recordForegroundWait({ .exitCode = 139, .signaled = true, .signal = SIGSEGV }, 139);
+    CHECK(shell.shell.lastCommandOutcome(139).signal == SIGSEGV);
+    auto const outcome = shell.shell.lastCommandOutcome(1);
+    CHECK(outcome.status == 1);
+    CHECK_FALSE(outcome.signal.has_value());
+    CHECK_FALSE(outcome.stopped);
+}
+
+TEST_CASE("shell.outcome.reset_forgets_the_wait")
+{
+    TestShell shell;
+    auto const rc = shell("sh -c 'kill -SEGV $$'").exitCode;
+    shell.shell.resetForegroundWait();
+    CHECK_FALSE(shell.shell.lastCommandOutcome(rc).signal.has_value());
+}
+
+#endif
 
 // ============================================================================
 // Startup environment

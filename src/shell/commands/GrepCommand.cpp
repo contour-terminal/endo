@@ -570,7 +570,9 @@ FilenamePrefix::FilenamePrefix(std::string_view filename, GrepRenderOptions cons
     // Resolve the path and build the URI up to (but not including) the fragment, once. Only the
     // `#line` suffix varies per output line, so per-line work reduces to appending digits.
     auto const uri =
-        core::platform::fileUri(core::platform::absolutePath(filename, render.baseDirectory), render.uriHost);
+        core::platform::absolutePath(filename, render.baseDirectory)
+            .transform([&](std::string const& path) { return core::platform::fileUri(path, render.uriHost); })
+            .value_or(std::string {});
     if (uri.empty())
         return;
 

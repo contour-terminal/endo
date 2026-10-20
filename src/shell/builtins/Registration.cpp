@@ -1077,6 +1077,13 @@ void Shell::registerPromptBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(_hyperlinks); })
         .onSet([this](CoreVM::Params& args) { _hyperlinks = args.getBool(1); });
 
+    // One switch for the automatic terminal integration: OSC 133 prompt marks, OSC 7, OSC 3008
+    // context signalling and the automatic SetUserVar updates. Turning it off ends the open
+    // shell context; turning it back on starts a new one at the next prompt.
+    _runtime.registerProperty("shell_integration", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_shellIntegration.enabled()); })
+        .onSet([this](CoreVM::Params& args) { _shellIntegration.setEnabled(args.getBool(1)); });
+
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });
 

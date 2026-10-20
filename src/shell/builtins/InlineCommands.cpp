@@ -2317,7 +2317,10 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
         {
             auto const waitResult = _processManager.wait(processPid);
             if (waitResult.has_value())
+            {
                 _exitCode = waitResult->exitCode;
+                recordForegroundWait(*waitResult, waitResult->exitCode);
+            }
         }
         _currentProcessGroupPids.clear();
         _pipelineCommands.clear();
@@ -2747,6 +2750,11 @@ int Shell::executeInlineGrep(CoreVM::CoreStringArray const& args,
 
 int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
 {
+    // The status `timeout` reports for a child it reaped.
+    auto const timeoutStatus = [](WaitResult const& result) noexcept {
+        return result.signaled ? 128 + result.signal : result.exitCode;
+    };
+
     // Parse arguments (skip args[0] which is "timeout")
     auto timeoutArgs = std::vector<std::string>();
     for (auto const i: std::views::iota(1uz, args.size()))
@@ -2835,6 +2843,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         auto waitResult = _processManager.wait(pid);
         if (!waitResult.has_value())
             return 125;
+        recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
         if (waitResult->signaled)
             return 128 + waitResult->signal;
         return waitResult->exitCode;
@@ -2854,6 +2863,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
         if (waitResult->exitCode != -1 || waitResult->signaled || waitResult->stopped)
         {
             // Child has exited
+            recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
             if (waitResult->signaled)
                 return 128 + waitResult->signal;
             return waitResult->exitCode;
@@ -2891,6 +2901,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
             {
                 if (opts.preserveStatus)
                 {
+                    recordForegroundWait(*waitResult, timeoutStatus(*waitResult));
                     if (waitResult->signaled)
                         return 128 + waitResult->signal;
                     return waitResult->exitCode;
@@ -2921,6 +2932,7 @@ int Shell::executeInlineTimeout(CoreVM::CoreStringArray const& args, core::platf
 
     if (opts.preserveStatus)
     {
+        recordForegroundWait(*finalResult, timeoutStatus(*finalResult));
         if (finalResult->signaled)
             return 128 + finalResult->signal;
         return finalResult->exitCode;
@@ -6024,6 +6036,40 @@ int Shell::executeInlineClip(CoreVM::CoreStringArray const& args,
         error("clip: {}", core::tui::describe(copied.error()));
         return 1;
     }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// set-user-var
+// ---------------------------------------------------------------------------
+
+int Shell::executeInlineSetUserVar(CoreVM::CoreStringArray const& args, core::platform::NativeHandle outputFd)
+{
+    auto const& descriptor = *findInlineBuiltin("set-user-var");
+    auto const parsed = parseInlineArgs(args, descriptor.options);
+    if (parsed.helpRequested)
+        return renderMarkdownHelp(outputFd, generateInlineHelp(descriptor));
+
+    auto const usage = [&](std::string_view reason) {
+        error("set-user-var: {}\nusage: {}", reason, descriptor.usageLine);
+        return 2;
+    };
+
+    if (parsed.positionalArgs.size() != 2)
+        return usage("expected a NAME and a VALUE");
+    auto const& name = parsed.positionalArgs[0];
+    auto const& value = parsed.positionalArgs[1];
+    if (name.empty())
+        return usage("NAME must not be empty");
+    // `=` ends the name in the sequence, and control bytes would end or corrupt the sequence.
+    auto const isNameChar = [](char ch) {
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'
+               || ch == '.' || ch == '-';
+    };
+    if (!std::ranges::all_of(name, isNameChar))
+        return usage("NAME may only contain letters, digits, '_', '.' and '-'");
+
+    _shellIntegration.setUserVar(name, value);
     return 0;
 }
 

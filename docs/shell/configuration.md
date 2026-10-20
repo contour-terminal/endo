@@ -197,6 +197,24 @@ shell_prompt_spacing <- 1
 shell_prompt_spacing <- 0
 ```
 
+### Shell Integration
+
+Endo tells the terminal where prompts and commands start and end (OSC 133), the working
+directory (OSC 7), the shell and command contexts (OSC 3008), and a few user variables
+(OSC 1337 `SetUserVar`). This is on by default and can be turned off:
+
+```endo
+# Disable terminal shell integration
+shell_integration <- false
+
+# Re-enable (default)
+shell_integration <- true
+```
+
+It does not affect the window title (OSC 2), clickable paths (`shell_hyperlinks`), or the
+`set-user-var` builtin. See [Shell Integration](shell-integration.md) for every sequence Endo
+sends and what is known about how terminals treat them.
+
 ### Command Duration Threshold
 
 Control when the command duration module appears:

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <shell/ShellIntegrationSequences.hpp>
 #include <shell/completion/Completer.hpp>
 #include <shell/ui/PromptPresets.hpp>
 
@@ -16,8 +17,11 @@
 
 #include <chrono>
 #include <filesystem>
+#include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
+#include <vector>
 
 #include "PromptComponent.hpp"
 
@@ -662,4 +666,277 @@ TEST_CASE("PromptComponent.preset_switch_does_not_resurrect_disabled_hyperlinks"
     comp.render(canvas);
 
     CHECK(buffer.hyperlinks().empty());
+}
+
+// ============================================================================
+// Semantic prompt zones (OSC 133) as row marks
+// ============================================================================
+
+namespace
+{
+
+using shellintegration::PromptZone;
+
+/// @brief Readable stand-in for each zone's escape sequence.
+std::string fakeZoneSequence(PromptZone zone)
+{
+    switch (zone)
+    {
+        case PromptZone::Start: return "<A>";
+        case PromptZone::Prompt: return "<P>";
+        case PromptZone::Continuation: return "<S>";
+        case PromptZone::RightPrompt: return "<R>";
+        case PromptZone::Input: return "<B>";
+    }
+    return {};
+}
+
+/// @brief A mark as a comparable value: (row, column, sequence).
+using MarkTuple = std::tuple<int, int, std::string>;
+
+/// @brief Renders @p comp into a fresh 80x12 buffer and returns its marks in registration order.
+std::vector<MarkTuple> renderMarks(PromptComponent& comp)
+{
+    auto buffer = core::tui::Buffer(12, 80);
+    auto canvas = core::tui::Canvas(
+        buffer, core::tui::Rect { .x = 0, .y = 0, .width = 80, .height = 12 }, core::tui::currentTheme());
+    comp.render(canvas);
+    auto result = std::vector<MarkTuple> {};
+    for (auto const& mark: buffer.marks())
+        result.emplace_back(mark.row, mark.column, mark.sequence);
+    return result;
+}
+
+/// @brief Configures @p comp with the given layout and spacing, no info modules, and fake zones.
+void configureMarkedPrompt(PromptComponent& comp, PromptLayoutKind layout, int spacing)
+{
+    auto config = comp.promptConfig();
+    config.layout = layout;
+    config.promptSpacing = spacing;
+    config.infoLineModules = {};
+    comp.setPromptConfig(std::move(config));
+    comp.setZoneSequences(fakeZoneSequence);
+}
+
+} // namespace
+
+TEST_CASE("PromptComponent.marks_two_line_spacing_1", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    CHECK(col == 5); // margin 1 + bar 1 + padding 1 + "> "
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 2, 0, "<S>" },
+              { 2, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_single_line_spacing_0", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::SingleLine, 0);
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 0, 0, "<A>" },
+              { 0, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_boxed_with_aurora", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::Boxed, 1);
+    auto config = comp.promptConfig();
+    config.auroraBackground = { core::tui::RgbColor { .r = 0x10, .g = 0x20, .b = 0x30 },
+                                core::tui::RgbColor { .r = 0x30, .g = 0x20, .b = 0x10 } };
+    config.enableSixelFade = true;
+    comp.setPromptConfig(std::move(config));
+    auto ctx = PromptContext {};
+    ctx.cellPixelWidth = 8;
+    ctx.cellPixelHeight = 16;
+    comp.setPromptContext(std::move(ctx));
+    REQUIRE(comp.auroraFadeHeight() == 1);
+    REQUIRE(comp.chromeHeight() == 3);
+
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    // Row 0: top padding, row 1: aurora fade, row 2: first prompt row, rows 3-4: box chrome, row 5: input.
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 2, 0, "<A>" },
+              { 3, 0, "<S>" },
+              { 4, 0, "<S>" },
+              { 5, 0, "<S>" },
+              { 5, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_multiline_input", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.setMultiline(true);
+    comp.inputField().setText("a\nb\nc");
+    REQUIRE(comp.inputField().lineCount() == 3);
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 2, 0, "<S>" },
+              { 2, col, "<B>" },
+              { 3, 0, "<S>" },
+              { 3, col, "<B>" },
+              { 4, 0, "<S>" },
+              { 4, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_right_prompt", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    auto config = comp.promptConfig();
+    config.rightPromptModules = { "hostname" };
+    comp.setPromptConfig(std::move(config));
+    auto ctx = PromptContext {};
+    ctx.hostname = "box";
+    comp.setPromptContext(std::move(ctx));
+
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    // "box" is right-aligned against the 1-column right margin: 80 - 1 - 3.
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 1, 76, "<R>" },
+              { 2, 0, "<S>" },
+              { 2, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_full_redraw_no_second_start", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    auto const first = renderMarks(comp);
+    REQUIRE(!first.empty());
+    CHECK(first.front() == MarkTuple { 1, 0, "<A>" });
+
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<P>" },
+              { 2, 0, "<S>" },
+              { 2, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_suppressed_zone", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.setZoneSequences([](PromptZone zone) {
+        return zone == PromptZone::Continuation ? std::string {} : fakeZoneSequence(zone);
+    });
+    comp.beginNewPrompt();
+    auto const col = comp.inputTextStartColumn();
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 2, col, "<B>" },
+          });
+}
+
+TEST_CASE("PromptComponent.marks_dynamic_indicator", "[prompt]")
+{
+    // A dynamic indicator replaces the static prompt string for the frame; the input zone must
+    // start where the input field actually draws the text, after the indicator's own width.
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.setPrompt("> ");
+    auto config = comp.promptConfig();
+    config.indicatorFn = "myIndicator";
+    comp.setPromptConfig(std::move(config));
+    comp.setDynamicFieldResolver([](std::string const& fnName) -> std::optional<std::string> {
+        if (fnName == "myIndicator")
+            return "endo>>> ";
+        return std::nullopt;
+    });
+
+    comp.beginNewPrompt();
+    // margin 1 + bar 1 + padding 1 + "endo>>> " (8), not the 2 columns of "> ".
+    auto constexpr InputColumn = 11;
+    CHECK(renderMarks(comp)
+          == std::vector<MarkTuple> {
+              { 1, 0, "<A>" },
+              { 2, 0, "<S>" },
+              { 2, InputColumn, "<B>" },
+          });
+    CHECK(comp.inputTextStartColumn() == InputColumn);
+}
+
+// ============================================================================
+// Click-to-move from a lone press (kitty and Ghostty report it with click_events=1, even with
+// mouse tracking off; kitty never sends the matching release)
+// ============================================================================
+
+namespace
+{
+
+/// @brief A left-button press at the 0-based component cell (@p column, @p row); no release follows.
+core::tui::InputEvent loneLeftPress(int column, int row)
+{
+    return core::tui::MouseEvent { .type = core::tui::MouseEvent::Type::Press,
+                                   .button = 0,
+                                   .x = column + 1,
+                                   .y = row + 1,
+                                   .modifiers = core::tui::Modifier::None };
+}
+
+} // namespace
+
+TEST_CASE("PromptComponent.click_press_without_release_moves_cursor", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    for (auto const ch: std::string_view("hello world"))
+        (void) comp.processInput(charEvent(ch));
+    REQUIRE(comp.inputField().text() == "hello world");
+
+    // Two-line layout with spacing 1: top padding (1) + info row (1) puts the input line on row 2.
+    auto const inputRow = 2;
+    auto const result = comp.onEvent(loneLeftPress(comp.inputTextStartColumn() + 3, inputRow));
+    CHECK(result == core::tui::EventResult::Handled);
+    CHECK(comp.inputField().cursor() == 3);
+
+    (void) comp.processInput(charEvent('X'));
+    CHECK(comp.inputField().text() == "helXlo world");
+    CHECK_FALSE(comp.inputField().hasSelection());
+}
+
+TEST_CASE("PromptComponent.click_on_chrome_snaps_to_input", "[prompt]")
+{
+    auto comp = PromptComponent();
+    configureMarkedPrompt(comp, PromptLayoutKind::TwoLine, 1);
+    comp.beginNewPrompt();
+    comp.inputField().setMultiline(true);
+    comp.inputField().setText("first\nsecond");
+    comp.inputField().setCursor(comp.inputField().text().size());
+    REQUIRE(comp.inputField().cursorLine() == 1);
+
+    // Row 1 is the info row, above the first input line.
+    auto const infoRow = 1;
+    auto const result = comp.onEvent(loneLeftPress(comp.inputTextStartColumn() + 2, infoRow));
+    CHECK(result == core::tui::EventResult::Handled);
+    CHECK(comp.inputField().cursorLine() == 0);
+    CHECK(comp.inputField().cursor() == 2);
 }

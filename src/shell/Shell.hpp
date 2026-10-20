@@ -43,6 +43,7 @@ struct AgentRunOptions;
 } // namespace endo::agent
 #endif
 
+#include <shell/ContextSignalling.hpp>
 #include <shell/DirectoryConfig.hpp>
 #include <shell/SixelCapability.hpp>
 #include <shell/completion/Completer.hpp>
@@ -54,6 +55,7 @@ struct AgentRunOptions;
 #include <shell/ui/Prompt.hpp>
 
 #include "Job.hpp"
+#include "ShellIntegration.hpp"
 #include "TTY.hpp"
 #if defined(ENDO_ENABLE_AGENT) && ENDO_ENABLE_AGENT
     #include <agent/mcp/ServerManager.hpp>
@@ -194,6 +196,29 @@ class Shell final: public core::platform::SignalCallback
     int execute(std::string const& lineBuffer,
                 CoreVM::diagnostics::Report& report,
                 std::string_view sourceName = "stdin");
+
+    /// @brief Remembers how the foreground process the shell just reaped ended.
+    ///
+    /// Called from every site that waits for a foreground process whose status can become the
+    /// line's result. The latest call wins; see lastCommandOutcome() for how a stale record is
+    /// told apart from the status that finally got reported.
+    /// @param result The wait result of the reaped foreground process.
+    /// @param reportedStatus The exact status the call site propagates for that process. A stopped
+    ///        process has no exit code, so this is what the line will report (usually 0), not a
+    ///        value derived from the signal.
+    void recordForegroundWait(WaitResult const& result, int reportedStatus) noexcept;
+
+    /// @brief Forgets the recorded foreground wait. Called before each interactive line.
+    void resetForegroundWait() noexcept;
+
+    /// @brief The outcome of the last line, with the terminating signal when one is known.
+    ///
+    /// The recorded wait is used only when the status it was recorded with equals @p status. A
+    /// differing status came from something later on the line (`segv; true`), so the signal no
+    /// longer describes it.
+    /// @param status The status the line reported.
+    /// @return `{status, signal, stopped}` from the recorded wait, or `{status, nullopt, false}`.
+    [[nodiscard]] shellintegration::CommandOutcome lastCommandOutcome(int status) const noexcept;
 
     /// @brief Loads ~/.config/endo/init.endo and agent config if they exist.
     /// Call after construction for non-interactive modes that need shell config.
@@ -451,6 +476,11 @@ class Shell final: public core::platform::SignalCallback
     [[nodiscard]] int executeInlineClip(CoreVM::CoreStringArray const& args,
                                         core::platform::NativeHandle outputFd,
                                         core::platform::NativeHandle stdinFd);
+    /// Executes the set-user-var builtin: publishes NAME=VALUE to the terminal as OSC 1337
+    /// SetUserVar. Writes to the shell's terminal whenever the shell is attached to one, even if
+    /// stdout is redirected; a silent no-op otherwise. Returns 2 on a usage error.
+    [[nodiscard]] int executeInlineSetUserVar(CoreVM::CoreStringArray const& args,
+                                              core::platform::NativeHandle outputFd);
     /// Executes the tee builtin. Returns exit code.
     [[nodiscard]] int executeInlineTee(CoreVM::CoreStringArray const& args,
                                        core::platform::NativeHandle outputFd,
@@ -655,12 +685,8 @@ class Shell final: public core::platform::SignalCallback
     // --- Core shell methods ---
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);
 
-    // Shell integration (OSC 133) and CWD propagation (OSC 7)
-    void emitPromptStart();
-    void emitPromptEnd();
-    void emitCommandStart();
-    void emitCommandFinished(int exitCode);
-    void emitCurrentWorkingDirectory();
+    /// @brief Returns the working directory reported to the terminal: `$PWD`, or the actual one.
+    [[nodiscard]] std::string terminalWorkingDirectory() const;
 
     /// @brief Sets the terminal window title via OSC 2.
     /// Control characters (C0, DEL, C1) are stripped to prevent escape injection.
@@ -737,6 +763,8 @@ class Shell final: public core::platform::SignalCallback
     core::platform::ProcessEnvironment& _env;
     core::platform::WorkingDirectory& _workingDirectory;
     TTY& _tty;
+    /// Tells the terminal about prompts, commands, the working directory and the session.
+    ShellIntegration _shellIntegration;
     /// core::tui's languages plus endo's own, which selects .endo files and ```endo fences.
     core::tui::SyntaxHighlighterRegistry _highlighters;
     core::tui::LanguageId _endoLanguage =
@@ -789,6 +817,8 @@ class Shell final: public core::platform::SignalCallback
     std::optional<core::platform::ProcessId> _rightPid;
 
     int _exitCode = -1;
+    std::optional<std::pair<WaitResult, int>>
+        _lastForegroundWait; ///< Latest reaped foreground process and the status reported for it.
     /// Scratch buffer populated by the `__prompt_capture_string` builtin when
     /// `invokePromptCallback` runs a user-defined prompt function. Read once and
     /// cleared by `invokePromptCallback`; not thread-safe.

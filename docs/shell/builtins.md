@@ -2184,3 +2184,42 @@ clip < notes.txt                     # copies a file
 git rev-parse HEAD | clip -p         # primary selection
 clip -t image/png < screenshot.png   # needs a terminal with OSC 5522
 ```
+
+---
+
+## set-user-var
+
+Publish a user variable to the terminal.
+
+**Syntax:**
+
+```
+set-user-var NAME VALUE
+```
+
+**Description:** Sends `OSC 1337 ; SetUserVar=NAME=<base64 of VALUE> ST` to the terminal, which
+terminals such as WezTerm and iTerm2 expose to their configuration and status bars
+(for example, to change a tab title or colour scheme from a script). Inside tmux the sequence is
+wrapped in a tmux passthrough (`DCS tmux ; ... ST`), which needs `set -g allow-passthrough on`.
+
+`set-user-var` writes to the shell's terminal whenever the shell is attached to one, even when
+its own standard output is redirected (like `clip`); otherwise it does nothing and succeeds. It
+is not affected by the `shell_integration` setting, and it works in scripts as well as at the
+prompt.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-h`, `--help` | Display help |
+
+**Exit status:** `0` on success, and when the shell is not attached to a terminal. `2` with a usage
+message on standard error when the number of arguments is not two, when `NAME` is empty, or when
+`NAME` contains anything but ASCII letters, digits, `_`, `.` and `-`.
+
+**Examples:**
+
+<!-- endo-no-check -->
+```endo
+set-user-var MY_MODE production
+```

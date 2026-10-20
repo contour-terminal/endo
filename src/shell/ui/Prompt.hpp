@@ -20,6 +20,64 @@
 namespace endo
 {
 
+namespace detail
+{
+
+    /// @brief Row counts of a drawn prompt region, as `emitTransientPrompt` sees it.
+    struct TransientGeometry
+    {
+        int topPad;     ///< Blank padding rows above the aurora/chrome (not part of the marked line).
+        int aurora;     ///< Aurora sixel rows between the top padding and the first chrome row (0 when off).
+        int chrome;     ///< Chrome rows above the input.
+        int inputLines; ///< Number of input lines.
+        int cursorLine; ///< Input line the cursor is on.
+        int botPad;     ///< Blank padding rows below the input.
+    };
+
+    /// @brief Collapses the top of a prompt region for the transient prompt.
+    ///
+    /// Moves from the cursor's row to the top of the region, clears the top padding rows and, when
+    /// the aurora is drawn, deletes its row(s) with a line deletion. The terminal keeps a line's
+    /// semantic marks across a deletion, so the OSC 133;A-marked first chrome row moves up into row
+    /// `topPad`, where the transient line is then written. Leaves the cursor at column 1 of row
+    /// `topPad` (relative to the top of the region).
+    /// @param out The terminal output to write to.
+    /// @param geometry The row counts of the prompt region being replaced.
+    void collapseForTransient(core::tui::TerminalOutput& out, TransientGeometry const& geometry);
+
+    /// @brief Writes the transient prompt's content, one terminal row per command line.
+    ///
+    /// The first row is the line carrying the OSC 133;A mark. It is never erased across its full width
+    /// (tmux drops a line's marks when the whole line is erased): the content is written from
+    /// column 1 first, then the rest of the row is cleared with a clear-to-end-of-line. An empty first
+    /// row gets a single space so that the clear starts past column 1. A first row whose content
+    /// fills the terminal width is not cleared at all: the cursor then waits to wrap on the last
+    /// cell, which the clear would erase. Continuation rows carry no mark and are cleared before
+    /// they are written.
+    /// @param out The terminal output to write to; the cursor must be at column 1 of the first row.
+    /// @param mode The transient mode (`Arrow` prefixes the first row with an arrow).
+    /// @param inputText The submitted command text.
+    /// @param columns The terminal width in columns.
+    /// @return The number of command lines written (0 for empty input).
+    [[nodiscard]] int writeTransientLines(core::tui::TerminalOutput& out,
+                                          TransientMode mode,
+                                          std::string_view inputText,
+                                          int columns);
+
+    /// @brief Clears the rows of the prompt region below the transient content.
+    ///
+    /// Leaves the cursor on the row from which the submit handler's line feed keeps the
+    /// configured bottom padding below the transient content.
+    /// @param out The terminal output to write to; the cursor must be on the first content row.
+    /// @param geometry The row counts of the prompt region being replaced.
+    /// @param linesWritten The value returned by writeTransientLines(); empty input (0) still
+    ///                     occupies the first row.
+    void clearBelowTransient(core::tui::TerminalOutput& out,
+                             TransientGeometry const& geometry,
+                             int linesWritten);
+
+} // namespace detail
+
 // Forward declarations
 class Completer;
 class CommandResolver;
@@ -115,6 +173,13 @@ class Prompt
     /// Forwards to the underlying PromptComponent. See
     /// PromptComponent::setDynamicFieldResolver for semantics.
     void setDynamicFieldResolver(PromptComponent::DynamicFieldResolver resolver);
+
+    /// @brief Installs the source of the semantic prompt zone sequences (OSC 133).
+    ///
+    /// Forwards to the underlying PromptComponent. See PromptComponent::setZoneSequences
+    /// for semantics.
+    /// @param fn The zone sequence source; an empty function disables all marks.
+    void setZoneSequences(PromptZoneSequenceFn fn);
 
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] core::tui::Terminal& terminal() noexcept { return _terminal; }
@@ -232,6 +297,7 @@ class Prompt
     /// forwarded to the component in `initialize()` so that the first render picks up
     /// user-assigned function values on properties like `shell_prompt_indicator`.
     PromptComponent::DynamicFieldResolver _pendingDynamicFieldResolver;
+    PromptZoneSequenceFn _pendingZoneSequences; ///< Held until initialize() creates the component.
 
     void initialize();
 

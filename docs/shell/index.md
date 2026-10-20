@@ -145,5 +145,6 @@ bindings and available actions.
 - [Built-in Commands](builtins.md) -- Reference for all shell builtins
 - [Completions](completions.md) -- Tab completion system and writing custom completers
 - [Structured Output](structured-output.md) -- Automatic parsing of command output
+- [Shell Integration](shell-integration.md) -- Semantic prompt marks and what Endo tells the terminal
 - [Platform Differences](platform-differences.md) -- Windows vs POSIX differences
 - [FAQ](../FAQ.md) -- Common questions about pipes, lambdas, and patterns

@@ -321,7 +321,7 @@ void PromptComponent::render(core::tui::Canvas& canvas)
     auto const& theme = core::tui::currentTheme();
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
-    auto const promptTextWidth = displayWidth(_promptStr);
+    auto const promptTextWidth = displayWidth(drawnPromptText());
     auto const totalPromptWidth = HorizontalMargin + leftBarWidth() + PaddingAfterBar + promptTextWidth;
 
     // Effective content width (excluding margins)
@@ -472,6 +472,9 @@ void PromptComponent::render(core::tui::Canvas& canvas)
         if (!_auroraFadeSixelCache.empty())
             canvas.drawImage(topPad, HorizontalMargin, contentWidth, 1, _auroraFadeSixelCache);
     }
+
+    // Column of the right prompt when one is drawn on the info line (for its zone mark).
+    auto rightPromptColumn = std::optional<int> {};
 
     // Render info line chrome above input
     if (chrome > 0)
@@ -629,6 +632,7 @@ void PromptComponent::render(core::tui::Canvas& canvas)
             auto rightCol = canvasWidth - HorizontalMargin - rightWidth;
             if (rightCol > col + 2) // Ensure at least 2 chars gap
             {
+                rightPromptColumn = rightCol;
                 for (std::size_t i = 0; i < rightModules.size(); ++i)
                 {
                     if (i > 0)
@@ -759,7 +763,7 @@ void PromptComponent::render(core::tui::Canvas& canvas)
     // Set up InputField with prompt, continuation, ghost text style, and decorator.
     // When a dynamic indicator function is configured, the override computed above
     // (via evaluateDynamicCallback) replaces the static `_promptStr` for this frame.
-    _inputField.setPrompt(_context.indicatorOverride.value_or(_promptStr));
+    _inputField.setPrompt(drawnPromptText());
     _inputField.setContinuationPrompt(continuationStr);
     _inputField.setStyles(core::tui::InputFieldStyles {
         .text = promptStyle,
@@ -873,8 +877,44 @@ void PromptComponent::render(core::tui::Canvas& canvas)
     for (int i = 0; i < botPad; ++i)
         canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
 
+    markPromptZones(canvas, rightPromptColumn);
+
     // Null out the dangling pointer to the stack-local resolved colors.
     _context.resolvedColors = nullptr;
+}
+
+void PromptComponent::markPromptZones(core::tui::Canvas& canvas, std::optional<int> rightPromptColumn)
+{
+    using shellintegration::PromptZone;
+
+    auto const firstZone = std::exchange(_newPromptPending, false) ? PromptZone::Start : PromptZone::Prompt;
+    if (!_zoneSequences)
+        return;
+
+    auto const markIfAny = [&canvas](int row, int column, std::string sequence) {
+        if (!sequence.empty())
+            canvas.mark(row, column, std::move(sequence));
+    };
+
+    // Terminals carry zone state across rows, so every prompt row that can be repainted gets
+    // a mark at column 0; padding and aurora rows stay outside the prompt and get none.
+    auto const firstRow = topPadding() + auroraFadeHeight();
+    auto const inputStartRow = firstRow + chromeHeight();
+    auto const inputEndRow = inputStartRow + _inputField.lineCount();
+    auto const inputColumn = inputTextStartColumn();
+    auto const continuation = _zoneSequences(PromptZone::Continuation);
+    auto const input = _zoneSequences(PromptZone::Input);
+
+    markIfAny(firstRow, 0, _zoneSequences(firstZone));
+    if (rightPromptColumn)
+        markIfAny(firstRow, *rightPromptColumn, _zoneSequences(PromptZone::RightPrompt));
+    for (auto const row: std::views::iota(firstRow, inputEndRow))
+    {
+        if (row > firstRow)
+            markIfAny(row, 0, continuation);
+        if (row >= inputStartRow)
+            markIfAny(row, inputColumn, input);
+    }
 }
 
 core::tui::Size PromptComponent::preferredSize() const
@@ -927,7 +967,14 @@ void PromptComponent::setPrompt(std::string_view prompt)
 
 int PromptComponent::promptWidth() const
 {
-    return leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    return leftBarWidth() + PaddingAfterBar + displayWidth(drawnPromptText());
+}
+
+int PromptComponent::inputTextStartColumn() const noexcept
+{
+    // The continuation prompt matches the prompt text width by construction, so every input
+    // row's text starts at the same column.
+    return HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(drawnPromptText());
 }
 
 int PromptComponent::chromeHeight() const noexcept
@@ -999,10 +1046,7 @@ core::tui::InputFieldAction PromptComponent::handleMouseEvent(core::tui::MouseEv
     auto const clampedLine = std::clamp(inputLine, 0, std::max(0, totalLines - 1));
 
     // Compute text start column (prompt prefix area)
-    auto const fieldOriginCol = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
-    auto const promptTextWidth = displayWidth(_promptStr);
-    // Continuation prompt matches prompt text width by construction
-    auto const textStartCol = fieldOriginCol + promptTextWidth;
+    auto const textStartCol = inputTextStartColumn();
 
     // Display column within text area (clamp to 0 if click is in prompt area)
     auto const textDisplayCol = std::max(0, compCol - textStartCol);
@@ -1859,8 +1903,7 @@ std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, i
 
 std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int x, int y) const
 {
-    auto const totalPromptWidth =
-        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    auto const totalPromptWidth = inputTextStartColumn();
 
     // Screen x must be within the text area
     if (x < totalPromptWidth)
@@ -1896,8 +1939,7 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
 
 std::pair<int, int> PromptComponent::getCommandBounds() const
 {
-    auto const totalPromptWidth =
-        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
+    auto const totalPromptWidth = inputTextStartColumn();
 
     auto const text = _inputField.text();
     if (text.empty())

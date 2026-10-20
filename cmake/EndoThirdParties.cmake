@@ -286,14 +286,15 @@ if(NOT EMSCRIPTEN)
     CPMAddPackage(
         NAME stb
         GITHUB_REPOSITORY nothings/stb
-        GIT_TAG master
+        # The commit core-cpp pins (cmake/CoreCppDependencies.cmake); master moved stb_image_resize2.h away.
+        GIT_TAG f1c79c02822848a9bed4315b12c8c8f3761e1296
         DOWNLOAD_ONLY YES
     )
     if(stb_ADDED)
         add_library(stb_image INTERFACE)
         target_include_directories(stb_image SYSTEM INTERFACE "${stb_SOURCE_DIR}")
     endif()
-    set(THIRDPARTY_BUILTIN_stb "CPM (master)")
+    set(THIRDPARTY_BUILTIN_stb "CPM (f1c79c0)")
 endif()
 
 # ==============================================================================
@@ -357,10 +358,10 @@ endif()
 CPMAddPackage(
     NAME core-cpp
     GITHUB_REPOSITORY contour-terminal/core-cpp
-    # feature/clipboard-writer (ClipboardWriter, TerminalChannel); moves to the release tag once
-    # core-cpp publishes it.
-    GIT_TAG 741c43e7575066a0be025b6ba6a5ab91893a75c8
-    VERSION 0.7.0
+    # feature/semantic-row-marks (row marks, deleteLines, readMachineId) on top of 0.8.0; moves to
+    # the release tag once core-cpp publishes it.
+    GIT_TAG 8b2bc86aba543ae6225fd8ba020a26024d935598
+    VERSION 0.8.0
     EXCLUDE_FROM_ALL YES
     SYSTEM YES
     OPTIONS
@@ -368,4 +369,4 @@ CPMAddPackage(
         "CORE_CPP_WITH_TLS OFF"
         "CORE_CPP_WITH_TUI ${_endo_core_cpp_native}"
 )
-set(THIRDPARTY_BUILTIN_core_cpp "CPM (741c43e757)")
+set(THIRDPARTY_BUILTIN_core_cpp "CPM (8b2bc86aba)")

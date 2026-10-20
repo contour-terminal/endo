@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/ShellIntegrationSequences.hpp>
 #include <shell/ui/PromptConfig.hpp>
 #include <shell/ui/PromptModule.hpp>
 
@@ -35,6 +36,9 @@ class Completer;
 class CommandResolver;
 class GitModule;
 class History;
+
+/// @brief Returns the escape sequence that opens a semantic prompt zone, or "" to mark none.
+using PromptZoneSequenceFn = std::function<std::string(shellintegration::PromptZone)>;
 
 /// @brief A styled prompt component for the shell.
 ///
@@ -122,6 +126,24 @@ class PromptComponent: public core::tui::Component
     /// constructing a real Completer. Passing an empty function restores Completer-backed behaviour.
     /// @param fn The suggestion function, or an empty function to fall back to the Completer.
     void setSuggestFn(SuggestFn fn) { _suggestFn = std::move(fn); }
+
+    /// @brief Installs the source of the semantic prompt zone sequences (OSC 133).
+    ///
+    /// Each render places them as row marks: the first prompt row gets `Start` (after
+    /// beginNewPrompt()) or `Prompt`, every later row through the last input row gets
+    /// `Continuation`, every input row gets `Input` at inputTextStartColumn(), and a drawn
+    /// right prompt gets `RightPrompt`. A zone whose sequence is empty is not marked.
+    /// @param fn The zone sequence source; an empty function disables all marks.
+    void setZoneSequences(PromptZoneSequenceFn fn) { _zoneSequences = std::move(fn); }
+
+    /// @brief Makes the next render mark the first prompt row `Start` instead of `Prompt`.
+    ///
+    /// Called once per drawn prompt (a new prompt, or a Ctrl+L redraw); that render clears it,
+    /// so repaints of the same prompt never announce a second prompt start.
+    void beginNewPrompt() noexcept { _newPromptPending = true; }
+
+    /// @brief Returns the component column at which the input text starts on each input row.
+    [[nodiscard]] int inputTextStartColumn() const noexcept;
 
     /// @brief Sets the command resolver for tooltip display.
     void setCommandResolver(CommandResolver* resolver) { _commandResolver = resolver; }
@@ -238,7 +260,7 @@ class PromptComponent: public core::tui::Component
     /// @brief Returns the number of rows reserved for the aurora sixel fade (0 or 1).
     [[nodiscard]] int auroraFadeHeight() const noexcept;
 
-    /// @brief Returns the number of top padding rows (0 on first display).
+    /// @brief Returns the number of blank rows above the prompt (`shell_prompt_spacing`).
     [[nodiscard]] int topPadding() const noexcept;
 
     /// @brief Returns the number of bottom padding rows.
@@ -293,8 +315,10 @@ class PromptComponent: public core::tui::Component
     core::tui::FuzzyPickerPopup _fuzzyFileFinder;
     core::tui::CommandRegistry* _commandRegistry = nullptr;
     Completer* _completer = nullptr;
-    SuggestFn _suggestFn;         ///< Optional injected ghost-text source; overrides _completer when set.
-    bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
+    SuggestFn _suggestFn; ///< Optional injected ghost-text source; overrides _completer when set.
+    PromptZoneSequenceFn _zoneSequences; ///< Source of the semantic prompt zone marks (none when empty).
+    bool _newPromptPending = false;      ///< Next render marks the first prompt row `Start`.
+    bool _terminalFocused = true;        ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
     core::platform::ProcessEnvironment const* _envProvider = nullptr;
@@ -348,6 +372,19 @@ class PromptComponent: public core::tui::Component
     [[nodiscard]] int leftBarWidth() const noexcept
     {
         return (_config.separator == SeparatorStyle::Rounded) ? 2 : LeftBarWidth;
+    }
+
+    /// @brief Places this frame's semantic prompt zone marks (see setZoneSequences()).
+    /// @param canvas The canvas being rendered.
+    /// @param rightPromptColumn Column of the drawn right prompt, or nullopt when none was drawn.
+    void markPromptZones(core::tui::Canvas& canvas, std::optional<int> rightPromptColumn);
+
+    /// @brief Returns the prompt text the input field draws: the dynamic indicator's value from
+    /// the last render when one is configured, the static prompt string otherwise.
+    [[nodiscard]] std::string_view drawnPromptText() const noexcept
+    {
+        return _context.indicatorOverride ? std::string_view { *_context.indicatorOverride }
+                                          : std::string_view { _promptStr };
     }
 
     /// @brief Calculates the width of the prompt prefix (bar + padding + prompt text).
