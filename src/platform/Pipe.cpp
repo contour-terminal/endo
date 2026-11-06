@@ -3,6 +3,7 @@
 
 #include <core/log/LogStore.hpp>
 
+#include <array>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -64,15 +65,29 @@ class PosixPipe final: public Pipe
     #else
         if (pipe(_pfd) < 0)
             throw std::runtime_error { "Failed to create pipe. "s + strerror(errno) };
-        // Apply flags manually on non-Linux systems
-        if (flags != 0)
+
+        // pipe2's flags, applied one by one where there is no pipe2. Each is a different kind of
+        // flag: O_CLOEXEC is the descriptor flag FD_CLOEXEC (F_SETFD), O_NONBLOCK a file status flag
+        // (F_SETFL). Handing the open flag itself to F_SETFD sets nothing at all.
+        struct FlagMapping
         {
+            unsigned requested; ///< The pipe2 flag.
+            int get;            ///< The fcntl command that reads the flag word it belongs to.
+            int set;            ///< The fcntl command that writes it.
+            int bit;            ///< The flag's bit in that word.
+        };
+
+        constexpr auto Mappings = std::array {
+            FlagMapping { .requested = O_CLOEXEC, .get = F_GETFD, .set = F_SETFD, .bit = FD_CLOEXEC },
+            FlagMapping { .requested = O_NONBLOCK, .get = F_GETFL, .set = F_SETFL, .bit = O_NONBLOCK },
+        };
+        for (auto const& mapping: Mappings)
+        {
+            if ((flags & mapping.requested) == 0)
+                continue;
             for (auto const fd: _pfd)
-            {
-                int const currentFlags = fcntl(fd, F_GETFD);
-                if (currentFlags != -1)
-                    fcntl(fd, F_SETFD, currentFlags | static_cast<int>(flags));
-            }
+                if (auto const current = fcntl(fd, mapping.get); current != -1)
+                    fcntl(fd, mapping.set, current | mapping.bit);
         }
     #endif
         pipeLog()()("Created pipe: {} {}\n", _pfd[0], _pfd[1]);
