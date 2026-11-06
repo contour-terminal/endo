@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace endo
 {
@@ -20,6 +21,12 @@ struct GitInfo
     int staged = 0; ///< Number of staged changes.
     bool valid = false;
 };
+
+/// @brief Reads the branch and the change counts out of `git status --porcelain=v2 --branch` output.
+/// @param porcelainV2 The output, as git wrote it.
+/// @return The branch (`HEAD` when detached) and the staged and unstaged counts, untracked files
+///         counting as unstaged; @c GitInfo::valid is false where the output names no branch.
+[[nodiscard]] GitInfo parseGitStatus(std::string_view porcelainV2);
 
 /// @brief Prompt module that displays Git branch and status information.
 ///
@@ -34,8 +41,10 @@ class GitModule final: public PromptModule
     using QueryFn = std::function<GitInfo(std::string const&)>;
 
     /// @brief Constructs the module.
-    /// @param queryFn Query implementation. Defaults to the `popen`-based
-    ///                `git status` call. Tests inject a mock to control timing.
+    /// @param queryFn Query implementation. Defaults to running
+    ///                `git status --porcelain=v2 --branch` directly, with no shell
+    ///                (see @c platform::captureOutput). Tests inject a mock to
+    ///                control timing.
     explicit GitModule(QueryFn queryFn = {});
 
     [[nodiscard]] std::string_view id() const noexcept override { return "git"; }

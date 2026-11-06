@@ -3,6 +3,7 @@
 # environment, signals, file/process listing).
 
 add_library(endo-platform STATIC
+    CaptureOutput.hpp
     PosixCompat.hpp
     WaitResult.hpp
     Process.hpp
@@ -23,6 +24,11 @@ add_library(endo-platform STATIC
 # Platform-specific implementations
 if(WIN32)
     target_sources(endo-platform PRIVATE
+        windows/CaptureOutput.cpp
+        windows/CommandLine.hpp
+        windows/CommandLine.cpp
+        windows/HandleInheritance.hpp
+        windows/HandleInheritance.cpp
         windows/WindowsProcess.cpp
         windows/WindowsPipe.cpp
         windows/WindowsProcessProvider.hpp
@@ -46,6 +52,11 @@ else()
     )
 endif()
 
+# Running a program and capturing its output: one implementation per platform family.
+if(NOT WIN32)
+    target_sources(endo-platform PRIVATE posix/CaptureOutput.cpp)
+endif()
+
 target_include_directories(endo-platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(endo-platform PUBLIC core::platform core::cli)
 if(NOT WIN32)
@@ -61,6 +72,7 @@ if(ENDO_TESTING)
     add_executable(test-endo-platform
         test_main.cpp
         InterruptThrottle_test.cpp
+        CaptureOutput_test.cpp
         Process_test.cpp
         Pipe_test.cpp
         ProjectFileTree_test.cpp

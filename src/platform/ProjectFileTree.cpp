@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/Environment.hpp>
+
 #include <algorithm>
-#include <array>
-#include <cstdio>
-#include <format>
 #include <functional>
 #include <map>
 #include <set>
 #include <sstream>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
+#include <platform/CaptureOutput.hpp>
 #include <platform/ProjectFileTree.hpp>
 
 namespace endo::platform
@@ -16,32 +18,20 @@ namespace endo::platform
 
 namespace
 {
-    /// Runs a command and captures its stdout output.
-    [[nodiscard]] auto runCommand(std::string const& command) -> std::string
+    /// Runs git with @p arguments, directly and with no shell between, and returns what it wrote to
+    /// stdout without the trailing newline; empty when git could not be run.
+    ///
+    /// The directory is one of the arguments, so a quote, `&` or `$(...)` in its name is only a name.
+    /// And `2>/dev/null` used to be part of the command on every platform, which `cmd.exe` cannot open,
+    /// so on Windows the command failed before git ran; stderr is the null device here instead.
+    [[nodiscard]] auto runGit(std::vector<std::string> const& arguments) -> std::string
     {
-#if defined(_WIN32)
-        auto* pipe = _popen(command.c_str(), "r");
-#else
-        auto* pipe = popen(command.c_str(), "r");
-#endif
-        if (!pipe)
-            return {};
-
-        auto output = std::string {};
-        auto buffer = std::array<char, 4096> {};
-        while (auto const bytesRead = fread(buffer.data(), 1, buffer.size(), pipe))
-            output.append(buffer.data(), bytesRead);
-
-#if defined(_WIN32)
-        _pclose(pipe);
-#else
-        pclose(pipe);
-#endif
-
-        // Trim trailing newline
-        while (!output.empty() && output.back() == '\n')
+        auto output =
+            captureOutput("git", arguments, core::LiveEnvironment {})
+                .transform([](CapturedOutput captured) { return std::move(captured.standardOutput); })
+                .value_or(std::string {});
+        while (!output.empty() && (output.back() == '\n' || output.back() == '\r'))
             output.pop_back();
-
         return output;
     }
 } // namespace
@@ -137,15 +127,14 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
 
 auto ProjectFileTree::isGitRepo(std::filesystem::path const& path) -> bool
 {
-    auto const result =
-        runCommand(std::format("git -C \"{}\" rev-parse --is-inside-work-tree 2>/dev/null", path.string()));
+    auto const result = runGit({ "-C", path.string(), "rev-parse", "--is-inside-work-tree" });
     return result == "true";
 }
 
 auto ProjectFileTree::getGitTrackedFiles(std::filesystem::path const& path) const -> std::vector<std::string>
 {
-    auto const output = runCommand(std::format(
-        "git -C \"{}\" ls-files --cached --others --exclude-standard 2>/dev/null", path.string()));
+    auto const output =
+        runGit({ "-C", path.string(), "ls-files", "--cached", "--others", "--exclude-standard" });
 
     auto files = std::vector<std::string> {};
     auto stream = std::istringstream(output);

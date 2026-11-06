@@ -2,19 +2,18 @@
 #include "GitModule.hpp"
 #include <shell/ui/PromptColorResolver.hpp>
 
+#include <core/Environment.hpp>
 #include <core/tui/Theme.hpp>
 
 #include <array>
-#include <cstdio>
 #include <memory>
+#include <ranges>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 
-#if defined(_WIN32)
-    #define popen  _popen
-    #define pclose _pclose
-#endif
+#include <platform/CaptureOutput.hpp>
 
 namespace endo
 {
@@ -22,78 +21,64 @@ namespace endo
 namespace
 {
 
-    /// @brief Runs a command and captures stdout.
-    [[nodiscard]] auto runCommand(std::string const& cmd) -> std::string
-    {
-        auto result = std::string {};
-        auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-        if (!fp)
-            return result;
-
-        auto buf = std::array<char, 256> {};
-        while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
-            result += buf.data();
-        pclose(fp); // NOLINT(cert-env33-c)
-
-        // Trim trailing newline
-        while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-            result.pop_back();
-        return result;
-    }
-
-    /// @brief Default query implementation: invokes `git status` via popen.
+    /// @brief Default query implementation: runs `git status` directly, with no shell between.
     ///
-    /// Extracts branch name from `# branch.head` header and dirty/staged counts
-    /// from porcelain v2 change entries.
+    /// Through @c platform::captureOutput, so the directory is an argument rather than text a shell
+    /// parses -- a space, `&` or `$(...)` in its name is only a name -- `git` is the one on PATH rather
+    /// than one in that directory, and on Windows the child does not attach to this shell's console,
+    /// which a child cannot start on once the console's host has gone.
     [[nodiscard]] auto defaultQueryGitInfo(std::string const& cwd) -> GitInfo
     {
-        auto info = GitInfo {};
-
-#if defined(_WIN32)
-        auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>NUL");
-#else
-        auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>/dev/null");
-#endif
-        if (status.empty())
-            return info;
-
-        for (auto pos = std::size_t { 0 }; pos < status.size();)
-        {
-            auto const nl = status.find('\n', pos);
-            auto const line = status.substr(pos, (nl == std::string::npos) ? std::string::npos : nl - pos);
-            pos = (nl == std::string::npos) ? status.size() : nl + 1;
-
-            // Extract branch name from header: "# branch.head <name>"
-            if (line.starts_with("# branch.head "))
-            {
-                info.branch = line.substr(14); // strlen("# branch.head ") == 14
-                // git status reports "(detached)" for detached HEAD — normalize to "HEAD"
-                if (info.branch == "(detached)")
-                    info.branch = "HEAD";
-                info.valid = true;
-                continue;
-            }
-
-            if (line.size() >= 4 && (line[0] == '1' || line[0] == '2'))
-            {
-                // Changed entry: "1 XY ..." or "2 XY ..."
-                auto const x = line[2]; // staged indicator
-                auto const y = line[3]; // unstaged indicator
-                if (x != '.')
-                    ++info.staged;
-                if (y != '.')
-                    ++info.dirty;
-            }
-            else if (line.starts_with("? "))
-            {
-                ++info.dirty; // Untracked files count as dirty
-            }
-        }
-
-        return info;
+        auto const arguments =
+            std::array<std::string, 5> { "-C", cwd, "status", "--porcelain=v2", "--branch" };
+        // The output alone decides: git writes the porcelain only where it succeeds, and the exit
+        // status may be missing, reaped by the shell's own SIGCHLD handler first.
+        return platform::captureOutput("git", arguments, core::LiveEnvironment {})
+            .transform([](platform::CapturedOutput const& captured) {
+                return parseGitStatus(captured.standardOutput);
+            })
+            .value_or(GitInfo {});
     }
 
 } // namespace
+
+GitInfo parseGitStatus(std::string_view porcelainV2)
+{
+    auto info = GitInfo {};
+
+    for (auto const lineRange: std::views::split(porcelainV2, '\n'))
+    {
+        auto const line = std::string_view(lineRange.begin(), lineRange.end());
+
+        // Extract branch name from header: "# branch.head <name>"
+        if (line.starts_with("# branch.head "))
+        {
+            info.branch = std::string(line.substr(14)); // strlen("# branch.head ") == 14
+            // git status reports "(detached)" for detached HEAD — normalize to "HEAD"
+            if (info.branch == "(detached)")
+                info.branch = "HEAD";
+            info.valid = true;
+            continue;
+        }
+
+        if (line.size() >= 4 && (line[0] == '1' || line[0] == '2'))
+        {
+            // Changed entry: "1 XY ..." or "2 XY ..."
+            auto const x = line[2]; // staged indicator
+            auto const y = line[3]; // unstaged indicator
+            if (x != '.')
+                ++info.staged;
+            if (y != '.')
+                ++info.dirty;
+        }
+        else if (line.starts_with("? "))
+        {
+            ++info.dirty; // Untracked files count as dirty
+        }
+    }
+
+    return info;
+}
 
 GitModule::GitModule(QueryFn queryFn):
     _queryFn(queryFn ? std::move(queryFn) : QueryFn { &defaultQueryGitInfo })

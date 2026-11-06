@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <core/Environment.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <system_error>
+#include <vector>
 
+#include <platform/CaptureOutput.hpp>
 #include <platform/ProjectFileTree.hpp>
 
 using namespace endo::platform;
@@ -148,4 +154,48 @@ TEST_CASE("ProjectFileTree.tree_format_verification", "[platform]")
         auto const afterReadme = readmePos + std::string("README.md").size();
         CHECK(result[afterReadme] == '\n');
     }
+}
+
+TEST_CASE("ProjectFileTree.lists_a_repository_through_git_whatever_its_directory_is_called", "[platform]")
+{
+    // The directory is an argument to git, never text a shell parses: a space or `&` in its name used
+    // to split the command, or on Windows run what followed. There the command also ended in a
+    // `2>/dev/null` that cmd.exe cannot open, so it failed before git ran and the tree came from the
+    // directory walk instead. The ignored file tells the two apart: only git leaves it out. It sits
+    // below the root because every root-level file is listed either way, as a navigation target.
+    struct Repository
+    {
+        std::filesystem::path root = std::filesystem::temp_directory_path() / "endo-test-filetree git & repo";
+
+        Repository()
+        {
+            std::filesystem::remove_all(root);
+            std::filesystem::create_directories(root / "src");
+            std::ofstream(root / ".gitignore") << "ignored.txt\n";
+            std::ofstream(root / "src" / "kept.txt") << "kept";
+            std::ofstream(root / "src" / "ignored.txt") << "ignored";
+        }
+
+        ~Repository()
+        {
+            auto ignored = std::error_code {};
+            std::filesystem::remove_all(root, ignored);
+        }
+
+        Repository(Repository const&) = delete;
+        Repository& operator=(Repository const&) = delete;
+        Repository(Repository&&) = delete;
+        Repository& operator=(Repository&&) = delete;
+    };
+
+    auto const repository = Repository {};
+    auto const init = captureOutput(
+        "git", std::vector<std::string> { "init", "-q", repository.root.string() }, core::LiveEnvironment {});
+    if (!init || init->exitCode != 0)
+        SKIP("git is not available to make a repository with");
+
+    auto const paths = ProjectFileTree {}.filePaths(repository.root);
+
+    CHECK(std::ranges::find(paths, "src/kept.txt") != paths.end());
+    CHECK(std::ranges::find(paths, "src/ignored.txt") == paths.end());
 }
