@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <mutex>
+
 #include <platform/PosixCompat.hpp>
 #include <platform/Process.hpp>
+#include <platform/windows/CommandLine.hpp>
+#include <platform/windows/HandleInheritance.hpp>
 
 #if defined(_WIN32)
     #include <fcntl.h>
@@ -11,70 +15,6 @@
 namespace endo::platform
 {
 
-namespace
-{
-    /// @brief Quotes a single argument for the Windows CreateProcess command line.
-    auto quoteArgument(std::string_view arg) -> std::string
-    {
-        if (!arg.empty() && arg.find_first_of(" \t\"") == std::string_view::npos)
-            return std::string(arg);
-
-        std::string result;
-        result.reserve(arg.size() + 4);
-        result += '"';
-
-        for (auto it = arg.begin(); it != arg.end(); ++it)
-        {
-            auto numBackslashes = 0u;
-            while (it != arg.end() && *it == '\\')
-            {
-                ++it;
-                ++numBackslashes;
-            }
-
-            if (it == arg.end())
-            {
-                result.append(numBackslashes * 2, '\\');
-                break;
-            }
-            else if (*it == '"')
-            {
-                result.append(numBackslashes * 2 + 1, '\\');
-                result += '"';
-            }
-            else
-            {
-                result.append(numBackslashes, '\\');
-                result += *it;
-            }
-        }
-
-        result += '"';
-        return result;
-    }
-
-    /// @brief Builds a Windows command line string from program path and arguments.
-    auto buildCommandLine(std::filesystem::path const& program, std::vector<std::string> const& arguments)
-        -> std::wstring
-    {
-        auto cmdLine = quoteArgument(program.string());
-        for (auto const& arg: arguments)
-        {
-            cmdLine += ' ';
-            cmdLine += quoteArgument(arg);
-        }
-
-        auto const size = MultiByteToWideChar(CP_UTF8, 0, cmdLine.c_str(), -1, nullptr, 0);
-        auto wideCmdLine = std::wstring(static_cast<size_t>(size), L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, cmdLine.c_str(), -1, wideCmdLine.data(), size);
-
-        if (!wideCmdLine.empty() && wideCmdLine.back() == L'\0')
-            wideCmdLine.pop_back();
-
-        return wideCmdLine;
-    }
-} // namespace
-
 WindowsProcessManager& WindowsProcessManager::instance()
 {
     static WindowsProcessManager pm;
@@ -84,7 +24,7 @@ WindowsProcessManager& WindowsProcessManager::instance()
 std::expected<core::platform::ProcessId, core::platform::PlatformError> WindowsProcessManager::spawn(
     SpawnConfig const& config)
 {
-    auto cmdLine = buildCommandLine(config.program, config.arguments);
+    auto cmdLine = buildCommandLine(config.program.string(), config.arguments);
 
     STARTUPINFOW si {};
     si.cb = sizeof(si);
@@ -105,9 +45,16 @@ std::expected<core::platform::ProcessId, core::platform::PlatformError> WindowsP
         flags |= CREATE_NEW_PROCESS_GROUP;
 
     PROCESS_INFORMATION pi {};
-    if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, flags, nullptr, nullptr, &si, &pi))
+    // A child inheriting handles must not start while another one's are briefly inheritable.
+    auto const err = [&]() -> DWORD {
+        auto const lock = std::scoped_lock { handleInheritanceMutex() };
+        if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, flags, nullptr, nullptr, &si, &pi)
+            != 0)
+            return ERROR_SUCCESS;
+        return GetLastError();
+    }();
+    if (err != ERROR_SUCCESS)
     {
-        auto const err = GetLastError();
         if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
             return std::unexpected(core::platform::PlatformError::ProgramNotFound);
         return std::unexpected(core::platform::PlatformError::ExecFailed);

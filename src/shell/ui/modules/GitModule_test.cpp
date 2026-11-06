@@ -312,3 +312,32 @@ TEST_CASE("GitModule.query_runs_off_the_main_thread", "[git][prompt]")
         return mod.cachedInfo().valid;
     }));
 }
+
+TEST_CASE("GitModule.parseGitStatus_reads_the_branch_and_counts_the_changes", "[git][prompt]")
+{
+    auto const info = parseGitStatus("# branch.oid 0123456789abcdef\n"
+                                     "# branch.head main\n"
+                                     "1 M. N... 100644 100644 100644 a b staged.txt\n"
+                                     "1 .M N... 100644 100644 100644 a b unstaged.txt\n"
+                                     "2 R. N... 100644 100644 100644 a b R100 renamed.txt\told.txt\n"
+                                     "? untracked.txt\n");
+
+    CHECK(info.valid);
+    CHECK(info.branch == "main");
+    CHECK(info.staged == 2);
+    CHECK(info.dirty == 2); // the unstaged change and the untracked file
+}
+
+TEST_CASE("GitModule.parseGitStatus_names_a_detached_head_HEAD", "[git][prompt]")
+{
+    auto const info = parseGitStatus("# branch.oid 0123456789abcdef\n# branch.head (detached)\n");
+
+    CHECK(info.valid);
+    CHECK(info.branch == "HEAD");
+}
+
+TEST_CASE("GitModule.parseGitStatus_without_a_branch_is_not_a_repository", "[git][prompt]")
+{
+    CHECK_FALSE(parseGitStatus("").valid);
+    CHECK_FALSE(parseGitStatus("fatal: not a git repository\n").valid);
+}
