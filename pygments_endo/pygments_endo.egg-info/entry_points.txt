@@ -1,0 +1,2 @@
+[pygments.lexers]
+endo = pygments_endo.lexer:EndoLexer
