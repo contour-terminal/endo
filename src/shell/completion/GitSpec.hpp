@@ -39,8 +39,10 @@ class GitQueryProvider: public CommandQueryProvider
     [[nodiscard]] static std::vector<QueryResult> queryConfigKeys();
     [[nodiscard]] static std::vector<QueryResult> queryWorktrees();
 
-    /// @brief Runs a command and returns stdout lines.
-    [[nodiscard]] static std::vector<std::string> runCommand(std::string const& cmd);
+    /// @brief Runs git with @p arguments, directly and with no shell, and returns its non-empty stdout lines.
+    /// @param arguments The arguments after `git`.
+    /// @return The lines git wrote, without line endings; empty when git could not be run.
+    [[nodiscard]] static std::vector<std::string> runGit(std::vector<std::string> const& arguments);
 };
 
 } // namespace endo

@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GitSpec.hpp"
 
+#include <core/Environment.hpp>
+
 #include <algorithm>
 #include <array>
-#include <cstdio>
+#include <ranges>
 #include <set>
 
-#if defined(_WIN32)
-    #define popen  _popen
-    #define pclose _pclose
-#endif
+#include <platform/CaptureOutput.hpp>
 
 namespace endo
 {
@@ -1047,26 +1046,22 @@ CommandSpec createGitSpec()
 // GitQueryProvider implementation
 // ============================================================================
 
-std::vector<std::string> GitQueryProvider::runCommand(std::string const& cmd)
+std::vector<std::string> GitQueryProvider::runGit(std::vector<std::string> const& arguments)
 {
+    // Directly, with no shell between: the same arguments on every platform, and on Windows a console of
+    // git's own rather than the shell's (see platform::captureOutput).
     auto lines = std::vector<std::string> {};
-    auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-    if (!fp)
+    auto const captured = platform::captureOutput("git", arguments, core::LiveEnvironment {});
+    if (!captured)
         return lines;
-
-    auto buf = std::array<char, 512> {};
-    auto current = std::string {};
-    while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
+    for (auto const lineRange: std::views::split(captured->standardOutput, '\n'))
     {
-        current += buf.data();
-        while (!current.empty() && (current.back() == '\n' || current.back() == '\r'))
-            current.pop_back();
-        if (!current.empty())
-            lines.push_back(std::move(current));
-        current.clear();
+        auto line = std::string(lineRange.begin(), lineRange.end());
+        while (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (!line.empty())
+            lines.push_back(std::move(line));
     }
-    pclose(fp); // NOLINT(cert-env33-c)
-
     return lines;
 }
 
@@ -1104,17 +1099,9 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
     auto results = std::vector<QueryResult> {};
     auto seen = std::set<std::string> {};
 
-#if defined(_WIN32)
-    static constexpr auto LocalCmd = "git branch --format=\"%(refname:short)\" 2>NUL";
-    static constexpr auto RemoteCmd = "git branch -r --format=\"%(refname:short)\" 2>NUL";
-#else
-    static constexpr auto LocalCmd = "git branch --format='%(refname:short)' 2>/dev/null";
-    static constexpr auto RemoteCmd = "git branch -r --format='%(refname:short)' 2>/dev/null";
-#endif
-
     if (!remoteOnly)
     {
-        for (auto const& branch: runCommand(LocalCmd))
+        for (auto const& branch: runGit({ "branch", "--format=%(refname:short)" }))
         {
             if (seen.insert(branch).second)
                 results.push_back(QueryResult { .text = branch, .description = "local branch" });
@@ -1123,7 +1110,7 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
 
     if (!localOnly)
     {
-        for (auto const& branch: runCommand(RemoteCmd))
+        for (auto const& branch: runGit({ "branch", "-r", "--format=%(refname:short)" }))
         {
             auto stripped = branch;
             if (auto const slash = branch.find('/'); slash != std::string::npos)
@@ -1145,11 +1132,7 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
 
 std::vector<QueryResult> GitQueryProvider::queryTags()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git tag --list 2>NUL");
-#else
-    auto const lines = runCommand("git tag --list 2>/dev/null");
-#endif
+    auto const lines = runGit({ "tag", "--list" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& tag: lines)
@@ -1159,11 +1142,7 @@ std::vector<QueryResult> GitQueryProvider::queryTags()
 
 std::vector<QueryResult> GitQueryProvider::queryRemotes()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git remote 2>NUL");
-#else
-    auto const lines = runCommand("git remote 2>/dev/null");
-#endif
+    auto const lines = runGit({ "remote" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& remote: lines)
@@ -1173,11 +1152,7 @@ std::vector<QueryResult> GitQueryProvider::queryRemotes()
 
 std::vector<QueryResult> GitQueryProvider::queryStashes()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git stash list --format=\"%gd: %s\" 2>NUL");
-#else
-    auto const lines = runCommand("git stash list --format='%gd: %s' 2>/dev/null");
-#endif
+    auto const lines = runGit({ "stash", "list", "--format=%gd: %s" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& line: lines)
@@ -1199,11 +1174,7 @@ std::vector<QueryResult> GitQueryProvider::queryStashes()
 
 std::vector<QueryResult> GitQueryProvider::queryRecentCommits()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git log --oneline -20 2>NUL");
-#else
-    auto const lines = runCommand("git log --oneline -20 2>/dev/null");
-#endif
+    auto const lines = runGit({ "log", "--oneline", "-20" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& line: lines)
@@ -1220,11 +1191,7 @@ std::vector<QueryResult> GitQueryProvider::queryRecentCommits()
 
 std::vector<QueryResult> GitQueryProvider::queryAliases()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git config --get-regexp \"^alias\\.\" 2>NUL");
-#else
-    auto const lines = runCommand("git config --get-regexp '^alias\\.' 2>/dev/null");
-#endif
+    auto const lines = runGit({ "config", "--get-regexp", "^alias\\." });
     auto results = std::vector<QueryResult> {};
     for (auto const& line: lines)
     {
@@ -1245,11 +1212,7 @@ std::vector<QueryResult> GitQueryProvider::queryAliases()
 
 std::vector<QueryResult> GitQueryProvider::queryStatusFiles()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git status --porcelain 2>NUL");
-#else
-    auto const lines = runCommand("git status --porcelain 2>/dev/null");
-#endif
+    auto const lines = runGit({ "status", "--porcelain" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& line: lines)
@@ -1282,11 +1245,7 @@ std::vector<QueryResult> GitQueryProvider::queryStatusFiles()
 
 std::vector<QueryResult> GitQueryProvider::queryTrackedFiles()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git ls-files 2>NUL");
-#else
-    auto const lines = runCommand("git ls-files 2>/dev/null");
-#endif
+    auto const lines = runGit({ "ls-files" });
     auto results = std::vector<QueryResult> {};
     results.reserve(lines.size());
     for (auto const& file: lines)
@@ -1296,11 +1255,7 @@ std::vector<QueryResult> GitQueryProvider::queryTrackedFiles()
 
 std::vector<QueryResult> GitQueryProvider::queryConfigKeys()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git config --list --name-only 2>NUL");
-#else
-    auto const lines = runCommand("git config --list --name-only 2>/dev/null");
-#endif
+    auto const lines = runGit({ "config", "--list", "--name-only" });
     auto results = std::vector<QueryResult> {};
     auto seen = std::set<std::string> {};
     for (auto const& key: lines)
@@ -1313,11 +1268,7 @@ std::vector<QueryResult> GitQueryProvider::queryConfigKeys()
 
 std::vector<QueryResult> GitQueryProvider::queryWorktrees()
 {
-#if defined(_WIN32)
-    auto const lines = runCommand("git worktree list --porcelain 2>NUL");
-#else
-    auto const lines = runCommand("git worktree list --porcelain 2>/dev/null");
-#endif
+    auto const lines = runGit({ "worktree", "list", "--porcelain" });
     auto results = std::vector<QueryResult> {};
     auto path = std::string {};
     auto branch = std::string {};

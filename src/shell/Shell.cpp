@@ -24,6 +24,7 @@
 #include <CoreVM/types/TypeRegistry.hpp>
 
 #include <core/Assert.hpp>
+#include <core/Environment.hpp>
 #include <core/net/EventLoop.hpp>
 #include <core/net/IoBackend.hpp>
 #include <core/tui/Canvas.hpp>
@@ -115,6 +116,7 @@
 #include <core/platform/WorkingDirectory.hpp>
 
 #include <nlohmann/json.hpp>
+#include <platform/CaptureOutput.hpp>
 #include <platform/InstallPaths.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/PosixCompat.hpp>
@@ -2250,32 +2252,6 @@ namespace
         ScrollRegionGuard _scrollGuard;
     };
 
-    /// @brief Runs a command and captures stdout (for git info queries).
-    [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
-    {
-        auto result = std::string {};
-    #if defined(_WIN32)
-        auto* fp = _popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-    #else
-        auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
-    #endif
-        if (!fp)
-            return result;
-
-        auto buf = std::array<char, 256> {};
-        while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
-            result += buf.data();
-    #if defined(_WIN32)
-        _pclose(fp); // NOLINT(cert-env33-c)
-    #else
-        pclose(fp); // NOLINT(cert-env33-c)
-    #endif
-
-        while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-            result.pop_back();
-        return result;
-    }
-
     /// @brief Builds agent context (project files, git info, system prompt) — runs in background thread.
     /// @param cwd The current working directory.
     /// @param cachedContext Optional cached project context to reuse (skips file scanning).
@@ -2308,24 +2284,23 @@ namespace
         }
         else
         {
-            // Fallback: query git directly (e.g., first agent entry before prompt displayed)
-            auto const cwdStr = core::platform::normalizePath(cwd);
-    #if defined(_WIN32)
-            gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
-    #else
-            gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-    #endif
-            if (!gitBranch.empty())
+            // Fallback: query git directly (e.g., first agent entry before prompt displayed), as the
+            // prompt does -- with no shell between, so the directory is only an argument -- and read
+            // the porcelain as the prompt reads it: its `# branch` headers are there whether or not
+            // anything changed, so the output being non-empty says nothing about the tree.
+            auto const arguments = std::array<std::string, 5> {
+                "-C", core::platform::normalizePath(cwd), "status", "--porcelain=v2", "--branch"
+            };
+            auto const info = platform::captureOutput("git", arguments, core::LiveEnvironment {})
+                                  .transform([](platform::CapturedOutput const& captured) {
+                                      return parseGitStatus(captured.standardOutput);
+                                  })
+                                  .value_or(GitInfo {});
+            if (info.valid)
             {
+                gitBranch = info.branch;
                 promptBuilder.setGitBranch(gitBranch);
-    #if defined(_WIN32)
-                auto const gitStatus =
-                    runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>NUL");
-    #else
-                auto const gitStatus =
-                    runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>/dev/null");
-    #endif
-                promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
+                promptBuilder.setGitStatus((info.dirty > 0 || info.staged > 0) ? "has changes" : "clean");
             }
         }
 
@@ -2718,6 +2693,10 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
         while (!answered)
         {
             auto events = terminal.input().poll(-1);
+            // The terminal is gone -- it hung up, or its console's host died -- so no answer is coming,
+            // and every further poll would return at once with nothing.
+            if (terminal.input().inputClosed())
+                return;
             for (auto const& event: events)
             {
                 auto const action = question.processInput(event);
