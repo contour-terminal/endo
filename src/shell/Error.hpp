@@ -93,6 +93,8 @@ enum class ShellError // NOLINT(performance-enum-size)
         case core::platform::PlatformError::TerminalControlFailed: return ShellError::ExecutionFailed;
         case core::platform::PlatformError::NotImplemented: return ShellError::NotImplemented;
         case core::platform::PlatformError::InvalidArgument: return ShellError::InvalidArgument;
+        case core::platform::PlatformError::NotificationRegistrationFailed:
+            return ShellError::ExecutionFailed;
     }
     return ShellError::ExecutionFailed;
 }

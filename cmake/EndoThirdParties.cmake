@@ -350,7 +350,9 @@ endif()
 # core::base, core::log and core::cli everywhere; core::platform, core::async, core::net and
 # core::tui natively. Declared last, so libunicode and stb_image above are the parent's targets
 # core-cpp resolves its own dependencies from, and one copy of each is built. TLS stays off: endo
-# has no TLS transport, so it links no OpenSSL. CPM_core-cpp_SOURCE points it at a local checkout.
+# has no TLS transport, so it links no OpenSSL. systemd stays off too: it backs only core-cpp's
+# Linux power monitor, which endo does not use, and leaving it on would make libsystemd a build
+# dependency. CPM_core-cpp_SOURCE points it at a local checkout.
 set(_endo_core_cpp_native ON)
 if(EMSCRIPTEN)
     set(_endo_core_cpp_native OFF)
@@ -358,15 +360,14 @@ endif()
 CPMAddPackage(
     NAME core-cpp
     GITHUB_REPOSITORY contour-terminal/core-cpp
-    # feature/semantic-row-marks (row marks, deleteLines, readMachineId) on top of 0.8.0; moves to
-    # the release tag once core-cpp publishes it.
-    GIT_TAG 8b2bc86aba543ae6225fd8ba020a26024d935598
-    VERSION 0.8.0
+    GIT_TAG v0.16.0
+    VERSION 0.16.0
     EXCLUDE_FROM_ALL YES
     SYSTEM YES
     OPTIONS
         "CORE_CPP_TESTING OFF"
         "CORE_CPP_WITH_TLS OFF"
+        "CORE_CPP_WITH_SYSTEMD OFF"
         "CORE_CPP_WITH_TUI ${_endo_core_cpp_native}"
 )
-set(THIRDPARTY_BUILTIN_core_cpp "CPM (8b2bc86aba)")
+set(THIRDPARTY_BUILTIN_core_cpp "CPM (v0.16.0)")
